@@ -3,216 +3,201 @@
 
   const $ = (id) => document.getElementById(id);
 
-  const state = {
-    uid: null,
-    roomId: null,
-    room: null,
-    isOwner: false,
-    memberName: "使用者",
-
-    roomRef: null,
-    stateRef: null,
-    membersRef: null,
-    chatRef: null,
-
-    player: null,
-    playerReady: false,
-
-    applyingRemote: false,
-    lastRemoteKey: "",
-
-    lastWriteAt: 0,
-    seekTimer: null,
-
-    directVideo: $("directVideo"),
-
-    firebaseReady: false
-  };
-
-  let db = null;
-  let auth = null;
+  /*
+   * =========================================
+   * YouTube Data API
+   * =========================================
+   *
+   * 這裡填你的 YouTube Data API v3 Key。
+   *
+   * 例如：
+   * const YOUTUBE_API_KEY = "AIza...";
+   *
+   * 沒有 API Key 時：
+   * - 房間功能仍可用
+   * - 聊天仍可用
+   * - 已選影片的播放同步仍可用
+   * - 但首頁的「搜尋影片」不能使用
+   */
+  const YOUTUBE_API_KEY = "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
 
-  /* =========================================
-     平台資料
-  ========================================== */
+  /*
+   * =========================================
+   * 平台資訊
+   * =========================================
+   */
 
   const PLATFORMS = {
+
     youtube: {
       name: "YouTube",
       icon: "▶",
-      url: "https://www.youtube.com/",
-      type: "影片平台",
-      description: "使用 YouTube 官方網站與播放器。"
-    },
-
-    netflix: {
-      name: "Netflix",
-      icon: "🔴",
-      url: "https://www.netflix.com/",
-      type: "串流平台",
-      description: "使用你自己的 Netflix 帳號觀看。"
-    },
-
-    bilibili: {
-      name: "Bilibili",
-      icon: "📺",
-      url: "https://www.bilibili.com/",
-      type: "影片平台",
-      description: "使用 Bilibili 官方網站觀看。"
-    },
-
-    crunchyroll: {
-      name: "Crunchyroll",
-      icon: "🟠",
-      url: "https://www.crunchyroll.com/",
-      type: "動漫串流",
-      description: "使用自己的 Crunchyroll 帳號觀看動漫。"
-    },
-
-    disneyplus: {
-      name: "Disney+",
-      icon: "🔵",
-      url: "https://www.disneyplus.com/",
-      type: "串流平台",
-      description: "使用自己的 Disney+ 帳號觀看。"
-    },
-
-    primevideo: {
-      name: "Prime Video",
-      icon: "🟦",
-      url: "https://www.primevideo.com/",
-      type: "串流平台",
-      description: "使用自己的 Prime Video 帳號觀看。"
-    },
-
-    appletv: {
-      name: "Apple TV+",
-      icon: "🍎",
-      url: "https://tv.apple.com/",
-      type: "串流平台",
-      description: "使用自己的 Apple TV+ 帳號觀看。"
-    },
-
-    max: {
-      name: "Max",
-      icon: "🟣",
-      url: "https://www.max.com/",
-      type: "串流平台",
-      description: "使用自己的 Max 帳號觀看。"
-    },
-
-    hulu: {
-      name: "Hulu",
-      icon: "🟢",
-      url: "https://www.hulu.com/",
-      type: "串流平台",
-      description: "使用自己的 Hulu 帳號觀看。"
-    },
-
-    paramount: {
-      name: "Paramount+",
-      icon: "🟦",
-      url: "https://www.paramountplus.com/",
-      type: "串流平台",
-      description: "使用自己的 Paramount+ 帳號觀看。"
-    },
-
-    peacock: {
-      name: "Peacock",
-      icon: "🦚",
-      url: "https://www.peacocktv.com/",
-      type: "串流平台",
-      description: "使用自己的 Peacock 帳號觀看。"
-    },
-
-    twitch: {
-      name: "Twitch",
-      icon: "🎮",
-      url: "https://www.twitch.tv/",
-      type: "直播平台",
-      description: "使用 Twitch 官方網站觀看直播。"
+      searchable: true,
+      player: "youtube"
     },
 
     vimeo: {
       name: "Vimeo",
       icon: "▶",
-      url: "https://vimeo.com/",
-      type: "影片平台",
-      description: "使用 Vimeo 官方網站觀看。"
+      searchable: false,
+      player: "vimeo"
     },
 
     dailymotion: {
       name: "Dailymotion",
       icon: "▶",
-      url: "https://www.dailymotion.com/",
-      type: "影片平台",
-      description: "使用 Dailymotion 官方網站觀看。"
+      searchable: false,
+      player: "dailymotion"
     },
 
-    tiktok: {
-      name: "TikTok",
-      icon: "🎵",
-      url: "https://www.tiktok.com/",
-      type: "短影片",
-      description: "使用 TikTok 官方網站觀看。"
+    bilibili: {
+      name: "Bilibili",
+      icon: "📺",
+      searchable: false,
+      player: "bilibili"
     },
 
-    facebook: {
-      name: "Facebook Video",
+    twitch: {
+      name: "Twitch",
+      icon: "🎮",
+      searchable: false,
+      player: "twitch"
+    },
+
+    netflix: {
+      name: "Netflix",
+      icon: "🔴",
+      searchable: false,
+      player: "external"
+    },
+
+    crunchyroll: {
+      name: "Crunchyroll",
+      icon: "🟠",
+      searchable: false,
+      player: "external"
+    },
+
+    disneyplus: {
+      name: "Disney+",
       icon: "🔵",
-      url: "https://www.facebook.com/watch/",
-      type: "影片平台",
-      description: "使用 Facebook 官方網站觀看影片。"
+      searchable: false,
+      player: "external"
     },
 
-    x: {
-      name: "X / Twitter",
-      icon: "𝕏",
-      url: "https://x.com/",
-      type: "社群影片",
-      description: "使用 X 官方網站觀看影片。"
+    primevideo: {
+      name: "Prime Video",
+      icon: "🟦",
+      searchable: false,
+      player: "external"
     },
 
-    rumble: {
-      name: "Rumble",
-      icon: "▶",
-      url: "https://rumble.com/",
-      type: "影片平台",
-      description: "使用 Rumble 官方網站觀看。"
+    appletv: {
+      name: "Apple TV+",
+      icon: "🍎",
+      searchable: false,
+      player: "external"
     },
 
-    streamable: {
-      name: "Streamable",
-      icon: "▶",
-      url: "https://streamable.com/",
-      type: "影片平台",
-      description: "使用 Streamable 官方網站觀看。"
+    max: {
+      name: "Max",
+      icon: "🟣",
+      searchable: false,
+      player: "external"
     },
 
-    internetarchive: {
-      name: "Internet Archive",
-      icon: "🗂",
-      url: "https://archive.org/",
-      type: "公開影片",
-      description: "使用 Internet Archive 官方網站觀看公開內容。"
+    hulu: {
+      name: "Hulu",
+      icon: "🟢",
+      searchable: false,
+      player: "external"
     },
 
-    other: {
-      name: "其他網站",
-      icon: "🌐",
-      url: "https://www.google.com/",
-      type: "其他平台",
-      description: "使用其他合法影片平台。"
+    paramount: {
+      name: "Paramount+",
+      icon: "🟦",
+      searchable: false,
+      player: "external"
+    },
+
+    peacock: {
+      name: "Peacock",
+      icon: "🦚",
+      searchable: false,
+      player: "external"
     }
   };
 
 
-  /* =========================================
-     基本工具
-  ========================================== */
+  /*
+   * =========================================
+   * 房間狀態
+   * =========================================
+   */
+
+  const state = {
+
+    uid: null,
+
+    memberName: "看片玩家",
+
+    roomId: null,
+
+    room: null,
+
+    isOwner: false,
+
+    roomRef: null,
+
+    stateRef: null,
+
+    membersRef: null,
+
+    chatRef: null,
+
+    player: null,
+
+    playerReady: false,
+
+    vimeoPlayer: null,
+
+    dailymotionFrame: null,
+
+    applyingRemote: false,
+
+    lastRemoteKey: "",
+
+    lastWriteAt: 0,
+
+    searchResults: [],
+
+    selectedVideo: null,
+
+    modalSelectedVideo: null,
+
+    searchBusy: false,
+
+    syncTimer: null,
+
+    seekTimer: null
+
+  };
+
+
+  let db = null;
+
+  let auth = null;
+
+
+  /*
+   * =========================================
+   * 基本工具
+   * =========================================
+   */
 
   function toast(message) {
+
     const element = $("toast");
 
     if (!element) {
@@ -220,59 +205,83 @@
     }
 
     element.textContent = message;
+
     element.classList.add("show");
 
     clearTimeout(toast.timer);
 
     toast.timer = setTimeout(() => {
+
       element.classList.remove("show");
+
     }, 2400);
+
   }
 
 
   function setError(element, message) {
+
     if (!element) {
       return;
     }
 
-    element.textContent = message || "";
+    element.textContent =
+      message || "";
+
   }
 
 
-  function show(view) {
-    const home = $("homeView");
-    const room = $("roomView");
+  function showView(view) {
 
-    if (home) {
-      home.classList.toggle("hidden", view !== "home");
-    }
+    $("homeView")
+      ?.classList
+      .toggle(
+        "hidden",
+        view !== "home"
+      );
 
-    if (room) {
-      room.classList.toggle("hidden", view !== "room");
-    }
+    $("roomView")
+      ?.classList
+      .toggle(
+        "hidden",
+        view !== "room"
+      );
+
   }
 
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(
+
+    return String(
+      value ?? ""
+    ).replace(
       /[&<>"']/g,
       (character) => {
+
         const map = {
+
           "&": "&amp;",
           "<": "&lt;",
           ">": "&gt;",
           '"': "&quot;",
           "'": "&#039;"
+
         };
 
-        return map[character];
+        return map[
+          character
+        ];
+
       }
     );
+
   }
 
 
   function formatTime(seconds) {
-    seconds = Number(seconds);
+
+    seconds =
+      Number(seconds);
 
     if (
       !Number.isFinite(seconds) ||
@@ -281,42 +290,61 @@
       return "00:00";
     }
 
-    seconds = Math.floor(seconds);
+    seconds =
+      Math.floor(seconds);
 
     const hours =
-      Math.floor(seconds / 3600);
+      Math.floor(
+        seconds / 3600
+      );
 
     const minutes =
-      Math.floor((seconds % 3600) / 60);
+      Math.floor(
+        (seconds % 3600) / 60
+      );
 
     const secs =
       seconds % 60;
 
     if (hours > 0) {
+
       return (
-        String(hours).padStart(2, "0") +
+        String(hours)
+          .padStart(2, "0") +
         ":" +
-        String(minutes).padStart(2, "0") +
+        String(minutes)
+          .padStart(2, "0") +
         ":" +
-        String(secs).padStart(2, "0")
+        String(secs)
+          .padStart(2, "0")
       );
+
     }
 
     return (
-      String(minutes).padStart(2, "0") +
+      String(minutes)
+        .padStart(2, "0") +
       ":" +
-      String(secs).padStart(2, "0")
+      String(secs)
+        .padStart(2, "0")
     );
+
   }
 
 
   function randomRoomCode() {
+
     const chars =
       "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     let result = "";
 
-    for (let i = 0; i < 6; i++) {
+    for (
+      let i = 0;
+      i < 6;
+      i++
+    ) {
+
       result +=
         chars[
           Math.floor(
@@ -324,88 +352,109 @@
             chars.length
           )
         ];
+
     }
 
     return result;
+
   }
 
 
   function getRoomIdFromUrl() {
+
     return (
       new URLSearchParams(
         location.search
       )
         .get("room")
         ?.trim()
-        .toUpperCase() || ""
+        .toUpperCase() ||
+      ""
     );
+
   }
 
 
-  function getRoomLink(roomId) {
+  function roomLink(roomId) {
+
     return (
       location.origin +
       location.pathname +
       "?room=" +
-      encodeURIComponent(roomId)
+      encodeURIComponent(
+        roomId
+      )
     );
+
   }
 
 
   function getMemberName() {
+
     let name =
       localStorage.getItem(
         "wt_name"
       );
 
     if (!name) {
+
       name =
         "玩家" +
         Math.floor(
-          Math.random() * 900 + 100
+          Math.random() * 900 +
+          100
         );
 
       localStorage.setItem(
         "wt_name",
         name
       );
+
     }
 
     return name;
+
   }
 
 
-  function isValidRoomCode(roomId) {
-    return /^[A-Z0-9]{6}$/.test(
-      roomId
-    );
-  }
-
-
-  /* =========================================
-     Firebase
-  ========================================== */
+  /*
+   * =========================================
+   * Firebase
+   * =========================================
+   */
 
   async function initializeFirebase() {
+
     if (!window.firebase) {
+
       throw new Error(
         "Firebase SDK 尚未載入"
       );
+
     }
+
 
     if (
       !window.FIREBASE_CONFIG
     ) {
+
       throw new Error(
         "找不到 Firebase 設定"
       );
+
     }
 
-    if (!firebase.apps.length) {
+
+    if (
+      !firebase.apps.length
+    ) {
+
       firebase.initializeApp(
         window.FIREBASE_CONFIG
       );
+
     }
+
 
     auth =
       firebase.auth();
@@ -413,761 +462,622 @@
     db =
       firebase.database();
 
-    await auth.signInAnonymously();
+
+    await auth
+      .signInAnonymously();
+
 
     state.uid =
       auth.currentUser?.uid ||
       null;
 
+
     if (!state.uid) {
+
       throw new Error(
         "Firebase 匿名登入失敗"
       );
+
     }
 
-    state.firebaseReady = true;
 
-    if ($("authStatus")) {
-      $("authStatus").textContent =
-        "已連線";
-    }
+    $("authStatus")
+      .textContent =
+      "已連線";
+
   }
 
 
-  /* =========================================
-     平台 UI
-  ========================================== */
+  /*
+   * =========================================
+   * YouTube ID
+   * =========================================
+   */
 
-  function updatePlatformPreview(
-    platformId
-  ) {
-    const data =
-      PLATFORMS[platformId] ||
-      PLATFORMS.youtube;
+  function getYoutubeId(value) {
 
-    const icon =
-      $("platformPreviewIcon");
-
-    const name =
-      $("platformPreviewName");
-
-    const type =
-      $("platformPreviewType");
-
-    const description =
-      $("platformDescription");
-
-    if (icon) {
-      icon.textContent =
-        data.icon;
-    }
-
-    if (name) {
-      name.textContent =
-        data.name;
-    }
-
-    if (type) {
-      type.textContent =
-        data.type;
-    }
-
-    if (description) {
-      description.textContent =
-        data.description;
-    }
-  }
-
-
-  function updateModalPlatform(
-    platformId
-  ) {
-    const data =
-      PLATFORMS[platformId] ||
-      PLATFORMS.youtube;
-
-    const description =
-      $("modalPlatformDescription");
-
-    if (description) {
-      description.textContent =
-        data.description;
-    }
-  }
-
-
-  function renderRoomPlatform() {
-    const platformId =
-      state.room?.sourceType ||
-      "youtube";
-
-    const data =
-      PLATFORMS[platformId] ||
-      PLATFORMS.youtube;
-
-    const icon =
-      $("roomPlatformIcon");
-
-    const name =
-      $("roomPlatformName");
-
-    const description =
-      $("roomPlatformDescription");
-
-    const syncText =
-      $("platformSyncText");
-
-    if (icon) {
-      icon.textContent =
-        data.icon;
-    }
-
-    if (name) {
-      name.textContent =
-        data.name;
-    }
-
-    if (description) {
-      description.textContent =
-        data.description;
-    }
-
-    if (syncText) {
-      syncText.textContent =
-        `${data.name} 房間已連線`;
-    }
-  }
-
-
-  function openCurrentPlatform() {
-    const platformId =
-      state.room?.sourceType ||
-      "youtube";
-
-    const data =
-      PLATFORMS[platformId] ||
-      PLATFORMS.youtube;
-
-    if (!data.url) {
-      toast(
-        "目前沒有可開啟的平台網址"
-      );
-
-      return;
-    }
-
-    window.open(
-      data.url,
-      "_blank",
-      "noopener,noreferrer"
-    );
-
-    toast(
-      `${data.name} 已開啟`
-    );
-  }
-
-
-  /* =========================================
-     YouTube
-  ========================================== */
-
-  function getYoutubeId(url) {
-    if (!url) {
+    if (!value) {
       return null;
     }
 
+    const text =
+      String(value)
+        .trim();
+
+    /*
+     * 允許直接傳 ID
+     */
+    if (
+      /^[A-Za-z0-9_-]{11}$/.test(
+        text
+      )
+    ) {
+      return text;
+    }
+
+
     try {
-      const parsed =
-        new URL(url);
+
+      const url =
+        new URL(text);
+
 
       if (
-        parsed.hostname.includes(
+        url.hostname.includes(
           "youtu.be"
         )
       ) {
+
         return (
-          parsed.pathname
-            .replace("/", "")
+          url.pathname
+            .replace(
+              /^\/+/,
+              ""
+            )
             .split("/")[0] ||
           null
         );
+
       }
 
+
       if (
-        parsed.hostname.includes(
+        url.hostname.includes(
           "youtube.com"
         )
       ) {
+
         if (
-          parsed.pathname ===
+          url.pathname ===
           "/watch"
         ) {
+
           return (
-            parsed.searchParams.get(
+            url.searchParams.get(
               "v"
             ) || null
           );
+
         }
 
+
         if (
-          parsed.pathname.startsWith(
+          url.pathname.startsWith(
             "/shorts/"
           )
         ) {
+
           return (
-            parsed.pathname.split(
+            url.pathname.split(
               "/"
-            )[2] || null
+            )[2] ||
+            null
           );
+
         }
 
+
         if (
-          parsed.pathname.startsWith(
+          url.pathname.startsWith(
             "/embed/"
           )
         ) {
+
           return (
-            parsed.pathname.split(
+            url.pathname.split(
               "/"
-            )[2] || null
+            )[2] ||
+            null
           );
+
         }
+
       }
+
     } catch (_) {}
 
     return null;
+
   }
 
 
-  function hasYoutubeVideo() {
-    return (
-      state.room?.sourceType ===
-        "youtube" &&
-      !!state.room?.sourceUrl &&
-      !!getYoutubeId(
-        state.room.sourceUrl
-      )
-    );
-  }
+  /*
+   * =========================================
+   * YouTube 搜尋
+   * =========================================
+   */
 
-
-  function buildYoutubePlayer() {
-    if (
-      !hasYoutubeVideo()
-    ) {
-      return;
-    }
-
-    const playerElement =
-      $("youtubePlayer");
-
-    if (!playerElement) {
-      return;
-    }
-
-    const videoId =
-      getYoutubeId(
-        state.room.sourceUrl
-      );
-
-    if (!videoId) {
-      return;
-    }
-
-    $("platformView")
-      ?.classList.add(
-        "hidden"
-      );
-
-    $("directVideo")
-      ?.classList.add(
-        "hidden"
-      );
-
-    playerElement.classList.remove(
-      "hidden"
-    );
-
-    if (
-      !window.YT ||
-      typeof YT.Player !==
-        "function"
-    ) {
-      $("playerPlaceholder").textContent =
-        "YouTube 播放器載入中…";
-
-      $("playerPlaceholder")
-        .classList.remove(
-          "hidden"
-        );
-
-      setTimeout(
-        buildYoutubePlayer,
-        600
-      );
-
-      return;
-    }
-
-    $("playerPlaceholder")
-      ?.classList.add(
-        "hidden"
-      );
-
-    if (state.player) {
-      try {
-        state.player.destroy();
-      } catch (_) {}
-    }
-
-    state.player =
-      new YT.Player(
-        "youtubePlayer",
-        {
-          videoId,
-
-          playerVars: {
-            autoplay: 0,
-            controls: 1,
-            playsinline: 1,
-            rel: 0,
-            modestbranding: 1
-          },
-
-          events: {
-
-            onReady: () => {
-              state.playerReady =
-                true;
-
-              updateTimeUI();
-
-              syncLatestPlayback();
-            },
-
-
-            onStateChange:
-              (event) => {
-
-                if (
-                  state.applyingRemote
-                ) {
-                  return;
-                }
-
-                if (
-                  event.data ===
-                  YT.PlayerState.PLAYING
-                ) {
-                  writePlayback(
-                    "play",
-                    true
-                  );
-                }
-
-
-                if (
-                  event.data ===
-                  YT.PlayerState.PAUSED
-                ) {
-                  writePlayback(
-                    "pause",
-                    false
-                  );
-                }
-
-
-                updateTimeUI();
-              },
-
-
-            onError: () => {
-              toast(
-                "YouTube 無法播放這支影片"
-              );
-            }
-
-          }
-        }
-      );
-  }
-
-
-  function currentPlaybackPosition() {
-    if (
-      state.room?.sourceType ===
-      "youtube"
-    ) {
-      if (
-        state.playerReady &&
-        state.player
-      ) {
-        try {
-          return (
-            state.player.getCurrentTime() ||
-            0
-          );
-        } catch (_) {
-          return 0;
-        }
-      }
-
-      return 0;
-    }
-
-    if (
-      state.directVideo
-    ) {
-      return (
-        state.directVideo.currentTime ||
-        0
-      );
-    }
-
-    return 0;
-  }
-
-
-  function currentDuration() {
-    if (
-      state.room?.sourceType ===
-      "youtube"
-    ) {
-      if (
-        state.playerReady &&
-        state.player
-      ) {
-        try {
-          return (
-            state.player.getDuration() ||
-            0
-          );
-        } catch (_) {
-          return 0;
-        }
-      }
-
-      return 0;
-    }
-
-    return (
-      Number(
-        state.directVideo?.duration
-      ) || 0
-    );
-  }
-
-
-  function isCurrentlyPlaying() {
-    if (
-      state.room?.sourceType ===
-      "youtube"
-    ) {
-      if (
-        !state.playerReady ||
-        !state.player ||
-        !window.YT
-      ) {
-        return false;
-      }
-
-      try {
-        return (
-          state.player.getPlayerState() ===
-          YT.PlayerState.PLAYING
-        );
-      } catch (_) {
-        return false;
-      }
-    }
-
-    if (
-      state.directVideo
-    ) {
-      return (
-        !state.directVideo.paused
-      );
-    }
-
-    return false;
-  }
-
-
-  function updateTimeUI() {
-    const readout =
-      $("timeReadout");
-
-    if (!readout) {
-      return;
-    }
-
-    readout.textContent =
-      formatTime(
-        currentPlaybackPosition()
-      ) +
-      " / " +
-      formatTime(
-        currentDuration()
-      );
-  }
-
-
-  /* =========================================
-     播放狀態同步
-  ========================================== */
-
-  async function writePlayback(
-    action,
-    playing
+  async function searchYoutube(
+    query,
+    target = "home"
   ) {
-    if (
-      !state.stateRef ||
-      !state.uid
-    ) {
-      return;
-    }
 
-    if (
-      state.applyingRemote
-    ) {
-      return;
-    }
+    query =
+      String(
+        query || ""
+      ).trim();
 
-    const now =
-      Date.now();
 
-    if (
-      action === "sync" &&
-      now - state.lastWriteAt <
-        300
-    ) {
-      return;
-    }
+    if (!query) {
 
-    state.lastWriteAt = now;
-
-    const payload = {
-      action,
-      position:
-        currentPlaybackPosition(),
-
-      playing:
-        typeof playing ===
-        "boolean"
-          ? playing
-          : isCurrentlyPlaying(),
-
-      updatedAt:
-        firebase.database
-          .ServerValue
-          .TIMESTAMP,
-
-      updatedBy:
-        state.uid
-    };
-
-    try {
-      await state.stateRef.set(
-        payload
+      throw new Error(
+        "請輸入影片名稱"
       );
-    } catch (error) {
-      console.error(error);
 
-      toast(
-        "同步失敗，請檢查 Firebase 規則"
-      );
-    }
-  }
-
-
-  async function syncLatestPlayback() {
-    if (
-      !state.stateRef
-    ) {
-      return;
     }
 
-    const snapshot =
-      await state.stateRef.once(
-        "value"
+
+    if (!YOUTUBE_API_KEY) {
+
+      throw new Error(
+        "目前還沒有設定 YouTube Data API Key"
       );
+
+    }
+
+
+    const url =
+      new URL(
+        "https://www.googleapis.com/youtube/v3/search"
+      );
+
+
+    url.searchParams.set(
+      "part",
+      "snippet"
+    );
+
+    url.searchParams.set(
+      "q",
+      query
+    );
+
+    url.searchParams.set(
+      "type",
+      "video"
+    );
+
+    url.searchParams.set(
+      "maxResults",
+      "12"
+    );
+
+    url.searchParams.set(
+      "regionCode",
+      "TW"
+    );
+
+    url.searchParams.set(
+      "relevanceLanguage",
+      "zh-Hant"
+    );
+
+    url.searchParams.set(
+      "safeSearch",
+      "moderate"
+    );
+
+    url.searchParams.set(
+      "videoEmbeddable",
+      "true"
+    );
+
+    url.searchParams.set(
+      "key",
+      YOUTUBE_API_KEY
+    );
+
+
+    const response =
+      await fetch(
+        url.toString()
+      );
+
+
+    if (!response.ok) {
+
+      let message =
+        "YouTube 搜尋失敗";
+
+      try {
+
+        const error =
+          await response.json();
+
+        message =
+          error?.error?.message ||
+          message;
+
+      } catch (_) {}
+
+      throw new Error(
+        message
+      );
+
+    }
+
 
     const data =
-      snapshot.val();
+      await response.json();
 
-    if (!data) {
-      await writePlayback(
-        "sync"
+
+    const items =
+      Array.isArray(
+        data.items
+      )
+        ? data.items
+        : [];
+
+
+    const results =
+      items
+        .map(
+          (item) => {
+
+            const id =
+              item?.id?.videoId;
+
+            const snippet =
+              item?.snippet || {};
+
+
+            if (!id) {
+              return null;
+            }
+
+
+            return {
+
+              id,
+
+              platform:
+                "youtube",
+
+              title:
+                snippet.title ||
+                "未命名影片",
+
+              description:
+                snippet.description ||
+                "",
+
+              channel:
+                snippet.channelTitle ||
+                "",
+
+              thumbnail:
+                snippet.thumbnails?.high?.url ||
+                snippet.thumbnails?.medium?.url ||
+                snippet.thumbnails?.default?.url ||
+                ""
+
+            };
+
+          }
+        )
+        .filter(Boolean);
+
+
+    state.searchResults =
+      results;
+
+
+    if (
+      target === "modal"
+    ) {
+
+      renderSearchResults(
+        results,
+        "modal"
       );
 
-      return;
+    } else {
+
+      renderSearchResults(
+        results,
+        "home"
+      );
+
     }
 
-    await applyRemotePlayback(
-      data,
-      true
-    );
+
+    return results;
+
   }
 
 
-  async function applyRemotePlayback(
-    data,
-    force = false
+  /*
+   * =========================================
+   * 搜尋結果 UI
+   * =========================================
+   */
+
+  function renderSearchResults(
+    results,
+    target
   ) {
-    if (!data) {
+
+    const container =
+      target === "modal"
+        ? $("modalVideoSearchResults")
+        : $("videoSearchResults");
+
+
+    if (!container) {
       return;
     }
 
-    if (
-      !force &&
-      data.updatedBy ===
-        state.uid
-    ) {
+
+    if (!results.length) {
+
+      container.innerHTML =
+        `
+          <div
+            class="muted"
+            style="
+              padding:14px 4px;
+              text-align:center;
+            "
+          >
+            找不到符合的影片。
+          </div>
+        `;
+
       return;
     }
 
-    const key =
-      [
-        data.updatedAt,
-        data.updatedBy,
-        data.action,
-        data.position,
-        data.playing
-      ].join("|");
 
-    if (
-      key ===
-      state.lastRemoteKey
-    ) {
-      return;
-    }
+    container.innerHTML =
+      results
+        .map(
+          (video) => {
 
-    state.lastRemoteKey =
-      key;
+            return `
+              <button
+                type="button"
+                class="video-result-card"
+                data-video-id="${escapeHtml(video.id)}"
+                data-target="${target}"
+              >
 
-    const position =
-      Math.max(
-        0,
-        Number(data.position) ||
-          0
+                <img
+                  src="${escapeHtml(video.thumbnail)}"
+                  alt=""
+                  loading="lazy"
+                >
+
+                <span class="video-result-info">
+
+                  <strong>
+                    ${escapeHtml(video.title)}
+                  </strong>
+
+                  <small>
+                    ${escapeHtml(video.channel)}
+                  </small>
+
+                </span>
+
+              </button>
+            `;
+
+          }
+        )
+        .join("");
+
+
+    container
+      .querySelectorAll(
+        ".video-result-card"
+      )
+      .forEach(
+        (card) => {
+
+          card.addEventListener(
+            "click",
+            () => {
+
+              const id =
+                card.dataset.videoId;
+
+              const video =
+                results.find(
+                  (item) =>
+                    item.id === id
+                );
+
+              if (!video) {
+                return;
+              }
+
+
+              if (
+                target === "modal"
+              ) {
+
+                state.modalSelectedVideo =
+                  video;
+
+                renderModalSelectedVideo(
+                  video
+                );
+
+              } else {
+
+                state.selectedVideo =
+                  video;
+
+                renderSelectedVideo(
+                  video
+                );
+
+              }
+
+            }
+          );
+
+        }
       );
 
-    state.applyingRemote =
-      true;
-
-    try {
-
-      if (
-        hasYoutubeVideo() &&
-        state.playerReady &&
-        state.player
-      ) {
-
-        const local =
-          state.player.getCurrentTime?.() ||
-          0;
-
-        if (
-          Math.abs(
-            local - position
-          ) > 0.8 ||
-          data.action === "seek" ||
-          data.action === "sync"
-        ) {
-          state.player.seekTo(
-            position,
-            true
-          );
-        }
-
-        if (
-          data.playing === true
-        ) {
-          state.player.playVideo();
-        }
-
-        if (
-          data.playing === false
-        ) {
-          state.player.pauseVideo();
-        }
-      }
-
-
-      if (
-        state.room?.sourceType ===
-        "direct" &&
-        state.directVideo
-      ) {
-
-        const local =
-          state.directVideo.currentTime ||
-          0;
-
-        if (
-          Math.abs(
-            local - position
-          ) > 0.8 ||
-          data.action === "seek" ||
-          data.action === "sync"
-        ) {
-          state.directVideo.currentTime =
-            position;
-        }
-
-        if (
-          data.playing === true
-        ) {
-          await state.directVideo
-            .play()
-            .catch(
-              () => {}
-            );
-        }
-
-        if (
-          data.playing === false
-        ) {
-          state.directVideo.pause();
-        }
-      }
-
-      if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          "已同步 " +
-          formatTime(
-            position
-          );
-      }
-
-      updateTimeUI();
-
-    } finally {
-
-      setTimeout(() => {
-        state.applyingRemote =
-          false;
-      }, 250);
-
-    }
   }
 
 
-  /* =========================================
-     房間
-  ========================================== */
+  function renderSelectedVideo(
+    video
+  ) {
+
+    const card =
+      $("selectedVideoCard");
+
+    const title =
+      $("selectedVideoTitle");
+
+    const meta =
+      $("selectedVideoMeta");
+
+    const thumbnail =
+      $("selectedVideoThumbnail");
+
+
+    if (card) {
+      card.classList.remove(
+        "hidden"
+      );
+    }
+
+
+    if (title) {
+      title.textContent =
+        video.title;
+    }
+
+
+    if (meta) {
+      meta.textContent =
+        video.channel ||
+        "YouTube";
+    }
+
+
+    if (thumbnail) {
+
+      thumbnail.style.backgroundImage =
+        `url("${video.thumbnail}")`;
+
+    }
+
+
+    toast(
+      "已選擇影片"
+    );
+
+  }
+
+
+  function clearSelectedVideo() {
+
+    state.selectedVideo =
+      null;
+
+
+    $("selectedVideoCard")
+      ?.classList.add(
+        "hidden"
+      );
+
+  }
+
+
+  function renderModalSelectedVideo(
+    video
+  ) {
+
+    const results =
+      $("modalVideoSearchResults");
+
+    if (!results) {
+      return;
+    }
+
+
+    results.innerHTML =
+      `
+        <button
+          type="button"
+          class="video-result-card selected"
+        >
+
+          <img
+            src="${escapeHtml(video.thumbnail)}"
+            alt=""
+          >
+
+          <span class="video-result-info">
+
+            <strong>
+              ${escapeHtml(video.title)}
+            </strong>
+
+            <small>
+              ${escapeHtml(video.channel)}
+            </small>
+
+          </span>
+
+        </button>
+      `;
+
+  }
+
+
+  /*
+   * =========================================
+   * 選中影片
+   * =========================================
+   */
+
+  function videoForRoom() {
+
+    if (
+      state.room?.video
+    ) {
+      return state.room.video;
+    }
+
+    return null;
+
+  }
+
+
+  /*
+   * =========================================
+   * 建立房間
+   * =========================================
+   */
 
   async function createRoom() {
-    if (
-      !state.firebaseReady
-    ) {
-      throw new Error(
-        "Firebase 尚未連線"
-      );
-    }
 
-    const name =
+    const roomName =
       $("roomNameInput")
         ?.value
         .trim() ||
@@ -1181,11 +1091,37 @@
 
 
     if (
-      !PLATFORMS[platform]
+      !PLATFORMS[
+        platform
+      ]
     ) {
+
       throw new Error(
-        "找不到這個平台"
+        "不支援的平台"
       );
+
+    }
+
+
+    /*
+     * YouTube 房間必須先選影片
+     */
+
+    if (
+      platform ===
+      "youtube"
+    ) {
+
+      if (
+        !state.selectedVideo
+      ) {
+
+        throw new Error(
+          "請先搜尋並選擇一部 YouTube 影片"
+        );
+
+      }
+
     }
 
 
@@ -1199,29 +1135,61 @@
           .ref(
             `rooms/${roomId}`
           )
-          .once("value")
+          .once(
+            "value"
+          )
       ).exists()
     ) {
+
       roomId =
         randomRoomCode();
+
+    }
+
+
+    let video =
+      null;
+
+
+    if (
+      platform ===
+      "youtube"
+    ) {
+
+      video = {
+
+        id:
+          state.selectedVideo.id,
+
+        title:
+          state.selectedVideo.title,
+
+        thumbnail:
+          state.selectedVideo.thumbnail,
+
+        channel:
+          state.selectedVideo.channel
+
+      };
+
     }
 
 
     const room = {
+
       owner:
         state.uid,
 
-      name,
+      name:
+        roomName,
 
       sourceType:
         platform,
 
-      sourceUrl:
-        platform === "youtube"
-          ? ""
-          : "",
+      video,
 
       state: {
+
         action:
           "pause",
 
@@ -1238,7 +1206,9 @@
 
         updatedBy:
           state.uid
+
       }
+
     };
 
 
@@ -1269,26 +1239,38 @@
 
 
     await enterRoom();
+
   }
 
+
+  /*
+   * =========================================
+   * 加入房間
+   * =========================================
+   */
 
   async function joinRoom(
     roomId
   ) {
+
     roomId =
-      String(roomId || "")
+      String(
+        roomId || ""
+      )
         .trim()
         .toUpperCase();
 
 
     if (
-      !isValidRoomCode(
+      !/^[A-Z0-9]{6}$/.test(
         roomId
       )
     ) {
+
       throw new Error(
         "房間碼必須是 6 碼"
       );
+
     }
 
 
@@ -1297,15 +1279,19 @@
         .ref(
           `rooms/${roomId}`
         )
-        .once("value");
+        .once(
+          "value"
+        );
 
 
     if (
       !snapshot.exists()
     ) {
+
       throw new Error(
         "找不到這個房間"
       );
+
     }
 
 
@@ -1330,25 +1316,25 @@
 
 
     await enterRoom();
+
   }
 
 
+  /*
+   * =========================================
+   * 進入房間
+   * =========================================
+   */
+
   async function enterRoom() {
-    if (
-      !state.room ||
-      !state.roomId
-    ) {
-      throw new Error(
-        "房間資料不存在"
-      );
-    }
 
-
-    show("room");
+    showView(
+      "room"
+    );
 
 
     $("roomTitle").textContent =
-      state.room.name ||
+      state.room?.name ||
       "一起看";
 
 
@@ -1362,10 +1348,12 @@
       )
       .forEach(
         (element) => {
+
           element.classList.toggle(
             "hidden",
             !state.isOwner
           );
+
         }
       );
 
@@ -1394,9 +1382,16 @@
       );
 
 
+    /*
+     * 加入成員
+     */
+
     await state.membersRef
-      .child(state.uid)
+      .child(
+        state.uid
+      )
       .set({
+
         name:
           state.memberName,
 
@@ -1404,94 +1399,852 @@
           firebase.database
             .ServerValue
             .TIMESTAMP
+
       });
 
 
     state.membersRef
-      .child(state.uid)
+      .child(
+        state.uid
+      )
       .onDisconnect()
       .remove();
 
 
+    /*
+     * 播放同步
+     */
+
     state.stateRef.on(
       "value",
       (snapshot) => {
+
         applyRemotePlayback(
           snapshot.val()
         );
+
       }
     );
 
+
+    /*
+     * 成員
+     */
 
     state.membersRef.on(
       "value",
       (snapshot) => {
+
         renderMembers(
           snapshot.val() ||
           {}
         );
+
       }
     );
 
+
+    /*
+     * 聊天
+     */
 
     state.chatRef
       .limitToLast(100)
       .on(
         "value",
         (snapshot) => {
+
           renderChat(
             snapshot.val() ||
             {}
           );
+
         }
       );
 
 
-    renderRoomPlatform();
+    /*
+     * 載入影片
+     */
 
+    buildRoomPlayer();
+
+
+    /*
+     * 顯示目前房間狀態
+     */
 
     if (
-      hasYoutubeVideo()
+      $("syncStatus")
     ) {
-      buildYoutubePlayer();
-    } else {
 
-      $("youtubePlayer")
-        ?.classList.add(
-          "hidden"
-        );
-
-      $("directVideo")
-        ?.classList.add(
-          "hidden"
-        );
-
-      $("platformView")
-        ?.classList.remove(
-          "hidden"
-        );
-
-      $("playerPlaceholder")
-        ?.classList.add(
-          "hidden"
-        );
-    }
-
-
-    if ($("syncStatus")) {
-      $("syncStatus").textContent =
+      $("syncStatus")
+        .textContent =
         "房間已連線";
+
     }
+
   }
 
 
-  /* =========================================
-     成員
-  ========================================== */
+  /*
+   * =========================================
+   * 建立播放器
+   * =========================================
+   */
+
+  function hideAllPlayers() {
+
+    [
+      "youtubePlayer",
+      "vimeoPlayer",
+      "dailymotionPlayer",
+      "bilibiliPlayer",
+      "directVideo",
+      "emptyPlayer",
+      "platformPlayerNotice"
+    ]
+      .forEach(
+        (id) => {
+
+          $(id)
+            ?.classList
+            .add(
+              "hidden"
+            );
+
+        }
+      );
+
+  }
+
+
+  function buildRoomPlayer() {
+
+    hideAllPlayers();
+
+
+    const platform =
+      state.room?.sourceType ||
+      "youtube";
+
+
+    const info =
+      PLATFORMS[
+        platform
+      ];
+
+
+    if (
+      platform ===
+      "youtube"
+    ) {
+
+      const videoId =
+        state.room?.video?.id;
+
+
+      if (!videoId) {
+
+        $("emptyPlayer")
+          ?.classList
+          .remove(
+            "hidden"
+          );
+
+        return;
+
+      }
+
+
+      buildYoutubePlayer(
+        videoId
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * Vimeo / Dailymotion / Bilibili
+     * 先保留播放器容器。
+     *
+     * 真正的影片 ID 之後由各平台
+     * 官方 API / Embed 再接入。
+     */
+
+    if (
+      platform ===
+        "vimeo" ||
+      platform ===
+        "dailymotion" ||
+      platform ===
+        "bilibili"
+    ) {
+
+      $("platformPlayerNotice")
+        ?.classList
+        .remove(
+          "hidden"
+        );
+
+
+      $("roomPlatformIcon")
+        .textContent =
+        info.icon;
+
+
+      $("roomPlatformName")
+        .textContent =
+        info.name;
+
+
+      $("roomPlatformDescription")
+        .textContent =
+        "這個平台的播放器需要使用該平台提供的影片 ID／官方嵌入方式。";
+
+
+      return;
+
+    }
+
+
+    /*
+     * 其他平台
+     */
+
+    $("platformPlayerNotice")
+      ?.classList
+      .remove(
+        "hidden"
+      );
+
+
+    $("roomPlatformIcon")
+      .textContent =
+      info?.icon ||
+      "🌐";
+
+
+    $("roomPlatformName")
+      .textContent =
+      info?.name ||
+      platform;
+
+
+    $("roomPlatformDescription")
+      .textContent =
+      "房間已選定這個平台。實際站內播放需要該平台提供官方播放器整合能力。";
+
+
+  }
+
+
+  /*
+   * =========================================
+   * YouTube 播放器
+   * =========================================
+   */
+
+  function buildYoutubePlayer(
+    videoId
+  ) {
+
+    const container =
+      $("youtubePlayer");
+
+
+    if (!container) {
+      return;
+    }
+
+
+    hideAllPlayers();
+
+
+    container.classList.remove(
+      "hidden"
+    );
+
+
+    state.playerReady =
+      false;
+
+
+    if (
+      !window.YT ||
+      typeof YT.Player !==
+        "function"
+    ) {
+
+      $("playerPlaceholder")
+        ?.classList
+        .remove(
+          "hidden"
+        );
+
+
+      if (
+        $("playerPlaceholder")
+      ) {
+
+        $("playerPlaceholder")
+          .textContent =
+          "YouTube 播放器載入中…";
+
+      }
+
+
+      setTimeout(
+        () => {
+          buildYoutubePlayer(
+            videoId
+          );
+        },
+        700
+      );
+
+
+      return;
+
+    }
+
+
+    if (
+      state.player
+    ) {
+
+      try {
+        state.player.destroy();
+      } catch (_) {}
+
+    }
+
+
+    state.player =
+      new YT.Player(
+        "youtubePlayer",
+        {
+
+          videoId,
+
+          playerVars: {
+
+            autoplay:
+              0,
+
+            controls:
+              1,
+
+            playsinline:
+              1,
+
+            rel:
+              0,
+
+            modestbranding:
+              1
+
+          },
+
+
+          events: {
+
+            onReady:
+              () => {
+
+                state.playerReady =
+                  true;
+
+
+                updateTimeUI();
+
+
+                syncLatestPlayback();
+
+
+                startSyncHeartbeat();
+
+              },
+
+
+            onStateChange:
+              (event) => {
+
+                if (
+                  state.applyingRemote
+                ) {
+                  return;
+                }
+
+
+                if (
+                  event.data ===
+                  YT.PlayerState.PLAYING
+                ) {
+
+                  writePlayback(
+                    "play",
+                    true
+                  );
+
+                }
+
+
+                if (
+                  event.data ===
+                  YT.PlayerState.PAUSED
+                ) {
+
+                  writePlayback(
+                    "pause",
+                    false
+                  );
+
+                }
+
+
+                if (
+                  event.data ===
+                  YT.PlayerState.ENDED
+                ) {
+
+                  writePlayback(
+                    "pause",
+                    false
+                  );
+
+                }
+
+
+                updateTimeUI();
+
+              },
+
+
+            onError:
+              () => {
+
+                toast(
+                  "這支 YouTube 影片無法嵌入播放"
+                );
+
+              }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /*
+   * =========================================
+   * 播放器狀態
+   * =========================================
+   */
+
+  function currentPosition() {
+
+    if (
+      state.playerReady &&
+      state.player
+    ) {
+
+      try {
+
+        return (
+          state.player
+            .getCurrentTime() ||
+          0
+        );
+
+      } catch (_) {}
+
+    }
+
+
+    return 0;
+
+  }
+
+
+  function duration() {
+
+    if (
+      state.playerReady &&
+      state.player
+    ) {
+
+      try {
+
+        return (
+          state.player
+            .getDuration() ||
+          0
+        );
+
+      } catch (_) {}
+
+    }
+
+
+    return 0;
+
+  }
+
+
+  function isPlaying() {
+
+    if (
+      !state.playerReady ||
+      !state.player ||
+      !window.YT
+    ) {
+
+      return false;
+
+    }
+
+
+    try {
+
+      return (
+        state.player
+          .getPlayerState() ===
+        YT.PlayerState.PLAYING
+      );
+
+    } catch (_) {
+
+      return false;
+
+    }
+
+  }
+
+
+  function updateTimeUI() {
+
+    const readout =
+      $("timeReadout");
+
+
+    if (!readout) {
+      return;
+    }
+
+
+    readout.textContent =
+      `${formatTime(
+        currentPosition()
+      )} / ${formatTime(
+        duration()
+      )}`;
+
+  }
+
+
+  /*
+   * =========================================
+   * 同步寫入
+   * =========================================
+   */
+
+  async function writePlayback(
+    action,
+    playing
+  ) {
+
+    if (
+      !state.stateRef ||
+      !state.uid
+    ) {
+
+      return;
+
+    }
+
+
+    if (
+      state.applyingRemote
+    ) {
+
+      return;
+
+    }
+
+
+    const now =
+      Date.now();
+
+
+    if (
+      action === "sync" &&
+      now - state.lastWriteAt <
+        300
+    ) {
+
+      return;
+
+    }
+
+
+    state.lastWriteAt =
+      now;
+
+
+    const payload = {
+
+      action,
+
+      position:
+        currentPosition(),
+
+      playing:
+        Boolean(
+          playing ??
+          isPlaying()
+        ),
+
+      updatedAt:
+        firebase.database
+          .ServerValue
+          .TIMESTAMP,
+
+      updatedBy:
+        state.uid
+
+    };
+
+
+    try {
+
+      await state.stateRef.set(
+        payload
+      );
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+      toast(
+        "播放同步失敗"
+      );
+
+    }
+
+  }
+
+
+  /*
+   * =========================================
+   * 遠端同步
+   * =========================================
+   */
+
+  async function applyRemotePlayback(
+    data
+  ) {
+
+    if (!data) {
+      return;
+    }
+
+
+    if (
+      data.updatedBy ===
+      state.uid
+    ) {
+
+      return;
+
+    }
+
+
+    const key =
+      [
+        data.updatedAt,
+        data.updatedBy,
+        data.action,
+        data.position,
+        data.playing
+      ].join("|");
+
+
+    if (
+      key ===
+      state.lastRemoteKey
+    ) {
+
+      return;
+
+    }
+
+
+    state.lastRemoteKey =
+      key;
+
+
+    const remotePosition =
+      Number(
+        data.position
+      ) || 0;
+
+
+    state.applyingRemote =
+      true;
+
+
+    try {
+
+      if (
+        state.playerReady &&
+        state.player
+      ) {
+
+        const localPosition =
+          currentPosition();
+
+
+        const difference =
+          Math.abs(
+            localPosition -
+            remotePosition
+          );
+
+
+        if (
+          difference > 0.8 ||
+          data.action === "seek" ||
+          data.action === "sync"
+        ) {
+
+          state.player.seekTo(
+            remotePosition,
+            true
+          );
+
+        }
+
+
+        if (
+          data.playing === true
+        ) {
+
+          state.player
+            .playVideo();
+
+        }
+
+
+        if (
+          data.playing === false
+        ) {
+
+          state.player
+            .pauseVideo();
+
+        }
+
+      }
+
+
+      if (
+        $("syncStatus")
+      ) {
+
+        $("syncStatus")
+          .textContent =
+          `已同步 ${formatTime(
+            remotePosition
+          )}`;
+
+      }
+
+
+      updateTimeUI();
+
+    } finally {
+
+      setTimeout(
+        () => {
+
+          state.applyingRemote =
+            false;
+
+        },
+        250
+      );
+
+    }
+
+  }
+
+
+  /*
+   * =========================================
+   * 自動校正
+   * =========================================
+   */
+
+  function startSyncHeartbeat() {
+
+    clearInterval(
+      state.syncTimer
+    );
+
+
+    state.syncTimer =
+      setInterval(
+        async () => {
+
+          if (
+            !state.stateRef ||
+            !state.playerReady ||
+            state.applyingRemote
+          ) {
+
+            return;
+
+          }
+
+
+          /*
+           * 房主定期送目前時間。
+           */
+
+          if (
+            state.isOwner
+          ) {
+
+            await writePlayback(
+              "sync"
+            );
+
+          }
+
+        },
+        3000
+      );
+
+  }
+
+
+  /*
+   * =========================================
+   * 成員
+   * =========================================
+   */
 
   function renderMembers(
     members
   ) {
+
     const entries =
       Object.entries(
         members || {}
@@ -1500,48 +2253,72 @@
 
     entries.sort(
       (a, b) =>
-        (a[1]?.joinedAt || 0) -
-        (b[1]?.joinedAt || 0)
+        (
+          a[1]?.joinedAt ||
+          0
+        ) -
+        (
+          b[1]?.joinedAt ||
+          0
+        )
     );
 
 
-    if ($("memberCount")) {
-      $("memberCount").textContent =
+    if (
+      $("memberCount")
+    ) {
+
+      $("memberCount")
+        .textContent =
         String(
           entries.length
         );
+
     }
 
 
     if (
       !$("memberList")
     ) {
+
       return;
+
     }
 
 
     if (
-      entries.length === 0
+      entries.length ===
+      0
     ) {
-      $("memberList").innerHTML =
-        '<div class="muted">目前沒有成員。</div>';
+
+      $("memberList")
+        .innerHTML =
+        `
+          <div class="muted">
+            目前沒有成員。
+          </div>
+        `;
 
       return;
+
     }
 
 
-    $("memberList").innerHTML =
+    $("memberList")
+      .innerHTML =
       entries
         .map(
           ([uid, member]) => {
 
             const name =
               member?.name ||
-              "使用者";
+              "看片玩家";
 
-            const owner =
+
+            const isOwner =
               uid ===
               state.room?.owner;
+
 
             return `
               <div class="member">
@@ -1562,7 +2339,7 @@
 
                   <span>
                     ${
-                      owner
+                      isOwner
                         ? "房主"
                         : "成員"
                     }
@@ -1574,42 +2351,42 @@
 
               </div>
             `;
+
           }
         )
         .join("");
+
   }
 
 
-  /* =========================================
-     聊天室
-  ========================================== */
+  /*
+   * =========================================
+   * 聊天
+   * =========================================
+   */
 
-  async function sendMessage(
+  async function sendChat(
     text
   ) {
-    if (
-      !state.chatRef ||
-      !state.uid
-    ) {
-      return;
-    }
-
 
     text =
       String(text || "")
-        .trim();
+        .trim()
+        .slice(0, 300);
 
 
-    if (!text) {
+    if (
+      !text ||
+      !state.chatRef
+    ) {
+
       return;
+
     }
 
 
-    text =
-      text.slice(0, 300);
-
-
     await state.chatRef.push({
+
       uid:
         state.uid,
 
@@ -1622,35 +2399,47 @@
         firebase.database
           .ServerValue
           .TIMESTAMP
+
     });
+
   }
 
 
   function renderChat(
     messages
   ) {
+
     const list =
       Object.values(
         messages || {}
       ).sort(
         (a, b) =>
-          (a.createdAt || 0) -
-          (b.createdAt || 0)
+          (
+            a.createdAt ||
+            0
+          ) -
+          (
+            b.createdAt ||
+            0
+          )
       );
 
 
     if (
       !$("chatMessages")
     ) {
+
       return;
+
     }
 
 
     if (
-      list.length === 0
+      !list.length
     ) {
 
-      $("chatMessages").innerHTML =
+      $("chatMessages")
+        .innerHTML =
         `
           <div
             class="muted"
@@ -1661,31 +2450,37 @@
         `;
 
       return;
+
     }
 
 
-    $("chatMessages").innerHTML =
+    $("chatMessages")
+      .innerHTML =
       list
         .map(
-          (message) => `
-            <div class="message">
+          (message) => {
 
-              <b>
-                ${escapeHtml(
-                  message?.name ||
-                  "玩家"
-                )}
-              </b>
+            return `
+              <div class="message">
 
-              <p>
-                ${escapeHtml(
-                  message?.text ||
-                  ""
-                )}
-              </p>
+                <b>
+                  ${escapeHtml(
+                    message?.name ||
+                    "玩家"
+                  )}
+                </b>
 
-            </div>
-          `
+                <p>
+                  ${escapeHtml(
+                    message?.text ||
+                    ""
+                  )}
+                </p>
+
+              </div>
+            `;
+
+          }
         )
         .join("");
 
@@ -1696,61 +2491,74 @@
 
     box.scrollTop =
       box.scrollHeight;
+
   }
 
 
-  /* =========================================
-     平台切換
-  ========================================== */
+  /*
+   * =========================================
+   * 更換影片
+   * =========================================
+   */
 
-  async function changePlatform(
-    platformId
+  async function changeYoutubeVideo(
+    video
   ) {
+
     if (
       !state.isOwner
     ) {
+
       toast(
-        "只有房主可以切換平台"
+        "只有房主可以更換影片"
       );
 
       return;
+
     }
 
 
-    if (
-      !PLATFORMS[
-        platformId
-      ]
-    ) {
+    if (!video?.id) {
+
       throw new Error(
-        "不支援的平台"
+        "沒有選擇影片"
       );
+
     }
 
 
-    await db
-      .ref(
-        `rooms/${state.roomId}/sourceType`
-      )
-      .set(
-        platformId
-      );
+    const roomVideo = {
+
+      id:
+        video.id,
+
+      title:
+        video.title,
+
+      thumbnail:
+        video.thumbnail,
+
+      channel:
+        video.channel
+
+    };
 
 
-    await db
-      .ref(
-        `rooms/${state.roomId}/sourceUrl`
-      )
-      .set("");
+    await state.roomRef
+      .child("sourceType")
+      .set("youtube");
 
 
-    await db
-      .ref(
-        `rooms/${state.roomId}/state`
-      )
+    await state.roomRef
+      .child("video")
+      .set(roomVideo);
+
+
+    await state.stateRef
       .set({
+
         action:
-          "pause",
+          "seek",
 
         position:
           0,
@@ -1765,166 +2573,47 @@
 
         updatedBy:
           state.uid
+
       });
 
 
-    state.room.sourceType =
-      platformId;
-
-    state.room.sourceUrl =
-      "";
+    state.room
+      .sourceType =
+      "youtube";
 
 
-    renderRoomPlatform();
+    state.room.video =
+      roomVideo;
 
 
-    if (
-      hasYoutubeVideo()
-    ) {
-      buildYoutubePlayer();
-    } else {
+    buildRoomPlayer();
 
-      $("youtubePlayer")
-        ?.classList.add(
-          "hidden"
-        );
 
-      $("directVideo")
-        ?.classList.add(
-          "hidden"
-        );
-
-      $("platformView")
-        ?.classList.remove(
-          "hidden"
-        );
-    }
+    $("sourceModal")
+      ?.classList
+      .add(
+        "hidden"
+      );
 
 
     toast(
-      `已切換到 ${
-        PLATFORMS[
-          platformId
-        ].name
-      }`
+      "已切換影片"
     );
+
   }
 
 
-  /* =========================================
-     播放控制
-  ========================================== */
-
-  function playPause() {
-    if (
-      hasYoutubeVideo() &&
-      state.playerReady &&
-      state.player
-    ) {
-
-      if (
-        isCurrentlyPlaying()
-      ) {
-        state.player.pauseVideo();
-      } else {
-        state.player.playVideo();
-      }
-
-      return;
-    }
-
-
-    if (
-      state.room?.sourceType ===
-      "direct" &&
-      state.directVideo
-    ) {
-
-      if (
-        state.directVideo.paused
-      ) {
-
-        state.directVideo
-          .play()
-          .catch(
-            () => {
-              toast(
-                "瀏覽器阻止自動播放"
-              );
-            }
-          );
-
-      } else {
-
-        state.directVideo.pause();
-
-      }
-
-      return;
-    }
-
-
-    openCurrentPlatform();
-  }
-
-
-  function seekRelative(
-    seconds
-  ) {
-
-    if (
-      !hasYoutubeVideo() &&
-      state.room?.sourceType !==
-        "direct"
-    ) {
-      openCurrentPlatform();
-
-      return;
-    }
-
-
-    const target =
-      Math.max(
-        0,
-        currentPlaybackPosition() +
-          seconds
-      );
-
-
-    if (
-      hasYoutubeVideo() &&
-      state.player
-    ) {
-      state.player.seekTo(
-        target,
-        true
-      );
-    }
-
-
-    if (
-      state.room?.sourceType ===
-        "direct" &&
-      state.directVideo
-    ) {
-      state.directVideo.currentTime =
-        target;
-    }
-
-
-    writePlayback(
-      "seek"
-    );
-  }
-
-
-  /* =========================================
-     事件
-  ========================================== */
+  /*
+   * =========================================
+   * UI 事件
+   * =========================================
+   */
 
   function setupEvents() {
 
-    /* 建立房間 */
+    /*
+     * 建立房間
+     */
 
     $("createRoomBtn")
       ?.addEventListener(
@@ -1951,12 +2640,16 @@
               error.message ||
                 "建立房間失敗"
             );
+
           }
+
         }
       );
 
 
-    /* 加入房間 */
+    /*
+     * 加入房間
+     */
 
     $("joinRoomBtn")
       ?.addEventListener(
@@ -1980,10 +2673,16 @@
               error.message ||
                 "加入房間失敗"
             );
+
           }
+
         }
       );
 
+
+    /*
+     * 房間碼
+     */
 
     $("joinCodeInput")
       ?.addEventListener(
@@ -1997,23 +2696,169 @@
                 /[^A-Z0-9]/g,
                 ""
               );
+
         }
       );
 
 
-    /* 平台選擇 */
+    /*
+     * YouTube 搜尋
+     */
+
+    $("searchVideoBtn")
+      ?.addEventListener(
+        "click",
+        async () => {
+
+          if (
+            state.searchBusy
+          ) {
+            return;
+          }
+
+
+          const input =
+            $("videoSearchInput");
+
+
+          const query =
+            input?.value.trim();
+
+
+          state.searchBusy =
+            true;
+
+
+          const button =
+            $("searchVideoBtn");
+
+
+          if (button) {
+            button.disabled =
+              true;
+
+            button.textContent =
+              "搜尋中…";
+          }
+
+
+          try {
+
+            await searchYoutube(
+              query,
+              "home"
+            );
+
+          } catch (error) {
+
+            console.error(
+              error
+            );
+
+            setError(
+              $("homeError"),
+              error.message
+            );
+
+          } finally {
+
+            state.searchBusy =
+              false;
+
+
+            if (button) {
+
+              button.disabled =
+                false;
+
+              button.textContent =
+                "搜尋";
+
+            }
+
+          }
+
+        }
+      );
+
+
+    $("videoSearchInput")
+      ?.addEventListener(
+        "keydown",
+        (event) => {
+
+          if (
+            event.key ===
+            "Enter"
+          ) {
+
+            event.preventDefault();
+
+            $("searchVideoBtn")
+              ?.click();
+
+          }
+
+        }
+      );
+
+
+    /*
+     * 清除選擇
+     */
+
+    $("clearSelectedVideoBtn")
+      ?.addEventListener(
+        "click",
+        clearSelectedVideo
+      );
+
+
+    /*
+     * 平台選擇
+     */
 
     $("sourceTypeInput")
       ?.addEventListener(
         "change",
         (event) => {
 
-          updatePlatformPreview(
-            event.target.value
-          );
+          const platform =
+            event.target.value;
+
+
+          const info =
+            PLATFORMS[
+              platform
+            ];
+
+
+          if (!info) {
+            return;
+          }
+
+
+          /*
+           * 非 YouTube 時，
+           * 現階段先隱藏搜尋結果區。
+           */
+
+          if (
+            platform !==
+            "youtube"
+          ) {
+
+            clearSelectedVideo();
+
+          }
+
         }
       );
 
+
+    /*
+     * 平台卡片
+     */
 
     document
       .querySelectorAll(
@@ -2027,32 +2872,42 @@
             () => {
 
               const platform =
-                card.dataset.platform;
+                card.dataset
+                  .platform;
+
 
               const select =
                 $("sourceTypeInput");
 
-              if (
-                select &&
-                PLATFORMS[
-                  platform
-                ]
-              ) {
 
-                select.value =
-                  platform;
+              if (!select) {
+                return;
+              }
 
-                updatePlatformPreview(
-                  platform
-                );
 
-                select.scrollIntoView({
+              select.value =
+                platform;
+
+
+              select.dispatchEvent(
+                new Event(
+                  "change"
+                )
+              );
+
+
+              document
+                .querySelector(
+                  ".creator-panel"
+                )
+                ?.scrollIntoView({
                   behavior:
                     "smooth",
+
                   block:
                     "center"
                 });
-              }
+
             }
           );
 
@@ -2060,7 +2915,9 @@
       );
 
 
-    /* 房間複製 */
+    /*
+     * 複製房間
+     */
 
     $("copyRoomBtn")
       ?.addEventListener(
@@ -2069,11 +2926,13 @@
 
           try {
 
-            await navigator.clipboard.writeText(
-              getRoomLink(
-                state.roomId
-              )
-            );
+            await navigator
+              .clipboard
+              .writeText(
+                roomLink(
+                  state.roomId
+                )
+              );
 
             toast(
               "房間連結已複製"
@@ -2086,11 +2945,14 @@
             );
 
           }
+
         }
       );
 
 
-    /* 離開 */
+    /*
+     * 離開
+     */
 
     $("leaveRoomBtn")
       ?.addEventListener(
@@ -2099,42 +2961,140 @@
 
           location.href =
             location.pathname;
+
         }
       );
 
 
-    /* 播放 */
+    /*
+     * 播放 / 暫停
+     */
 
     $("playPauseBtn")
       ?.addEventListener(
         "click",
-        playPause
+        () => {
+
+          if (
+            !state.playerReady ||
+            !state.player
+          ) {
+
+            toast(
+              "目前沒有可控制的影片"
+            );
+
+            return;
+
+          }
+
+
+          if (
+            isPlaying()
+          ) {
+
+            state.player
+              .pauseVideo();
+
+          } else {
+
+            state.player
+              .playVideo();
+
+          }
+
+        }
       );
 
 
-    /* 倒退 */
+    /*
+     * 後退
+     */
 
     $("backBtn")
       ?.addEventListener(
         "click",
         () => {
-          seekRelative(-10);
+
+          if (
+            !state.playerReady ||
+            !state.player
+          ) {
+
+            return;
+
+          }
+
+
+          const target =
+            Math.max(
+              0,
+              currentPosition() -
+                10
+            );
+
+
+          state.player
+            .seekTo(
+              target,
+              true
+            );
+
+
+          writePlayback(
+            "seek"
+          );
+
         }
       );
 
 
-    /* 快轉 */
+    /*
+     * 快轉
+     */
 
     $("forwardBtn")
       ?.addEventListener(
         "click",
         () => {
-          seekRelative(10);
+
+          if (
+            !state.playerReady ||
+            !state.player
+          ) {
+
+            return;
+
+          }
+
+
+          const target =
+            Math.min(
+              duration() ||
+                Infinity,
+              currentPosition() +
+                10
+            );
+
+
+          state.player
+            .seekTo(
+              target,
+              true
+            );
+
+
+          writePlayback(
+            "seek"
+          );
+
         }
       );
 
 
-    /* 立即同步 */
+    /*
+     * 立即同步
+     */
 
     $("syncNowBtn")
       ?.addEventListener(
@@ -2142,29 +3102,30 @@
         async () => {
 
           if (
-            hasYoutubeVideo() ||
-            state.room?.sourceType ===
-              "direct"
+            !state.stateRef
           ) {
 
-            await writePlayback(
-              "sync"
-            );
-
-            toast(
-              "已重新同步"
-            );
-
-          } else {
-
-            openCurrentPlatform();
+            return;
 
           }
+
+
+          await writePlayback(
+            "sync"
+          );
+
+
+          toast(
+            "已重新同步"
+          );
+
         }
       );
 
 
-    /* 音量 */
+    /*
+     * 音量
+     */
 
     $("volumeInput")
       ?.addEventListener(
@@ -2178,25 +3139,14 @@
 
 
           if (
-            hasYoutubeVideo() &&
             state.playerReady &&
             state.player
           ) {
 
-            state.player.setVolume(
-              value
-            );
-
-          }
-
-
-          if (
-            state.directVideo
-          ) {
-
-            state.directVideo
-              .volume =
-              value / 100;
+            state.player
+              .setVolume(
+                value
+              );
 
           }
 
@@ -2204,15 +3154,18 @@
       );
 
 
-    /* 全螢幕 */
+    /*
+     * 全螢幕
+     */
 
     $("fullscreenBtn")
       ?.addEventListener(
         "click",
         () => {
 
-          const playerWrap =
+          const wrap =
             $("playerWrap");
+
 
           if (
             document.fullscreenElement
@@ -2222,7 +3175,8 @@
 
           } else {
 
-            playerWrap?.requestFullscreen?.();
+            wrap
+              ?.requestFullscreen?.();
 
           }
 
@@ -2230,7 +3184,9 @@
       );
 
 
-    /* 複製時間 */
+    /*
+     * 複製時間
+     */
 
     $("copyTimeBtn")
       ?.addEventListener(
@@ -2241,12 +3197,16 @@
 
             const time =
               formatTime(
-                currentPlaybackPosition()
+                currentPosition()
               );
 
-            await navigator.clipboard.writeText(
-              time
-            );
+
+            await navigator
+              .clipboard
+              .writeText(
+                time
+              );
+
 
             toast(
               `已複製 ${time}`
@@ -2259,20 +3219,31 @@
             );
 
           }
+
         }
       );
 
 
-    /* 開啟平台 */
+    /*
+     * 開啟外部平台
+     */
 
     $("openPlatformBtn")
       ?.addEventListener(
         "click",
-        openCurrentPlatform
+        () => {
+
+          toast(
+            "目前請先使用平台官方播放器"
+          );
+
+        }
       );
 
 
-    /* 聊天 */
+    /*
+     * 聊天
+     */
 
     $("chatForm")
       ?.addEventListener(
@@ -2281,21 +3252,27 @@
 
           event.preventDefault();
 
+
           const input =
             $("chatInput");
 
+
           const text =
             input?.value.trim();
+
 
           if (!text) {
             return;
           }
 
-          input.value = "";
+
+          input.value =
+            "";
+
 
           try {
 
-            await sendMessage(
+            await sendChat(
               text
             );
 
@@ -2310,11 +3287,14 @@
             );
 
           }
+
         }
       );
 
 
-    /* 更換平台 */
+    /*
+     * 開啟更換影片
+     */
 
     $("changeSourceBtn")
       ?.addEventListener(
@@ -2324,37 +3304,103 @@
           if (
             !state.isOwner
           ) {
+
             return;
+
           }
 
-          const modal =
-            $("sourceModal");
 
-          if (!modal) {
-            return;
-          }
+          $("sourceModal")
+            ?.classList
+            .remove(
+              "hidden"
+            );
 
-          modal.classList.remove(
-            "hidden"
-          );
 
-          if (
-            $("sourceTypeModal")
-          ) {
-            $("sourceTypeModal").value =
-              state.room?.sourceType ||
-              "youtube";
-          }
+          $("sourceTypeModal")
+            .value =
+            "youtube";
 
-          updateModalPlatform(
-            state.room?.sourceType ||
-              "youtube"
-          );
+
+          state.modalSelectedVideo =
+            null;
+
+
+          $("modalVideoSearchResults")
+            .innerHTML =
+            "";
+
         }
       );
 
 
-    /* Modal 取消 */
+    /*
+     * Modal 搜尋
+     */
+
+    $("modalSearchVideoBtn")
+      ?.addEventListener(
+        "click",
+        async () => {
+
+          const query =
+            $("modalVideoSearchInput")
+              ?.value
+              .trim();
+
+
+          try {
+
+            await searchYoutube(
+              query,
+              "modal"
+            );
+
+          } catch (error) {
+
+            console.error(
+              error
+            );
+
+            setError(
+              $("modalError"),
+              error.message
+            );
+
+          }
+
+        }
+      );
+
+
+    /*
+     * Modal Enter
+     */
+
+    $("modalVideoSearchInput")
+      ?.addEventListener(
+        "keydown",
+        (event) => {
+
+          if (
+            event.key ===
+            "Enter"
+          ) {
+
+            event.preventDefault();
+
+            $("modalSearchVideoBtn")
+              ?.click();
+
+          }
+
+        }
+      );
+
+
+    /*
+     * Modal 取消
+     */
 
     $("cancelModalBtn")
       ?.addEventListener(
@@ -2362,7 +3408,8 @@
         () => {
 
           $("sourceModal")
-            ?.classList.add(
+            ?.classList
+            .add(
               "hidden"
             );
 
@@ -2375,22 +3422,9 @@
       );
 
 
-    /* Modal 平台選擇 */
-
-    $("sourceTypeModal")
-      ?.addEventListener(
-        "change",
-        (event) => {
-
-          updateModalPlatform(
-            event.target.value
-          );
-
-        }
-      );
-
-
-    /* Modal 儲存 */
+    /*
+     * Modal 確認
+     */
 
     $("saveSourceBtn")
       ?.addEventListener(
@@ -2404,18 +3438,22 @@
               ""
             );
 
-            const platform =
-              $("sourceTypeModal")
-                ?.value;
 
-            await changePlatform(
-              platform
+            if (
+              !state.modalSelectedVideo
+            ) {
+
+              throw new Error(
+                "請先搜尋並選擇一部影片"
+              );
+
+            }
+
+
+            await changeYoutubeVideo(
+              state.modalSelectedVideo
             );
 
-            $("sourceModal")
-              ?.classList.add(
-                "hidden"
-              );
 
           } catch (error) {
 
@@ -2425,98 +3463,22 @@
 
             setError(
               $("modalError"),
-              error.message ||
-                "切換平台失敗"
+              error.message
             );
+
           }
+
         }
       );
 
-
-    /* Direct Video 播放器 */
-
-    if (
-      state.directVideo
-    ) {
-
-      state.directVideo
-        .addEventListener(
-          "play",
-          () => {
-
-            if (
-              !state.applyingRemote
-            ) {
-              writePlayback(
-                "play",
-                true
-              );
-            }
-
-          }
-        );
-
-
-      state.directVideo
-        .addEventListener(
-          "pause",
-          () => {
-
-            if (
-              !state.applyingRemote
-            ) {
-              writePlayback(
-                "pause",
-                false
-              );
-            }
-
-          }
-        );
-
-
-      state.directVideo
-        .addEventListener(
-          "timeupdate",
-          updateTimeUI
-        );
-
-
-      state.directVideo
-        .addEventListener(
-          "seeking",
-          () => {
-
-            if (
-              state.applyingRemote
-            ) {
-              return;
-            }
-
-            clearTimeout(
-              state.seekTimer
-            );
-
-            state.seekTimer =
-              setTimeout(
-                () => {
-                  writePlayback(
-                    "seek"
-                  );
-                },
-                120
-              );
-
-          }
-        );
-
-    }
   }
 
 
-  /* =========================================
-     啟動
-  ========================================== */
+  /*
+   * =========================================
+   * 啟動
+   * =========================================
+   */
 
   async function start() {
 
@@ -2532,18 +3494,13 @@
       setupEvents();
 
 
-      updatePlatformPreview(
-        $("sourceTypeInput")
-          ?.value ||
-        "youtube"
-      );
-
-
       const roomId =
         getRoomIdFromUrl();
 
 
-      if (roomId) {
+      if (
+        roomId
+      ) {
 
         try {
 
@@ -2563,17 +3520,22 @@
             location.pathname
           );
 
-          show("home");
+          showView(
+            "home"
+          );
 
           toast(
             error.message ||
               "無法進入房間"
           );
+
         }
 
       } else {
 
-        show("home");
+        showView(
+          "home"
+        );
 
       }
 
@@ -2583,39 +3545,53 @@
         error
       );
 
+
       if (
         $("authStatus")
       ) {
-        $("authStatus").textContent =
+
+        $("authStatus")
+          .textContent =
           "連線失敗";
+
       }
+
 
       toast(
         error.message ||
           "網站初始化失敗"
       );
+
     }
+
   }
 
 
-  /* =========================================
-     YouTube API Ready
-  ========================================== */
+  /*
+   * =========================================
+   * YouTube API Ready
+   * =========================================
+   */
 
   window.onYouTubeIframeAPIReady =
     () => {
 
       if (
         state.room &&
-        hasYoutubeVideo()
+        state.room.sourceType ===
+          "youtube" &&
+        state.room.video?.id
       ) {
-        buildYoutubePlayer();
+
+        buildYoutubePlayer(
+          state.room.video.id
+        );
+
       }
 
     };
 
 
-  /* 開始 */
   start();
 
 })();
