@@ -4,139 +4,1020 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="WatchTogether - 和朋友一起同步觀看影片">
   <title>WatchTogether｜一起看影片</title>
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <div class="app-shell">
+
     <header class="topbar">
-      <div class="brand">WATCH<span>TOGETHER</span></div>
-      <div id="authStatus" class="status-pill">連線中…</div>
+      <div class="brand">
+        WATCH<span>TOGETHER</span>
+      </div>
+
+      <div class="header-actions">
+        <div id="authStatus" class="status-pill">
+          連線中…
+        </div>
+      </div>
     </header>
 
     <main>
+
+      <!-- =========================
+           HOME
+      ========================== -->
       <section id="homeView" class="view">
+
         <div class="hero">
-          <div class="hero-badge">🎬 SYNC WATCH PARTY</div>
-          <h1>跟朋友一起看，<br><span>進度完全同步。</span></h1>
-          <p>建立一個房間，分享連結。播放、暫停、跳轉都會同步給房間裡的人。</p>
+          <div class="hero-badge">
+            🎬 SYNC WATCH PARTY
+          </div>
+
+          <h1>
+            跟朋友一起看，
+            <br>
+            <span>進度完全同步。</span>
+          </h1>
+
+          <p>
+            建立一個房間，分享連結。
+            播放、暫停、跳轉與房間聊天都可以一起進行。
+          </p>
         </div>
+
 
         <div class="home-grid">
-          <section class="panel creator-panel">
-            <div class="panel-title">建立房間</div>
-            <label>房間名稱</label>
-            <input id="roomNameInput" type="text" maxlength="40" placeholder="例如：今晚一起看動漫">
 
-            <label>影片來源</label>
+          <!-- 建立房間 -->
+          <section class="panel creator-panel">
+
+            <div class="panel-title">
+              建立房間
+            </div>
+
+            <label for="roomNameInput">
+              房間名稱
+            </label>
+
+            <input
+              id="roomNameInput"
+              type="text"
+              maxlength="40"
+              placeholder="例如：今晚一起看動漫"
+            >
+
+
+            <label for="sourceTypeInput">
+              影片來源
+            </label>
+
             <select id="sourceTypeInput">
-              <option value="youtube">YouTube</option>
-              <option value="direct">直接影片網址（MP4 / WebM 等）</option>
+
+              <!-- 目前程式支援 -->
+              <option value="youtube">
+                ▶ YouTube
+              </option>
+
+              <option value="direct">
+                🎞️ 直接影片網址（MP4 / WebM）
+              </option>
+
+              <!-- 未來可接 -->
+              <option value="bilibili">
+                📺 Bilibili
+              </option>
+
+              <option value="vimeo">
+                ▶ Vimeo
+              </option>
+
+              <option value="dailymotion">
+                ▶ Dailymotion
+              </option>
+
+              <option value="twitch">
+                🎮 Twitch
+              </option>
+
+              <option value="facebook">
+                🔵 Facebook Video
+              </option>
+
+              <option value="x">
+                𝕏 X / Twitter Video
+              </option>
+
+              <option value="tiktok">
+                🎵 TikTok
+              </option>
+
+              <option value="rumble">
+                ▶ Rumble
+              </option>
+
+              <option value="streamable">
+                ▶ Streamable
+              </option>
+
+              <option value="archive">
+                🗂 Internet Archive
+              </option>
+
+              <option value="crunchyroll">
+                🟠 Crunchyroll
+              </option>
+
+              <option value="netflix">
+                🔴 Netflix
+              </option>
+
+              <option value="disneyplus">
+                🔵 Disney+
+              </option>
+
+              <option value="primevideo">
+                🟦 Prime Video
+              </option>
+
+              <option value="hbomax">
+                🟣 Max
+              </option>
+
+              <option value="apple-tv">
+                🍎 Apple TV+
+              </option>
+
+              <option value="hulu">
+                🟢 Hulu
+              </option>
+
+              <option value="paramount">
+                🟦 Paramount+
+              </option>
+
+              <option value="peacock">
+                🦚 Peacock
+              </option>
+
+              <option value="other">
+                🌐 其他網站
+              </option>
+
             </select>
 
-            <label id="sourceUrlLabel">YouTube 影片網址</label>
-            <input id="sourceUrlInput" type="url" placeholder="https://www.youtube.com/watch?v=...">
-            <button id="createRoomBtn" class="primary-btn">建立房間</button>
-            <div id="homeError" class="error-text"></div>
+
+            <label id="sourceUrlLabel" for="sourceUrlInput">
+              影片網址
+            </label>
+
+            <input
+              id="sourceUrlInput"
+              type="url"
+              placeholder="貼上影片網址"
+            >
+
+
+            <div
+              id="sourceHint"
+              class="muted"
+              style="margin-top:8px;line-height:1.5;"
+            >
+              YouTube 可以直接貼影片網址。
+            </div>
+
+
+            <button
+              id="createRoomBtn"
+              class="primary-btn"
+              type="button"
+            >
+              建立房間
+            </button>
+
+
+            <div
+              id="homeError"
+              class="error-text"
+            ></div>
+
           </section>
 
+
+          <!-- 加入房間 -->
           <section class="panel join-panel">
-            <div class="panel-title">加入朋友的房間</div>
-            <label>房間碼</label>
-            <input id="joinCodeInput" type="text" maxlength="6" placeholder="例如：A7K2Q9" autocomplete="off">
-            <button id="joinRoomBtn" class="secondary-btn">加入房間</button>
-            <div class="divider"><span>或</span></div>
-            <p class="muted">朋友直接把房間連結貼給你，也會自動帶你進入房間。</p>
+
+            <div class="panel-title">
+              加入朋友的房間
+            </div>
+
+            <label for="joinCodeInput">
+              房間碼
+            </label>
+
+            <input
+              id="joinCodeInput"
+              type="text"
+              maxlength="6"
+              placeholder="例如：A7K2Q9"
+              autocomplete="off"
+            >
+
+
+            <button
+              id="joinRoomBtn"
+              class="secondary-btn"
+              type="button"
+            >
+              加入房間
+            </button>
+
+
+            <div class="divider">
+              <span>或</span>
+            </div>
+
+
+            <p class="muted">
+              朋友直接把房間連結貼給你，也會自動帶你進入房間。
+            </p>
+
           </section>
+
         </div>
+
+
+        <!-- 平台資訊 -->
+        <section
+          class="panel"
+          style="margin-top:20px;"
+        >
+
+          <div class="panel-title">
+            🎞️ 可選影片來源
+          </div>
+
+          <div
+            style="
+              display:grid;
+              grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+              gap:10px;
+              margin-top:14px;
+            "
+          >
+
+            <div class="platform-chip">
+              ▶ YouTube
+            </div>
+
+            <div class="platform-chip">
+              📺 Bilibili
+            </div>
+
+            <div class="platform-chip">
+              ▶ Vimeo
+            </div>
+
+            <div class="platform-chip">
+              ▶ Dailymotion
+            </div>
+
+            <div class="platform-chip">
+              🎮 Twitch
+            </div>
+
+            <div class="platform-chip">
+              🎵 TikTok
+            </div>
+
+            <div class="platform-chip">
+              🔴 Netflix
+            </div>
+
+            <div class="platform-chip">
+              🟠 Crunchyroll
+            </div>
+
+            <div class="platform-chip">
+              🔵 Disney+
+            </div>
+
+            <div class="platform-chip">
+              🟦 Prime Video
+            </div>
+
+            <div class="platform-chip">
+              🍎 Apple TV+
+            </div>
+
+            <div class="platform-chip">
+              🟣 Max
+            </div>
+
+            <div class="platform-chip">
+              🟢 Hulu
+            </div>
+
+            <div class="platform-chip">
+              🗂 Internet Archive
+            </div>
+
+            <div class="platform-chip">
+              🌐 其他合法來源
+            </div>
+
+          </div>
+
+
+          <div
+            class="muted"
+            style="margin-top:14px;line-height:1.6;"
+          >
+            不同平台的嵌入、登入、DRM 與播放器控制方式不同。
+            目前這裡是來源選擇介面，實際能否直接在房間內播放，要由播放器程式依平台支援程度處理。
+          </div>
+
+        </section>
+
       </section>
 
-      <section id="roomView" class="view hidden">
+
+
+      <!-- =========================
+           ROOM
+      ========================== -->
+
+      <section
+        id="roomView"
+        class="view hidden"
+      >
+
+        <!-- 房間頂部 -->
         <div class="room-toolbar">
+
           <div>
-            <div class="eyebrow">WATCH PARTY</div>
-            <h2 id="roomTitle">房間</h2>
-            <div class="room-meta"><span id="roomCodeLabel">------</span><button id="copyRoomBtn" class="tiny-btn">複製房間連結</button></div>
+
+            <div class="eyebrow">
+              WATCH PARTY
+            </div>
+
+            <h2 id="roomTitle">
+              房間
+            </h2>
+
+            <div class="room-meta">
+
+              <span id="roomCodeLabel">
+                ------
+              </span>
+
+              <button
+                id="copyRoomBtn"
+                class="tiny-btn"
+                type="button"
+              >
+                複製房間連結
+              </button>
+
+            </div>
+
           </div>
-          <button id="leaveRoomBtn" class="ghost-btn">離開房間</button>
+
+
+          <button
+            id="leaveRoomBtn"
+            class="ghost-btn"
+            type="button"
+          >
+            離開房間
+          </button>
+
         </div>
+
+
 
         <div class="room-layout">
+
+          <!-- =========================
+               VIDEO
+          ========================== -->
+
           <section class="watch-panel panel">
-            <div id="playerWrap" class="player-wrap">
-              <div id="youtubePlayer" class="youtube-player"></div>
-              <video id="directVideo" class="direct-video hidden" playsinline></video>
-              <div id="playerPlaceholder" class="player-placeholder hidden">載入影片中…</div>
+
+            <div
+              id="playerWrap"
+              class="player-wrap"
+            >
+
+              <!-- YouTube -->
+              <div
+                id="youtubePlayer"
+                class="youtube-player"
+              ></div>
+
+
+              <!-- 直接影片 -->
+              <video
+                id="directVideo"
+                class="direct-video hidden"
+                playsinline
+                controls
+                preload="metadata"
+              ></video>
+
+
+              <!-- 外部平台提示 -->
+              <div
+                id="externalPlayer"
+                class="player-placeholder hidden"
+              >
+                <div
+                  style="
+                    font-size:42px;
+                    margin-bottom:10px;
+                  "
+                >
+                  🌐
+                </div>
+
+                <div id="externalPlayerTitle">
+                  此平台需要另外開啟
+                </div>
+
+                <a
+                  id="externalPlayerLink"
+                  href="#"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="primary-btn"
+                  style="
+                    display:inline-flex;
+                    margin-top:16px;
+                    text-decoration:none;
+                  "
+                >
+                  開啟影片網站
+                </a>
+              </div>
+
+
+              <div
+                id="playerPlaceholder"
+                class="player-placeholder hidden"
+              >
+                載入影片中…
+              </div>
+
             </div>
 
+
+
+            <!-- 同步狀態 -->
             <div class="sync-bar">
+
               <div>
                 <span class="live-dot"></span>
-                <span id="syncStatus">同步中</span>
+
+                <span id="syncStatus">
+                  同步中
+                </span>
               </div>
-              <button id="syncNowBtn" class="tiny-btn">立即同步</button>
+
+
+              <button
+                id="syncNowBtn"
+                class="tiny-btn"
+                type="button"
+              >
+                立即同步
+              </button>
+
             </div>
 
-            <div id="roomControls" class="room-controls">
-              <button id="playPauseBtn" class="control-btn">▶</button>
-              <button id="backBtn" class="control-btn">↶ 10</button>
-              <button id="forwardBtn" class="control-btn">10 ↷</button>
-              <div class="time-readout" id="timeReadout">00:00 / 00:00</div>
-              <input id="volumeInput" class="volume" type="range" min="0" max="100" value="100">
-              <button id="fullscreenBtn" class="control-btn">⛶</button>
+
+
+            <!-- 控制列 -->
+            <div
+              id="roomControls"
+              class="room-controls"
+            >
+
+              <button
+                id="playPauseBtn"
+                class="control-btn"
+                type="button"
+              >
+                ▶
+              </button>
+
+
+              <button
+                id="backBtn"
+                class="control-btn"
+                type="button"
+              >
+                ↶ 10
+              </button>
+
+
+              <button
+                id="forwardBtn"
+                class="control-btn"
+                type="button"
+              >
+                10 ↷
+              </button>
+
+
+              <div
+                class="time-readout"
+                id="timeReadout"
+              >
+                00:00 / 00:00
+              </div>
+
+
+              <input
+                id="volumeInput"
+                class="volume"
+                type="range"
+                min="0"
+                max="100"
+                value="100"
+              >
+
+
+              <button
+                id="fullscreenBtn"
+                class="control-btn"
+                type="button"
+              >
+                ⛶
+              </button>
+
             </div>
 
+
+
+            <!-- 房間操作 -->
             <div class="room-actions">
-              <button id="copyTimeBtn" class="secondary-btn">複製目前時間</button>
-              <button id="changeSourceBtn" class="secondary-btn owner-only">更換影片</button>
+
+              <button
+                id="copyTimeBtn"
+                class="secondary-btn"
+                type="button"
+              >
+                複製目前時間
+              </button>
+
+
+              <button
+                id="changeSourceBtn"
+                class="secondary-btn owner-only"
+                type="button"
+              >
+                更換影片
+              </button>
+
             </div>
+
           </section>
 
+
+
+          <!-- =========================
+               SIDE
+          ========================== -->
+
           <aside class="side-column">
+
+            <!-- 房間成員 -->
             <section class="panel members-panel">
-              <div class="panel-title row-title">房間成員 <span id="memberCount">0</span></div>
-              <div id="memberList" class="member-list"></div>
+
+              <div class="panel-title row-title">
+
+                <span>
+                  房間成員
+                </span>
+
+                <span id="memberCount">
+                  0
+                </span>
+
+              </div>
+
+
+              <div
+                id="memberList"
+                class="member-list"
+              ></div>
+
             </section>
+
+
+
+            <!-- =========================
+                 CHAT
+            ========================== -->
 
             <section class="panel chat-panel">
-              <div class="panel-title">聊天室</div>
-              <div id="chatMessages" class="chat-messages"></div>
-              <form id="chatForm" class="chat-form">
-                <input id="chatInput" maxlength="300" placeholder="說點什麼…" autocomplete="off">
-                <button type="submit">送出</button>
+
+              <div
+                class="panel-title row-title"
+              >
+
+                <span>
+                  💬 聊天室
+                </span>
+
+                <span
+                  class="muted"
+                  style="font-size:12px;"
+                >
+                  房間內即時聊天
+                </span>
+
+              </div>
+
+
+              <div
+                id="chatMessages"
+                class="chat-messages"
+              ></div>
+
+
+              <form
+                id="chatForm"
+                class="chat-form"
+              >
+
+                <input
+                  id="chatInput"
+                  maxlength="300"
+                  placeholder="輸入訊息…"
+                  autocomplete="off"
+                >
+
+
+                <button
+                  type="submit"
+                >
+                  送出
+                </button>
+
               </form>
+
             </section>
+
           </aside>
+
         </div>
+
       </section>
+
     </main>
+
   </div>
 
-  <div id="sourceModal" class="modal hidden">
+
+
+  <!-- =========================
+       SOURCE MODAL
+  ========================== -->
+
+  <div
+    id="sourceModal"
+    class="modal hidden"
+  >
+
     <div class="modal-card">
-      <div class="panel-title">更換房間影片</div>
-      <label>來源</label>
-      <select id="sourceTypeModal">
-        <option value="youtube">YouTube</option>
-        <option value="direct">直接影片網址</option>
-      </select>
-      <label>網址</label>
-      <input id="sourceUrlModal" type="url" placeholder="貼上影片網址">
-      <div class="modal-actions">
-        <button id="cancelModalBtn" class="secondary-btn">取消</button>
-        <button id="saveSourceBtn" class="primary-btn">切換</button>
+
+      <div class="panel-title">
+        更換房間影片
       </div>
-      <div id="modalError" class="error-text"></div>
+
+
+      <label for="sourceTypeModal">
+        來源
+      </label>
+
+      <select id="sourceTypeModal">
+
+        <option value="youtube">
+          ▶ YouTube
+        </option>
+
+        <option value="direct">
+          🎞️ 直接影片網址
+        </option>
+
+        <option value="bilibili">
+          📺 Bilibili
+        </option>
+
+        <option value="vimeo">
+          ▶ Vimeo
+        </option>
+
+        <option value="dailymotion">
+          ▶ Dailymotion
+        </option>
+
+        <option value="twitch">
+          🎮 Twitch
+        </option>
+
+        <option value="facebook">
+          🔵 Facebook Video
+        </option>
+
+        <option value="tiktok">
+          🎵 TikTok
+        </option>
+
+        <option value="crunchyroll">
+          🟠 Crunchyroll
+        </option>
+
+        <option value="netflix">
+          🔴 Netflix
+        </option>
+
+        <option value="disneyplus">
+          🔵 Disney+
+        </option>
+
+        <option value="primevideo">
+          🟦 Prime Video
+        </option>
+
+        <option value="hbomax">
+          🟣 Max
+        </option>
+
+        <option value="apple-tv">
+          🍎 Apple TV+
+        </option>
+
+        <option value="hulu">
+          🟢 Hulu
+        </option>
+
+        <option value="paramount">
+          🟦 Paramount+
+        </option>
+
+        <option value="other">
+          🌐 其他
+        </option>
+
+      </select>
+
+
+      <label for="sourceUrlModal">
+        網址
+      </label>
+
+      <input
+        id="sourceUrlModal"
+        type="url"
+        placeholder="貼上影片網址"
+      >
+
+
+      <div class="modal-actions">
+
+        <button
+          id="cancelModalBtn"
+          class="secondary-btn"
+          type="button"
+        >
+          取消
+        </button>
+
+
+        <button
+          id="saveSourceBtn"
+          class="primary-btn"
+          type="button"
+        >
+          切換
+        </button>
+
+      </div>
+
+
+      <div
+        id="modalError"
+        class="error-text"
+      ></div>
+
     </div>
+
   </div>
 
-  <div id="toast" class="toast"></div>
+
+
+  <!-- Toast -->
+  <div
+    id="toast"
+    class="toast"
+  ></div>
+
+
+
+  <!-- =========================
+       FIREBASE
+  ========================== -->
 
   <script src="firebase-config.js"></script>
+
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
+
+
+  <!-- YouTube -->
   <script src="https://www.youtube.com/iframe_api"></script>
+
+
+  <!-- APP -->
   <script src="app.js"></script>
+
+
+  <!-- =========================
+       UI ENHANCEMENTS
+  ========================== -->
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+
+      const sourceTypeInput =
+        document.getElementById("sourceTypeInput");
+
+      const sourceUrlInput =
+        document.getElementById("sourceUrlInput");
+
+      const sourceUrlLabel =
+        document.getElementById("sourceUrlLabel");
+
+      const sourceHint =
+        document.getElementById("sourceHint");
+
+
+      function updateSourceHint() {
+
+        if (!sourceTypeInput) return;
+
+        const type = sourceTypeInput.value;
+
+
+        const hints = {
+
+          youtube:
+            "直接貼 YouTube 影片網址，例如 https://www.youtube.com/watch?v=xxxx",
+
+          direct:
+            "需要可以直接播放的影片檔網址，例如 MP4 / WebM。",
+
+          bilibili:
+            "Bilibili 是否能直接內嵌與控制，要看影片與平台限制。",
+
+          vimeo:
+            "Vimeo 部分影片可以嵌入，依影片權限而定。",
+
+          dailymotion:
+            "Dailymotion 部分影片可使用官方嵌入。",
+
+          twitch:
+            "Twitch 直播與影片需要依官方嵌入規則處理。",
+
+          facebook:
+            "Facebook Video 依影片公開設定與嵌入權限而定。",
+
+          tiktok:
+            "TikTok 通常需要使用官方嵌入方式。",
+
+          crunchyroll:
+            "Crunchyroll 需要使用官方服務與登入，不保證可由第三方播放器控制。",
+
+          netflix:
+            "Netflix 需要你自己的 Netflix 帳號；第三方網站不能繞過 DRM。",
+
+          disneyplus:
+            "Disney+ 需要自己的帳號與官方播放器。",
+
+          primevideo:
+            "Prime Video 需要自己的帳號與官方播放器。",
+
+          hbomax:
+            "Max 需要自己的帳號與官方播放器。",
+
+          "apple-tv":
+            "Apple TV+ 使用官方服務與播放器。",
+
+          hulu:
+            "Hulu 需要自己的帳號與官方服務。",
+
+          paramount:
+            "Paramount+ 使用官方播放器。",
+
+          other:
+            "其他網站請確認平台允許嵌入或第三方控制。"
+
+        };
+
+
+        if (sourceHint) {
+          sourceHint.textContent =
+            hints[type] ||
+            "請輸入影片來源網址。";
+        }
+
+
+        if (sourceUrlInput) {
+
+          const placeholders = {
+
+            youtube:
+              "https://www.youtube.com/watch?v=...",
+
+            direct:
+              "https://example.com/video.mp4",
+
+            bilibili:
+              "https://www.bilibili.com/video/...",
+
+            vimeo:
+              "https://vimeo.com/...",
+
+            dailymotion:
+              "https://www.dailymotion.com/video/...",
+
+            twitch:
+              "https://www.twitch.tv/...",
+
+            facebook:
+              "https://www.facebook.com/watch/...",
+
+            tiktok:
+              "https://www.tiktok.com/...",
+
+            crunchyroll:
+              "https://www.crunchyroll.com/...",
+
+            netflix:
+              "https://www.netflix.com/...",
+
+            disneyplus:
+              "https://www.disneyplus.com/...",
+
+            primevideo:
+              "https://www.primevideo.com/...",
+
+            hbomax:
+              "https://www.max.com/...",
+
+            "apple-tv":
+              "https://tv.apple.com/...",
+
+            hulu:
+              "https://www.hulu.com/...",
+
+            paramount:
+              "https://www.paramountplus.com/...",
+
+            other:
+              "貼上影片網站網址"
+
+          };
+
+
+          sourceUrlInput.placeholder =
+            placeholders[type] ||
+            "貼上影片網址";
+        }
+
+      }
+
+
+      if (sourceTypeInput) {
+
+        sourceTypeInput.addEventListener(
+          "change",
+          updateSourceHint
+        );
+
+        updateSourceHint();
+
+      }
+
+    });
+  </script>
+
 </body>
 </html>
