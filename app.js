@@ -8,7 +8,7 @@
     roomId: null,
     room: null,
     isOwner: false,
-    memberName: "看片玩家",
+    memberName: "使用者",
 
     roomRef: null,
     stateRef: null,
@@ -1537,7 +1537,7 @@
 
             const name =
               member?.name ||
-              "看片玩家";
+              "使用者";
 
             const owner =
               uid ===
