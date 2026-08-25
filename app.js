@@ -2192,7 +2192,27 @@
    * =========================================
    */
 
-  function startSyncHeartbeat() {
+  async function syncLatestPlayback() {
+  if (!state.stateRef) {
+    return;
+  }
+
+  try {
+    const snapshot = await state.stateRef.once("value");
+    const data = snapshot.val();
+
+    if (!data) {
+      return;
+    }
+
+    state.lastRemoteKey = "";
+
+    await applyRemotePlayback(data);
+
+  } catch (error) {
+    console.error("同步初始播放狀態失敗:", error);
+  }
+}function startSyncHeartbeat() {
 
     clearInterval(
       state.syncTimer
