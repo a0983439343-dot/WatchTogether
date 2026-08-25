@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <title>WatchTogether｜一起看片</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">WATCH<span>TOGETHER</span></div>
+      <div id="authStatus" class="status-pill">連線中…</div>
+    </header>
+
+    <main>
+      <section id="homeView" class="view">
+        <div class="hero">
+          <div class="hero-badge">🎬 SYNC WATCH PARTY</div>
+          <h1>跟朋友一起看，<br><span>進度完全同步。</span></h1>
+          <p>建立一個房間，分享連結。播放、暫停、跳轉都會同步給房間裡的人。</p>
+        </div>
+
+        <div class="home-grid">
+          <section class="panel creator-panel">
+            <div class="panel-title">建立房間</div>
+            <label>房間名稱</label>
+            <input id="roomNameInput" type="text" maxlength="40" placeholder="例如：今晚一起看動漫">
+
+            <label>影片來源</label>
+            <select id="sourceTypeInput">
+              <option value="youtube">YouTube</option>
+              <option value="direct">直接影片網址（MP4 / WebM 等）</option>
+            </select>
+
+            <label id="sourceUrlLabel">YouTube 影片網址</label>
+            <input id="sourceUrlInput" type="url" placeholder="https://www.youtube.com/watch?v=...">
+            <button id="createRoomBtn" class="primary-btn">建立房間</button>
+            <div id="homeError" class="error-text"></div>
+          </section>
+
+          <section class="panel join-panel">
+            <div class="panel-title">加入朋友的房間</div>
+            <label>房間碼</label>
+            <input id="joinCodeInput" type="text" maxlength="6" placeholder="例如：A7K2Q9" autocomplete="off">
+            <button id="joinRoomBtn" class="secondary-btn">加入房間</button>
+            <div class="divider"><span>或</span></div>
+            <p class="muted">朋友直接把房間連結貼給你，也會自動帶你進入房間。</p>
+          </section>
+        </div>
+      </section>
+
+      <section id="roomView" class="view hidden">
+        <div class="room-toolbar">
+          <div>
+            <div class="eyebrow">WATCH PARTY</div>
+            <h2 id="roomTitle">房間</h2>
+            <div class="room-meta"><span id="roomCodeLabel">------</span><button id="copyRoomBtn" class="tiny-btn">複製房間連結</button></div>
+          </div>
+          <button id="leaveRoomBtn" class="ghost-btn">離開房間</button>
+        </div>
+
+        <div class="room-layout">
+          <section class="watch-panel panel">
+            <div id="playerWrap" class="player-wrap">
+              <div id="youtubePlayer" class="youtube-player"></div>
+              <video id="directVideo" class="direct-video hidden" playsinline></video>
+              <div id="playerPlaceholder" class="player-placeholder hidden">載入影片中…</div>
+            </div>
+
+            <div class="sync-bar">
+              <div>
+                <span class="live-dot"></span>
+                <span id="syncStatus">同步中</span>
+              </div>
+              <button id="syncNowBtn" class="tiny-btn">立即同步</button>
+            </div>
+
+            <div id="roomControls" class="room-controls">
+              <button id="playPauseBtn" class="control-btn">▶</button>
+              <button id="backBtn" class="control-btn">↶ 10</button>
+              <button id="forwardBtn" class="control-btn">10 ↷</button>
+              <div class="time-readout" id="timeReadout">00:00 / 00:00</div>
+              <input id="volumeInput" class="volume" type="range" min="0" max="100" value="100">
+              <button id="fullscreenBtn" class="control-btn">⛶</button>
+            </div>
+
+            <div class="room-actions">
+              <button id="copyTimeBtn" class="secondary-btn">複製目前時間</button>
+              <button id="changeSourceBtn" class="secondary-btn owner-only">更換影片</button>
+            </div>
+          </section>
+
+          <aside class="side-column">
+            <section class="panel members-panel">
+              <div class="panel-title row-title">房間成員 <span id="memberCount">0</span></div>
+              <div id="memberList" class="member-list"></div>
+            </section>
+
+            <section class="panel chat-panel">
+              <div class="panel-title">聊天室</div>
+              <div id="chatMessages" class="chat-messages"></div>
+              <form id="chatForm" class="chat-form">
+                <input id="chatInput" maxlength="300" placeholder="說點什麼…" autocomplete="off">
+                <button type="submit">送出</button>
+              </form>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="sourceModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="panel-title">更換房間影片</div>
+      <label>來源</label>
+      <select id="sourceTypeModal">
+        <option value="youtube">YouTube</option>
+        <option value="direct">直接影片網址</option>
+      </select>
+      <label>網址</label>
+      <input id="sourceUrlModal" type="url" placeholder="貼上影片網址">
+      <div class="modal-actions">
+        <button id="cancelModalBtn" class="secondary-btn">取消</button>
+        <button id="saveSourceBtn" class="primary-btn">切換</button>
+      </div>
+      <div id="modalError" class="error-text"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="firebase-config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="app.js"></script>
+</body>
+</html>
