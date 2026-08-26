@@ -108,10 +108,12 @@
 
   const state = {
     uid: null,
+
     memberName: "看片玩家",
 
     roomId: null,
     room: null,
+
     isOwner: false,
 
     roomRef: null,
@@ -119,8 +121,6 @@
     membersRef: null,
     chatRef: null,
     queueRef: null,
-
-    ownerListenerAttached: false,
 
     player: null,
     playerReady: false,
@@ -130,11 +130,11 @@
     currentVideoUrl: null,
 
     applyingRemote: false,
+
     lastRemoteKey: "",
     lastWriteAt: 0,
 
     syncTimer: null,
-    presenceTimer: null,
 
     searchResults: [],
     modalSelectedVideo: null,
@@ -155,11 +155,6 @@
 
     queue: {},
 
-    members: {},
-
-    inviteReady: false,
-    ownershipChanging: false,
-
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -170,9 +165,9 @@
   let db = null;
   let auth = null;
 
-  /* =========================================================
-     BASIC UI
-  ========================================================= */
+  /* =====================================================
+     BASIC
+  ===================================================== */
 
   function toast(message) {
     const element = $("toast");
@@ -268,10 +263,6 @@
     );
   }
 
-  /* =========================================================
-     ROOM / MEMBER
-  ========================================================= */
-
   function randomRoomCode() {
     const chars =
       "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -292,9 +283,7 @@
 
   function getRoomIdFromUrl() {
     return (
-      new URLSearchParams(
-        location.search
-      )
+      new URLSearchParams(location.search)
         .get("room")
         ?.trim()
         .toUpperCase() ||
@@ -331,9 +320,9 @@
     return name;
   }
 
-  /* =========================================================
+  /* =====================================================
      FIREBASE
-  ========================================================= */
+  ===================================================== */
 
   async function initializeFirebase() {
     if (!window.firebase) {
@@ -377,9 +366,9 @@
     }
   }
 
-  /* =========================================================
-     YOUTUBE / PLATFORM ID
-  ========================================================= */
+  /* =====================================================
+     ID PARSERS
+  ===================================================== */
 
   function getYoutubeId(value) {
     if (!value) {
@@ -422,9 +411,7 @@
           "/watch"
         ) {
           return (
-            url.searchParams.get(
-              "v"
-            ) ||
+            url.searchParams.get("v") ||
             null
           );
         }
@@ -435,9 +422,7 @@
           )
         ) {
           return (
-            url.pathname.split(
-              "/"
-            )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
         }
@@ -448,9 +433,7 @@
           )
         ) {
           return (
-            url.pathname.split(
-              "/"
-            )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
         }
@@ -498,7 +481,7 @@
 
     const match =
       text.match(
-        /(?:vimeo\.com\/)(\d+)/
+        /vimeo\.com\/(\d+)/
       );
 
     return (
@@ -638,8 +621,7 @@
       }
 
       if (
-        parts[0] ===
-        "videos" &&
+        parts[0] === "videos" &&
         parts[1]
       ) {
         return {
@@ -649,8 +631,7 @@
       }
 
       if (
-        parts[0] ===
-        "clip" &&
+        parts[0] === "clip" &&
         parts[1]
       ) {
         return {
@@ -675,22 +656,17 @@
     return {
       type: "channel",
       value:
-        text.replace(
-          /^@/,
-          ""
-        )
+        text.replace(/^@/, "")
     };
   }
 
-  /* =========================================================
-     SEARCH
-  ========================================================= */
+  /* =====================================================
+     YOUTUBE SEARCH
+  ===================================================== */
 
   async function searchYoutube(query) {
     query =
-      String(
-        query || ""
-      ).trim();
+      String(query || "").trim();
 
     if (!query) {
       throw new Error(
@@ -700,12 +676,10 @@
 
     if (
       !YOUTUBE_API_KEY ||
-      YOUTUBE_API_KEY.startsWith(
-        "請"
-      )
+      YOUTUBE_API_KEY.startsWith("請")
     ) {
       throw new Error(
-        "YouTube API Key 未設定"
+        "YouTube API Key 尚未設定"
       );
     }
 
@@ -777,9 +751,7 @@
           message;
       } catch (_) {}
 
-      throw new Error(
-        message
-      );
+      throw new Error(message);
     }
 
     const data =
@@ -787,54 +759,44 @@
 
     const results =
       (
-        Array.isArray(
-          data.items
-        )
+        Array.isArray(data.items)
           ? data.items
           : []
       )
-        .map(
-          (item) => {
-            const id =
-              item?.id?.videoId;
+        .map((item) => {
+          const id =
+            item?.id?.videoId;
 
-            const snippet =
-              item?.snippet ||
-              {};
+          const snippet =
+            item?.snippet || {};
 
-            if (!id) {
-              return null;
-            }
-
-            return {
-              id,
-
-              platform:
-                "youtube",
-
-              title:
-                snippet.title ||
-                "未命名影片",
-
-              description:
-                snippet.description ||
-                "",
-
-              channel:
-                snippet.channelTitle ||
-                "",
-
-              thumbnail:
-                snippet.thumbnails
-                  ?.high?.url ||
-                snippet.thumbnails
-                  ?.medium?.url ||
-                snippet.thumbnails
-                  ?.default?.url ||
-                ""
-            };
+          if (!id) {
+            return null;
           }
-        )
+
+          return {
+            id,
+            platform: "youtube",
+
+            title:
+              snippet.title ||
+              "未命名影片",
+
+            description:
+              snippet.description ||
+              "",
+
+            channel:
+              snippet.channelTitle ||
+              "",
+
+            thumbnail:
+              snippet.thumbnails?.high?.url ||
+              snippet.thumbnails?.medium?.url ||
+              snippet.thumbnails?.default?.url ||
+              ""
+          };
+        })
         .filter(Boolean);
 
     state.searchResults =
@@ -853,9 +815,11 @@
     return results;
   }
 
-  function renderSearchResults(
-    results
-  ) {
+  /* =====================================================
+     SEARCH RESULTS
+  ===================================================== */
+
+  function renderSearchResults(results) {
     const container =
       $("modalVideoSearchResults");
 
@@ -864,9 +828,7 @@
     }
 
     state.searchResults =
-      Array.isArray(
-        results
-      )
+      Array.isArray(results)
         ? results
         : [];
 
@@ -914,17 +876,6 @@
                 data-video-select="${escapeHtml(
                   video.id
                 )}"
-                style="
-                  display:flex;
-                  align-items:center;
-                  gap:10px;
-                  width:100%;
-                  padding:0;
-                  border:0;
-                  background:transparent;
-                  color:inherit;
-                  text-align:left;
-                "
               >
 
                 <img
@@ -1000,8 +951,7 @@
             "click",
             () => {
               selectSearchVideo(
-                button.dataset
-                  .videoSelect
+                button.dataset.videoSelect
               );
             }
           );
@@ -1016,17 +966,13 @@
         (button) => {
           button.addEventListener(
             "click",
-            async (
-              event
-            ) => {
+            async (event) => {
               event.stopPropagation();
 
               const video =
                 state.searchResults.find(
                   (item) =>
-                    String(
-                      item.id
-                    ) ===
+                    String(item.id) ===
                     String(
                       button.dataset
                         .videoPlay
@@ -1038,13 +984,10 @@
               }
 
               try {
-                await changeVideo(
-                  {
-                    ...video,
-                    platform:
-                      "youtube"
-                  }
-                );
+                await changeVideo({
+                  ...video,
+                  platform: "youtube"
+                });
               } catch (error) {
                 console.error(
                   error
@@ -1069,17 +1012,13 @@
         (button) => {
           button.addEventListener(
             "click",
-            async (
-              event
-            ) => {
+            async (event) => {
               event.stopPropagation();
 
               const video =
                 state.searchResults.find(
                   (item) =>
-                    String(
-                      item.id
-                    ) ===
+                    String(item.id) ===
                     String(
                       button.dataset
                         .videoQueue
@@ -1091,13 +1030,10 @@
               }
 
               try {
-                await addToQueue(
-                  {
-                    ...video,
-                    platform:
-                      "youtube"
-                  }
-                );
+                await addToQueue({
+                  ...video,
+                  platform: "youtube"
+                });
 
                 toast(
                   "已加入待播放清單"
@@ -1119,9 +1055,7 @@
       );
   }
 
-  function selectSearchVideo(
-    id
-  ) {
+  function selectSearchVideo(id) {
     const video =
       state.searchResults.find(
         (item) =>
@@ -1138,8 +1072,7 @@
 
     state.modalSelectedVideo = {
       ...video,
-      platform:
-        "youtube"
+      platform: "youtube"
     };
 
     state.modalSelectedVideoId =
@@ -1158,8 +1091,7 @@
             item.classList.toggle(
               "selected",
               String(
-                item.dataset
-                  .videoId
+                item.dataset.videoId
               ) ===
                 String(id)
             );
@@ -1217,40 +1149,219 @@
 
     return {
       ...video,
-      platform:
-        "youtube"
+      platform: "youtube"
     };
   }
 
-  /* =========================================================
-     QUEUE
-  ========================================================= */
+  /* =====================================================
+     VIDEO OBJECT
+  ===================================================== */
 
-  function getSortedQueue() {
-    return Object.entries(
-      state.queue || {}
-    )
-      .map(
-        ([id, item]) => ({
-          ...item,
-          queueId:
+  function createVideoObject(
+    platform,
+    rawValue,
+    title = ""
+  ) {
+    if (!rawValue) {
+      return null;
+    }
+
+    if (
+      platform ===
+      "youtube"
+    ) {
+      const id =
+        getYoutubeId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
+
+      return {
+        id,
+        platform,
+
+        title:
+          title ||
+          "YouTube 影片",
+
+        thumbnail:
+          `https://i.ytimg.com/vi/${encodeURIComponent(
             id
-        })
-      )
-      .sort(
-        (a, b) =>
-          Number(
-            a.addedAt || 0
-          ) -
-          Number(
-            b.addedAt || 0
-          )
-      );
+          )}/hqdefault.jpg`,
+
+        channel:
+          "YouTube"
+      };
+    }
+
+    if (
+      platform ===
+      "vimeo"
+    ) {
+      const id =
+        getVimeoId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
+
+      return {
+        id,
+        url:
+          String(rawValue),
+
+        platform,
+
+        title:
+          title ||
+          "Vimeo 影片",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Vimeo"
+      };
+    }
+
+    if (
+      platform ===
+      "dailymotion"
+    ) {
+      const id =
+        getDailymotionId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
+
+      return {
+        id,
+        url:
+          String(rawValue),
+
+        platform,
+
+        title:
+          title ||
+          "Dailymotion 影片",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Dailymotion"
+      };
+    }
+
+    if (
+      platform ===
+      "bilibili"
+    ) {
+      const id =
+        getBilibiliId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
+
+      return {
+        id,
+        url:
+          String(rawValue),
+
+        platform,
+
+        title:
+          title ||
+          "Bilibili 影片",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Bilibili"
+      };
+    }
+
+    if (
+      platform ===
+      "twitch"
+    ) {
+      const value =
+        getTwitchValue(
+          rawValue
+        );
+
+      if (!value) {
+        return null;
+      }
+
+      return {
+        id:
+          value.value,
+
+        twitchType:
+          value.type,
+
+        url:
+          String(rawValue),
+
+        platform,
+
+        title:
+          title ||
+          "Twitch",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Twitch"
+      };
+    }
+
+    return {
+      id:
+        String(rawValue),
+
+      url:
+        String(rawValue),
+
+      platform,
+
+      title:
+        title ||
+        PLATFORMS[
+          platform
+        ]?.name ||
+        platform,
+
+      thumbnail:
+        "",
+
+      channel:
+        PLATFORMS[
+          platform
+        ]?.name ||
+        platform
+    };
   }
 
-  async function addToQueue(
-    video
-  ) {
+  /* =====================================================
+     QUEUE
+  ===================================================== */
+
+  async function addToQueue(video) {
     if (
       !state.queueRef ||
       !state.uid
@@ -1271,11 +1382,15 @@
         state.queue || {}
       ).some(
         (item) =>
+          String(item?.id || "") ===
+          String(video.id) &&
           String(
-            item?.id || ""
+            item?.platform ||
+            "youtube"
           ) ===
           String(
-            video.id
+            video.platform ||
+            "youtube"
           )
       );
 
@@ -1287,9 +1402,7 @@
 
     const item = {
       id:
-        String(
-          video.id
-        ),
+        String(video.id),
 
       platform:
         video.platform ||
@@ -1319,6 +1432,16 @@
           .TIMESTAMP
     };
 
+    if (video.url) {
+      item.url =
+        String(video.url);
+    }
+
+    if (video.twitchType) {
+      item.twitchType =
+        video.twitchType;
+    }
+
     await state.queueRef.push(
       item
     );
@@ -1347,9 +1470,7 @@
     queueId
   ) {
     const item =
-      state.queue?.[
-        queueId
-      ];
+      state.queue?.[queueId];
 
     if (!item) {
       throw new Error(
@@ -1357,7 +1478,7 @@
       );
     }
 
-    await changeVideo({
+    const video = {
       id:
         item.id,
 
@@ -1373,40 +1494,44 @@
 
       channel:
         item.channel
-    });
+    };
 
-    await state.queueRef
-      .child(
-        queueId
-      )
-      .remove();
+    if (item.url) {
+      video.url =
+        item.url;
+    }
+
+    if (item.twitchType) {
+      video.twitchType =
+        item.twitchType;
+    }
+
+    await changeVideo(
+      video
+    );
+
+    if (state.queueRef) {
+      await state.queueRef
+        .child(queueId)
+        .remove();
+    }
   }
 
-  async function playNextQueueItem() {
-    const list =
-      getSortedQueue();
-
-    if (!list.length) {
-      return false;
-    }
-
-    const next =
-      list[0];
-
-    try {
-      await playQueueItem(
-        next.queueId
+  function getSortedQueue() {
+    return Object.entries(
+      state.queue || {}
+    )
+      .map(
+        ([id, item]) => ({
+          ...item,
+          queueId: id
+        })
+      )
+      .sort(
+        (a, b) =>
+          Number(a.addedAt || 0) -
+          Number(b.addedAt || 0)
       );
-
-      return true;
-    } catch (error) {
-      console.error(
-        "播放下一部失敗：",
-        error
-      );
-
-      return false;
-    }
   }
 
   function renderQueue() {
@@ -1458,11 +1583,11 @@
 
                 <div
                   style="
-                    width:26px;
-                    flex:0 0 26px;
+                    width:28px;
+                    flex:0 0 28px;
                     text-align:center;
-                    color:#60a5fa;
-                    font-weight:850;
+                    font-weight:800;
+                    color:#93c5fd;
                   "
                 >
                   ${index + 1}
@@ -1481,7 +1606,6 @@
                           height:40px;
                           object-fit:cover;
                           border-radius:7px;
-                          flex:0 0 auto;
                         "
                       >
                     `
@@ -1501,7 +1625,7 @@
                       text-overflow:ellipsis;
                       white-space:nowrap;
                       font-size:13px;
-                      font-weight:750;
+                      font-weight:700;
                     "
                   >
                     ${escapeHtml(
@@ -1583,7 +1707,7 @@
 
                 toast(
                   error.message ||
-                    "播放失敗"
+                  "播放失敗"
                 );
               }
             }
@@ -1620,9 +1744,36 @@
       );
   }
 
-  /* =========================================================
-     PLAYER DISPLAY
-  ========================================================= */
+  async function playNextQueueItem() {
+    const list =
+      getSortedQueue();
+
+    if (!list.length) {
+      return false;
+    }
+
+    const next =
+      list[0];
+
+    try {
+      await playQueueItem(
+        next.queueId
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "播放下一部失敗:",
+        error
+      );
+
+      return false;
+    }
+  }
+
+  /* =====================================================
+     PLAYER VISIBILITY
+  ===================================================== */
 
   function hidePlayers(
     keepYoutube = false
@@ -1656,9 +1807,7 @@
     }
   }
 
-  function showPlayerElement(
-    id
-  ) {
+  function showPlayerElement(id) {
     $(id)?.classList.remove(
       "hidden"
     );
@@ -1666,9 +1815,7 @@
 
   function forceYoutubeVisible() {
     const element =
-      document.getElementById(
-        "youtubePlayer"
-      );
+      $("youtubePlayer");
 
     if (!element) {
       return;
@@ -1708,6 +1855,10 @@
     }
   }
 
+  /* =====================================================
+     PLAYER DESTROY
+  ===================================================== */
+
   async function destroyCurrentPlayer() {
     const old =
       state.player;
@@ -1740,12 +1891,16 @@
         "youtube"
       ) {
         old.destroy?.();
-      } else if (
+      }
+
+      if (
         oldType ===
         "vimeo"
       ) {
         await old.destroy?.();
-      } else if (
+      }
+
+      if (
         oldType ===
         "dailymotion"
       ) {
@@ -1754,9 +1909,9 @@
     } catch (_) {}
   }
 
-  /* =========================================================
-     PLAYER INFO
-  ========================================================= */
+  /* =====================================================
+     PLAYER STATE
+  ===================================================== */
 
   async function asyncCurrentPosition() {
     const player =
@@ -2026,9 +2181,9 @@
     return false;
   }
 
-  /* =========================================================
-     PLAYBACK SYNC
-  ========================================================= */
+  /* =====================================================
+     FIREBASE PLAYBACK SYNC
+  ===================================================== */
 
   async function writePlayback(
     action,
@@ -2053,8 +2208,7 @@
       Date.now();
 
     if (
-      action ===
-        "sync" &&
+      action === "sync" &&
       now -
         state.lastWriteAt <
         400
@@ -2098,7 +2252,7 @@
       });
     } catch (error) {
       console.error(
-        "播放同步失敗：",
+        "播放同步失敗:",
         error
       );
     }
@@ -2131,8 +2285,7 @@
         position:
           Math.max(
             0,
-            Number(position) ||
-              0
+            Number(position) || 0
           ),
 
         playing:
@@ -2151,7 +2304,7 @@
       });
     } catch (error) {
       console.error(
-        "播放同步失敗：",
+        "播放同步失敗:",
         error
       );
     }
@@ -2184,7 +2337,7 @@
       );
     } catch (error) {
       console.error(
-        "讀取播放狀態失敗：",
+        "讀取播放狀態失敗:",
         error
       );
     }
@@ -2246,12 +2399,9 @@
       ) {
         await applyPlayerPosition(
           remotePosition,
-          data.action ===
-            "seek" ||
-            data.action ===
-              "sync" ||
-            data.action ===
-              "play"
+          data.action === "seek" ||
+          data.action === "sync" ||
+          data.action === "play"
         );
 
         if (
@@ -2269,7 +2419,9 @@
         }
       }
 
-      if ($("syncStatus")) {
+      if (
+        $("syncStatus")
+      ) {
         $("syncStatus")
           .textContent =
           `已同步 ${formatTime(
@@ -2339,14 +2491,18 @@
           seconds,
           true
         );
-      } else if (
+      }
+
+      if (
         type ===
         "vimeo"
       ) {
         await player.setCurrentTime(
           seconds
         );
-      } else if (
+      }
+
+      if (
         type ===
         "dailymotion"
       ) {
@@ -2358,7 +2514,9 @@
             seconds
           );
         }
-      } else if (
+      }
+
+      if (
         type ===
         "twitch"
       ) {
@@ -2389,17 +2547,23 @@
       ) {
         state.player.mute();
         state.player.playVideo();
-      } else if (
+      }
+
+      if (
         state.playerType ===
         "vimeo"
       ) {
         await state.player.play();
-      } else if (
+      }
+
+      if (
         state.playerType ===
         "dailymotion"
       ) {
         await state.player.play();
-      } else if (
+      }
+
+      if (
         state.playerType ===
         "twitch"
       ) {
@@ -2422,17 +2586,23 @@
         "youtube"
       ) {
         state.player.pauseVideo();
-      } else if (
+      }
+
+      if (
         state.playerType ===
         "vimeo"
       ) {
         await state.player.pause();
-      } else if (
+      }
+
+      if (
         state.playerType ===
         "dailymotion"
       ) {
         await state.player.pause();
-      } else if (
+      }
+
+      if (
         state.playerType ===
         "twitch"
       ) {
@@ -2491,229 +2661,9 @@
       );
   }
 
-  /* =========================================================
-     VIDEO OBJECT
-  ========================================================= */
-
-  function createVideoObject(
-    platform,
-    rawValue,
-    title = ""
-  ) {
-    if (!rawValue) {
-      return null;
-    }
-
-    if (
-      platform ===
-      "youtube"
-    ) {
-      const id =
-        getYoutubeId(
-          rawValue
-        );
-
-      if (!id) {
-        return null;
-      }
-
-      return {
-        id,
-
-        platform,
-
-        title:
-          title ||
-          "YouTube 影片",
-
-        thumbnail:
-          `https://i.ytimg.com/vi/${encodeURIComponent(
-            id
-          )}/hqdefault.jpg`,
-
-        channel:
-          "YouTube"
-      };
-    }
-
-    if (
-      platform ===
-      "vimeo"
-    ) {
-      const id =
-        getVimeoId(
-          rawValue
-        );
-
-      if (!id) {
-        return null;
-      }
-
-      return {
-        id,
-
-        url:
-          String(
-            rawValue
-          ),
-
-        platform,
-
-        title:
-          title ||
-          "Vimeo 影片",
-
-        thumbnail:
-          "",
-
-        channel:
-          "Vimeo"
-      };
-    }
-
-    if (
-      platform ===
-      "dailymotion"
-    ) {
-      const id =
-        getDailymotionId(
-          rawValue
-        );
-
-      if (!id) {
-        return null;
-      }
-
-      return {
-        id,
-
-        url:
-          String(
-            rawValue
-          ),
-
-        platform,
-
-        title:
-          title ||
-          "Dailymotion 影片",
-
-        thumbnail:
-          "",
-
-        channel:
-          "Dailymotion"
-      };
-    }
-
-    if (
-      platform ===
-      "bilibili"
-    ) {
-      const id =
-        getBilibiliId(
-          rawValue
-        );
-
-      if (!id) {
-        return null;
-      }
-
-      return {
-        id,
-
-        url:
-          String(
-            rawValue
-          ),
-
-        platform,
-
-        title:
-          title ||
-          "Bilibili 影片",
-
-        thumbnail:
-          "",
-
-        channel:
-          "Bilibili"
-      };
-    }
-
-    if (
-      platform ===
-      "twitch"
-    ) {
-      const value =
-        getTwitchValue(
-          rawValue
-        );
-
-      if (!value) {
-        return null;
-      }
-
-      return {
-        id:
-          value.value,
-
-        twitchType:
-          value.type,
-
-        url:
-          String(
-            rawValue
-          ),
-
-        platform,
-
-        title:
-          title ||
-          "Twitch",
-
-        thumbnail:
-          "",
-
-        channel:
-          "Twitch"
-      };
-    }
-
-    return {
-      id:
-        String(
-          rawValue
-        ),
-
-      url:
-        String(
-          rawValue
-        ),
-
-      platform,
-
-      title:
-        title ||
-        PLATFORMS[
-          platform
-        ]?.name ||
-        platform,
-
-      thumbnail:
-        "",
-
-      channel:
-        PLATFORMS[
-          platform
-        ]?.name ||
-        platform
-    };
-  }
-
-  /* =========================================================
+  /* =====================================================
      SDK LOADERS
-  ========================================================= */
+  ===================================================== */
 
   async function loadVimeoSdk() {
     if (
@@ -2737,8 +2687,7 @@
             setInterval(
               () => {
                 if (
-                  window.Vimeo
-                    ?.Player
+                  window.Vimeo?.Player
                 ) {
                   clearInterval(
                     timer
@@ -2760,8 +2709,7 @@
               );
 
               if (
-                window.Vimeo
-                  ?.Player
+                window.Vimeo?.Player
               ) {
                 state.sdk.vimeo =
                   true;
@@ -2795,8 +2743,7 @@
         script.onload =
           () => {
             if (
-              window.Vimeo
-                ?.Player
+              window.Vimeo?.Player
             ) {
               state.sdk.vimeo =
                 true;
@@ -2917,7 +2864,8 @@
         script.async =
           true;
 
-        script.dataset.wtDailymotionSdk =
+        script.dataset
+          .wtDailymotionSdk =
           "1";
 
         script.onload =
@@ -2975,8 +2923,7 @@
             setInterval(
               () => {
                 if (
-                  window.Twitch
-                    ?.Player
+                  window.Twitch?.Player
                 ) {
                   clearInterval(
                     timer
@@ -2998,8 +2945,7 @@
               );
 
               if (
-                window.Twitch
-                  ?.Player
+                window.Twitch?.Player
               ) {
                 state.sdk.twitch =
                   true;
@@ -3033,8 +2979,7 @@
         script.onload =
           () => {
             if (
-              window.Twitch
-                ?.Player
+              window.Twitch?.Player
             ) {
               state.sdk.twitch =
                 true;
@@ -3064,9 +3009,9 @@
     );
   }
 
-  /* =========================================================
+  /* =====================================================
      YOUTUBE PLAYER
-  ========================================================= */
+  ===================================================== */
 
   async function buildYoutubePlayer(
     videoId,
@@ -3076,7 +3021,7 @@
       return;
     }
 
-    const initial =
+    let initial =
       $("youtubePlayer");
 
     if (!initial) {
@@ -3191,6 +3136,15 @@
         await destroyCurrentPlayer();
       }
 
+      if (
+        state.youtubeBuildToken !==
+          token ||
+        state.youtubeRequestedId !==
+          videoId
+      ) {
+        return;
+      }
+
       let container =
         $("youtubePlayer");
 
@@ -3200,6 +3154,11 @@
         );
       }
 
+      /*
+       * YouTube API 會把 div 轉成 iframe。
+       * 如果上一個版本已經留下 iframe，
+       * 先換回乾淨 div。
+       */
       if (
         container.tagName ===
         "IFRAME"
@@ -3275,9 +3234,7 @@
 
             playerVars: {
               autoplay:
-                autoplay
-                  ? 1
-                  : 0,
+                autoplay ? 1 : 0,
 
               controls:
                 1,
@@ -3305,8 +3262,14 @@
                 ) => {
                   if (
                     state.youtubeBuildToken !==
-                      token
+                      token ||
+                    state.youtubeRequestedId !==
+                      videoId
                   ) {
+                    try {
+                      event.target.destroy?.();
+                    } catch (_) {}
+
                     return;
                   }
 
@@ -3327,9 +3290,7 @@
 
                   forceYoutubeVisible();
 
-                  $(
-                    "playerPlaceholder"
-                  )
+                  $("playerPlaceholder")
                     ?.classList.add(
                       "hidden"
                     );
@@ -3338,13 +3299,6 @@
                     event.target.setVolume(
                       100
                     );
-
-                    if (
-                      autoplay
-                    ) {
-                      event.target.mute();
-                      event.target.playVideo();
-                    }
                   } catch (_) {}
 
                   if (
@@ -3359,6 +3313,11 @@
 
                   updateTimeUI();
 
+                  /*
+                   * 先取得 Firebase 最新狀態。
+                   * 如果房間狀態是 paused，
+                   * 不會被初始 autoplay 硬改成播放。
+                   */
                   await syncLatestPlayback();
 
                   if (
@@ -3447,6 +3406,10 @@
                       false
                     );
 
+                    /*
+                     * 只讓房主自動切下一部，
+                     * 避免所有成員同時搶著切換。
+                     */
                     if (
                       state.isOwner
                     ) {
@@ -3491,14 +3454,8 @@
         player;
     } catch (error) {
       console.error(
-        "YouTube 播放器建立失敗：",
+        "YouTube 播放器建立失敗:",
         error
-      );
-
-      hidePlayers();
-
-      showPlayerElement(
-        "emptyPlayer"
       );
 
       state.player =
@@ -3509,6 +3466,15 @@
 
       state.playerType =
         null;
+
+      state.currentVideoId =
+        null;
+
+      hidePlayers();
+
+      showPlayerElement(
+        "emptyPlayer"
+      );
 
       toast(
         "YouTube 播放器建立失敗"
@@ -3524,9 +3490,9 @@
     }
   }
 
-  /* =========================================================
+  /* =====================================================
      VIMEO
-  ========================================================= */
+  ===================================================== */
 
   async function buildVimeoPlayer(
     video
@@ -3555,6 +3521,14 @@
       `https://player.vimeo.com/video/${encodeURIComponent(
         video.id
       )}`;
+
+    container.allow =
+      "autoplay; fullscreen; picture-in-picture";
+
+    container.setAttribute(
+      "allowfullscreen",
+      ""
+    );
 
     const player =
       new Vimeo.Player(
@@ -3633,17 +3607,6 @@
     );
 
     player.on(
-      "ended",
-      async () => {
-        if (
-          state.isOwner
-        ) {
-          await playNextQueueItem();
-        }
-      }
-    );
-
-    player.on(
       "seeked",
       async (
         data
@@ -3672,9 +3635,9 @@
     );
   }
 
-  /* =========================================================
+  /* =====================================================
      DAILYMOTION
-  ========================================================= */
+  ===================================================== */
 
   async function buildDailymotionPlayer(
     video
@@ -3726,19 +3689,20 @@
     );
 
     const player =
-      await window.dailymotion.createPlayer(
-        playerId,
-        {
-          video:
-            video.id,
+      await window.dailymotion
+        .createPlayer(
+          playerId,
+          {
+            video:
+              video.id,
 
-          mute:
-            true,
+            mute:
+              true,
 
-          controls:
-            true
-        }
-      );
+            controls:
+              true
+          }
+        );
 
     state.player =
       player;
@@ -3763,7 +3727,9 @@
         "play",
         async () => {
           if (
-            state.applyingRemote
+            state.applyingRemote ||
+            state.player !==
+              player
           ) {
             return;
           }
@@ -3779,7 +3745,9 @@
         "pause",
         async () => {
           if (
-            state.applyingRemote
+            state.applyingRemote ||
+            state.player !==
+              player
           ) {
             return;
           }
@@ -3790,29 +3758,16 @@
           );
         }
       );
-
-      player.addEventListener(
-        "ended",
-        async () => {
-          if (
-            state.isOwner
-          ) {
-            await playNextQueueItem();
-          }
-        }
-      );
     }
 
-    try {
-      await player.play();
-    } catch (_) {}
+    await syncLatestPlayback();
 
     startSyncHeartbeat();
   }
 
-  /* =========================================================
+  /* =====================================================
      BILIBILI
-  ========================================================= */
+  ===================================================== */
 
   async function buildBilibiliPlayer(
     video
@@ -3877,6 +3832,11 @@
     iframe.allow =
       "autoplay; fullscreen; picture-in-picture";
 
+    iframe.setAttribute(
+      "allowfullscreen",
+      ""
+    );
+
     state.currentVideoId =
       video.id;
 
@@ -3894,9 +3854,9 @@
       true;
   }
 
-  /* =========================================================
+  /* =====================================================
      TWITCH
-  ========================================================= */
+  ===================================================== */
 
   async function buildTwitchPlayer(
     video
@@ -4006,6 +3966,14 @@
       (resolve) => {
         const ready =
           () => {
+            if (
+              state.player !==
+              player
+            ) {
+              resolve();
+              return;
+            }
+
             state.playerReady =
               true;
 
@@ -4024,7 +3992,9 @@
             Twitch.Player.PLAY,
             async () => {
               if (
-                state.applyingRemote
+                state.applyingRemote ||
+                state.player !==
+                  player
               ) {
                 return;
               }
@@ -4040,7 +4010,9 @@
             Twitch.Player.PAUSE,
             async () => {
               if (
-                state.applyingRemote
+                state.applyingRemote ||
+                state.player !==
+                  player
               ) {
                 return;
               }
@@ -4060,12 +4032,14 @@
       }
     );
 
+    await syncLatestPlayback();
+
     startSyncHeartbeat();
   }
 
-  /* =========================================================
-     EXTERNAL PLATFORMS
-  ========================================================= */
+  /* =====================================================
+     EXTERNAL PLATFORM
+  ===================================================== */
 
   async function buildExternalPlayer(
     video
@@ -4152,6 +4126,10 @@
       false;
   }
 
+  /* =====================================================
+     PLATFORM ROUTER
+  ===================================================== */
+
   async function buildPlatformPlayer(
     video
   ) {
@@ -4226,9 +4204,9 @@
     );
   }
 
-  /* =========================================================
-     ROOM CREATION
-  ========================================================= */
+  /* =====================================================
+     ROOM CREATE / JOIN
+  ===================================================== */
 
   async function createRoom() {
     const roomName =
@@ -4267,9 +4245,6 @@
 
       video:
         null,
-
-      queue:
-        {},
 
       state: {
         action:
@@ -4319,9 +4294,7 @@
     await enterRoom();
   }
 
-  async function joinRoom(
-    roomId
-  ) {
+  async function joinRoom(roomId) {
     roomId =
       String(
         roomId || ""
@@ -4377,765 +4350,9 @@
     await enterRoom();
   }
 
-  /* =========================================================
-     PRESENCE
-  ========================================================= */
-
-  async function setPresenceOnline() {
-    if (
-      !state.membersRef ||
-      !state.uid
-    ) {
-      return;
-    }
-
-    const memberRef =
-      state.membersRef.child(
-        state.uid
-      );
-
-    const connectedRef =
-      db.ref(
-        ".info/connected"
-      );
-
-    connectedRef.on(
-      "value",
-      async (
-        snapshot
-      ) => {
-        if (
-          snapshot.val() !==
-          true
-        ) {
-          return;
-        }
-
-        try {
-          await memberRef.onDisconnect()
-            .update({
-              online:
-                false,
-
-              lastSeen:
-                firebase.database
-                  .ServerValue
-                  .TIMESTAMP
-            });
-
-          await memberRef.update({
-            name:
-              state.memberName,
-
-            online:
-              true,
-
-            lastSeen:
-              firebase.database
-                .ServerValue
-                .TIMESTAMP,
-
-            joinedAt:
-              firebase.database
-                .ServerValue
-                .TIMESTAMP
-          });
-
-          startPresenceHeartbeat();
-        } catch (error) {
-          console.error(
-            "Presence 更新失敗：",
-            error
-          );
-        }
-      }
-    );
-  }
-
-  function startPresenceHeartbeat() {
-    clearInterval(
-      state.presenceTimer
-    );
-
-    state.presenceTimer =
-      setInterval(
-        async () => {
-          if (
-            !state.membersRef ||
-            !state.uid
-          ) {
-            return;
-          }
-
-          try {
-            await state.membersRef
-              .child(
-                state.uid
-              )
-              .update({
-                online:
-                  true,
-
-                lastSeen:
-                  firebase.database
-                    .ServerValue
-                    .TIMESTAMP
-              });
-          } catch (_) {}
-        },
-        20000
-      );
-  }
-
-  async function setPresenceOffline() {
-    if (
-      !state.membersRef ||
-      !state.uid
-    ) {
-      return;
-    }
-
-    clearInterval(
-      state.presenceTimer
-    );
-
-    try {
-      await state.membersRef
-        .child(
-          state.uid
-        )
-        .update({
-          online:
-            false,
-
-          lastSeen:
-            firebase.database
-              .ServerValue
-              .TIMESTAMP
-        });
-    } catch (_) {}
-  }
-
-  /* =========================================================
-     OWNER TRANSFER
-  ========================================================= */
-
-  function updateOwnerUI() {
-    document
-      .querySelectorAll(
-        ".owner-only"
-      )
-      .forEach(
-        (element) => {
-          if (
-            element.id ===
-            "changeSourceBtn"
-          ) {
-            element.classList.remove(
-              "hidden"
-            );
-
-            return;
-          }
-
-          element.classList.toggle(
-            "hidden",
-            !state.isOwner
-          );
-        }
-      );
-
-    const ownerBadge =
-      $("roomOwnerStatus");
-
-    if (ownerBadge) {
-      ownerBadge.textContent =
-        state.isOwner
-          ? "👑 你是房主"
-          : "👥 成員";
-    }
-  }
-
-  async function tryTransferOwnership(
-    preferredUid = null
-  ) {
-    if (
-      !state.roomRef ||
-      !state.membersRef ||
-      !state.roomId ||
-      state.ownershipChanging
-    ) {
-      return false;
-    }
-
-    state.ownershipChanging =
-      true;
-
-    try {
-      const ownerSnapshot =
-        await state.roomRef
-          .child(
-            "owner"
-          )
-          .once(
-            "value"
-          );
-
-      const currentOwner =
-        ownerSnapshot.val();
-
-      if (!currentOwner) {
-        return false;
-      }
-
-      const ownerMember =
-        state.members?.[
-          currentOwner
-        ];
-
-      if (
-        ownerMember?.online !==
-        false
-      ) {
-        return false;
-      }
-
-      const membersSnapshot =
-        await state.membersRef.once(
-          "value"
-        );
-
-      const members =
-        membersSnapshot.val() ||
-        {};
-
-      let candidates =
-        Object.entries(
-          members
-        )
-          .filter(
-            ([uid, member]) =>
-              uid !==
-                currentOwner &&
-              member?.online ===
-                true
-          )
-          .map(
-            ([uid, member]) => ({
-              uid,
-              joinedAt:
-                Number(
-                  member?.joinedAt ||
-                    Number.MAX_SAFE_INTEGER
-                )
-            })
-          )
-          .sort(
-            (a, b) =>
-              a.joinedAt -
-              b.joinedAt
-          );
-
-      if (
-        preferredUid
-      ) {
-        const preferred =
-          candidates.find(
-            (item) =>
-              item.uid ===
-              preferredUid
-          );
-
-        if (preferred) {
-          candidates =
-            [
-              preferred,
-              ...candidates.filter(
-                (item) =>
-                  item.uid !==
-                  preferredUid
-              )
-            ];
-        }
-      }
-
-      if (!candidates.length) {
-        return false;
-      }
-
-      const nextOwner =
-        candidates[0].uid;
-
-      const ownerRef =
-        state.roomRef.child(
-          "owner"
-        );
-
-      const result =
-        await ownerRef.transaction(
-          (value) => {
-            if (
-              value ===
-              currentOwner
-            ) {
-              return nextOwner;
-            }
-
-            return;
-          }
-        );
-
-      if (
-        result.committed
-      ) {
-        state.room.owner =
-          result.snapshot.val();
-
-        state.isOwner =
-          state.room.owner ===
-          state.uid;
-
-        updateOwnerUI();
-
-        if (
-          state.isOwner
-        ) {
-          toast(
-            "你現在是房主"
-          );
-        } else if (
-          state.room.owner ===
-          nextOwner
-        ) {
-          toast(
-            "房主已轉移"
-          );
-        }
-
-        return true;
-      }
-    } catch (error) {
-      console.error(
-        "房主轉移失敗：",
-        error
-      );
-    } finally {
-      state.ownershipChanging =
-        false;
-    }
-
-    return false;
-  }
-
-  async function handleOwnerStatus(
-    members
-  ) {
-    if (
-      !state.room?.owner
-    ) {
-      return;
-    }
-
-    const owner =
-      members?.[
-        state.room.owner
-      ];
-
-    if (
-      owner?.online ===
-      false
-    ) {
-      await tryTransferOwnership();
-    }
-  }
-
-  /* =========================================================
-     INVITE UI
-  ========================================================= */
-
-  function ensureInviteButton() {
-    if (
-      state.inviteReady
-    ) {
-      return;
-    }
-
-    const copyButton =
-      $("copyRoomBtn");
-
-    if (!copyButton) {
-      return;
-    }
-
-    if (
-      $("inviteRoomBtn")
-    ) {
-      state.inviteReady =
-        true;
-
-      return;
-    }
-
-    const button =
-      document.createElement(
-        "button"
-      );
-
-    button.id =
-      "inviteRoomBtn";
-
-    button.type =
-      "button";
-
-    button.className =
-      "tiny-btn";
-
-    button.textContent =
-      "邀請朋友";
-
-    button.addEventListener(
-      "click",
-      openInviteModal
-    );
-
-    copyButton.insertAdjacentElement(
-      "afterend",
-      button
-    );
-
-    ensureInviteModal();
-
-    state.inviteReady =
-      true;
-  }
-
-  function ensureInviteModal() {
-    if (
-      $("inviteModal")
-    ) {
-      return;
-    }
-
-    const modal =
-      document.createElement(
-        "div"
-      );
-
-    modal.id =
-      "inviteModal";
-
-    modal.className =
-      "modal hidden";
-
-    modal.innerHTML = `
-      <div
-        class="modal-card"
-        style="
-          width:min(520px,100%);
-        "
-      >
-
-        <div
-          class="panel-title"
-          style="
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-          "
-        >
-          <span>🔗 邀請朋友</span>
-
-          <button
-            id="closeInviteModalBtn"
-            type="button"
-            class="tiny-btn"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div
-          style="
-            padding:14px;
-            border:1px solid rgba(96,165,250,.18);
-            border-radius:14px;
-            background:rgba(96,165,250,.06);
-          "
-        >
-
-          <div
-            class="muted"
-            style="
-              font-size:11px;
-              margin-bottom:6px;
-            "
-          >
-            房間碼
-          </div>
-
-          <div
-            id="inviteRoomCode"
-            style="
-              font-size:28px;
-              letter-spacing:.15em;
-              font-weight:900;
-            "
-          >
-            ------
-          </div>
-
-        </div>
-
-        <label
-          for="inviteRoomLink"
-        >
-          房間連結
-        </label>
-
-        <div
-          style="
-            display:grid;
-            grid-template-columns:1fr auto;
-            gap:8px;
-          "
-        >
-
-          <input
-            id="inviteRoomLink"
-            type="text"
-            readonly
-          >
-
-          <button
-            id="inviteCopyBtn"
-            type="button"
-            class="secondary-btn"
-          >
-            複製
-          </button>
-
-        </div>
-
-        <div
-          class="modal-actions"
-          style="
-            margin-top:14px;
-          "
-        >
-
-          <button
-            id="inviteShareBtn"
-            type="button"
-            class="primary-btn"
-            style="margin-top:0;"
-          >
-            📤 分享
-          </button>
-
-          <button
-            id="inviteCloseBtn"
-            type="button"
-            class="secondary-btn"
-          >
-            關閉
-          </button>
-
-        </div>
-
-        <div
-          id="inviteError"
-          class="error-text"
-        ></div>
-
-      </div>
-    `;
-
-    document.body.appendChild(
-      modal
-    );
-
-    $("closeInviteModalBtn")
-      ?.addEventListener(
-        "click",
-        closeInviteModal
-      );
-
-    $("inviteCloseBtn")
-      ?.addEventListener(
-        "click",
-        closeInviteModal
-      );
-
-    $("inviteCopyBtn")
-      ?.addEventListener(
-        "click",
-        async () => {
-          try {
-            await copyRoomLink();
-
-            toast(
-              "房間連結已複製"
-            );
-          } catch (_) {
-            setError(
-              $("inviteError"),
-              "複製失敗"
-            );
-          }
-        }
-      );
-
-    $("inviteShareBtn")
-      ?.addEventListener(
-        "click",
-        async () => {
-          try {
-            await shareRoom();
-
-            toast(
-              "已開啟分享"
-            );
-          } catch (error) {
-            if (
-              error?.name ===
-              "AbortError"
-            ) {
-              return;
-            }
-
-            setError(
-              $("inviteError"),
-              error.message ||
-                "分享失敗"
-            );
-          }
-        }
-      );
-  }
-
-  function openInviteModal() {
-    ensureInviteModal();
-
-    const modal =
-      $("inviteModal");
-
-    if (!modal) {
-      return;
-    }
-
-    if (
-      $("inviteRoomCode")
-    ) {
-      $("inviteRoomCode")
-        .textContent =
-        state.roomId ||
-        "------";
-    }
-
-    if (
-      $("inviteRoomLink")
-    ) {
-      $("inviteRoomLink")
-        .value =
-        getRoomLink(
-          state.roomId
-        );
-    }
-
-    setError(
-      $("inviteError"),
-      ""
-    );
-
-    modal.classList.remove(
-      "hidden"
-    );
-  }
-
-  function closeInviteModal() {
-    $("inviteModal")
-      ?.classList.add(
-        "hidden"
-      );
-  }
-
-  async function copyRoomLink() {
-    const link =
-      getRoomLink(
-        state.roomId
-      );
-
-    if (
-      navigator.clipboard
-        ?.writeText
-    ) {
-      await navigator.clipboard.writeText(
-        link
-      );
-
-      return;
-    }
-
-    const input =
-      $("inviteRoomLink");
-
-    if (!input) {
-      throw new Error(
-        "找不到房間連結"
-      );
-    }
-
-    input.focus();
-    input.select();
-
-    const ok =
-      document.execCommand(
-        "copy"
-      );
-
-    if (!ok) {
-      throw new Error(
-        "複製失敗"
-      );
-    }
-  }
-
-  async function shareRoom() {
-    const url =
-      getRoomLink(
-        state.roomId
-      );
-
-    const title =
-      state.room?.name
-        ? `加入 WatchTogether：${state.room.name}`
-        : "加入 WatchTogether 房間";
-
-    const text =
-      `房間碼：${state.roomId}`;
-
-    if (
-      navigator.share
-    ) {
-      await navigator.share({
-        title,
-        text,
-        url
-      });
-
-      return;
-    }
-
-    await copyRoomLink();
-
-    toast(
-      "目前瀏覽器不支援直接分享，已複製連結"
-    );
-  }
-
-  /* =========================================================
+  /* =====================================================
      ROOM VIDEO
-  ========================================================= */
+  ===================================================== */
 
   async function handleRoomVideo(
     video
@@ -5183,6 +4400,8 @@
     state.room.sourceType =
       normalized.platform;
 
+    updateRoomOwnerUI();
+
     if (
       normalized.platform ===
       "youtube"
@@ -5209,8 +4428,7 @@
         forceYoutubeVisible();
 
         if (
-          state.room?.state
-            ?.playing
+          state.room?.state?.playing
         ) {
           await playPlayer();
         }
@@ -5231,9 +4449,98 @@
     );
   }
 
-  /* =========================================================
-     ROOM ENTER
-  ========================================================= */
+  /* =====================================================
+     ROOM UI
+  ===================================================== */
+
+  function updateRoomOwnerUI() {
+    const element =
+      $("roomOwnerStatus");
+
+    if (!element) {
+      return;
+    }
+
+    if (
+      state.isOwner
+    ) {
+      element.textContent =
+        "👑 房主";
+    } else {
+      element.textContent =
+        "👥 成員";
+    }
+  }
+
+  /* =====================================================
+     ONLINE MEMBER
+  ===================================================== */
+
+  async function markMemberOnline() {
+    if (
+      !state.membersRef ||
+      !state.uid
+    ) {
+      return;
+    }
+
+    const memberRef =
+      state.membersRef.child(
+        state.uid
+      );
+
+    await memberRef.update({
+      name:
+        state.memberName,
+
+      online:
+        true,
+
+      lastSeen:
+        firebase.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+    memberRef
+      .onDisconnect()
+      .update({
+        online:
+          false,
+
+        lastSeen:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP
+      });
+  }
+
+  async function heartbeatMember() {
+    if (
+      !state.membersRef ||
+      !state.uid
+    ) {
+      return;
+    }
+
+    try {
+      await state.membersRef
+        .child(state.uid)
+        .update({
+          online:
+            true,
+
+          lastSeen:
+            firebase.database
+              .ServerValue
+              .TIMESTAMP
+        });
+    } catch (_) {}
+  }
+
+  /* =====================================================
+     ENTER ROOM
+  ===================================================== */
 
   async function enterRoom() {
     showView(
@@ -5257,9 +4564,7 @@
         state.roomId;
     }
 
-    updateOwnerUI();
-
-    ensureInviteButton();
+    updateRoomOwnerUI();
 
     state.roomRef =
       db.ref(
@@ -5294,92 +4599,20 @@
         name:
           state.memberName,
 
-        online:
-          true,
-
         joinedAt:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP,
-
-        lastSeen:
           firebase.database
             .ServerValue
             .TIMESTAMP
       });
 
-    try {
-      await state.membersRef
-        .child(
-          state.uid
-        )
-        .onDisconnect()
-        .update({
-          online:
-            false,
-
-          lastSeen:
-            firebase.database
-              .ServerValue
-              .TIMESTAMP
-        });
-    } catch (_) {}
-
-    setPresenceOnline();
-
-    if (
-      !state.ownerListenerAttached
-    ) {
-      state.roomRef
-        .child("owner")
-        .on(
-          "value",
-          async (
-            snapshot
-          ) => {
-            const owner =
-              snapshot.val();
-
-            if (!state.room) {
-              return;
-            }
-
-            const changed =
-              state.room.owner !==
-              owner;
-
-            state.room.owner =
-              owner;
-
-            state.isOwner =
-              owner ===
-              state.uid;
-
-            updateOwnerUI();
-
-            if (
-              changed &&
-              state.isOwner
-            ) {
-              toast(
-                "你已成為房主"
-              );
-            }
-          }
-        );
-
-      state.ownerListenerAttached =
-        true;
-    }
+    await markMemberOnline();
 
     if (
       !state.stateListenerAttached
     ) {
       state.stateRef.on(
         "value",
-        (
-          snapshot
-        ) => {
+        (snapshot) => {
           applyRemotePlayback(
             snapshot.val()
           );
@@ -5406,7 +4639,7 @@
               );
             } catch (error) {
               console.error(
-                "影片載入失敗：",
+                "影片載入失敗:",
                 error
               );
 
@@ -5427,22 +4660,10 @@
     ) {
       state.membersRef.on(
         "value",
-        async (
-          snapshot
-        ) => {
-          const members =
-            snapshot.val() ||
-            {};
-
-          state.members =
-            members;
-
+        (snapshot) => {
           renderMembers(
-            members
-          );
-
-          await handleOwnerStatus(
-            members
+            snapshot.val() ||
+            {}
           );
         }
       );
@@ -5455,14 +4676,10 @@
       !state.chatListenerAttached
     ) {
       state.chatRef
-        .limitToLast(
-          100
-        )
+        .limitToLast(100)
         .on(
           "value",
-          (
-            snapshot
-          ) => {
+          (snapshot) => {
             renderChat(
               snapshot.val() ||
               {}
@@ -5479,9 +4696,7 @@
     ) {
       state.queueRef.on(
         "value",
-        (
-          snapshot
-        ) => {
+        (snapshot) => {
           state.queue =
             snapshot.val() ||
             {};
@@ -5530,17 +4745,14 @@
     renderQueue();
   }
 
-  /* =========================================================
-     MEMBERS
-  ========================================================= */
+  /* =====================================================
+     MEMBERS UI
+  ===================================================== */
 
-  function renderMembers(
-    members
-  ) {
+  function renderMembers(members) {
     const entries =
       Object.entries(
-        members ||
-        {}
+        members || {}
       );
 
     entries.sort(
@@ -5573,8 +4785,7 @@
 
     if (!entries.length) {
       $("memberList")
-        .innerHTML =
-        `
+        .innerHTML = `
           <div class="muted">
             目前沒有成員。
           </div>
@@ -5603,12 +4814,11 @@
             return `
               <div
                 class="member"
-                data-member-uid="${escapeHtml(
-                  uid
-                )}"
               >
 
-                <div class="avatar">
+                <div
+                  class="avatar"
+                >
                   ${escapeHtml(
                     name.slice(
                       0,
@@ -5642,16 +4852,11 @@
                 <span
                   class="online"
                   style="
-                    background:${
+                    ${
                       online
-                        ? "#22c55e"
-                        : "#64748b"
-                    };
-                    box-shadow:${
-                      online
-                        ? "0 0 9px rgba(34,197,94,.7)"
-                        : "none"
-                    };
+                        ? ""
+                        : "background:#64748b;box-shadow:none;"
+                    }
                   "
                 ></span>
 
@@ -5662,13 +4867,11 @@
         .join("");
   }
 
-  /* =========================================================
+  /* =====================================================
      CHAT
-  ========================================================= */
+  ===================================================== */
 
-  async function sendChat(
-    text
-  ) {
+  async function sendChat(text) {
     text =
       String(
         text || ""
@@ -5703,13 +4906,10 @@
     });
   }
 
-  function renderChat(
-    messages
-  ) {
+  function renderChat(messages) {
     const list =
       Object.values(
-        messages ||
-        {}
+        messages || {}
       ).sort(
         (a, b) =>
           Number(
@@ -5730,11 +4930,12 @@
 
     if (!list.length) {
       $("chatMessages")
-        .innerHTML =
-        `
+        .innerHTML = `
           <div
             class="muted"
-            style="padding:12px;"
+            style="
+              padding:12px;
+            "
           >
             開始聊天吧 👋
           </div>
@@ -5748,7 +4949,9 @@
       list
         .map(
           (message) => `
-            <div class="message">
+            <div
+              class="message"
+            >
 
               <b>
                 ${escapeHtml(
@@ -5776,19 +4979,25 @@
       box.scrollHeight;
   }
 
-  /* =========================================================
+  /* =====================================================
      CHANGE VIDEO
-  ========================================================= */
+  ===================================================== */
 
-  async function changeVideo(
-    video
-  ) {
+  async function changeVideo(video) {
     if (
       !video?.id &&
       !video?.url
     ) {
       throw new Error(
         "沒有選擇影片"
+      );
+    }
+
+    if (
+      !state.roomRef
+    ) {
+      throw new Error(
+        "尚未進入房間"
       );
     }
 
@@ -5826,7 +5035,9 @@
       video.url
     ) {
       roomVideo.url =
-        video.url;
+        String(
+          video.url
+        );
     }
 
     if (
@@ -5836,13 +5047,7 @@
         video.twitchType;
     }
 
-    if (!state.roomRef) {
-      throw new Error(
-        "尚未進入房間"
-      );
-    }
-
-    await state.roomRef.update({
+    const update = {
       sourceType:
         platform,
 
@@ -5867,7 +5072,11 @@
         updatedBy:
           state.uid
       }
-    });
+    };
+
+    await state.roomRef.update(
+      update
+    );
 
     state.room.sourceType =
       platform;
@@ -5904,9 +5113,9 @@
     );
   }
 
-  /* =========================================================
+  /* =====================================================
      SOURCE MODAL
-  ========================================================= */
+  ===================================================== */
 
   function openSourceModal() {
     const modal =
@@ -6023,13 +5232,18 @@
     const externalArea =
       $("modalExternalSourceArea");
 
+    const searchable =
+      PLATFORMS[
+        platform
+      ]?.searchable ===
+      true;
+
     if (
       searchArea
     ) {
       searchArea.classList.toggle(
         "hidden",
-        platform !==
-          "youtube"
+        !searchable
       );
     }
 
@@ -6038,15 +5252,11 @@
     ) {
       externalArea.classList.toggle(
         "hidden",
-        platform ===
-          "youtube"
+        searchable
       );
     }
 
-    if (
-      platform !==
-      "youtube"
-    ) {
+    if (!searchable) {
       state.modalSelectedVideo =
         null;
 
@@ -6067,9 +5277,9 @@
     }
   }
 
-  /* =========================================================
-     LISTENERS
-  ========================================================= */
+  /* =====================================================
+     LISTENER CLEANUP
+  ===================================================== */
 
   function detachRoomListeners() {
     try {
@@ -6082,30 +5292,8 @@
       state.queueRef?.off();
 
       state.roomRef
-        ?.child(
-          "video"
-        )
+        ?.child("video")
         .off();
-
-      state.roomRef
-        ?.child(
-          "owner"
-        )
-        .off();
-    } catch (_) {}
-
-    clearInterval(
-      state.syncTimer
-    );
-
-    clearInterval(
-      state.presenceTimer
-    );
-
-    try {
-      db?.ref(
-        ".info/connected"
-      )?.off();
     } catch (_) {}
 
     state.stateListenerAttached =
@@ -6123,24 +5311,17 @@
     state.queueListenerAttached =
       false;
 
-    state.ownerListenerAttached =
-      false;
-
     state.queue =
       {};
-
-    state.members =
-      {};
-
-    state.inviteReady =
-      false;
   }
 
-  /* =========================================================
+  /* =====================================================
      EVENTS
-  ========================================================= */
+  ===================================================== */
 
   function setupEvents() {
+    /* CREATE */
+
     $("createRoomBtn")
       ?.addEventListener(
         "click",
@@ -6165,6 +5346,8 @@
           }
         }
       );
+
+    /* JOIN */
 
     $("joinRoomBtn")
       ?.addEventListener(
@@ -6202,12 +5385,18 @@
         }
       );
 
+    /* COPY ROOM */
+
     $("copyRoomBtn")
       ?.addEventListener(
         "click",
         async () => {
           try {
-            await copyRoomLink();
+            await navigator.clipboard.writeText(
+              getRoomLink(
+                state.roomId
+              )
+            );
 
             toast(
               "房間連結已複製"
@@ -6219,6 +5408,8 @@
           }
         }
       );
+
+    /* LEAVE */
 
     $("leaveRoomBtn")
       ?.addEventListener(
@@ -6235,71 +5426,20 @@
 
           try {
             if (
-              state.isOwner
+              state.membersRef &&
+              state.uid
             ) {
-              const members =
-                state.members ||
-                {};
-
-              const candidates =
-                Object.entries(
-                  members
+              await state.membersRef
+                .child(
+                  state.uid
                 )
-                  .filter(
-                    ([uid, member]) =>
-                      uid !==
-                        state.uid &&
-                      member?.online ===
-                        true
-                  )
-                  .map(
-                    ([uid, member]) => ({
-                      uid,
-                      joinedAt:
-                        Number(
-                          member?.joinedAt ||
-                            Number.MAX_SAFE_INTEGER
-                        )
-                    })
-                  )
-                  .sort(
-                    (a, b) =>
-                      a.joinedAt -
-                      b.joinedAt
-                  );
-
-              if (
-                candidates.length
-              ) {
-                await state.roomRef
-                  .child(
-                    "owner"
-                  )
-                  .transaction(
-                    (
-                      currentOwner
-                    ) => {
-                      if (
-                        currentOwner ===
-                        state.uid
-                      ) {
-                        return candidates[0]
-                          .uid;
-                      }
-
-                      return;
-                    }
-                  );
-              }
+                .remove();
             }
+          } catch (_) {}
 
-            await setPresenceOffline();
-          } catch (error) {
-            console.error(
-              "離開前處理失敗：",
-              error
-            );
-          }
+          clearInterval(
+            state.syncTimer
+          );
 
           detachRoomListeners();
 
@@ -6313,8 +5453,6 @@
 
           await destroyCurrentPlayer();
 
-          closeInviteModal();
-
           state.roomId =
             null;
 
@@ -6323,12 +5461,6 @@
 
           state.isOwner =
             false;
-
-          state.queue =
-            {};
-
-          state.members =
-            {};
 
           history.replaceState(
             {},
@@ -6341,6 +5473,8 @@
           );
         }
       );
+
+    /* PLAY / PAUSE */
 
     $("playPauseBtn")
       ?.addEventListener(
@@ -6380,6 +5514,8 @@
         }
       );
 
+    /* BACK 10 */
+
     $("backBtn")
       ?.addEventListener(
         "click",
@@ -6411,6 +5547,8 @@
           );
         }
       );
+
+    /* FORWARD 10 */
 
     $("forwardBtn")
       ?.addEventListener(
@@ -6448,6 +5586,8 @@
         }
       );
 
+    /* SYNC NOW */
+
     $("syncNowBtn")
       ?.addEventListener(
         "click",
@@ -6481,6 +5621,8 @@
         }
       );
 
+    /* VOLUME */
+
     $("volumeInput")
       ?.addEventListener(
         "input",
@@ -6506,34 +5648,39 @@
               } else {
                 state.player?.mute();
               }
-            } else if (
+            }
+
+            if (
               state.playerType ===
               "vimeo"
             ) {
               state.player?.setVolume(
-                value /
-                  100
+                value / 100
               );
-            } else if (
+            }
+
+            if (
               state.playerType ===
               "twitch"
             ) {
               state.player?.setVolume(
-                value /
-                  100
+                value / 100
               );
-            } else if (
+            }
+
+            if (
               state.playerType ===
               "dailymotion"
             ) {
               state.player?.setVolume?.(
-                value /
-                  100
+                value / 100
               );
             }
           } catch (_) {}
         }
       );
+
+    /* FULLSCREEN */
 
     $("fullscreenBtn")
       ?.addEventListener(
@@ -6546,7 +5693,6 @@
             document.fullscreenElement
           ) {
             document.exitFullscreen?.();
-
             return;
           }
 
@@ -6554,6 +5700,8 @@
             ?.requestFullscreen?.();
         }
       );
+
+    /* COPY TIME */
 
     $("copyTimeBtn")
       ?.addEventListener(
@@ -6580,12 +5728,12 @@
         }
       );
 
+    /* CHAT */
+
     $("chatForm")
       ?.addEventListener(
         "submit",
-        async (
-          event
-        ) => {
+        async (event) => {
           event.preventDefault();
 
           const input =
@@ -6617,6 +5765,8 @@
         }
       );
 
+    /* SOURCE */
+
     $("changeSourceBtn")
       ?.addEventListener(
         "click",
@@ -6634,6 +5784,8 @@
         "change",
         updateModalPlatformUI
       );
+
+    /* YOUTUBE SEARCH */
 
     $("modalSearchVideoBtn")
       ?.addEventListener(
@@ -6712,9 +5864,7 @@
     $("modalVideoSearchInput")
       ?.addEventListener(
         "keydown",
-        (
-          event
-        ) => {
+        (event) => {
           if (
             event.key ===
             "Enter"
@@ -6726,6 +5876,8 @@
           }
         }
       );
+
+    /* SAVE SOURCE */
 
     $("saveSourceBtn")
       ?.addEventListener(
@@ -6815,15 +5967,17 @@
         }
       );
 
+    /* NEXT QUEUE */
+
     $("playQueueNowBtn")
       ?.addEventListener(
         "click",
         async () => {
           try {
-            const ok =
+            const played =
               await playNextQueueItem();
 
-            if (!ok) {
+            if (!played) {
               toast(
                 "待播放清單是空的"
               );
@@ -6835,16 +5989,16 @@
 
             toast(
               error.message ||
-                "播放下一部失敗"
+              "播放待播放清單失敗"
             );
           }
         }
       );
   }
 
-  /* =========================================================
+  /* =====================================================
      START
-  ========================================================= */
+  ===================================================== */
 
   async function start() {
     try {
@@ -6854,6 +6008,11 @@
       await initializeFirebase();
 
       setupEvents();
+
+      setInterval(
+        heartbeatMember,
+        15000
+      );
 
       const roomId =
         getRoomIdFromUrl();
@@ -6908,9 +6067,9 @@
     }
   }
 
-  /* =========================================================
-     YOUTUBE API READY
-  ========================================================= */
+  /* =====================================================
+     YOUTUBE API CALLBACK
+  ===================================================== */
 
   window.onYouTubeIframeAPIReady =
     () => {
@@ -6930,7 +6089,6 @@
           "youtube"
       ) {
         forceYoutubeVisible();
-
         return;
       }
 
@@ -6954,21 +6112,6 @@
         );
       }
     };
-
-  window.addEventListener(
-    "beforeunload",
-    () => {
-      try {
-        clearInterval(
-          state.syncTimer
-        );
-
-        clearInterval(
-          state.presenceTimer
-        );
-      } catch (_) {}
-    }
-  );
 
   start();
 })();
