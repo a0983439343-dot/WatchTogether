@@ -161,6 +161,8 @@
 
     playerReady: false,
 
+    currentVideoId: null,
+
     applyingRemote: false,
 
     lastRemoteKey: "",
@@ -1369,6 +1371,13 @@
       return;
     }
 
+    if (
+      state.player &&
+      state.currentVideoId === videoId
+    ) {
+      return;
+    }
+
     /*
      * 隱藏其他播放器
      */
@@ -1441,6 +1450,9 @@
 
     }
 
+
+    state.currentVideoId =
+      videoId;
 
     state.player =
       new YT.Player(
@@ -2614,7 +2626,7 @@
           try {
 
             await navigator.clipboard.writeText(
-              roomLink(
+              getRoomLink(
                 state.roomId
               )
             );
