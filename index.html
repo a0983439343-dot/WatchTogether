@@ -2,17 +2,59 @@
 <html lang="zh-Hant" translate="no">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b1020">
-  <meta name="google" content="notranslate">
-  <meta name="description" content="WatchTogether - 和朋友一起看同一部影片">
-  <title>WatchTogether｜一起看</title>
-  <link rel="stylesheet" href="styles.css">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#0b1020"
+  >
+
+  <meta
+    name="google"
+    content="notranslate"
+  >
+
+  <meta
+    name="description"
+    content="WatchTogether - 和朋友一起看同一部影片"
+  >
+
+  <meta
+    property="og:title"
+    content="WatchTogether｜一起看"
+  >
+
+  <meta
+    property="og:description"
+    content="和朋友一起同步觀看影片"
+  >
+
+  <meta
+    property="og:type"
+    content="website"
+  >
+
+  <title>
+    WatchTogether｜一起看
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="styles.css"
+  >
 </head>
 
 <body>
 
 <div class="app-shell">
+
+  <!-- =====================================================
+       TOPBAR
+  ====================================================== -->
 
   <header class="topbar">
 
@@ -33,7 +75,12 @@
 
   </header>
 
+
   <main>
+
+    <!-- ===================================================
+         HOME
+    ==================================================== -->
 
     <section
       id="homeView"
@@ -61,13 +108,21 @@
 
       </div>
 
+
       <div class="home-grid">
 
-        <section class="panel creator-panel">
+        <!-- =================================================
+             CREATE ROOM
+        ================================================== -->
+
+        <section
+          class="panel creator-panel"
+        >
 
           <div class="panel-title">
             建立房間
           </div>
+
 
           <label for="roomNameInput">
             房間名稱
@@ -81,13 +136,19 @@
             autocomplete="off"
           >
 
+
           <label for="sourceTypeInput">
             預設影片平台
           </label>
 
-          <select id="sourceTypeInput">
+          <select
+            id="sourceTypeInput"
+          >
 
-            <option value="youtube" selected>
+            <option
+              value="youtube"
+              selected
+            >
               ▶ YouTube
             </option>
 
@@ -145,6 +206,7 @@
 
           </select>
 
+
           <div
             id="videoSearchArea"
             class="video-search-area"
@@ -164,6 +226,7 @@
 
           </div>
 
+
           <div
             id="platformNotice"
             class="platform-notice hidden"
@@ -178,11 +241,15 @@
 
             <div>
 
-              <strong id="platformNoticeTitle">
+              <strong
+                id="platformNoticeTitle"
+              >
                 平台
               </strong>
 
-              <p id="platformNoticeText">
+              <p
+                id="platformNoticeText"
+              >
                 建立房間後再選擇影片。
               </p>
 
@@ -190,13 +257,16 @@
 
           </div>
 
+
           <div
             id="externalSourceArea"
             class="platform-input-area hidden"
             style="margin-top:14px;"
           >
 
-            <label for="sourceUrlInput">
+            <label
+              for="sourceUrlInput"
+            >
               影片網址或 ID
             </label>
 
@@ -223,6 +293,7 @@
 
           </div>
 
+
           <button
             id="createRoomBtn"
             class="primary-btn"
@@ -231,6 +302,7 @@
             建立房間
           </button>
 
+
           <div
             id="homeError"
             class="error-text"
@@ -238,13 +310,23 @@
 
         </section>
 
-        <section class="panel join-panel">
+
+        <!-- =================================================
+             JOIN ROOM
+        ================================================== -->
+
+        <section
+          class="panel join-panel"
+        >
 
           <div class="panel-title">
             加入房間
           </div>
 
-          <label for="joinCodeInput">
+
+          <label
+            for="joinCodeInput"
+          >
             房間碼
           </label>
 
@@ -257,6 +339,7 @@
             spellcheck="false"
           >
 
+
           <button
             id="joinRoomBtn"
             class="secondary-btn"
@@ -265,14 +348,17 @@
             加入朋友的房間
           </button>
 
+
           <div class="divider">
             <span>或</span>
           </div>
+
 
           <p class="muted">
             朋友也可以直接把邀請連結傳給你。
             打開後會自動進入同一個房間。
           </p>
+
 
           <div class="join-feature-list">
 
@@ -302,6 +388,11 @@
 
       </div>
 
+
+      <!-- ===================================================
+           PLATFORM GRID
+      ==================================================== -->
+
       <section
         class="panel platform-panel"
         style="margin-top:20px;"
@@ -310,6 +401,7 @@
         <div class="panel-title">
           🎞️ 影片平台
         </div>
+
 
         <div
           id="platformGrid"
@@ -326,6 +418,7 @@
             <small>搜尋 / 影片</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="vimeo"
@@ -335,6 +428,7 @@
             <strong>Vimeo</strong>
             <small>影片</small>
           </button>
+
 
           <button
             class="platform-card"
@@ -346,6 +440,7 @@
             <small>影片</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="bilibili"
@@ -355,6 +450,7 @@
             <strong>Bilibili</strong>
             <small>影片</small>
           </button>
+
 
           <button
             class="platform-card"
@@ -366,6 +462,7 @@
             <small>直播 / VOD</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="netflix"
@@ -375,6 +472,7 @@
             <strong>Netflix</strong>
             <small>串流</small>
           </button>
+
 
           <button
             class="platform-card"
@@ -386,6 +484,7 @@
             <small>動漫</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="disneyplus"
@@ -395,6 +494,7 @@
             <strong>Disney+</strong>
             <small>串流</small>
           </button>
+
 
           <button
             class="platform-card"
@@ -406,6 +506,7 @@
             <small>串流</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="appletv"
@@ -415,6 +516,7 @@
             <strong>Apple TV+</strong>
             <small>串流</small>
           </button>
+
 
           <button
             class="platform-card"
@@ -426,6 +528,7 @@
             <small>串流</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="hulu"
@@ -436,6 +539,7 @@
             <small>串流</small>
           </button>
 
+
           <button
             class="platform-card"
             data-platform="paramount"
@@ -445,6 +549,7 @@
             <strong>Paramount+</strong>
             <small>串流</small>
           </button>
+
 
           <button
             class="platform-card"
@@ -457,6 +562,7 @@
           </button>
 
         </div>
+
 
         <div
           id="platformDescription"
@@ -474,6 +580,11 @@
 
     </section>
 
+
+    <!-- =====================================================
+         ROOM
+    ====================================================== -->
+
     <section
       id="roomView"
       class="view hidden"
@@ -487,15 +598,35 @@
             WATCH PARTY
           </div>
 
+
           <h2 id="roomTitle">
             一起看
           </h2>
+
 
           <div class="room-meta">
 
             <span id="roomCodeLabel">
               ------
             </span>
+
+
+            <span
+              id="roomOwnerStatus"
+              style="
+                padding:6px 9px;
+                border:1px solid rgba(96,165,250,.15);
+                border-radius:8px;
+                background:rgba(96,165,250,.06);
+                color:#93c5fd;
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:0;
+              "
+            >
+              👥 成員
+            </span>
+
 
             <button
               id="copyRoomBtn"
@@ -509,6 +640,7 @@
 
         </div>
 
+
         <button
           id="leaveRoomBtn"
           class="ghost-btn"
@@ -519,7 +651,12 @@
 
       </div>
 
+
       <div class="room-layout">
+
+        <!-- =================================================
+             PLAYER
+        ================================================== -->
 
         <section
           class="watch-panel panel"
@@ -535,6 +672,7 @@
               class="youtube-player hidden"
             ></div>
 
+
             <iframe
               id="vimeoPlayer"
               class="external-player hidden"
@@ -542,6 +680,7 @@
               allow="autoplay; fullscreen; picture-in-picture"
               frameborder="0"
             ></iframe>
+
 
             <iframe
               id="dailymotionPlayer"
@@ -551,6 +690,7 @@
               frameborder="0"
             ></iframe>
 
+
             <iframe
               id="bilibiliPlayer"
               class="external-player hidden"
@@ -559,10 +699,12 @@
               frameborder="0"
             ></iframe>
 
+
             <div
               id="twitchPlayer"
               class="external-player hidden"
             ></div>
+
 
             <video
               id="directVideo"
@@ -571,6 +713,7 @@
               controls
               preload="metadata"
             ></video>
+
 
             <div
               id="emptyPlayer"
@@ -581,9 +724,11 @@
                 🎬
               </div>
 
+
               <h3>
                 等待有人選擇影片
               </h3>
+
 
               <p>
                 房間內任何成員都可以搜尋 YouTube，
@@ -591,6 +736,7 @@
               </p>
 
             </div>
+
 
             <div
               id="platformPlayerNotice"
@@ -604,13 +750,20 @@
                 🌐
               </div>
 
-              <h3 id="roomPlatformName">
+
+              <h3
+                id="roomPlatformName"
+              >
                 影片平台
               </h3>
 
-              <p id="roomPlatformDescription">
+
+              <p
+                id="roomPlatformDescription"
+              >
                 正在準備播放器。
               </p>
+
 
               <button
                 id="openPlatformBtn"
@@ -622,6 +775,7 @@
 
             </div>
 
+
             <div
               id="playerPlaceholder"
               class="player-placeholder hidden"
@@ -630,6 +784,9 @@
             </div>
 
           </div>
+
+
+          <!-- SYNC -->
 
           <div class="sync-bar">
 
@@ -643,6 +800,7 @@
 
             </div>
 
+
             <button
               id="syncNowBtn"
               class="tiny-btn"
@@ -652,6 +810,9 @@
             </button>
 
           </div>
+
+
+          <!-- PLAYER CONTROLS -->
 
           <div
             id="roomControls"
@@ -666,6 +827,7 @@
               ▶
             </button>
 
+
             <button
               id="backBtn"
               class="control-btn"
@@ -673,6 +835,7 @@
             >
               ↶ 10
             </button>
+
 
             <button
               id="forwardBtn"
@@ -682,12 +845,14 @@
               10 ↷
             </button>
 
+
             <div
               id="timeReadout"
               class="time-readout"
             >
               00:00 / 00:00
             </div>
+
 
             <input
               id="volumeInput"
@@ -697,6 +862,7 @@
               max="100"
               value="100"
             >
+
 
             <button
               id="fullscreenBtn"
@@ -708,6 +874,9 @@
 
           </div>
 
+
+          <!-- ROOM ACTIONS -->
+
           <div class="room-actions">
 
             <button
@@ -717,6 +886,7 @@
             >
               複製目前時間
             </button>
+
 
             <button
               id="changeSourceBtn"
@@ -730,7 +900,14 @@
 
         </section>
 
+
+        <!-- =================================================
+             SIDEBAR
+        ================================================== -->
+
         <aside class="side-column">
+
+          <!-- MEMBERS -->
 
           <section
             class="panel members-panel"
@@ -744,11 +921,13 @@
                 👥 房間成員
               </span>
 
+
               <span id="memberCount">
                 0
               </span>
 
             </div>
+
 
             <div
               id="memberList"
@@ -756,6 +935,9 @@
             ></div>
 
           </section>
+
+
+          <!-- QUEUE -->
 
           <section
             class="panel"
@@ -770,6 +952,7 @@
                 📋 待播放清單
               </span>
 
+
               <button
                 id="playQueueNowBtn"
                 class="tiny-btn"
@@ -780,16 +963,28 @@
 
             </div>
 
+
             <div
               id="queueList"
               class="queue-list"
             >
-              <div class="muted">
+
+              <div
+                class="muted"
+                style="
+                  padding:8px 0;
+                  text-align:center;
+                "
+              >
                 待播放清單是空的。
               </div>
+
             </div>
 
           </section>
+
+
+          <!-- CHAT -->
 
           <section
             class="panel chat-panel"
@@ -799,10 +994,12 @@
               💬 聊天室
             </div>
 
+
             <div
               id="chatMessages"
               class="chat-messages"
             ></div>
+
 
             <form
               id="chatForm"
@@ -816,7 +1013,10 @@
                 autocomplete="off"
               >
 
-              <button type="submit">
+
+              <button
+                type="submit"
+              >
                 送出
               </button>
 
@@ -834,6 +1034,11 @@
 
 </div>
 
+
+<!-- =======================================================
+     VIDEO SOURCE MODAL
+======================================================= -->
+
 <div
   id="sourceModal"
   class="modal hidden"
@@ -844,6 +1049,7 @@
     <div class="panel-title">
       🔎 搜尋 / 選擇影片
     </div>
+
 
     <div
       class="muted"
@@ -857,13 +1063,22 @@
       可以直接播放，也可以加入待播放清單。
     </div>
 
-    <label for="sourceTypeModal">
+
+    <label
+      for="sourceTypeModal"
+    >
       影片平台
     </label>
 
-    <select id="sourceTypeModal">
 
-      <option value="youtube" selected>
+    <select
+      id="sourceTypeModal"
+    >
+
+      <option
+        value="youtube"
+        selected
+      >
         ▶ YouTube
       </option>
 
@@ -921,15 +1136,23 @@
 
     </select>
 
+
+    <!-- EXTERNAL INPUT -->
+
     <div
       id="modalExternalSourceArea"
       class="hidden"
-      style="margin-top:14px;"
+      style="
+        margin-top:14px;
+      "
     >
 
-      <label for="modalSourceUrlInput">
+      <label
+        for="modalSourceUrlInput"
+      >
         影片網址或 ID
       </label>
+
 
       <input
         id="modalSourceUrlInput"
@@ -939,6 +1162,7 @@
         autocomplete="off"
         spellcheck="false"
       >
+
 
       <div
         id="modalSourceHint"
@@ -954,14 +1178,22 @@
 
     </div>
 
+
+    <!-- YOUTUBE SEARCH -->
+
     <div
       id="modalVideoSearchArea"
-      style="margin-top:14px;"
+      style="
+        margin-top:14px;
+      "
     >
 
-      <label for="modalVideoSearchInput">
+      <label
+        for="modalVideoSearchInput"
+      >
         搜尋 YouTube
       </label>
+
 
       <div class="search-row">
 
@@ -973,6 +1205,7 @@
           autocomplete="off"
         >
 
+
         <button
           id="modalSearchVideoBtn"
           class="search-btn"
@@ -983,6 +1216,7 @@
 
       </div>
 
+
       <div
         class="muted"
         style="
@@ -991,8 +1225,10 @@
           line-height:1.5;
         "
       >
-        搜尋結果可以直接播放，或加入待播放清單。
+        搜尋結果可以直接播放，
+        或加入待播放清單。
       </div>
+
 
       <div
         id="modalVideoSearchResults"
@@ -1000,6 +1236,9 @@
       ></div>
 
     </div>
+
+
+    <!-- MODAL ACTIONS -->
 
     <div class="modal-actions">
 
@@ -1011,6 +1250,7 @@
         取消
       </button>
 
+
       <button
         id="saveSourceBtn"
         class="primary-btn"
@@ -1021,6 +1261,7 @@
 
     </div>
 
+
     <div
       id="modalError"
       class="error-text"
@@ -1030,361 +1271,469 @@
 
 </div>
 
+
+<!-- TOAST -->
+
 <div
   id="toast"
   class="toast"
 ></div>
 
+
+<!-- =======================================================
+     FIREBASE
+======================================================= -->
+
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
 
+
+<!-- YOUTUBE -->
+
 <script src="https://www.youtube.com/iframe_api"></script>
+
+
+<!-- VIMEO -->
+
 <script src="https://player.vimeo.com/api/player.js"></script>
 
+
+<!-- CONFIG -->
+
 <script src="firebase-config.js"></script>
+
+
+<!-- APP -->
+
 <script src="app.js"></script>
 
+
+<!-- =======================================================
+     PLATFORM UI
+======================================================= -->
+
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
 
-  const sourceSelect =
-    document.getElementById("sourceTypeInput");
-
-  const sourceModal =
-    document.getElementById("sourceTypeModal");
-
-  const sourceCards =
-    document.querySelectorAll(".platform-card");
-
-  const description =
-    document.getElementById("platformDescription");
-
-  const notice =
-    document.getElementById("platformNotice");
-
-  const noticeIcon =
-    document.getElementById("platformNoticeIcon");
-
-  const noticeTitle =
-    document.getElementById("platformNoticeTitle");
-
-  const noticeText =
-    document.getElementById("platformNoticeText");
-
-  const externalSourceArea =
-    document.getElementById("externalSourceArea");
-
-  const sourceUrlInput =
-    document.getElementById("sourceUrlInput");
-
-  const externalSourceHint =
-    document.getElementById("externalSourceHint");
-
-  const modalVideoSearchArea =
-    document.getElementById("modalVideoSearchArea");
-
-  const modalExternalSourceArea =
-    document.getElementById("modalExternalSourceArea");
-
-  const modalSourceUrlInput =
-    document.getElementById("modalSourceUrlInput");
-
-  const modalSourceHint =
-    document.getElementById("modalSourceHint");
-
-  const searchHint =
-    document.getElementById("searchHint");
-
-  const platformInfo = {
-
-    youtube: {
-      icon: "▶",
-      name: "YouTube",
-      text:
-        "進入房間後，所有成員都可以搜尋並選擇 YouTube 影片。",
-      placeholder: "",
-      searchable: true
-    },
-
-    vimeo: {
-      icon: "▶",
-      name: "Vimeo",
-      text:
-        "進入房間後可以貼上 Vimeo 影片網址或影片 ID。",
-      placeholder:
-        "例如 https://vimeo.com/123456789",
-      searchable: false
-    },
-
-    dailymotion: {
-      icon: "▶",
-      name: "Dailymotion",
-      text:
-        "進入房間後可以貼上 Dailymotion 影片網址或影片 ID。",
-      placeholder:
-        "例如 https://www.dailymotion.com/video/x123abc",
-      searchable: false
-    },
-
-    bilibili: {
-      icon: "📺",
-      name: "Bilibili",
-      text:
-        "進入房間後可以貼上 Bilibili BV 號碼、av 號碼或影片網址。",
-      placeholder:
-        "例如 https://www.bilibili.com/video/BVxxxxxx",
-      searchable: false
-    },
-
-    twitch: {
-      icon: "🎮",
-      name: "Twitch",
-      text:
-        "進入房間後可以輸入 Twitch 頻道、VOD 或影片網址。",
-      placeholder:
-        "例如 https://www.twitch.tv/頻道",
-      searchable: false
-    },
-
-    netflix: {
-      icon: "🔴",
-      name: "Netflix",
-      text:
-        "Netflix 播放器通常受 DRM 與平台嵌入限制。",
-      placeholder:
-        "Netflix 影片網址",
-      searchable: false
-    },
-
-    crunchyroll: {
-      icon: "🟠",
-      name: "Crunchyroll",
-      text:
-        "Crunchyroll 播放內容受平台登入與嵌入限制。",
-      placeholder:
-        "Crunchyroll 影片網址",
-      searchable: false
-    },
-
-    disneyplus: {
-      icon: "🔵",
-      name: "Disney+",
-      text:
-        "Disney+ 使用平台自己的受保護播放器。",
-      placeholder:
-        "Disney+ 影片網址",
-      searchable: false
-    },
-
-    primevideo: {
-      icon: "🟦",
-      name: "Prime Video",
-      text:
-        "Prime Video 使用平台自己的播放器。",
-      placeholder:
-        "Prime Video 影片網址",
-      searchable: false
-    },
-
-    appletv: {
-      icon: "🍎",
-      name: "Apple TV+",
-      text:
-        "Apple TV+ 使用平台自己的播放器。",
-      placeholder:
-        "Apple TV+ 影片網址",
-      searchable: false
-    },
-
-    max: {
-      icon: "🟣",
-      name: "Max",
-      text:
-        "Max 使用平台自己的播放器。",
-      placeholder:
-        "Max 影片網址",
-      searchable: false
-    },
-
-    hulu: {
-      icon: "🟢",
-      name: "Hulu",
-      text:
-        "Hulu 使用平台自己的播放器。",
-      placeholder:
-        "Hulu 影片網址",
-      searchable: false
-    },
-
-    paramount: {
-      icon: "🟦",
-      name: "Paramount+",
-      text:
-        "Paramount+ 使用平台自己的播放器。",
-      placeholder:
-        "Paramount+ 影片網址",
-      searchable: false
-    },
-
-    peacock: {
-      icon: "🦚",
-      name: "Peacock",
-      text:
-        "Peacock 使用平台自己的播放器。",
-      placeholder:
-        "Peacock 影片網址",
-      searchable: false
-    }
-
-  };
-
-  function updatePlatform(platform) {
-
-    const info =
-      platformInfo[platform] ||
-      platformInfo.youtube;
-
-    if (description) {
-      description.textContent =
-        info.text;
-    }
-
-    if (noticeIcon) {
-      noticeIcon.textContent =
-        info.icon;
-    }
-
-    if (noticeTitle) {
-      noticeTitle.textContent =
-        info.name;
-    }
-
-    if (noticeText) {
-      noticeText.textContent =
-        info.text;
-    }
-
-    if (searchHint) {
-      searchHint.textContent =
-        "建立房間後，所有成員都可以搜尋並選擇影片。";
-    }
-
-    if (externalSourceArea) {
-      externalSourceArea.classList.add("hidden");
-    }
-
-    if (sourceUrlInput) {
-      sourceUrlInput.placeholder =
-        info.placeholder ||
-        "建立房間後再輸入";
-    }
-
-    if (modalVideoSearchArea) {
-      modalVideoSearchArea.classList.toggle(
-        "hidden",
-        info.searchable !== true
+    const sourceSelect =
+      document.getElementById(
+        "sourceTypeInput"
       );
-    }
 
-    if (modalExternalSourceArea) {
-      modalExternalSourceArea.classList.toggle(
-        "hidden",
-        info.searchable === true
+    const sourceModal =
+      document.getElementById(
+        "sourceTypeModal"
       );
-    }
 
-    if (modalSourceUrlInput) {
-      modalSourceUrlInput.placeholder =
-        info.placeholder ||
-        "貼上影片網址或輸入 ID";
-    }
-
-    if (externalSourceHint) {
-      externalSourceHint.textContent =
-        `進入房間後，再輸入有效的 ${info.name} 影片網址或 ID。`;
-    }
-
-    if (modalSourceHint) {
-      modalSourceHint.textContent =
-        `請輸入有效的 ${info.name} 影片網址或 ID。`;
-    }
-
-    if (notice) {
-      notice.classList.toggle(
-        "hidden",
-        info.searchable === true
+    const sourceCards =
+      document.querySelectorAll(
+        ".platform-card"
       );
-    }
 
-    sourceCards.forEach((card) => {
-      card.classList.toggle(
-        "active",
-        card.dataset.platform === platform
+    const description =
+      document.getElementById(
+        "platformDescription"
       );
-    });
-  }
 
-  if (sourceSelect) {
+    const notice =
+      document.getElementById(
+        "platformNotice"
+      );
 
-    sourceSelect.addEventListener(
-      "change",
-      () => {
-        updatePlatform(
-          sourceSelect.value
+    const noticeIcon =
+      document.getElementById(
+        "platformNoticeIcon"
+      );
+
+    const noticeTitle =
+      document.getElementById(
+        "platformNoticeTitle"
+      );
+
+    const noticeText =
+      document.getElementById(
+        "platformNoticeText"
+      );
+
+    const externalSourceArea =
+      document.getElementById(
+        "externalSourceArea"
+      );
+
+    const sourceUrlInput =
+      document.getElementById(
+        "sourceUrlInput"
+      );
+
+    const externalSourceHint =
+      document.getElementById(
+        "externalSourceHint"
+      );
+
+    const modalVideoSearchArea =
+      document.getElementById(
+        "modalVideoSearchArea"
+      );
+
+    const modalExternalSourceArea =
+      document.getElementById(
+        "modalExternalSourceArea"
+      );
+
+    const modalSourceUrlInput =
+      document.getElementById(
+        "modalSourceUrlInput"
+      );
+
+    const modalSourceHint =
+      document.getElementById(
+        "modalSourceHint"
+      );
+
+    const searchHint =
+      document.getElementById(
+        "searchHint"
+      );
+
+
+    const platformInfo = {
+
+      youtube: {
+        icon: "▶",
+        name: "YouTube",
+        text:
+          "進入房間後，所有成員都可以搜尋並選擇 YouTube 影片。",
+        placeholder: "",
+        searchable: true
+      },
+
+      vimeo: {
+        icon: "▶",
+        name: "Vimeo",
+        text:
+          "進入房間後可以貼上 Vimeo 影片網址或影片 ID。",
+        placeholder:
+          "例如 https://vimeo.com/123456789",
+        searchable: false
+      },
+
+      dailymotion: {
+        icon: "▶",
+        name: "Dailymotion",
+        text:
+          "進入房間後可以貼上 Dailymotion 影片網址或影片 ID。",
+        placeholder:
+          "例如 https://www.dailymotion.com/video/x123abc",
+        searchable: false
+      },
+
+      bilibili: {
+        icon: "📺",
+        name: "Bilibili",
+        text:
+          "進入房間後可以貼上 Bilibili BV 號碼、av 號碼或影片網址。",
+        placeholder:
+          "例如 https://www.bilibili.com/video/BVxxxxxx",
+        searchable: false
+      },
+
+      twitch: {
+        icon: "🎮",
+        name: "Twitch",
+        text:
+          "進入房間後可以輸入 Twitch 頻道、VOD 或影片網址。",
+        placeholder:
+          "例如 https://www.twitch.tv/頻道",
+        searchable: false
+      },
+
+      netflix: {
+        icon: "🔴",
+        name: "Netflix",
+        text:
+          "Netflix 播放器通常受 DRM 與平台嵌入限制。",
+        placeholder:
+          "Netflix 影片網址",
+        searchable: false
+      },
+
+      crunchyroll: {
+        icon: "🟠",
+        name: "Crunchyroll",
+        text:
+          "Crunchyroll 播放內容受平台登入與嵌入限制。",
+        placeholder:
+          "Crunchyroll 影片網址",
+        searchable: false
+      },
+
+      disneyplus: {
+        icon: "🔵",
+        name: "Disney+",
+        text:
+          "Disney+ 使用平台自己的受保護播放器。",
+        placeholder:
+          "Disney+ 影片網址",
+        searchable: false
+      },
+
+      primevideo: {
+        icon: "🟦",
+        name: "Prime Video",
+        text:
+          "Prime Video 使用平台自己的播放器。",
+        placeholder:
+          "Prime Video 影片網址",
+        searchable: false
+      },
+
+      appletv: {
+        icon: "🍎",
+        name: "Apple TV+",
+        text:
+          "Apple TV+ 使用平台自己的播放器。",
+        placeholder:
+          "Apple TV+ 影片網址",
+        searchable: false
+      },
+
+      max: {
+        icon: "🟣",
+        name: "Max",
+        text:
+          "Max 使用平台自己的播放器。",
+        placeholder:
+          "Max 影片網址",
+        searchable: false
+      },
+
+      hulu: {
+        icon: "🟢",
+        name: "Hulu",
+        text:
+          "Hulu 使用平台自己的播放器。",
+        placeholder:
+          "Hulu 影片網址",
+        searchable: false
+      },
+
+      paramount: {
+        icon: "🟦",
+        name: "Paramount+",
+        text:
+          "Paramount+ 使用平台自己的播放器。",
+        placeholder:
+          "Paramount+ 影片網址",
+        searchable: false
+      },
+
+      peacock: {
+        icon: "🦚",
+        name: "Peacock",
+        text:
+          "Peacock 使用平台自己的播放器。",
+        placeholder:
+          "Peacock 影片網址",
+        searchable: false
+      }
+
+    };
+
+
+    function updatePlatform(
+      platform
+    ) {
+
+      const info =
+        platformInfo[
+          platform
+        ] ||
+        platformInfo.youtube;
+
+
+      if (description) {
+        description.textContent =
+          info.text;
+      }
+
+
+      if (noticeIcon) {
+        noticeIcon.textContent =
+          info.icon;
+      }
+
+
+      if (noticeTitle) {
+        noticeTitle.textContent =
+          info.name;
+      }
+
+
+      if (noticeText) {
+        noticeText.textContent =
+          info.text;
+      }
+
+
+      if (searchHint) {
+        searchHint.textContent =
+          "建立房間後，所有成員都可以搜尋並選擇影片。";
+      }
+
+
+      if (externalSourceArea) {
+        externalSourceArea.classList.add(
+          "hidden"
         );
       }
-    );
 
-    updatePlatform(
-      sourceSelect.value
-    );
-  }
 
-  sourceCards.forEach((card) => {
+      if (sourceUrlInput) {
+        sourceUrlInput.placeholder =
+          info.placeholder ||
+          "建立房間後再輸入";
+      }
 
-    card.addEventListener(
-      "click",
-      () => {
 
-        const platform =
-          card.dataset.platform;
+      if (modalVideoSearchArea) {
+        modalVideoSearchArea.classList.toggle(
+          "hidden",
+          info.searchable !== true
+        );
+      }
 
-        if (!sourceSelect) {
-          return;
+
+      if (modalExternalSourceArea) {
+        modalExternalSourceArea.classList.toggle(
+          "hidden",
+          info.searchable === true
+        );
+      }
+
+
+      if (modalSourceUrlInput) {
+        modalSourceUrlInput.placeholder =
+          info.placeholder ||
+          "貼上影片網址或輸入 ID";
+      }
+
+
+      if (externalSourceHint) {
+        externalSourceHint.textContent =
+          `進入房間後，再輸入有效的 ${info.name} 影片網址或 ID。`;
+      }
+
+
+      if (modalSourceHint) {
+        modalSourceHint.textContent =
+          `請輸入有效的 ${info.name} 影片網址或 ID。`;
+      }
+
+
+      if (notice) {
+        notice.classList.toggle(
+          "hidden",
+          info.searchable === true
+        );
+      }
+
+
+      sourceCards.forEach(
+        (card) => {
+
+          card.classList.toggle(
+            "active",
+            card.dataset.platform ===
+              platform
+          );
+
         }
+      );
 
-        sourceSelect.value =
-          platform;
+    }
 
-        sourceSelect.dispatchEvent(
-          new Event("change")
+
+    if (sourceSelect) {
+
+      sourceSelect.addEventListener(
+        "change",
+        () => {
+
+          updatePlatform(
+            sourceSelect.value
+          );
+
+        }
+      );
+
+
+      updatePlatform(
+        sourceSelect.value
+      );
+
+    }
+
+
+    sourceCards.forEach(
+      (card) => {
+
+        card.addEventListener(
+          "click",
+          () => {
+
+            const platform =
+              card.dataset.platform;
+
+            if (!sourceSelect) {
+              return;
+            }
+
+            sourceSelect.value =
+              platform;
+
+            sourceSelect.dispatchEvent(
+              new Event(
+                "change"
+              )
+            );
+
+            sourceSelect.scrollIntoView({
+              behavior:
+                "smooth",
+
+              block:
+                "center"
+            });
+
+          }
         );
-
-        sourceSelect.scrollIntoView({
-          behavior: "smooth",
-          block: "center"
-        });
 
       }
     );
 
-  });
 
-  if (sourceModal) {
+    if (sourceModal) {
 
-    sourceModal.addEventListener(
-      "change",
-      () => {
-        updatePlatform(
-          sourceModal.value
-        );
-      }
-    );
+      sourceModal.addEventListener(
+        "change",
+        () => {
+
+          updatePlatform(
+            sourceModal.value
+          );
+
+        }
+      );
+
+    }
 
   }
-
-});
+);
 </script>
 
 </body>
