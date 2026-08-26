@@ -2,17 +2,17 @@
   "rules": {
     "rooms": {
       "$roomId": {
-
         ".read": "auth != null",
 
-        ".write": "auth != null && (!data.exists() ? newData.child('owner').val() === auth.uid : data.child('owner').val() === auth.uid)",
+        ".write": "auth != null && !data.exists() && newData.child('owner').val() === auth.uid",
 
         "owner": {
-          ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && newData.val() === data.val()))"
+          ".write": "auth != null && !data.exists() && newData.val() === auth.uid",
+          ".validate": "newData.isString()"
         },
 
         "name": {
-          ".write": "auth != null && ((!data.exists() && newData.isString()) || (data.exists() && data.child('owner').val() === auth.uid))",
+          ".write": "auth != null && data.parent().child('owner').val() === auth.uid",
           ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
         },
 
@@ -22,7 +22,7 @@
         },
 
         "sourceUrl": {
-          ".write": "auth != null && (data.parent().child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists())",
+          ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
           ".validate": "newData.isString() && newData.val().length <= 2000"
         },
 
@@ -88,7 +88,6 @@
 
         "queue": {
           "$queueId": {
-
             ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
 
             ".validate": "!newData.exists() || newData.hasChildren(['id', 'platform', 'title', 'thumbnail', 'channel', 'addedBy', 'addedByName', 'addedAt'])",
@@ -129,7 +128,6 @@
 
         "chat": {
           "$messageId": {
-
             ".read": "auth != null",
 
             ".write": "auth != null && !data.exists() && root.child('members').child($roomId).child(auth.uid).exists() && newData.child('uid').val() === auth.uid",
@@ -158,11 +156,9 @@
 
     "members": {
       "$roomId": {
-
         ".read": "auth != null",
 
         "$uid": {
-
           ".read": "auth != null",
 
           ".write": "auth != null && auth.uid === $uid && root.child('rooms').child($roomId).exists()",
@@ -173,16 +169,16 @@
             ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 30"
           },
 
+          "joinedAt": {
+            ".validate": "newData.isNumber()"
+          },
+
           "online": {
             ".validate": "!newData.exists() || newData.isBoolean()"
           },
 
           "lastSeen": {
             ".validate": "!newData.exists() || newData.isNumber()"
-          },
-
-          "joinedAt": {
-            ".validate": "newData.isNumber()"
           }
         }
       }
