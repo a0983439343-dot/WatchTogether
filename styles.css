@@ -1280,3 +1280,157 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.platform-card.active {
+  border-color: rgba(96, 165, 250, .5);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(96, 165, 250, .20),
+      rgba(139, 92, 246, .16)
+    );
+}
+
+.video-search-results {
+  display: grid;
+  gap: 8px;
+
+  margin-top: 10px;
+
+  max-height: 320px;
+
+  overflow-y: auto;
+}
+
+.video-result-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;
+
+  padding: 8px;
+
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, .025);
+
+  color: #e2e8f0;
+
+  text-align: left;
+
+  transition:
+    border-color .16s ease,
+    background .16s ease;
+}
+
+.video-result-card:hover {
+  border-color: rgba(96, 165, 250, .28);
+
+  background: rgba(96, 165, 250, .08);
+}
+
+.video-result-card.selected {
+  border-color: rgba(96, 165, 250, .45);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(96, 165, 250, .14),
+      rgba(139, 92, 246, .10)
+    );
+}
+
+.video-result-card img {
+  width: 84px;
+  height: 47px;
+
+  flex: 0 0 auto;
+
+  border-radius: 8px;
+
+  object-fit: cover;
+
+  background: rgba(255, 255, 255, .05);
+}
+
+.video-result-info {
+  display: grid;
+  gap: 3px;
+
+  min-width: 0;
+}
+
+.video-result-info strong {
+  overflow: hidden;
+
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-result-info small {
+  overflow: hidden;
+
+  color: #64748b;
+
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-video-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin-top: 10px;
+  padding: 9px;
+
+  border: 1px solid rgba(96, 165, 250, .22);
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(96, 165, 250, .10),
+      rgba(139, 92, 246, .07)
+    );
+}
+
+.selected-video-thumbnail {
+  width: 84px;
+  height: 47px;
+
+  flex: 0 0 auto;
+
+  border-radius: 8px;
+
+  background-position: center;
+  background-size: cover;
+  background-color: rgba(255, 255, 255, .05);
+}
+
+.selected-video-info {
+  display: grid;
+  gap: 3px;
+
+  min-width: 0;
+
+  flex: 1 1 auto;
+}
+
+.selected-video-title {
+  overflow: hidden;
+
+  color: #e2e8f0;
+
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
