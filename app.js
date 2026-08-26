@@ -20,7 +20,7 @@
    * 2. API：YouTube Data API v3
    */
 
-  const YOUTUBE_API_KEY = "請填入你目前的 YouTube API Key";
+  const YOUTUBE_API_KEY = "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
 
   /*
