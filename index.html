@@ -54,8 +54,9 @@
 
         <p>
           建立房間後直接進入觀看空間。
-          房主可以在房間內搜尋 YouTube，
-          選擇影片後所有成員會自動同步。
+          所有人都可以搜尋影片，
+          也可以把影片加入待播放清單。
+          播放進度會即時同步。
         </p>
 
       </div>
@@ -158,7 +159,7 @@
                 line-height:1.5;
               "
             >
-              建立房間後，再由房主在房間內搜尋影片。
+              建立房間後，所有成員都可以搜尋並選擇影片。
             </div>
 
           </div>
@@ -287,12 +288,12 @@
 
             <div class="join-feature">
               <span>✓</span>
-              即時聊天室
+              待播放清單
             </div>
 
             <div class="join-feature">
               <span>✓</span>
-              房間成員
+              即時聊天室
             </div>
 
           </div>
@@ -466,7 +467,7 @@
             line-height:1.65;
           "
         >
-          建立房間後，再由房主選擇實際觀看內容。
+          建立房間後，所有成員都可以搜尋並選擇實際觀看內容。
         </div>
 
       </section>
@@ -581,13 +582,12 @@
               </div>
 
               <h3>
-                等待房主選擇影片
+                等待有人選擇影片
               </h3>
 
               <p>
-                房主可以搜尋 YouTube
-                並選擇影片。
-                選定後，所有房間成員會自動同步。
+                房間內任何成員都可以搜尋 YouTube，
+                選擇影片或加入待播放清單。
               </p>
 
             </div>
@@ -638,7 +638,7 @@
               <span class="live-dot"></span>
 
               <span id="syncStatus">
-                等待房主選擇影片
+                等待有人選擇影片
               </span>
 
             </div>
@@ -720,7 +720,7 @@
 
             <button
               id="changeSourceBtn"
-              class="secondary-btn owner-only"
+              class="secondary-btn"
               type="button"
             >
               🔎 搜尋 / 選擇影片
@@ -754,6 +754,40 @@
               id="memberList"
               class="member-list"
             ></div>
+
+          </section>
+
+          <section
+            class="panel"
+            style="padding:16px;"
+          >
+
+            <div
+              class="panel-title row-title"
+            >
+
+              <span>
+                📋 待播放清單
+              </span>
+
+              <button
+                id="playQueueNowBtn"
+                class="tiny-btn"
+                type="button"
+              >
+                ▶ 下一部
+              </button>
+
+            </div>
+
+            <div
+              id="queueList"
+              class="queue-list"
+            >
+              <div class="muted">
+                待播放清單是空的。
+              </div>
+            </div>
 
           </section>
 
@@ -809,6 +843,18 @@
 
     <div class="panel-title">
       🔎 搜尋 / 選擇影片
+    </div>
+
+    <div
+      class="muted"
+      style="
+        margin-bottom:12px;
+        font-size:12px;
+        line-height:1.5;
+      "
+    >
+      所有房間成員都可以搜尋影片。
+      可以直接播放，也可以加入待播放清單。
     </div>
 
     <label for="sourceTypeModal">
@@ -938,6 +984,17 @@
       </div>
 
       <div
+        class="muted"
+        style="
+          margin-top:8px;
+          font-size:12px;
+          line-height:1.5;
+        "
+      >
+        搜尋結果可以直接播放，或加入待播放清單。
+      </div>
+
+      <div
         id="modalVideoSearchResults"
         class="video-search-results"
       ></div>
@@ -959,7 +1016,7 @@
         class="primary-btn"
         type="button"
       >
-        選擇影片
+        播放這部影片
       </button>
 
     </div>
@@ -992,84 +1049,52 @@
 document.addEventListener("DOMContentLoaded", () => {
 
   const sourceSelect =
-    document.getElementById(
-      "sourceTypeInput"
-    );
+    document.getElementById("sourceTypeInput");
 
   const sourceModal =
-    document.getElementById(
-      "sourceTypeModal"
-    );
+    document.getElementById("sourceTypeModal");
 
   const sourceCards =
-    document.querySelectorAll(
-      ".platform-card"
-    );
+    document.querySelectorAll(".platform-card");
 
   const description =
-    document.getElementById(
-      "platformDescription"
-    );
+    document.getElementById("platformDescription");
 
   const notice =
-    document.getElementById(
-      "platformNotice"
-    );
+    document.getElementById("platformNotice");
 
   const noticeIcon =
-    document.getElementById(
-      "platformNoticeIcon"
-    );
+    document.getElementById("platformNoticeIcon");
 
   const noticeTitle =
-    document.getElementById(
-      "platformNoticeTitle"
-    );
+    document.getElementById("platformNoticeTitle");
 
   const noticeText =
-    document.getElementById(
-      "platformNoticeText"
-    );
+    document.getElementById("platformNoticeText");
 
   const externalSourceArea =
-    document.getElementById(
-      "externalSourceArea"
-    );
+    document.getElementById("externalSourceArea");
 
   const sourceUrlInput =
-    document.getElementById(
-      "sourceUrlInput"
-    );
+    document.getElementById("sourceUrlInput");
 
   const externalSourceHint =
-    document.getElementById(
-      "externalSourceHint"
-    );
+    document.getElementById("externalSourceHint");
 
   const modalVideoSearchArea =
-    document.getElementById(
-      "modalVideoSearchArea"
-    );
+    document.getElementById("modalVideoSearchArea");
 
   const modalExternalSourceArea =
-    document.getElementById(
-      "modalExternalSourceArea"
-    );
+    document.getElementById("modalExternalSourceArea");
 
   const modalSourceUrlInput =
-    document.getElementById(
-      "modalSourceUrlInput"
-    );
+    document.getElementById("modalSourceUrlInput");
 
   const modalSourceHint =
-    document.getElementById(
-      "modalSourceHint"
-    );
+    document.getElementById("modalSourceHint");
 
   const searchHint =
-    document.getElementById(
-      "searchHint"
-    );
+    document.getElementById("searchHint");
 
   const platformInfo = {
 
@@ -1077,7 +1102,7 @@ document.addEventListener("DOMContentLoaded", () => {
       icon: "▶",
       name: "YouTube",
       text:
-        "建立房間後，房主可以在房間內搜尋並選擇影片。",
+        "進入房間後，所有成員都可以搜尋並選擇 YouTube 影片。",
       placeholder: "",
       searchable: true
     },
@@ -1086,7 +1111,7 @@ document.addEventListener("DOMContentLoaded", () => {
       icon: "▶",
       name: "Vimeo",
       text:
-        "建立房間後貼上 Vimeo 影片網址或影片 ID。",
+        "進入房間後可以貼上 Vimeo 影片網址或影片 ID。",
       placeholder:
         "例如 https://vimeo.com/123456789",
       searchable: false
@@ -1096,7 +1121,7 @@ document.addEventListener("DOMContentLoaded", () => {
       icon: "▶",
       name: "Dailymotion",
       text:
-        "建立房間後貼上 Dailymotion 影片網址或影片 ID。",
+        "進入房間後可以貼上 Dailymotion 影片網址或影片 ID。",
       placeholder:
         "例如 https://www.dailymotion.com/video/x123abc",
       searchable: false
@@ -1106,7 +1131,7 @@ document.addEventListener("DOMContentLoaded", () => {
       icon: "📺",
       name: "Bilibili",
       text:
-        "建立房間後貼上 Bilibili BV 號碼、av 號碼或影片網址。",
+        "進入房間後可以貼上 Bilibili BV 號碼、av 號碼或影片網址。",
       placeholder:
         "例如 https://www.bilibili.com/video/BVxxxxxx",
       searchable: false
@@ -1116,7 +1141,7 @@ document.addEventListener("DOMContentLoaded", () => {
       icon: "🎮",
       name: "Twitch",
       text:
-        "建立房間後輸入 Twitch 頻道、VOD 或影片網址。",
+        "進入房間後可以輸入 Twitch 頻道、VOD 或影片網址。",
       placeholder:
         "例如 https://www.twitch.tv/頻道",
       searchable: false
@@ -1214,135 +1239,93 @@ document.addEventListener("DOMContentLoaded", () => {
 
   };
 
-  function updatePlatform(
-    platform
-  ) {
+  function updatePlatform(platform) {
 
     const info =
-      platformInfo[
-        platform
-      ] ||
+      platformInfo[platform] ||
       platformInfo.youtube;
 
-    if (
-      description
-    ) {
+    if (description) {
       description.textContent =
         info.text;
     }
 
-    if (
-      noticeIcon
-    ) {
+    if (noticeIcon) {
       noticeIcon.textContent =
         info.icon;
     }
 
-    if (
-      noticeTitle
-    ) {
+    if (noticeTitle) {
       noticeTitle.textContent =
         info.name;
     }
 
-    if (
-      noticeText
-    ) {
+    if (noticeText) {
       noticeText.textContent =
         info.text;
     }
 
-    const searchable =
-      info.searchable ===
-      true;
-
-    if (
-      searchHint
-    ) {
+    if (searchHint) {
       searchHint.textContent =
-        "建立房間後，再由房主在房間內選擇影片。";
+        "建立房間後，所有成員都可以搜尋並選擇影片。";
     }
 
-    if (
-      externalSourceArea
-    ) {
-      externalSourceArea.classList.add(
-        "hidden"
-      );
+    if (externalSourceArea) {
+      externalSourceArea.classList.add("hidden");
     }
 
-    if (
-      sourceUrlInput
-    ) {
+    if (sourceUrlInput) {
       sourceUrlInput.placeholder =
         info.placeholder ||
         "建立房間後再輸入";
     }
 
-    if (
-      modalVideoSearchArea
-    ) {
+    if (modalVideoSearchArea) {
       modalVideoSearchArea.classList.toggle(
         "hidden",
-        !searchable
+        info.searchable !== true
       );
     }
 
-    if (
-      modalExternalSourceArea
-    ) {
+    if (modalExternalSourceArea) {
       modalExternalSourceArea.classList.toggle(
         "hidden",
-        searchable
+        info.searchable === true
       );
     }
 
-    if (
-      modalSourceUrlInput
-    ) {
+    if (modalSourceUrlInput) {
       modalSourceUrlInput.placeholder =
         info.placeholder ||
         "貼上影片網址或輸入 ID";
     }
 
-    if (
-      externalSourceHint
-    ) {
+    if (externalSourceHint) {
       externalSourceHint.textContent =
-        `建立房間後，再輸入有效的 ${info.name} 影片網址或 ID。`;
+        `進入房間後，再輸入有效的 ${info.name} 影片網址或 ID。`;
     }
 
-    if (
-      modalSourceHint
-    ) {
+    if (modalSourceHint) {
       modalSourceHint.textContent =
         `請輸入有效的 ${info.name} 影片網址或 ID。`;
     }
 
-    if (
-      notice
-    ) {
+    if (notice) {
       notice.classList.toggle(
         "hidden",
-        searchable
+        info.searchable === true
       );
     }
 
-    sourceCards.forEach(
-      (card) => {
-        card.classList.toggle(
-          "active",
-          card.dataset.platform ===
-            platform
-        );
-      }
-    );
-
+    sourceCards.forEach((card) => {
+      card.classList.toggle(
+        "active",
+        card.dataset.platform === platform
+      );
+    });
   }
 
-  if (
-    sourceSelect
-  ) {
+  if (sourceSelect) {
 
     sourceSelect.addEventListener(
       "change",
@@ -1356,59 +1339,46 @@ document.addEventListener("DOMContentLoaded", () => {
     updatePlatform(
       sourceSelect.value
     );
-
   }
 
-  sourceCards.forEach(
-    (card) => {
+  sourceCards.forEach((card) => {
 
-      card.addEventListener(
-        "click",
-        () => {
+    card.addEventListener(
+      "click",
+      () => {
 
-          const platform =
-            card.dataset.platform;
+        const platform =
+          card.dataset.platform;
 
-          if (
-            !sourceSelect
-          ) {
-            return;
-          }
-
-          sourceSelect.value =
-            platform;
-
-          sourceSelect.dispatchEvent(
-            new Event(
-              "change"
-            )
-          );
-
-          sourceSelect.scrollIntoView({
-            behavior:
-              "smooth",
-            block:
-              "center"
-          });
-
+        if (!sourceSelect) {
+          return;
         }
-      );
 
-    }
-  );
+        sourceSelect.value =
+          platform;
 
-  if (
-    sourceModal
-  ) {
+        sourceSelect.dispatchEvent(
+          new Event("change")
+        );
+
+        sourceSelect.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+
+      }
+    );
+
+  });
+
+  if (sourceModal) {
 
     sourceModal.addEventListener(
       "change",
       () => {
-
         updatePlatform(
           sourceModal.value
         );
-
       }
     );
 
