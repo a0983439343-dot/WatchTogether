@@ -1,12 +1,19 @@
-```javascript
 (() => {
   "use strict";
 
   const $ = (id) =>
     document.getElementById(id);
 
+  /*
+   * =========================================================
+   * CONFIG
+   * =========================================================
+   */
+
   const YOUTUBE_API_KEY =
-    "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
+    "請放新的 YouTube API Key";
+
+  const YOUTUBE_SEARCH_PAGE_SIZE = 50;
 
   const PLATFORMS = {
     youtube: {
@@ -140,6 +147,10 @@
     memberHeartbeatTimer: null,
 
     searchResults: [],
+    searchNextPageToken: "",
+    searchQuery: "",
+    searchLoadingMore: false,
+
     modalSelectedVideo: null,
     modalSelectedVideoId: "",
 
@@ -170,20 +181,21 @@
   let db = null;
   let auth = null;
 
-  /* =====================================================
-     BASIC
-  ===================================================== */
+  /*
+   * =========================================================
+   * BASIC
+   * =========================================================
+   */
 
   function toast(message) {
-    const element =
-      $("toast");
+    const element = $("toast");
 
     if (!element) {
       return;
     }
 
     element.textContent =
-      message;
+      message || "";
 
     element.classList.add(
       "show"
@@ -242,9 +254,7 @@
           "'": "&#039;"
         };
 
-        return map[
-          character
-        ];
+        return map[character];
       }
     );
   }
@@ -274,53 +284,122 @@
 
     const minutes =
       Math.floor(
-        (seconds % 3600) / 60
+        (seconds % 3600) /
+        60
       );
 
     const secs =
-      seconds % 60;
+      seconds %
+      60;
 
-    if (
-      hours > 0
-    ) {
+    if (hours > 0) {
       return (
-        String(
-          hours
-        ).padStart(
-          2,
-          "0"
-        ) +
+        String(hours)
+          .padStart(2, "0") +
         ":" +
-        String(
-          minutes
-        ).padStart(
-          2,
-          "0"
-        ) +
+        String(minutes)
+          .padStart(2, "0") +
         ":" +
-        String(
-          secs
-        ).padStart(
-          2,
-          "0"
-        )
+        String(secs)
+          .padStart(2, "0")
       );
     }
 
     return (
-      String(
-        minutes
-      ).padStart(
-        2,
-        "0"
-      ) +
+      String(minutes)
+        .padStart(2, "0") +
       ":" +
-      String(
-        secs
-      ).padStart(
-        2,
-        "0"
+      String(secs)
+        .padStart(2, "0")
+    );
+  }
+
+  function formatViews(value) {
+    const number =
+      Number(value);
+
+    if (
+      !Number.isFinite(
+        number
       )
+    ) {
+      return "";
+    }
+
+    if (number >= 100000000) {
+      return (
+        (number / 100000000)
+          .toFixed(1)
+          .replace(/\.0$/, "") +
+        " 億次觀看"
+      );
+    }
+
+    if (number >= 10000) {
+      return (
+        (number / 10000)
+          .toFixed(1)
+          .replace(/\.0$/, "") +
+        " 萬次觀看"
+      );
+    }
+
+    return (
+      number.toLocaleString(
+        "zh-TW"
+      ) +
+      " 次觀看"
+    );
+  }
+
+  function formatDuration(seconds) {
+    const number =
+      Number(seconds);
+
+    if (
+      !Number.isFinite(
+        number
+      ) ||
+      number < 0
+    ) {
+      return "";
+    }
+
+    const total =
+      Math.floor(number);
+
+    const hours =
+      Math.floor(
+        total / 3600
+      );
+
+    const minutes =
+      Math.floor(
+        (total % 3600) /
+        60
+      );
+
+    const secs =
+      total %
+      60;
+
+    if (hours > 0) {
+      return (
+        String(hours) +
+        ":" +
+        String(minutes)
+          .padStart(2, "0") +
+        ":" +
+        String(secs)
+          .padStart(2, "0")
+      );
+    }
+
+    return (
+      String(minutes) +
+      ":" +
+      String(secs)
+        .padStart(2, "0")
     );
   }
 
@@ -339,7 +418,7 @@
         chars[
           Math.floor(
             Math.random() *
-              chars.length
+            chars.length
           )
         ];
     }
@@ -381,8 +460,8 @@
         "玩家" +
         Math.floor(
           Math.random() *
-            900 +
-            100
+          900 +
+          100
         );
 
       localStorage.setItem(
@@ -394,9 +473,7 @@
     return name;
   }
 
-  function setMemberName(
-    name
-  ) {
+  function setMemberName(name) {
     const normalized =
       String(
         name || ""
@@ -422,9 +499,11 @@
     );
   }
 
-  /* =====================================================
-     AUTH UI
-  ===================================================== */
+  /*
+   * =========================================================
+   * AUTH UI
+   * =========================================================
+   */
 
   function updateAuthUI() {
     const loginButton =
@@ -501,9 +580,11 @@
     );
   }
 
-  /* =====================================================
-     FIREBASE
-  ===================================================== */
+  /*
+   * =========================================================
+   * FIREBASE
+   * =========================================================
+   */
 
   async function initializeFirebase() {
     if (!window.firebase) {
@@ -542,11 +623,9 @@
             !user.isAnonymous &&
             user.displayName
           ) {
-            try {
-              setMemberName(
-                user.displayName
-              );
-            } catch (_) {}
+            setMemberName(
+              user.displayName
+            );
           }
         } else {
           state.uid =
@@ -557,9 +636,7 @@
       }
     );
 
-    if (
-      !auth.currentUser
-    ) {
+    if (!auth.currentUser) {
       await auth.signInAnonymously();
     }
 
@@ -576,9 +653,11 @@
     updateAuthUI();
   }
 
-  /* =====================================================
-     GOOGLE LOGIN
-  ===================================================== */
+  /*
+   * =========================================================
+   * GOOGLE LOGIN
+   * =========================================================
+   */
 
   async function googleLogin() {
     if (!auth) {
@@ -608,9 +687,10 @@
           "1"
         );
 
-        await currentUser.linkWithRedirect(
-          provider
-        );
+        await currentUser
+          .linkWithRedirect(
+            provider
+          );
 
         return;
       } catch (error) {
@@ -653,9 +733,7 @@
       const result =
         await auth.getRedirectResult();
 
-      if (
-        result?.user
-      ) {
+      if (result?.user) {
         const user =
           result.user;
 
@@ -665,11 +743,9 @@
         if (
           user.displayName
         ) {
-          try {
-            setMemberName(
-              user.displayName
-            );
-          } catch (_) {}
+          setMemberName(
+            user.displayName
+          );
         }
 
         updateAuthUI();
@@ -690,19 +766,10 @@
         error
       );
 
-      if (
-        error?.code ===
-        "auth/account-exists-with-different-credential"
-      ) {
-        toast(
-          "此 Google 帳號已存在，請再登入一次"
-        );
-      } else {
-        toast(
-          error?.message ||
-          "Google 登入失敗"
-        );
-      }
+      toast(
+        error?.message ||
+        "Google 登入失敗"
+      );
     }
   }
 
@@ -719,9 +786,6 @@
       state.uid =
         auth.currentUser?.uid ||
         null;
-
-      state.memberName =
-        getMemberName();
 
       updateAuthUI();
 
@@ -740,9 +804,11 @@
     }
   }
 
-  /* =====================================================
-     NAME MODAL
-  ===================================================== */
+  /*
+   * =========================================================
+   * NAME MODAL
+   * =========================================================
+   */
 
   function openNameModal() {
     const modal =
@@ -820,6 +886,26 @@
       });
   }
 
+  async function getMembersOnce() {
+    if (!state.membersRef) {
+      return {};
+    }
+
+    try {
+      const snapshot =
+        await state.membersRef.once(
+          "value"
+        );
+
+      return (
+        snapshot.val() ||
+        {}
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
   async function saveName() {
     const input =
       $("nameInput");
@@ -895,29 +981,11 @@
     }
   }
 
-  async function getMembersOnce() {
-    if (!state.membersRef) {
-      return {};
-    }
-
-    try {
-      const snapshot =
-        await state.membersRef.once(
-          "value"
-        );
-
-      return (
-        snapshot.val() ||
-        {}
-      );
-    } catch (_) {
-      return {};
-    }
-  }
-
-  /* =====================================================
-     ID PARSERS
-  ===================================================== */
+  /*
+   * =========================================================
+   * ID PARSERS
+   * =========================================================
+   */
 
   function getYoutubeId(value) {
     if (!value) {
@@ -1146,9 +1214,7 @@
           /(BV[a-zA-Z0-9]+)/
         );
 
-      if (
-        bv?.[1]
-      ) {
+      if (bv?.[1]) {
         return bv[1];
       }
 
@@ -1157,13 +1223,8 @@
           /\/av(\d+)/i
         );
 
-      if (
-        av?.[1]
-      ) {
-        return (
-          "av" +
-          av[1]
-        );
+      if (av?.[1]) {
+        return "av" + av[1];
       }
     } catch (_) {}
 
@@ -1205,8 +1266,7 @@
       }
 
       if (
-        parts[0] ===
-          "videos" &&
+        parts[0] === "videos" &&
         parts[1]
       ) {
         return {
@@ -1218,8 +1278,7 @@
       }
 
       if (
-        parts[0] ===
-          "clip" &&
+        parts[0] === "clip" &&
         parts[1]
       ) {
         return {
@@ -1260,12 +1319,15 @@
     };
   }
 
-  /* =====================================================
-     YOUTUBE SEARCH
-  ===================================================== */
+  /*
+   * =========================================================
+   * YOUTUBE SEARCH
+   * =========================================================
+   */
 
   async function searchYoutube(
-    query
+    query,
+    append = false
   ) {
     query =
       String(
@@ -1287,6 +1349,18 @@
       throw new Error(
         "YouTube API Key 尚未設定"
       );
+    }
+
+    if (
+      append &&
+      state.searchQuery === query &&
+      !state.searchNextPageToken
+    ) {
+      toast(
+        "已經沒有更多結果"
+      );
+
+      return [];
     }
 
     const url =
@@ -1311,7 +1385,9 @@
 
     url.searchParams.set(
       "maxResults",
-      "12"
+      String(
+        YOUTUBE_SEARCH_PAGE_SIZE
+      )
     );
 
     url.searchParams.set(
@@ -1333,6 +1409,16 @@
       "videoEmbeddable",
       "true"
     );
+
+    if (
+      append &&
+      state.searchNextPageToken
+    ) {
+      url.searchParams.set(
+        "pageToken",
+        state.searchNextPageToken
+      );
+    }
 
     url.searchParams.set(
       "key",
@@ -1365,14 +1451,79 @@
     const data =
       await response.json();
 
-    const results =
-      (
-        Array.isArray(
-          data.items
-        )
-          ? data.items
-          : []
+    const items =
+      Array.isArray(
+        data.items
       )
+        ? data.items
+        : [];
+
+    const ids =
+      items
+        .map(
+          (item) =>
+            item?.id?.videoId
+        )
+        .filter(Boolean);
+
+    let detailMap = {};
+
+    if (ids.length) {
+      try {
+        const detailUrl =
+          new URL(
+            "https://www.googleapis.com/youtube/v3/videos"
+          );
+
+        detailUrl.searchParams.set(
+          "part",
+          "contentDetails,statistics,snippet"
+        );
+
+        detailUrl.searchParams.set(
+          "id",
+          ids.join(",")
+        );
+
+        detailUrl.searchParams.set(
+          "key",
+          YOUTUBE_API_KEY
+        );
+
+        const detailResponse =
+          await fetch(
+            detailUrl.toString()
+          );
+
+        if (
+          detailResponse.ok
+        ) {
+          const detailData =
+            await detailResponse.json();
+
+          for (
+            const item of
+            Array.isArray(
+              detailData.items
+            )
+              ? detailData.items
+              : []
+          ) {
+            detailMap[
+              item.id
+            ] = item;
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "YouTube 詳細資料載入失敗:",
+          error
+        );
+      }
+    }
+
+    const results =
+      items
         .map(
           (item) => {
             const id =
@@ -1385,6 +1536,18 @@
             if (!id) {
               return null;
             }
+
+            const detail =
+              detailMap[id] ||
+              {};
+
+            const statistics =
+              detail.statistics ||
+              {};
+
+            const contentDetails =
+              detail.contentDetails ||
+              {};
 
             return {
               id,
@@ -1404,41 +1567,143 @@
                 snippet.channelTitle ||
                 "",
 
+              publishedAt:
+                snippet.publishedAt ||
+                "",
+
               thumbnail:
-                snippet.thumbnails
-                  ?.high
-                  ?.url ||
-                snippet.thumbnails
-                  ?.medium
-                  ?.url ||
-                snippet.thumbnails
-                  ?.default
-                  ?.url ||
-                ""
+                snippet.thumbnails?.maxres?.url ||
+                snippet.thumbnails?.high?.url ||
+                snippet.thumbnails?.medium?.url ||
+                snippet.thumbnails?.default?.url ||
+                "",
+
+              viewCount:
+                Number(
+                  statistics.viewCount ||
+                  0
+                ),
+
+              likeCount:
+                Number(
+                  statistics.likeCount ||
+                  0
+                ),
+
+              duration:
+                contentDetails.duration ||
+                "",
+
+              durationSeconds:
+                parseISO8601Duration(
+                  contentDetails.duration
+                ),
+
+              live:
+                Boolean(
+                  snippet.liveBroadcastContent &&
+                  snippet.liveBroadcastContent !==
+                    "none"
+                )
             };
           }
         )
         .filter(Boolean);
 
-    state.searchResults =
-      results;
-
-    state.modalSelectedVideo =
-      null;
-
-    state.modalSelectedVideoId =
+    state.searchNextPageToken =
+      data.nextPageToken ||
       "";
 
+    state.searchQuery =
+      query;
+
+    if (append) {
+      const existingIds =
+        new Set(
+          state.searchResults.map(
+            (item) =>
+              String(
+                item.id
+              )
+          )
+        );
+
+      for (
+        const item of results
+      ) {
+        if (
+          !existingIds.has(
+            String(
+              item.id
+            )
+          )
+        ) {
+          state.searchResults.push(
+            item
+          );
+        }
+      }
+    } else {
+      state.searchResults =
+        results;
+
+      state.modalSelectedVideo =
+        null;
+
+      state.modalSelectedVideoId =
+        "";
+    }
+
     renderSearchResults(
-      results
+      state.searchResults
     );
 
     return results;
   }
 
-  /* =====================================================
-     SEARCH RESULTS
-  ===================================================== */
+  function parseISO8601Duration(
+    value
+  ) {
+    if (!value) {
+      return 0;
+    }
+
+    const match =
+      String(value).match(
+        /^P(?:\d+D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/
+      );
+
+    if (!match) {
+      return 0;
+    }
+
+    const hours =
+      Number(
+        match[1] || 0
+      );
+
+    const minutes =
+      Number(
+        match[2] || 0
+      );
+
+    const seconds =
+      Number(
+        match[3] || 0
+      );
+
+    return (
+      hours * 3600 +
+      minutes * 60 +
+      seconds
+    );
+  }
+
+  /*
+   * =========================================================
+   * SEARCH RESULTS
+   * =========================================================
+   */
 
   function renderSearchResults(
     results
@@ -1455,13 +1720,8 @@
         ? results
         : [];
 
-    state.modalSelectedVideo =
-      null;
-
-    state.modalSelectedVideoId =
-      "";
-
     container.dataset.selectedVideoId =
+      state.modalSelectedVideoId ||
       "";
 
     if (
@@ -1471,7 +1731,7 @@
         <div
           class="muted"
           style="
-            padding:14px 4px;
+            padding:20px 8px;
             text-align:center;
           "
         >
@@ -1485,84 +1745,191 @@
     container.innerHTML =
       state.searchResults
         .map(
-          (video) => `
-            <div
-              class="video-result-card"
-              data-video-id="${escapeHtml(
+          (video, index) => {
+            const selected =
+              String(
+                state.modalSelectedVideoId ||
+                ""
+              ) ===
+              String(
                 video.id
-              )}"
-            >
+              );
 
-              <button
-                type="button"
-                class="video-result-main"
-                data-video-select="${escapeHtml(
+            const durationText =
+              formatDuration(
+                video.durationSeconds
+              );
+
+            const viewsText =
+              formatViews(
+                video.viewCount
+              );
+
+            return `
+              <div
+                class="video-result-card${
+                  selected
+                    ? " selected"
+                    : ""
+                }"
+                data-video-id="${escapeHtml(
                   video.id
                 )}"
               >
 
-                <img
-                  src="${escapeHtml(
-                    video.thumbnail
-                  )}"
-                  alt=""
-                  loading="lazy"
-                >
-
-                <span
-                  class="video-result-info"
-                >
-
-                  <strong>
-                    ${escapeHtml(
-                      video.title
-                    )}
-                  </strong>
-
-                  <small>
-                    ${escapeHtml(
-                      video.channel
-                    )}
-                  </small>
-
-                </span>
-
-              </button>
-
-              <div
-                style="
-                  display:flex;
-                  gap:6px;
-                  margin-top:8px;
-                "
-              >
-
                 <button
                   type="button"
-                  class="tiny-btn"
-                  data-video-play="${escapeHtml(
+                  class="video-result-main"
+                  data-video-select="${escapeHtml(
                     video.id
                   )}"
                 >
-                  ▶ 播放
+
+                  <div
+                    style="
+                      position:relative;
+                      flex:0 0 auto;
+                    "
+                  >
+
+                    <img
+                      src="${escapeHtml(
+                        video.thumbnail
+                      )}"
+                      alt=""
+                      loading="lazy"
+                    >
+
+                    ${
+                      durationText
+                        ? `
+                          <span
+                            style="
+                              position:absolute;
+                              right:4px;
+                              bottom:4px;
+                              padding:2px 5px;
+                              border-radius:5px;
+                              background:rgba(0,0,0,.85);
+                              color:#fff;
+                              font-size:10px;
+                              font-weight:700;
+                            "
+                          >
+                            ${escapeHtml(
+                              durationText
+                            )}
+                          </span>
+                        `
+                        : ""
+                    }
+
+                  </div>
+
+                  <span
+                    class="video-result-info"
+                  >
+
+                    <strong>
+                      ${escapeHtml(
+                        video.title
+                      )}
+                    </strong>
+
+                    <small>
+                      ${escapeHtml(
+                        video.channel
+                      )}
+                    </small>
+
+                    ${
+                      viewsText
+                        ? `
+                          <small
+                            style="
+                              color:#64748b;
+                            "
+                          >
+                            ${escapeHtml(
+                              viewsText
+                            )}
+                          </small>
+                        `
+                        : ""
+                    }
+
+                  </span>
+
                 </button>
 
-                <button
-                  type="button"
-                  class="tiny-btn"
-                  data-video-queue="${escapeHtml(
-                    video.id
-                  )}"
+                <div
+                  style="
+                    display:flex;
+                    gap:6px;
+                    margin-top:8px;
+                    flex-wrap:wrap;
+                  "
                 >
-                  ＋ 待播放
-                </button>
+
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-video-play="${escapeHtml(
+                      video.id
+                    )}"
+                  >
+                    ▶ 播放
+                  </button>
+
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-video-queue="${escapeHtml(
+                      video.id
+                    )}"
+                  >
+                    ＋ 待播放
+                  </button>
+
+                </div>
 
               </div>
-
-            </div>
-          `
+            `;
+          }
         )
         .join("");
+
+    /*
+     * Infinite loading sentinel
+     */
+
+    if (
+      state.searchNextPageToken
+    ) {
+      container.insertAdjacentHTML(
+        "beforeend",
+        `
+          <div
+            id="youtubeLoadMore"
+            style="
+              padding:14px;
+              text-align:center;
+            "
+          >
+            <button
+              type="button"
+              class="secondary-btn"
+              id="youtubeLoadMoreBtn"
+              style="
+                width:100%;
+              "
+            >
+              載入更多 YouTube 影片
+            </button>
+          </div>
+        `
+      );
+    }
 
     container
       .querySelectorAll(
@@ -1614,7 +1981,6 @@
               try {
                 await changeVideo({
                   ...video,
-
                   platform:
                     "youtube"
                 });
@@ -1666,7 +2032,6 @@
               try {
                 await addToQueue({
                   ...video,
-
                   platform:
                     "youtube"
                 });
@@ -1689,6 +2054,49 @@
           );
         }
       );
+
+    const moreButton =
+      $("youtubeLoadMoreBtn");
+
+    moreButton?.addEventListener(
+      "click",
+      async () => {
+        if (
+          state.searchLoadingMore ||
+          !state.searchNextPageToken
+        ) {
+          return;
+        }
+
+        state.searchLoadingMore =
+          true;
+
+        moreButton.disabled =
+          true;
+
+        moreButton.textContent =
+          "載入中…";
+
+        try {
+          await searchYoutube(
+            state.searchQuery,
+            true
+          );
+        } catch (error) {
+          console.error(
+            error
+          );
+
+          toast(
+            error.message ||
+            "載入更多失敗"
+          );
+        } finally {
+          state.searchLoadingMore =
+            false;
+        }
+      }
+    );
   }
 
   function selectSearchVideo(
@@ -1707,18 +2115,18 @@
       return;
     }
 
-    const container =
-      $("modalVideoSearchResults");
-
-    state.modalSelectedVideo = {
-      ...video,
-
-      platform:
-        "youtube"
-    };
+    state.modalSelectedVideo =
+      {
+        ...video,
+        platform:
+          "youtube"
+      };
 
     state.modalSelectedVideoId =
       String(id);
+
+    const container =
+      $("modalVideoSearchResults");
 
     if (container) {
       container.dataset.selectedVideoId =
@@ -1732,11 +2140,10 @@
           (item) => {
             item.classList.toggle(
               "selected",
-
               String(
                 item.dataset.videoId
               ) ===
-                String(id)
+              String(id)
             );
           }
         );
@@ -1794,15 +2201,16 @@
 
     return {
       ...video,
-
       platform:
         "youtube"
     };
   }
 
-  /* =====================================================
-     VIDEO OBJECT
-  ===================================================== */
+  /*
+   * =========================================================
+   * VIDEO OBJECT
+   * =========================================================
+   */
 
   function createVideoObject(
     platform,
@@ -1828,18 +2236,14 @@
 
       return {
         id,
-
         platform,
-
         title:
           title ||
           "YouTube 影片",
-
         thumbnail:
           `https://i.ytimg.com/vi/${encodeURIComponent(
             id
           )}/hqdefault.jpg`,
-
         channel:
           "YouTube"
       };
@@ -1860,21 +2264,16 @@
 
       return {
         id,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Vimeo 影片",
-
         thumbnail:
           "",
-
         channel:
           "Vimeo"
       };
@@ -1895,21 +2294,16 @@
 
       return {
         id,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Dailymotion 影片",
-
         thumbnail:
           "",
-
         channel:
           "Dailymotion"
       };
@@ -1930,21 +2324,16 @@
 
       return {
         id,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Bilibili 影片",
-
         thumbnail:
           "",
-
         channel:
           "Bilibili"
       };
@@ -1966,24 +2355,18 @@
       return {
         id:
           value.value,
-
         twitchType:
           value.type,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Twitch",
-
         thumbnail:
           "",
-
         channel:
           "Twitch"
       };
@@ -1994,24 +2377,19 @@
         String(
           rawValue
         ),
-
       url:
         String(
           rawValue
         ),
-
       platform,
-
       title:
         title ||
         PLATFORMS[
           platform
         ]?.name ||
         platform,
-
       thumbnail:
         "",
-
       channel:
         PLATFORMS[
           platform
@@ -2020,9 +2398,11 @@
     };
   }
 
-  /* =====================================================
-     QUEUE
-  ===================================================== */
+  /*
+   * =========================================================
+   * QUEUE
+   * =========================================================
+   */
 
   async function addToQueue(
     video
@@ -2044,25 +2424,23 @@
 
     const duplicate =
       Object.values(
-        state.queue ||
-          {}
+        state.queue || {}
       ).some(
         (item) =>
           String(
-            item?.id ||
-              ""
+            item?.id || ""
           ) ===
-            String(
-              video.id
-            ) &&
+          String(
+            video.id
+          ) &&
           String(
             item?.platform ||
-              "youtube"
+            "youtube"
           ) ===
-            String(
-              video.platform ||
-                "youtube"
-            )
+          String(
+            video.platform ||
+            "youtube"
+          )
       );
 
     if (duplicate) {
@@ -2105,18 +2483,14 @@
           .TIMESTAMP
     };
 
-    if (
-      video.url
-    ) {
+    if (video.url) {
       item.url =
         String(
           video.url
         );
     }
 
-    if (
-      video.twitchType
-    ) {
+    if (video.twitchType) {
       item.twitchType =
         video.twitchType;
     }
@@ -2179,16 +2553,12 @@
         item.channel
     };
 
-    if (
-      item.url
-    ) {
+    if (item.url) {
       video.url =
         item.url;
     }
 
-    if (
-      item.twitchType
-    ) {
+    if (item.twitchType) {
       video.twitchType =
         item.twitchType;
     }
@@ -2210,13 +2580,11 @@
 
   function getSortedQueue() {
     return Object.entries(
-      state.queue ||
-        {}
+      state.queue || {}
     )
       .map(
         ([id, item]) => ({
           ...item,
-
           queueId:
             id
         })
@@ -2225,11 +2593,11 @@
         (a, b) =>
           Number(
             a.addedAt ||
-              0
+            0
           ) -
           Number(
             b.addedAt ||
-              0
+            0
           )
       );
   }
@@ -2294,8 +2662,7 @@
                   "
                 >
                   ${
-                    index +
-                    1
+                    index + 1
                   }
                 </div>
 
@@ -2403,8 +2770,7 @@
             async () => {
               try {
                 await playQueueItem(
-                  button
-                    .dataset
+                  button.dataset
                     .queuePlay
                 );
               } catch (error) {
@@ -2433,8 +2799,7 @@
             async () => {
               try {
                 await removeFromQueue(
-                  button
-                    .dataset
+                  button.dataset
                     .queueRemove
                 );
               } catch (error) {
@@ -2476,9 +2841,11 @@
     }
   }
 
-  /* =====================================================
-     PLAYER VISIBILITY
-  ===================================================== */
+  /*
+   * =========================================================
+   * PLAYER VISIBILITY
+   * =========================================================
+   */
 
   function hidePlayers(
     keepYoutube = false
@@ -2562,9 +2929,11 @@
     }
   }
 
-  /* =====================================================
-     PLAYER DESTROY
-  ===================================================== */
+  /*
+   * =========================================================
+   * PLAYER DESTROY
+   * =========================================================
+   */
 
   async function destroyCurrentPlayer() {
     const old =
@@ -2616,9 +2985,11 @@
     } catch (_) {}
   }
 
-  /* =====================================================
-     PLAYER STATE
-  ===================================================== */
+  /*
+   * =========================================================
+   * PLAYER STATE
+   * =========================================================
+   */
 
   async function asyncCurrentPosition() {
     const player =
@@ -2888,9 +3259,11 @@
     return false;
   }
 
-  /* =====================================================
-     FIREBASE PLAYBACK
-  ===================================================== */
+  /*
+   * =========================================================
+   * FIREBASE PLAYBACK
+   * =========================================================
+   */
 
   async function writePlayback(
     action,
@@ -3113,13 +3486,10 @@
       ) {
         await applyPlayerPosition(
           remotePosition,
-
           data.action ===
             "seek" ||
-
           data.action ===
             "sync" ||
-
           data.action ===
             "play"
         );
@@ -3381,9 +3751,11 @@
       );
   }
 
-  /* =====================================================
-     SDK LOADERS
-  ===================================================== */
+  /*
+   * =========================================================
+   * SDK LOADERS
+   * =========================================================
+   */
 
   async function loadVimeoSdk() {
     if (
@@ -3738,9 +4110,11 @@
     );
   }
 
-  /* =====================================================
-     YOUTUBE PLAYER
-  ===================================================== */
+  /*
+   * =========================================================
+   * YOUTUBE PLAYER
+   * =========================================================
+   */
 
   async function buildYoutubePlayer(
     videoId,
@@ -3750,19 +4124,10 @@
       return;
     }
 
-    const requestedId =
-      String(
-        videoId
-      ).trim();
-
-    let initial =
+    const initial =
       $("youtubePlayer");
 
     if (!initial) {
-      console.error(
-        "找不到 youtubePlayer"
-      );
-
       return;
     }
 
@@ -3772,46 +4137,15 @@
       state.playerType ===
         "youtube" &&
       state.currentVideoId ===
-        requestedId
+        videoId
     ) {
       forceYoutubeVisible();
 
-      try {
-        if (
-          state.stateRef
-        ) {
-          const snapshot =
-            await state.stateRef.once(
-              "value"
-            );
-
-          const remote =
-            snapshot.val();
-
-          if (remote) {
-            await applyRemotePlayback(
-              remote,
-              true
-            );
-          } else if (
-            autoplay
-          ) {
-            state.player.mute();
-            state.player.playVideo();
-          }
-        } else if (
-          autoplay
-        ) {
+      if (autoplay) {
+        try {
           state.player.mute();
           state.player.playVideo();
-        }
-      } catch (_) {
-        if (autoplay) {
-          try {
-            state.player.mute();
-            state.player.playVideo();
-          } catch (_) {}
-        }
+        } catch (_) {}
       }
 
       return;
@@ -3820,13 +4154,13 @@
     if (
       state.youtubeLoading &&
       state.youtubeRequestedId ===
-        requestedId
+        videoId
     ) {
       return;
     }
 
     state.youtubeRequestedId =
-      requestedId;
+      videoId;
 
     state.youtubeLoading =
       true;
@@ -3861,24 +4195,19 @@
           () => {
             if (
               state.youtubeBuildToken !==
-                token
-            ) {
-              return;
-            }
-
-            if (
+                token ||
               state.youtubeRequestedId !==
-                requestedId
+                videoId
             ) {
               return;
             }
 
             buildYoutubePlayer(
-              requestedId,
+              videoId,
               autoplay
             );
           },
-          700
+          500
         );
 
         return;
@@ -3889,7 +4218,7 @@
         state.playerType ===
           "youtube"
       ) {
-        const oldPlayer =
+        const old =
           state.player;
 
         state.player =
@@ -3902,7 +4231,7 @@
           null;
 
         try {
-          oldPlayer.destroy?.();
+          old.destroy?.();
         } catch (_) {}
       } else if (
         state.player
@@ -3912,14 +4241,9 @@
 
       if (
         state.youtubeBuildToken !==
-          token
-      ) {
-        return;
-      }
-
-      if (
+          token ||
         state.youtubeRequestedId !==
-          requestedId
+          videoId
       ) {
         return;
       }
@@ -3956,9 +4280,7 @@
           replacement;
       }
 
-      hidePlayers(
-        true
-      );
+      hidePlayers(true);
 
       container.classList.remove(
         "hidden"
@@ -3979,21 +4301,11 @@
       container.style.height =
         "100%";
 
-      container.style.position =
-        "relative";
-
-      container.style.zIndex =
-        "3";
-
       $("playerPlaceholder")
         ?.classList.add(
           "hidden"
         );
 
-      /*
-       * onReady 之前不要把
-       * player 當作 ready。
-       */
       state.player =
         null;
 
@@ -4004,7 +4316,7 @@
         "youtube";
 
       state.currentVideoId =
-        requestedId;
+        videoId;
 
       state.currentVideoUrl =
         null;
@@ -4013,14 +4325,13 @@
         new YT.Player(
           "youtubePlayer",
           {
+            videoId,
+
             width:
               "100%",
 
             height:
               "100%",
-
-            videoId:
-              requestedId,
 
             playerVars: {
               autoplay:
@@ -4044,10 +4355,7 @@
                 1,
 
               origin:
-                location.origin,
-
-              hl:
-                "zh-TW"
+                location.origin
             },
 
             events: {
@@ -4057,18 +4365,9 @@
                 ) => {
                   if (
                     state.youtubeBuildToken !==
-                      token
-                  ) {
-                    try {
-                      event.target.destroy?.();
-                    } catch (_) {}
-
-                    return;
-                  }
-
-                  if (
+                      token ||
                     state.youtubeRequestedId !==
-                      requestedId
+                      videoId
                   ) {
                     try {
                       event.target.destroy?.();
@@ -4087,7 +4386,7 @@
                     "youtube";
 
                   state.currentVideoId =
-                    requestedId;
+                    videoId;
 
                   state.currentVideoUrl =
                     null;
@@ -4110,43 +4409,16 @@
                   ) {
                     $("syncStatus")
                       .textContent =
-                      "YouTube 已載入";
+                      autoplay
+                        ? "影片正在載入"
+                        : "影片已載入";
                   }
 
                   updateTimeUI();
 
-                  let remote =
-                    null;
-
-                  try {
-                    if (
-                      state.stateRef
-                    ) {
-                      const snapshot =
-                        await state.stateRef.once(
-                          "value"
-                        );
-
-                      remote =
-                        snapshot.val();
-                    }
-                  } catch (error) {
-                    console.warn(
-                      "讀取初始播放狀態失敗:",
-                      error
-                    );
-                  }
+                  await syncLatestPlayback();
 
                   if (
-                    remote &&
-                    state.player ===
-                      event.target
-                  ) {
-                    await applyRemotePlayback(
-                      remote,
-                      true
-                    );
-                  } else if (
                     autoplay &&
                     state.player ===
                       event.target
@@ -4190,7 +4462,7 @@
 
                   if (
                     state.player !==
-                      event.target
+                    event.target
                   ) {
                     return;
                   }
@@ -4211,14 +4483,6 @@
                       "play",
                       true
                     );
-
-                    if (
-                      $("syncStatus")
-                    ) {
-                      $("syncStatus")
-                        .textContent =
-                        "正在播放";
-                    }
                   }
 
                   if (
@@ -4229,14 +4493,6 @@
                       "pause",
                       false
                     );
-
-                    if (
-                      $("syncStatus")
-                    ) {
-                      $("syncStatus")
-                        .textContent =
-                        "已暫停";
-                    }
                   }
 
                   if (
@@ -4249,28 +4505,13 @@
                     );
 
                     if (
-                      $("syncStatus")
-                    ) {
-                      $("syncStatus")
-                        .textContent =
-                        "影片播放完畢";
-                    }
-
-                    if (
                       state.isOwner
                     ) {
                       setTimeout(
                         async () => {
-                          try {
-                            await playNextQueueItem();
-                          } catch (error) {
-                            console.error(
-                              "自動播放下一部失敗:",
-                              error
-                            );
-                          }
+                          await playNextQueueItem();
                         },
-                        500
+                        300
                       );
                     }
                   }
@@ -4287,75 +4528,22 @@
                     event
                   );
 
-                  const errorCode =
-                    Number(
-                      event?.data
-                    );
-
-                  let message =
-                    "YouTube 播放器錯誤";
-
-                  if (
-                    errorCode ===
-                    101
-                  ) {
-                    message =
-                      "這部影片禁止嵌入播放";
-                  }
-
-                  if (
-                    errorCode ===
-                    150
-                  ) {
-                    message =
-                      "這部影片禁止在外部網站播放";
-                  }
-
-                  if (
-                    errorCode ===
-                    2
-                  ) {
-                    message =
-                      "YouTube 影片 ID 無效";
-                  }
-
-                  if (
-                    errorCode ===
-                    5
-                  ) {
-                    message =
-                      "HTML5 播放器發生錯誤";
-                  }
-
-                  if (
-                    errorCode ===
-                    100
-                  ) {
-                    message =
-                      "找不到這部 YouTube 影片";
-                  }
-
                   if (
                     $("syncStatus")
                   ) {
                     $("syncStatus")
                       .textContent =
-                      message;
+                      "YouTube 播放器錯誤";
                   }
 
                   toast(
-                    message
+                    "這支 YouTube 影片無法嵌入播放"
                   );
                 }
             }
           }
         );
-
-      /*
-       * 不在這裡設定 state.player。
-       * 只有 onReady 後才可以操作。
-       */
-
+      }
     } catch (error) {
       console.error(
         "YouTube 播放器建立失敗:",
@@ -4374,22 +4562,11 @@
       state.currentVideoId =
         null;
 
-      state.currentVideoUrl =
-        null;
-
       hidePlayers();
 
       showPlayerElement(
         "emptyPlayer"
       );
-
-      if (
-        $("syncStatus")
-      ) {
-        $("syncStatus")
-          .textContent =
-          "YouTube 播放器建立失敗";
-      }
 
       toast(
         "YouTube 播放器建立失敗"
@@ -4405,9 +4582,11 @@
     }
   }
 
-  /* =====================================================
-     VIMEO
-  ===================================================== */
+  /*
+   * =========================================================
+   * VIMEO
+   * =========================================================
+   */
 
   async function buildVimeoPlayer(
     video
@@ -4550,9 +4729,11 @@
     );
   }
 
-  /* =====================================================
-     DAILYMOTION
-  ===================================================== */
+  /*
+   * =========================================================
+   * DAILYMOTION
+   * =========================================================
+   */
 
   async function buildDailymotionPlayer(
     video
@@ -4582,12 +4763,8 @@
     const playerId =
       "dm_" +
       Math.random()
-        .toString(
-          36
-        )
-        .slice(
-          2
-        );
+        .toString(36)
+        .slice(2);
 
     const target =
       document.createElement(
@@ -4608,19 +4785,20 @@
     );
 
     const player =
-      await window.dailymotion.createPlayer(
-        playerId,
-        {
-          video:
-            video.id,
+      await window.dailymotion
+        .createPlayer(
+          playerId,
+          {
+            video:
+              video.id,
 
-          mute:
-            true,
+            mute:
+              true,
 
-          controls:
-            true
-        }
-      );
+            controls:
+              true
+          }
+        );
 
     state.player =
       player;
@@ -4683,9 +4861,11 @@
     startSyncHeartbeat();
   }
 
-  /* =====================================================
-     BILIBILI
-  ===================================================== */
+  /*
+   * =========================================================
+   * BILIBILI
+   * =========================================================
+   */
 
   async function buildBilibiliPlayer(
     video
@@ -4707,8 +4887,7 @@
       );
     }
 
-    let src =
-      "";
+    let src = "";
 
     if (
       /^BV/.test(
@@ -4772,9 +4951,11 @@
       true;
   }
 
-  /* =====================================================
-     TWITCH
-  ===================================================== */
+  /*
+   * =========================================================
+   * TWITCH
+   * =========================================================
+   */
 
   async function buildTwitchPlayer(
     video
@@ -4804,12 +4985,8 @@
     const wrapperId =
       "tw_" +
       Math.random()
-        .toString(
-          36
-        )
-        .slice(
-          2
-        );
+        .toString(36)
+        .slice(2);
 
     const target =
       document.createElement(
@@ -4893,6 +5070,7 @@
               player
             ) {
               resolve();
+
               return;
             }
 
@@ -4959,9 +5137,11 @@
     startSyncHeartbeat();
   }
 
-  /* =====================================================
-     EXTERNAL
-  ===================================================== */
+  /*
+   * =========================================================
+   * EXTERNAL
+   * =========================================================
+   */
 
   async function buildExternalPlayer(
     video
@@ -5048,10 +5228,6 @@
       false;
   }
 
-  /* =====================================================
-     PLATFORM ROUTER
-  ===================================================== */
-
   async function buildPlatformPlayer(
     video
   ) {
@@ -5126,9 +5302,11 @@
     );
   }
 
-  /* =====================================================
-     CREATE ROOM
-  ===================================================== */
+  /*
+   * =========================================================
+   * CREATE ROOM
+   * =========================================================
+   */
 
   async function createRoom() {
     const roomName =
@@ -5216,9 +5394,11 @@
     await enterRoom();
   }
 
-  /* =====================================================
-     JOIN ROOM
-  ===================================================== */
+  /*
+   * =========================================================
+   * JOIN
+   * =========================================================
+   */
 
   async function joinRoom(
     roomId
@@ -5278,9 +5458,11 @@
     await enterRoom();
   }
 
-  /* =====================================================
-     ROOM VIDEO
-  ===================================================== */
+  /*
+   * =========================================================
+   * ROOM VIDEO
+   * =========================================================
+   */
 
   async function handleRoomVideo(
     video
@@ -5345,9 +5527,6 @@
         );
       }
 
-      state.youtubeRequestedId =
-        videoId;
-
       if (
         state.currentVideoId ===
           videoId &&
@@ -5358,26 +5537,11 @@
       ) {
         forceYoutubeVisible();
 
-        try {
-          const snapshot =
-            await state.stateRef?.once(
-              "value"
-            );
-
-          const remote =
-            snapshot?.val();
-
-          if (remote) {
-            await applyRemotePlayback(
-              remote,
-              true
-            );
-          } else if (
-            state.room?.state?.playing
-          ) {
-            await playPlayer();
-          }
-        } catch (_) {}
+        if (
+          state.room?.state?.playing
+        ) {
+          await playPlayer();
+        }
 
         return;
       }
@@ -5395,9 +5559,11 @@
     );
   }
 
-  /* =====================================================
-     ROOM OWNER UI
-  ===================================================== */
+  /*
+   * =========================================================
+   * ROOM UI
+   * =========================================================
+   */
 
   function updateRoomOwnerUI() {
     const element =
@@ -5407,20 +5573,17 @@
       return;
     }
 
-    if (
+    element.textContent =
       state.isOwner
-    ) {
-      element.textContent =
-        "👑 房主";
-    } else {
-      element.textContent =
-        "👥 成員";
-    }
+        ? "👑 房主"
+        : "👥 成員";
   }
 
-  /* =====================================================
-     MEMBER ONLINE
-  ===================================================== */
+  /*
+   * =========================================================
+   * ONLINE MEMBER
+   * =========================================================
+   */
 
   async function markMemberOnline() {
     if (
@@ -5491,9 +5654,11 @@
     } catch (_) {}
   }
 
-  /* =====================================================
-     ENTER ROOM
-  ===================================================== */
+  /*
+   * =========================================================
+   * ENTER ROOM
+   * =========================================================
+   */
 
   async function enterRoom() {
     showView(
@@ -5706,17 +5871,18 @@
     renderQueue();
   }
 
-  /* =====================================================
-     MEMBERS UI
-  ===================================================== */
+  /*
+   * =========================================================
+   * MEMBERS UI
+   * =========================================================
+   */
 
   function renderMembers(
     members
   ) {
     const entries =
       Object.entries(
-        members ||
-          {}
+        members || {}
       );
 
     entries.sort(
@@ -5726,11 +5892,11 @@
       ) =>
         Number(
           a[1]?.joinedAt ||
-            0
+          0
         ) -
         Number(
           b[1]?.joinedAt ||
-            0
+          0
         )
     );
 
@@ -5750,7 +5916,9 @@
       return;
     }
 
-    if (!entries.length) {
+    if (
+      !entries.length
+    ) {
       $("memberList")
         .innerHTML = `
           <div class="muted">
@@ -5836,9 +6004,11 @@
         .join("");
   }
 
-  /* =====================================================
-     CHAT
-  ===================================================== */
+  /*
+   * =========================================================
+   * CHAT
+   * =========================================================
+   */
 
   async function sendChat(
     text
@@ -5882,8 +6052,7 @@
   ) {
     const list =
       Object.values(
-        messages ||
-          {}
+        messages || {}
       ).sort(
         (
           a,
@@ -5891,11 +6060,11 @@
         ) =>
           Number(
             a.createdAt ||
-              0
+            0
           ) -
           Number(
             b.createdAt ||
-              0
+            0
           )
       );
 
@@ -5958,9 +6127,11 @@
       box.scrollHeight;
   }
 
-  /* =====================================================
-     CHANGE VIDEO
-  ===================================================== */
+  /*
+   * =========================================================
+   * CHANGE VIDEO
+   * =========================================================
+   */
 
   async function changeVideo(
     video
@@ -6094,9 +6265,11 @@
     );
   }
 
-  /* =====================================================
-     SOURCE MODAL
-  ===================================================== */
+  /*
+   * =========================================================
+   * SOURCE MODAL
+   * =========================================================
+   */
 
   function openSourceModal() {
     const modal =
@@ -6114,6 +6287,15 @@
       null;
 
     state.modalSelectedVideoId =
+      "";
+
+    state.searchResults =
+      [];
+
+    state.searchNextPageToken =
+      "";
+
+    state.searchQuery =
       "";
 
     modal.classList.remove(
@@ -6194,11 +6376,6 @@
 
     state.modalSelectedVideoId =
       "";
-
-    setError(
-      $("modalError"),
-      ""
-    );
   }
 
   function updateModalPlatformUI() {
@@ -6258,9 +6435,11 @@
     }
   }
 
-  /* =====================================================
-     LISTENER CLEANUP
-  ===================================================== */
+  /*
+   * =========================================================
+   * CLEANUP
+   * =========================================================
+   */
 
   function detachRoomListeners() {
     try {
@@ -6298,11 +6477,14 @@
       {};
   }
 
-  /* =====================================================
-     EVENTS
-  ===================================================== */
+  /*
+   * =========================================================
+   * EVENTS
+   * =========================================================
+   */
 
   function setupEvents() {
+
     $("createRoomBtn")
       ?.addEventListener(
         "click",
@@ -6502,17 +6684,6 @@
             state.syncTimer
           );
 
-          if (
-            state.memberHeartbeatTimer
-          ) {
-            clearInterval(
-              state.memberHeartbeatTimer
-            );
-
-            state.memberHeartbeatTimer =
-              null;
-          }
-
           detachRoomListeners();
 
           ++state.youtubeBuildToken;
@@ -6635,7 +6806,6 @@
             Math.min(
               total ||
                 Infinity,
-
               (
                 await asyncCurrentPosition()
               ) +
@@ -6850,6 +7020,12 @@
         updateModalPlatformUI
       );
 
+    /*
+     * =====================================================
+     * YOUTUBE SEARCH BUTTON
+     * =====================================================
+     */
+
     $("modalSearchVideoBtn")
       ?.addEventListener(
         "click",
@@ -6876,8 +7052,26 @@
               ?.value
               .trim();
 
+          if (!query) {
+            setError(
+              $("modalError"),
+              "請輸入影片名稱"
+            );
+
+            return;
+          }
+
           state.searchBusy =
             true;
+
+          state.searchResults =
+            [];
+
+          state.searchNextPageToken =
+            "";
+
+          state.searchQuery =
+            query;
 
           const button =
             $("modalSearchVideoBtn");
@@ -6897,7 +7091,8 @@
 
           try {
             await searchYoutube(
-              query
+              query,
+              false
             );
           } catch (error) {
             console.error(
@@ -7057,9 +7252,11 @@
       );
   }
 
-  /* =====================================================
-     START
-  ===================================================== */
+  /*
+   * =========================================================
+   * START
+   * =========================================================
+   */
 
   async function start() {
     try {
@@ -7125,21 +7322,22 @@
     }
   }
 
-  /* =====================================================
-     YOUTUBE CALLBACK
-  ===================================================== */
+  /*
+   * =========================================================
+   * YOUTUBE API CALLBACK
+   * =========================================================
+   */
 
   window.onYouTubeIframeAPIReady =
     () => {
-      console.log(
-        "YouTube IFrame API Ready"
-      );
-
       state.youtubeReady =
         true;
 
-      const video =
-        state.room?.video;
+      if (
+        state.youtubeLoading
+      ) {
+        return;
+      }
 
       if (
         state.playerReady &&
@@ -7152,11 +7350,8 @@
         return;
       }
 
-      if (
-        state.youtubeLoading
-      ) {
-        return;
-      }
+      const video =
+        state.room?.video;
 
       if (
         video &&
@@ -7167,20 +7362,14 @@
         ) &&
         video.id
       ) {
-        const videoId =
+        buildYoutubePlayer(
           getYoutubeId(
             video.id
-          );
-
-        if (videoId) {
-          buildYoutubePlayer(
-            videoId,
-            true
-          );
-        }
+          ),
+          true
+        );
       }
     };
 
   start();
 })();
-```
