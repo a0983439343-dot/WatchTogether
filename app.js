@@ -12,91 +12,78 @@
       searchable: true,
       player: "youtube"
     },
-
     vimeo: {
       name: "Vimeo",
       icon: "▶",
       searchable: false,
       player: "vimeo"
     },
-
     dailymotion: {
       name: "Dailymotion",
       icon: "▶",
       searchable: false,
       player: "dailymotion"
     },
-
     bilibili: {
       name: "Bilibili",
       icon: "📺",
       searchable: false,
       player: "bilibili"
     },
-
     twitch: {
       name: "Twitch",
       icon: "🎮",
       searchable: false,
       player: "twitch"
     },
-
     netflix: {
       name: "Netflix",
       icon: "🔴",
       searchable: false,
       player: "external"
     },
-
     crunchyroll: {
       name: "Crunchyroll",
       icon: "🟠",
       searchable: false,
       player: "external"
     },
-
     disneyplus: {
       name: "Disney+",
       icon: "🔵",
       searchable: false,
       player: "external"
     },
-
     primevideo: {
       name: "Prime Video",
       icon: "🟦",
       searchable: false,
       player: "external"
     },
-
     appletv: {
       name: "Apple TV+",
       icon: "🍎",
       searchable: false,
       player: "external"
     },
-
     max: {
       name: "Max",
       icon: "🟣",
       searchable: false,
       player: "external"
     },
-
     hulu: {
       name: "Hulu",
       icon: "🟢",
       searchable: false,
       player: "external"
     },
-
     paramount: {
       name: "Paramount+",
       icon: "🟦",
       searchable: false,
       player: "external"
     },
-
     peacock: {
       name: "Peacock",
       icon: "🦚",
@@ -282,9 +269,7 @@
 
   function getMemberName() {
     let name =
-      localStorage.getItem(
-        "wt_name"
-      );
+      localStorage.getItem("wt_name");
 
     if (!name) {
       name =
@@ -385,9 +370,7 @@
           "/watch"
         ) {
           return (
-            url.searchParams.get(
-              "v"
-            ) ||
+            url.searchParams.get("v") ||
             null
           );
         }
@@ -398,9 +381,7 @@
           )
         ) {
           return (
-            url.pathname.split(
-              "/"
-            )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
         }
@@ -411,9 +392,7 @@
           )
         ) {
           return (
-            url.pathname.split(
-              "/"
-            )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
         }
@@ -478,13 +457,6 @@
     const text =
       String(value).trim();
 
-    if (
-      /^[A-Za-z0-9]+$/.test(text) &&
-      text.length >= 5
-    ) {
-      return text;
-    }
-
     try {
       const url =
         new URL(text);
@@ -492,24 +464,8 @@
       if (
         url.hostname.includes(
           "dailymotion.com"
-        ) ||
-        url.hostname.includes(
-          "dai.ly"
         )
       ) {
-        if (
-          url.hostname.includes(
-            "dai.ly"
-          )
-        ) {
-          return (
-            url.pathname
-              .replace(/^\/+/, "")
-              .split("/")[0] ||
-            null
-          );
-        }
-
         const match =
           url.pathname.match(
             /video\/([A-Za-z0-9]+)/
@@ -520,7 +476,27 @@
           null
         );
       }
+
+      if (
+        url.hostname.includes(
+          "dai.ly"
+        )
+      ) {
+        return (
+          url.pathname
+            .replace(/^\/+/, "")
+            .split("/")[0] ||
+          null
+        );
+      }
     } catch (_) {}
+
+    if (
+      /^[A-Za-z0-9]+$/.test(text) &&
+      text.length >= 5
+    ) {
+      return text;
+    }
 
     return null;
   }
@@ -604,8 +580,7 @@
       }
 
       if (
-        parts[0] ===
-        "videos" &&
+        parts[0] === "videos" &&
         parts[1]
       ) {
         return {
@@ -615,8 +590,7 @@
       }
 
       if (
-        parts[0] ===
-        "clip" &&
+        parts[0] === "clip" &&
         parts[1]
       ) {
         return {
@@ -648,48 +622,28 @@
     };
   }
 
-  function getExternalInputValue() {
-    const ids = [
-      "sourceUrlInput",
-      "videoUrlInput",
-      "sourceUrl",
-      "mediaUrlInput",
-      "playerUrlInput",
-      "videoInput"
-    ];
-
-    for (
-      const id of ids
-    ) {
-      const element =
-        $(id);
+  function getInputValue(...ids) {
+    for (const id of ids) {
+      const input = $(id);
 
       if (
-        element?.value?.trim()
+        input &&
+        typeof input.value === "string" &&
+        input.value.trim()
       ) {
-        return element.value.trim();
+        return input.value.trim();
       }
     }
 
-    const element =
-      document.querySelector(
-        "[data-source-url-input], [data-video-url]"
-      );
-
-    return (
-      element?.value?.trim() ||
-      ""
-    );
+    return "";
   }
 
   async function searchYoutube(
     query,
-    target = "home"
+    target = "modal"
   ) {
     query =
-      String(
-        query || ""
-      ).trim();
+      String(query || "").trim();
 
     if (!query) {
       throw new Error(
@@ -784,22 +738,18 @@
     const data =
       await response.json();
 
-    const items =
-      Array.isArray(
-        data.items
-      )
-        ? data.items
-        : [];
-
     const results =
-      items
+      (
+        Array.isArray(data.items)
+          ? data.items
+          : []
+      )
         .map((item) => {
           const id =
             item?.id?.videoId;
 
           const snippet =
-            item?.snippet ||
-            {};
+            item?.snippet || {};
 
           if (!id) {
             return null;
@@ -807,29 +757,20 @@
 
           return {
             id,
-
-            platform:
-              "youtube",
-
+            platform: "youtube",
             title:
               snippet.title ||
               "未命名影片",
-
             description:
               snippet.description ||
               "",
-
             channel:
               snippet.channelTitle ||
               "",
-
             thumbnail:
-              snippet.thumbnails
-                ?.high?.url ||
-              snippet.thumbnails
-                ?.medium?.url ||
-              snippet.thumbnails
-                ?.default?.url ||
+              snippet.thumbnails?.high?.url ||
+              snippet.thumbnails?.medium?.url ||
+              snippet.thumbnails?.default?.url ||
               ""
           };
         })
@@ -892,7 +833,6 @@
               >
 
               <span class="video-result-info">
-
                 <strong>
                   ${escapeHtml(
                     video.title
@@ -904,7 +844,6 @@
                     video.channel
                   )}
                 </small>
-
               </span>
             </button>
           `
@@ -920,13 +859,14 @@
           card.addEventListener(
             "click",
             () => {
-              const id =
+              const videoId =
                 card.dataset.videoId;
 
               const video =
                 results.find(
                   (item) =>
-                    item.id === id
+                    item.id ===
+                    videoId
                 );
 
               if (!video) {
@@ -957,9 +897,7 @@
       );
   }
 
-  function renderSelectedVideo(
-    video
-  ) {
+  function renderSelectedVideo(video) {
     $("selectedVideoCard")
       ?.classList.remove(
         "hidden"
@@ -995,19 +933,7 @@
     );
   }
 
-  function clearSelectedVideo() {
-    state.selectedVideo =
-      null;
-
-    $("selectedVideoCard")
-      ?.classList.add(
-        "hidden"
-      );
-  }
-
-  function renderModalSelectedVideo(
-    video
-  ) {
+  function renderModalSelectedVideo(video) {
     const container =
       $("modalVideoSearchResults");
 
@@ -1056,21 +982,17 @@
       "directVideo",
       "emptyPlayer",
       "platformPlayerNotice"
-    ].forEach(
-      (id) => {
-        $(id)
-          ?.classList.add(
-            "hidden"
-          );
-      }
-    );
+    ].forEach((id) => {
+      $(id)?.classList.add(
+        "hidden"
+      );
+    });
   }
 
   function showPlayerElement(id) {
-    $(id)
-      ?.classList.remove(
-        "hidden"
-      );
+    $(id)?.classList.remove(
+      "hidden"
+    );
   }
 
   async function destroyCurrentPlayer() {
@@ -1087,14 +1009,11 @@
     const oldType =
       state.playerType;
 
-    state.player =
-      null;
-
-    state.playerReady =
-      false;
-
-    state.playerType =
-      null;
+    state.player = null;
+    state.playerReady = false;
+    state.playerType = null;
+    state.currentVideoId = null;
+    state.currentVideoUrl = null;
 
     if (!old) {
       return;
@@ -1102,18 +1021,15 @@
 
     try {
       if (
-        oldType ===
-        "youtube"
+        oldType === "youtube"
       ) {
-        old.destroy();
+        old.destroy?.();
       } else if (
-        oldType ===
-        "vimeo"
+        oldType === "vimeo"
       ) {
-        await old.destroy();
+        await old.destroy?.();
       } else if (
-        oldType ===
-        "dailymotion"
+        oldType === "dailymotion"
       ) {
         old.destroy?.();
       }
@@ -1136,58 +1052,44 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
-        return (
-          Number(
-            player.getCurrentTime()
-          ) || 0
-        );
+        return Number(
+          player.getCurrentTime()
+        ) || 0;
       }
 
       if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
-        return (
-          Number(
-            player.getCurrentTime()
-          ) || 0
-        );
+        return Number(
+          player.getCurrentTime()
+        ) || 0;
       }
 
       if (
-        type ===
-        "vimeo"
+        type === "vimeo"
       ) {
-        return (
-          Number(
-            await player.getCurrentTime()
-          ) || 0
-        );
+        return Number(
+          await player.getCurrentTime()
+        ) || 0;
       }
 
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
         if (
           typeof player.currentTime ===
           "function"
         ) {
-          return (
-            Number(
-              await player.currentTime()
-            ) || 0
-          );
+          return Number(
+            await player.currentTime()
+          ) || 0;
         }
 
-        return (
-          Number(
-            player.currentTime
-          ) || 0
-        );
+        return Number(
+          player.currentTime
+        ) || 0;
       }
     } catch (_) {}
 
@@ -1210,25 +1112,19 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
-        return (
-          Number(
-            player.getCurrentTime()
-          ) || 0
-        );
+        return Number(
+          player.getCurrentTime()
+        ) || 0;
       }
 
       if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
-        return (
-          Number(
-            player.getCurrentTime()
-          ) || 0
-        );
+        return Number(
+          player.getCurrentTime()
+        ) || 0;
       }
     } catch (_) {}
 
@@ -1251,58 +1147,44 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
-        return (
-          Number(
-            player.getDuration()
-          ) || 0
-        );
+        return Number(
+          player.getDuration()
+        ) || 0;
       }
 
       if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
-        return (
-          Number(
-            player.getDuration()
-          ) || 0
-        );
+        return Number(
+          player.getDuration()
+        ) || 0;
       }
 
       if (
-        type ===
-        "vimeo"
+        type === "vimeo"
       ) {
-        return (
-          Number(
-            await player.getDuration()
-          ) || 0
-        );
+        return Number(
+          await player.getDuration()
+        ) || 0;
       }
 
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
         if (
           typeof player.duration ===
           "function"
         ) {
-          return (
-            Number(
-              await player.duration()
-            ) || 0
-          );
+          return Number(
+            await player.duration()
+          ) || 0;
         }
 
-        return (
-          Number(
-            player.duration
-          ) || 0
-        );
+        return Number(
+          player.duration
+        ) || 0;
       }
     } catch (_) {}
 
@@ -1325,25 +1207,19 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
-        return (
-          Number(
-            player.getDuration()
-          ) || 0
-        );
+        return Number(
+          player.getDuration()
+        ) || 0;
       }
 
       if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
-        return (
-          Number(
-            player.getDuration()
-          ) || 0
-        );
+        return Number(
+          player.getDuration()
+        ) || 0;
       }
     } catch (_) {}
 
@@ -1366,8 +1242,7 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
         return (
           player.getPlayerState() ===
@@ -1376,15 +1251,13 @@
       }
 
       if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
         return !player.isPaused();
       }
 
       if (
-        type ===
-        "vimeo"
+        type === "vimeo"
       ) {
         return !(
           await player.getPaused()
@@ -1392,8 +1265,7 @@
       }
 
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
         if (
           typeof player.paused ===
@@ -1405,42 +1277,6 @@
         }
 
         return !player.paused;
-      }
-    } catch (_) {}
-
-    return false;
-  }
-
-  function isPlaying() {
-    const player =
-      state.player;
-
-    const type =
-      state.playerType;
-
-    if (
-      !state.playerReady ||
-      !player
-    ) {
-      return false;
-    }
-
-    try {
-      if (
-        type ===
-        "youtube"
-      ) {
-        return (
-          player.getPlayerState() ===
-          YT.PlayerState.PLAYING
-        );
-      }
-
-      if (
-        type ===
-        "twitch"
-      ) {
-        return !player.isPaused();
       }
     } catch (_) {}
 
@@ -1463,7 +1299,8 @@
   ) {
     if (
       !state.stateRef ||
-      !state.uid
+      !state.uid ||
+      !state.playerReady
     ) {
       return;
     }
@@ -1479,8 +1316,7 @@
 
     if (
       action === "sync" &&
-      now -
-        state.lastWriteAt <
+      now - state.lastWriteAt <
         400
     ) {
       return;
@@ -1544,7 +1380,8 @@
   ) {
     if (
       !state.stateRef ||
-      !state.uid
+      !state.uid ||
+      !state.playerReady
     ) {
       return;
     }
@@ -1561,8 +1398,7 @@
       position:
         Math.max(
           0,
-          Number(position) ||
-            0
+          Number(position) || 0
         ),
 
       playing:
@@ -1586,6 +1422,7 @@
       );
     } catch (error) {
       console.error(
+        "播放同步失敗：",
         error
       );
     }
@@ -1606,13 +1443,6 @@
         snapshot.val();
 
       if (!data) {
-        if (state.isOwner) {
-          await writePlayback(
-            "sync",
-            false
-          );
-        }
-
         return;
       }
 
@@ -1627,10 +1457,6 @@
       console.error(
         "讀取初始播放狀態失敗：",
         error
-      );
-
-      toast(
-        "無法取得目前播放進度"
       );
     }
   }
@@ -1683,14 +1509,16 @@
     try {
       if (
         state.playerReady &&
-        state.player
+        state.player &&
+        state.playerType !==
+          "bilibili" &&
+        state.playerType !==
+          "external"
       ) {
         await applyPlayerPosition(
           remotePosition,
-          data.action ===
-            "seek" ||
-            data.action ===
-              "sync"
+          data.action === "seek" ||
+            data.action === "sync"
         );
 
         if (
@@ -1704,7 +1532,9 @@
         }
       }
 
-      if ($("syncStatus")) {
+      if (
+        $("syncStatus")
+      ) {
         $("syncStatus")
           .textContent =
           `已同步 ${formatTime(
@@ -1753,30 +1583,26 @@
 
       if (
         !force &&
-        difference <=
-          0.8
+        difference <= 0.8
       ) {
         return;
       }
 
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
         player.seekTo(
           seconds,
           true
         );
       } else if (
-        type ===
-        "vimeo"
+        type === "vimeo"
       ) {
         await player.setCurrentTime(
           seconds
         );
       } else if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
         if (
           typeof player.seek ===
@@ -1787,8 +1613,7 @@
           );
         }
       } else if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
         if (
           typeof player.seek ===
@@ -1823,23 +1648,19 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
         player.playVideo();
       } else if (
-        type ===
-        "vimeo"
+        type === "vimeo"
       ) {
         await player.play();
       } else if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
         await player.play();
       } else if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
         player.play();
       }
@@ -1867,23 +1688,19 @@
 
     try {
       if (
-        type ===
-        "youtube"
+        type === "youtube"
       ) {
         player.pauseVideo();
       } else if (
-        type ===
-        "vimeo"
+        type === "vimeo"
       ) {
         await player.pause();
       } else if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
         await player.pause();
       } else if (
-        type ===
-        "twitch"
+        type === "twitch"
       ) {
         player.pause();
       }
@@ -1965,18 +1782,14 @@
 
       return {
         id,
-
         platform,
-
         title:
           title ||
           "YouTube 影片",
-
         thumbnail:
           `https://i.ytimg.com/vi/${encodeURIComponent(
             id
           )}/hqdefault.jpg`,
-
         channel:
           "YouTube"
       };
@@ -1997,21 +1810,15 @@
 
       return {
         id,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Vimeo 影片",
-
-        thumbnail:
-          "",
-
+        thumbnail: "",
         channel:
           "Vimeo"
       };
@@ -2032,21 +1839,15 @@
 
       return {
         id,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Dailymotion 影片",
-
-        thumbnail:
-          "",
-
+        thumbnail: "",
         channel:
           "Dailymotion"
       };
@@ -2067,21 +1868,15 @@
 
       return {
         id,
-
         url:
           String(
             rawValue
           ),
-
         platform,
-
         title:
           title ||
           "Bilibili 影片",
-
-        thumbnail:
-          "",
-
+        thumbnail: "",
         channel:
           "Bilibili"
       };
@@ -2146,8 +1941,7 @@
         ]?.name ||
         platform,
 
-      thumbnail:
-        "",
+      thumbnail: "",
 
       channel:
         PLATFORMS[
@@ -2179,8 +1973,7 @@
             setInterval(
               () => {
                 if (
-                  window.Vimeo
-                    ?.Player
+                  window.Vimeo?.Player
                 ) {
                   clearInterval(
                     timer
@@ -2202,8 +1995,7 @@
               );
 
               if (
-                window.Vimeo
-                  ?.Player
+                window.Vimeo?.Player
               ) {
                 state.sdk.vimeo =
                   true;
@@ -2237,8 +2029,7 @@
         script.onload =
           () => {
             if (
-              window.Vimeo
-                ?.Player
+              window.Vimeo?.Player
             ) {
               state.sdk.vimeo =
                 true;
@@ -2254,12 +2045,13 @@
           };
 
         script.onerror =
-          () =>
+          () => {
             reject(
               new Error(
                 "Vimeo SDK 載入失敗"
               )
             );
+          };
 
         document.head.appendChild(
           script
@@ -2334,15 +2126,16 @@
 
         const playerId =
           window.DAILYMOTION_PLAYER_ID ||
-          "YOUR_PLAYER_ID";
+          "";
 
-        if (
-          playerId ===
-          "YOUR_PLAYER_ID"
-        ) {
-          throw new Error(
-            "尚未設定 DAILYMOTION_PLAYER_ID"
+        if (!playerId) {
+          reject(
+            new Error(
+              "尚未設定 DAILYMOTION_PLAYER_ID"
+            )
           );
+
+          return;
         }
 
         const script =
@@ -2380,12 +2173,13 @@
           };
 
         script.onerror =
-          () =>
+          () => {
             reject(
               new Error(
                 "Dailymotion SDK 載入失敗"
               )
             );
+          };
 
         document.head.appendChild(
           script
@@ -2416,8 +2210,7 @@
             setInterval(
               () => {
                 if (
-                  window.Twitch
-                    ?.Player
+                  window.Twitch?.Player
                 ) {
                   clearInterval(
                     timer
@@ -2439,8 +2232,7 @@
               );
 
               if (
-                window.Twitch
-                  ?.Player
+                window.Twitch?.Player
               ) {
                 state.sdk.twitch =
                   true;
@@ -2474,8 +2266,7 @@
         script.onload =
           () => {
             if (
-              window.Twitch
-                ?.Player
+              window.Twitch?.Player
             ) {
               state.sdk.twitch =
                 true;
@@ -2491,12 +2282,13 @@
           };
 
         script.onerror =
-          () =>
+          () => {
             reject(
               new Error(
                 "Twitch SDK 載入失敗"
               )
             );
+          };
 
         document.head.appendChild(
           script
@@ -2505,9 +2297,7 @@
     );
   }
 
-  function buildYoutubePlayer(
-    videoId
-  ) {
+  function buildYoutubePlayer(videoId) {
     const container =
       $("youtubePlayer");
 
@@ -2516,7 +2306,6 @@
     }
 
     hidePlayers();
-
     showPlayerElement(
       "youtubePlayer"
     );
@@ -2539,17 +2328,17 @@
       typeof YT.Player !==
         "function"
     ) {
+      $("playerPlaceholder")
+        ?.classList.remove(
+          "hidden"
+        );
+
       if (
         $("playerPlaceholder")
       ) {
         $("playerPlaceholder")
           .textContent =
           "YouTube 播放器載入中…";
-
-        $("playerPlaceholder")
-          .classList.remove(
-            "hidden"
-          );
       }
 
       setTimeout(
@@ -2598,21 +2387,20 @@
           },
 
           events: {
-            onReady: async () => {
-              state.playerReady =
-                true;
+            onReady:
+              async () => {
+                state.playerReady =
+                  true;
 
-              updateTimeUI();
+                updateTimeUI();
 
-              await syncLatestPlayback();
+                await syncLatestPlayback();
 
-              startSyncHeartbeat();
-            },
+                startSyncHeartbeat();
+              },
 
             onStateChange:
-              async (
-                event
-              ) => {
+              async (event) => {
                 if (
                   state.applyingRemote
                 ) {
@@ -2653,9 +2441,7 @@
               },
 
             onError:
-              (
-                event
-              ) => {
+              (event) => {
                 console.error(
                   "YouTube player error:",
                   event
@@ -2674,10 +2460,12 @@
     video
   ) {
     await destroyCurrentPlayer();
-
     await loadVimeoSdk();
 
     hidePlayers();
+    showPlayerElement(
+      "vimeoPlayer"
+    );
 
     const container =
       $("vimeoPlayer");
@@ -2687,10 +2475,6 @@
         "找不到 vimeoPlayer"
       );
     }
-
-    showPlayerElement(
-      "vimeoPlayer"
-    );
 
     container.src =
       video.url ||
@@ -2765,9 +2549,7 @@
 
     player.on(
       "seeked",
-      async (
-        data
-      ) => {
+      async (data) => {
         if (
           state.applyingRemote
         ) {
@@ -2786,9 +2568,7 @@
 
     player.on(
       "timeupdate",
-      () => {
-        updateTimeUI();
-      }
+      updateTimeUI
     );
   }
 
@@ -2796,10 +2576,12 @@
     video
   ) {
     await destroyCurrentPlayer();
-
     await loadDailymotionSdk();
 
     hidePlayers();
+    showPlayerElement(
+      "dailymotionPlayer"
+    );
 
     const container =
       $("dailymotionPlayer");
@@ -2809,10 +2591,6 @@
         "找不到 dailymotionPlayer"
       );
     }
-
-    showPlayerElement(
-      "dailymotionPlayer"
-    );
 
     container.innerHTML =
       "";
@@ -2904,10 +2682,14 @@
           );
         }
       );
+
+      player.addEventListener(
+        "timeupdate",
+        updateTimeUI
+      );
     }
 
     await syncLatestPlayback();
-
     startSyncHeartbeat();
   }
 
@@ -2917,6 +2699,9 @@
     await destroyCurrentPlayer();
 
     hidePlayers();
+    showPlayerElement(
+      "bilibiliPlayer"
+    );
 
     const iframe =
       $("bilibiliPlayer");
@@ -2926,10 +2711,6 @@
         "找不到 bilibiliPlayer"
       );
     }
-
-    showPlayerElement(
-      "bilibiliPlayer"
-    );
 
     let src = "";
 
@@ -2989,19 +2770,6 @@
     state.playerReady =
       true;
 
-    if (
-      $("platformPlayerNotice")
-    ) {
-      $("platformPlayerNotice")
-        .classList.remove(
-          "hidden"
-        );
-
-      $("platformPlayerNotice")
-        .textContent =
-        "Bilibili 已載入。";
-    }
-
     await syncLatestPlayback();
 
     startSyncHeartbeat();
@@ -3011,10 +2779,12 @@
     video
   ) {
     await destroyCurrentPlayer();
-
     await loadTwitchSdk();
 
     hidePlayers();
+    showPlayerElement(
+      "twitchPlayer"
+    );
 
     const container =
       $("twitchPlayer");
@@ -3024,10 +2794,6 @@
         "找不到 twitchPlayer"
       );
     }
-
-    showPlayerElement(
-      "twitchPlayer"
-    );
 
     container.innerHTML =
       "";
@@ -3063,16 +2829,12 @@
     const options = {
       width:
         "100%",
-
       height:
         "100%",
-
       autoplay:
         false,
-
       muted:
         false,
-
       parent: [
         host
       ]
@@ -3170,7 +2932,6 @@
     );
 
     await syncLatestPlayback();
-
     startSyncHeartbeat();
   }
 
@@ -3181,52 +2942,65 @@
 
     hidePlayers();
 
-    const iframe =
-      $("directVideo") ||
+    const notice =
       $("platformPlayerNotice");
 
-    if (!iframe) {
+    if (!notice) {
       throw new Error(
-        "找不到外部播放器"
+        "找不到外部播放器提示"
       );
     }
 
+    notice.classList.remove(
+      "hidden"
+    );
+
     const url =
       video.url ||
-      video.id;
+      video.id ||
+      "";
 
     if (
-      iframe.tagName ===
-      "IFRAME"
+      $("roomPlatformName")
     ) {
-      iframe.src =
-        url;
-
-      iframe.classList.remove(
-        "hidden"
-      );
-
-      iframe.allow =
-        "autoplay; fullscreen; picture-in-picture";
-    } else {
-      iframe.classList.remove(
-        "hidden"
-      );
-
-      iframe.textContent =
-        `${
-          PLATFORMS[
-            video.platform
-          ]?.name ||
+      $("roomPlatformName")
+        .textContent =
+        PLATFORMS[
           video.platform
-        } 不支援本站直接控制播放。`;
+        ]?.name ||
+        video.platform;
+    }
+
+    if (
+      $("roomPlatformDescription")
+    ) {
+      $("roomPlatformDescription")
+        .textContent =
+        "此平台需要使用官方網站播放。";
+    }
+
+    const button =
+      $("openPlatformBtn");
+
+    if (button) {
+      button.onclick = () => {
+        if (!url) {
+          return;
+        }
+
+        window.open(
+          url,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      };
     }
 
     state.playerType =
       "external";
 
     state.player =
-      iframe;
+      null;
 
     state.playerReady =
       false;
@@ -3238,19 +3012,15 @@
     if (!video) {
       hidePlayers();
 
-      $("emptyPlayer")
-        ?.classList.remove(
-          "hidden"
-        );
+      showPlayerElement(
+        "emptyPlayer"
+      );
 
       return;
     }
 
-    const platform =
-      video.platform;
-
     if (
-      platform ===
+      video.platform ===
       "youtube"
     ) {
       buildYoutubePlayer(
@@ -3261,7 +3031,7 @@
     }
 
     if (
-      platform ===
+      video.platform ===
       "vimeo"
     ) {
       await buildVimeoPlayer(
@@ -3272,7 +3042,7 @@
     }
 
     if (
-      platform ===
+      video.platform ===
       "dailymotion"
     ) {
       await buildDailymotionPlayer(
@@ -3283,7 +3053,7 @@
     }
 
     if (
-      platform ===
+      video.platform ===
       "bilibili"
     ) {
       await buildBilibiliPlayer(
@@ -3294,7 +3064,7 @@
     }
 
     if (
-      platform ===
+      video.platform ===
       "twitch"
     ) {
       await buildTwitchPlayer(
@@ -3309,46 +3079,12 @@
     );
   }
 
-  function getSelectedVideoForPlatform(
-    platform
-  ) {
-    if (
-      state.selectedVideo &&
-      state.selectedVideo.platform ===
-        platform
-    ) {
-      return state.selectedVideo;
-    }
-
-    const raw =
-      getExternalInputValue();
-
-    if (raw) {
-      const video =
-        createVideoObject(
-          platform,
-          raw
-        );
-
-      if (video) {
-        return video;
-      }
-    }
-
-    return null;
-  }
-
   async function createRoom() {
     const roomName =
       $("roomNameInput")
         ?.value
         .trim() ||
       "一起看";
-
-    const platform =
-      $("sourceTypeInput")
-        ?.value ||
-      "youtube";
 
     let roomId =
       randomRoomCode();
@@ -3376,7 +3112,7 @@
         roomName,
 
       sourceType:
-        platform,
+        "youtube",
 
       video:
         null,
@@ -3429,9 +3165,7 @@
     await enterRoom();
   }
 
-  async function joinRoom(
-    roomId
-  ) {
+  async function joinRoom(roomId) {
     roomId =
       String(
         roomId || ""
@@ -3576,9 +3310,7 @@
       .child("video")
       .on(
         "value",
-        async (
-          snapshot
-        ) => {
+        async (snapshot) => {
           const video =
             snapshot.val();
 
@@ -3587,10 +3319,9 @@
 
             hidePlayers();
 
-            $("emptyPlayer")
-              ?.classList.remove(
-                "hidden"
-              );
+            showPlayerElement(
+              "emptyPlayer"
+            );
 
             if (
               $("syncStatus")
@@ -3631,10 +3362,9 @@
 
             hidePlayers();
 
-            $("emptyPlayer")
-              ?.classList.remove(
-                "hidden"
-              );
+            showPlayerElement(
+              "emptyPlayer"
+            );
 
             toast(
               error.message ||
@@ -3655,9 +3385,7 @@
     );
 
     state.chatRef
-      .limitToLast(
-        100
-      )
+      .limitToLast(100)
       .on(
         "value",
         (snapshot) => {
@@ -3671,27 +3399,20 @@
     if (
       state.room?.video
     ) {
-      try {
-        await buildPlatformPlayer({
-          ...state.room.video,
+      await buildPlatformPlayer({
+        ...state.room.video,
 
-          platform:
-            state.room.video.platform ||
-            state.room.sourceType ||
-            "youtube"
-        });
-      } catch (error) {
-        console.error(
-          error
-        );
-      }
+        platform:
+          state.room.video.platform ||
+          state.room.sourceType ||
+          "youtube"
+      });
     } else {
       hidePlayers();
 
-      $("emptyPlayer")
-        ?.classList.remove(
-          "hidden"
-        );
+      showPlayerElement(
+        "emptyPlayer"
+      );
 
       if (
         $("syncStatus")
@@ -3705,25 +3426,16 @@
     }
   }
 
-  function renderMembers(
-    members
-  ) {
+  function renderMembers(members) {
     const entries =
       Object.entries(
-        members ||
-        {}
+        members || {}
       );
 
     entries.sort(
       (a, b) =>
-        (
-          a[1]?.joinedAt ||
-          0
-        ) -
-        (
-          b[1]?.joinedAt ||
-          0
-        )
+        (a[1]?.joinedAt || 0) -
+        (b[1]?.joinedAt || 0)
     );
 
     if (
@@ -3806,9 +3518,7 @@
         .join("");
   }
 
-  async function sendChat(
-    text
-  ) {
+  async function sendChat(text) {
     text =
       String(
         text || ""
@@ -3843,23 +3553,14 @@
     });
   }
 
-  function renderChat(
-    messages
-  ) {
+  function renderChat(messages) {
     const list =
       Object.values(
-        messages ||
-        {}
+        messages || {}
       ).sort(
         (a, b) =>
-          (
-            a.createdAt ||
-            0
-          ) -
-          (
-            b.createdAt ||
-            0
-          )
+          (a.createdAt || 0) -
+          (b.createdAt || 0)
       );
 
     if (
@@ -4027,15 +3728,54 @@
         "hidden"
       );
 
-    state.selectedVideo =
-      null;
-
     state.modalSelectedVideo =
       null;
 
     toast(
-      `已切換${PLATFORMS[platform]?.name || platform}影片`
+      `已切換${
+        PLATFORMS[
+          platform
+        ]?.name ||
+        platform
+      }影片`
     );
+  }
+
+  function getModalPlatform() {
+    return (
+      $("sourceTypeModal")
+        ?.value ||
+      "youtube"
+    );
+  }
+
+  function updateModalPlatformUI() {
+    const platform =
+      getModalPlatform();
+
+    const searchArea =
+      $("modalVideoSearchArea");
+
+    const externalArea =
+      $("modalExternalSourceArea");
+
+    if (
+      searchArea
+    ) {
+      searchArea.classList.toggle(
+        "hidden",
+        platform !== "youtube"
+      );
+    }
+
+    if (
+      externalArea
+    ) {
+      externalArea.classList.toggle(
+        "hidden",
+        platform === "youtube"
+      );
+    }
   }
 
   function setupEvents() {
@@ -4100,143 +3840,6 @@
         }
       );
 
-    $("searchVideoBtn")
-      ?.addEventListener(
-        "click",
-        async () => {
-          if (
-            state.searchBusy
-          ) {
-            return;
-          }
-
-          const query =
-            $("videoSearchInput")
-              ?.value
-              .trim();
-
-          state.searchBusy =
-            true;
-
-          const button =
-            $("searchVideoBtn");
-
-          if (button) {
-            button.disabled =
-              true;
-
-            button.textContent =
-              "搜尋中…";
-          }
-
-          try {
-            await searchYoutube(
-              query,
-              "home"
-            );
-          } catch (error) {
-            console.error(
-              error
-            );
-
-            setError(
-              $("homeError"),
-              error.message
-            );
-          } finally {
-            state.searchBusy =
-              false;
-
-            if (button) {
-              button.disabled =
-                false;
-
-              button.textContent =
-                "搜尋";
-            }
-          }
-        }
-      );
-
-    $("videoSearchInput")
-      ?.addEventListener(
-        "keydown",
-        (event) => {
-          if (
-            event.key ===
-            "Enter"
-          ) {
-            event.preventDefault();
-
-            $("searchVideoBtn")
-              ?.click();
-          }
-        }
-      );
-
-    $("clearSelectedVideoBtn")
-      ?.addEventListener(
-        "click",
-        clearSelectedVideo
-      );
-
-    $("sourceTypeInput")
-      ?.addEventListener(
-        "change",
-        () => {
-          state.selectedVideo =
-            null;
-
-          $("selectedVideoCard")
-            ?.classList.add(
-              "hidden"
-            );
-        }
-      );
-
-    document
-      .querySelectorAll(
-        ".platform-card"
-      )
-      .forEach(
-        (card) => {
-          card.addEventListener(
-            "click",
-            () => {
-              const platform =
-                card.dataset.platform;
-
-              const select =
-                $("sourceTypeInput");
-
-              if (!select) {
-                return;
-              }
-
-              select.value =
-                platform;
-
-              select.dispatchEvent(
-                new Event(
-                  "change"
-                )
-              );
-
-              document
-                .querySelector(
-                  ".creator-panel"
-                )
-                ?.scrollIntoView({
-                  behavior:
-                    "smooth",
-                  block:
-                    "center"
-                });
-            }
-          );
-        }
-      );
-
     $("copyRoomBtn")
       ?.addEventListener(
         "click",
@@ -4287,7 +3890,7 @@
 
           if (
             state.playerType ===
-            "bilibili"
+              "bilibili"
           ) {
             toast(
               "Bilibili 無法由本站直接控制播放"
@@ -4298,7 +3901,7 @@
 
           if (
             state.playerType ===
-            "external"
+              "external"
           ) {
             toast(
               "此平台不支援本站播放控制"
@@ -4365,8 +3968,7 @@
 
           const target =
             Math.min(
-              total ||
-                Infinity,
+              total || Infinity,
               (
                 await asyncCurrentPosition()
               ) + 10
@@ -4542,13 +4144,13 @@
             return;
           }
 
+          state.modalSelectedVideo =
+            null;
+
           $("sourceModal")
             ?.classList.remove(
               "hidden"
             );
-
-          state.modalSelectedVideo =
-            null;
 
           if (
             $("modalVideoSearchResults")
@@ -4565,6 +4167,35 @@
               .value =
               "";
           }
+
+          if (
+            $("modalSourceUrlInput")
+          ) {
+            $("modalSourceUrlInput")
+              .value =
+              "";
+          }
+
+          updateModalPlatformUI();
+        }
+      );
+
+    $("sourceTypeModal")
+      ?.addEventListener(
+        "change",
+        () => {
+          state.modalSelectedVideo =
+            null;
+
+          if (
+            $("modalVideoSearchResults")
+          ) {
+            $("modalVideoSearchResults")
+              .innerHTML =
+              "";
+          }
+
+          updateModalPlatformUI();
         }
       );
 
@@ -4572,6 +4203,13 @@
       ?.addEventListener(
         "click",
         async () => {
+          if (
+            getModalPlatform() !==
+            "youtube"
+          ) {
+            return;
+          }
+
           const query =
             $("modalVideoSearchInput")
               ?.value
@@ -4625,6 +4263,9 @@
               "hidden"
             );
 
+          state.modalSelectedVideo =
+            null;
+
           setError(
             $("modalError"),
             ""
@@ -4642,9 +4283,21 @@
               ""
             );
 
+            const platform =
+              getModalPlatform();
+
             if (
-              state.modalSelectedVideo
+              platform ===
+              "youtube"
             ) {
+              if (
+                !state.modalSelectedVideo
+              ) {
+                throw new Error(
+                  "請先搜尋並選擇一部 YouTube 影片"
+                );
+              }
+
               await changeVideo(
                 state.modalSelectedVideo
               );
@@ -4652,8 +4305,41 @@
               return;
             }
 
-            throw new Error(
-              "請先搜尋並選擇一部影片"
+            const raw =
+              getInputValue(
+                "modalSourceUrlInput"
+              );
+
+            if (!raw) {
+              throw new Error(
+                `請輸入 ${
+                  PLATFORMS[
+                    platform
+                  ]?.name ||
+                  platform
+                } 的影片網址或 ID`
+              );
+            }
+
+            const video =
+              createVideoObject(
+                platform,
+                raw
+              );
+
+            if (!video) {
+              throw new Error(
+                `無法辨識 ${
+                  PLATFORMS[
+                    platform
+                  ]?.name ||
+                  platform
+                } 的影片網址或 ID`
+              );
+            }
+
+            await changeVideo(
+              video
             );
           } catch (error) {
             console.error(
@@ -4662,7 +4348,8 @@
 
             setError(
               $("modalError"),
-              error.message
+              error.message ||
+                "切換影片失敗"
             );
           }
         }
@@ -4735,9 +4422,12 @@
     () => {
       if (
         state.room &&
-        state.room.sourceType ===
-          "youtube" &&
-        state.room.video?.id
+        state.room.video?.id &&
+        (
+          state.room.video.platform ===
+            "youtube" ||
+          !state.room.video.platform
+        )
       ) {
         buildYoutubePlayer(
           state.room.video.id
