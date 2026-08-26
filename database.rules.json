@@ -21,6 +21,26 @@
           ".validate": "newData.isString()"
         },
 
+        "video": {
+          ".validate": "newData.hasChildren(['id'])",
+
+          "id": {
+            ".validate": "newData.isString()"
+          },
+
+          "title": {
+            ".validate": "newData.isString()"
+          },
+
+          "thumbnail": {
+            ".validate": "newData.isString()"
+          },
+
+          "channel": {
+            ".validate": "newData.isString()"
+          }
+        },
+
         "state": {
           ".validate": "newData.hasChildren(['action', 'position', 'playing', 'updatedAt', 'updatedBy'])",
 
@@ -59,9 +79,9 @@
 
     "members": {
       "$roomId": {
-        "$uid": {
-          ".read": "auth != null",
+        ".read": "auth != null",
 
+        "$uid": {
           ".write": "auth != null && auth.uid === $uid",
 
           ".validate": "newData.hasChildren(['name', 'joinedAt'])",
