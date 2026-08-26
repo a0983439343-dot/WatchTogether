@@ -43,7 +43,7 @@
           },
 
           "title": {
-            ".validate": "newData.isString() && newData.val().length <= 500"
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500"
           },
 
           "thumbnail": {
@@ -131,7 +131,7 @@
           ".read": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
 
           "$messageId": {
-            ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists() && (!data.exists() && newData.child('uid').val() === auth.uid)",
+            ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists() && !data.exists() && newData.child('uid').val() === auth.uid",
 
             ".validate": "newData.hasChildren(['uid', 'name', 'text', 'createdAt'])",
 
