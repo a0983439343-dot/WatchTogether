@@ -95,45 +95,34 @@
   const state = {
     uid: null,
     memberName: "看片玩家",
-
     roomId: null,
     room: null,
     isOwner: false,
-
     roomRef: null,
     stateRef: null,
     membersRef: null,
     chatRef: null,
-
     player: null,
     playerReady: false,
     playerType: null,
-
     currentVideoId: null,
     currentVideoUrl: null,
-
     applyingRemote: false,
     lastRemoteKey: "",
     lastWriteAt: 0,
-
     syncTimer: null,
-
     searchResults: [],
     modalSelectedVideo: null,
     modalSelectedVideoId: "",
-
     searchBusy: false,
-
     videoListenerAttached: false,
     stateListenerAttached: false,
     membersListenerAttached: false,
     chatListenerAttached: false,
-
     youtubeReady: false,
     youtubeLoading: false,
     youtubeRequestedId: null,
     youtubeBuildToken: 0,
-
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -246,8 +235,7 @@
       result +=
         chars[
           Math.floor(
-            Math.random() *
-            chars.length
+            Math.random() * chars.length
           )
         ];
     }
@@ -950,9 +938,7 @@
     };
   }
 
-  function hidePlayers(
-    keepYoutube = false
-  ) {
+  function hidePlayers(keepYoutube = false) {
     [
       "vimeoPlayer",
       "dailymotionPlayer",
@@ -989,10 +975,12 @@
   }
 
   function forceYoutubeVisible() {
-    const container =
-      $("youtubePlayer");
+    const element =
+      document.getElementById(
+        "youtubePlayer"
+      );
 
-    if (!container) {
+    if (!element) {
       return;
     }
 
@@ -1003,69 +991,47 @@
       return;
     }
 
-    container.classList.remove(
+    element.classList.remove(
       "hidden"
     );
 
-    container.style.display =
+    element.style.display =
       "block";
 
-    container.style.visibility =
+    element.style.visibility =
       "visible";
 
-    container.style.opacity =
+    element.style.opacity =
       "1";
 
-    container.style.width =
+    element.style.width =
       "100%";
 
-    container.style.height =
+    element.style.height =
       "100%";
 
-    container.style.position =
+    element.style.position =
       "relative";
 
-    container.style.zIndex =
+    element.style.zIndex =
       "2";
 
-    const iframe =
-      container.querySelector(
-        "iframe"
-      );
+    if (
+      element.tagName ===
+      "IFRAME"
+    ) {
+      element.style.border =
+        "0";
 
-    if (!iframe) {
-      return;
+      element.style.minWidth =
+        "100%";
+
+      element.style.minHeight =
+        "100%";
+
+      element.style.zIndex =
+        "3";
     }
-
-    iframe.style.display =
-      "block";
-
-    iframe.style.visibility =
-      "visible";
-
-    iframe.style.opacity =
-      "1";
-
-    iframe.style.width =
-      "100%";
-
-    iframe.style.height =
-      "100%";
-
-    iframe.style.minWidth =
-      "100%";
-
-    iframe.style.minHeight =
-      "100%";
-
-    iframe.style.border =
-      "0";
-
-    iframe.style.position =
-      "relative";
-
-    iframe.style.zIndex =
-      "3";
   }
 
   async function destroyCurrentPlayer(
@@ -1473,8 +1439,7 @@
 
         updatedAt:
           firebase.database
-            .ServerValue
-            .TIMESTAMP,
+            .ServerValue.TIMESTAMP,
 
         updatedBy:
           state.uid
@@ -1525,8 +1490,7 @@
 
         updatedAt:
           firebase.database
-            .ServerValue
-            .TIMESTAMP,
+            .ServerValue.TIMESTAMP,
 
         updatedBy:
           state.uid
@@ -2403,16 +2367,17 @@
     );
   }
 
-  async function buildYoutubePlayer(
-    videoId
-  ) {
-    const container =
-      $("youtubePlayer");
+  async function buildYoutubePlayer(videoId) {
+    if (!videoId) {
+      return;
+    }
 
-    if (
-      !videoId ||
-      !container
-    ) {
+    const initial =
+      document.getElementById(
+        "youtubePlayer"
+      );
+
+    if (!initial) {
       return;
     }
 
@@ -2437,8 +2402,6 @@
       state.youtubeRequestedId ===
         videoId
     ) {
-      forceYoutubeVisible();
-
       return;
     }
 
@@ -2457,28 +2420,31 @@
         typeof YT.Player !==
           "function"
       ) {
-        hidePlayers(
-          false
-        );
+        const existing =
+          document.getElementById(
+            "youtubePlayer"
+          );
 
-        showPlayerElement(
-          "youtubePlayer"
-        );
+        if (existing) {
+          existing.classList.remove(
+            "hidden"
+          );
 
-        container.style.display =
-          "block";
+          existing.style.display =
+            "block";
 
-        container.style.visibility =
-          "visible";
+          existing.style.visibility =
+            "visible";
 
-        container.style.opacity =
-          "1";
+          existing.style.opacity =
+            "1";
 
-        container.style.width =
-          "100%";
+          existing.style.width =
+            "100%";
 
-        container.style.height =
-          "100%";
+          existing.style.height =
+            "100%";
+        }
 
         if (
           $("playerPlaceholder")
@@ -2504,9 +2470,6 @@
               return;
             }
 
-            state.youtubeLoading =
-              false;
-
             buildYoutubePlayer(
               videoId
             );
@@ -2519,7 +2482,9 @@
 
       if (
         state.youtubeBuildToken !==
-        token
+          token ||
+        state.youtubeRequestedId !==
+          videoId
       ) {
         return;
       }
@@ -2529,30 +2494,17 @@
         state.playerType ===
           "youtube" &&
         state.currentVideoId ===
-          videoId
+          videoId &&
+        state.playerReady
       ) {
-        state.youtubeLoading =
-          false;
-
         forceYoutubeVisible();
-
         return;
       }
 
       if (
         state.player &&
-        state.playerType !==
-          "youtube"
-      ) {
-        await destroyCurrentPlayer();
-      }
-
-      if (
-        state.player &&
         state.playerType ===
-          "youtube" &&
-        state.currentVideoId !==
-          videoId
+          "youtube"
       ) {
         const oldPlayer =
           state.player;
@@ -2573,23 +2525,68 @@
           null;
 
         try {
-          oldPlayer.destroy?.();
+          oldPlayer.destroy();
         } catch (_) {}
+      } else if (
+        state.player &&
+        state.playerType !==
+          "youtube"
+      ) {
+        await destroyCurrentPlayer();
       }
 
       if (
         state.youtubeBuildToken !==
-        token
+          token ||
+        state.youtubeRequestedId !==
+          videoId
       ) {
         return;
       }
+
+      let current =
+        document.getElementById(
+          "youtubePlayer"
+        );
+
+      if (!current) {
+        throw new Error(
+          "找不到 youtubePlayer"
+        );
+      }
+
+      if (
+        current.tagName ===
+        "IFRAME"
+      ) {
+        const fresh =
+          document.createElement(
+            "div"
+          );
+
+        fresh.id =
+          "youtubePlayer";
+
+        fresh.className =
+          "youtube-player";
+
+        current.replaceWith(
+          fresh
+        );
+
+        current =
+          fresh;
+      }
+
+      const container =
+        current;
 
       hidePlayers(
         true
       );
 
-      showPlayerElement(
-        "youtubePlayer"
+      container.classList.remove(
+        "hidden"
       );
 
       container.style.display =
@@ -2630,15 +2627,6 @@
       state.currentVideoUrl =
         null;
 
-      if (
-        container.querySelector(
-          "iframe"
-        )
-      ) {
-        container.innerHTML =
-          "";
-      }
-
       const player =
         new YT.Player(
           "youtubePlayer",
@@ -2664,7 +2652,9 @@
 
             events: {
               onReady:
-                async () => {
+                async (
+                  event
+                ) => {
                   if (
                     state.youtubeBuildToken !==
                       token ||
@@ -2672,14 +2662,25 @@
                       videoId
                   ) {
                     try {
-                      player.destroy();
+                      event.target.destroy();
                     } catch (_) {}
 
                     return;
                   }
 
+                  if (
+                    !document.documentElement.contains(
+                      event.target.getIframe?.() ||
+                      document.getElementById(
+                        "youtubePlayer"
+                      )
+                    )
+                  ) {
+                    return;
+                  }
+
                   state.player =
-                    player;
+                    event.target;
 
                   state.playerReady =
                     true;
@@ -2716,7 +2717,14 @@
 
                   await syncLatestPlayback();
 
-                  forceYoutubeVisible();
+                  if (
+                    state.youtubeBuildToken ===
+                      token &&
+                    state.player ===
+                      event.target
+                  ) {
+                    forceYoutubeVisible();
+                  }
 
                   startSyncHeartbeat();
 
@@ -2745,6 +2753,15 @@
                       token ||
                     state.youtubeRequestedId !==
                       videoId
+                  ) {
+                    return;
+                  }
+
+                  if (
+                    state.player !==
+                    event.target &&
+                    state.player !==
+                      null
                   ) {
                     return;
                   }
@@ -2826,18 +2843,17 @@
         player;
 
       setTimeout(
-        forceYoutubeVisible,
-        100
-      );
-
-      setTimeout(
-        forceYoutubeVisible,
-        500
-      );
-
-      setTimeout(
-        forceYoutubeVisible,
-        1500
+        () => {
+          if (
+            state.youtubeBuildToken ===
+              token &&
+            state.player ===
+              player
+          ) {
+            forceYoutubeVisible();
+          }
+        },
+        250
       );
 
     } catch (error) {
@@ -2865,9 +2881,7 @@
         state.currentVideoUrl =
           null;
 
-        hidePlayers(
-          false
-        );
+        hidePlayers();
 
         showPlayerElement(
           "emptyPlayer"
@@ -2892,6 +2906,7 @@
     video
   ) {
     await destroyCurrentPlayer();
+
     await loadVimeoSdk();
 
     hidePlayers();
@@ -2939,6 +2954,13 @@
     player.on(
       "loaded",
       async () => {
+        if (
+          state.player !==
+          player
+        ) {
+          return;
+        }
+
         state.playerReady =
           true;
 
@@ -2952,7 +2974,9 @@
       "play",
       async () => {
         if (
-          state.applyingRemote
+          state.applyingRemote ||
+          state.player !==
+            player
         ) {
           return;
         }
@@ -2968,7 +2992,9 @@
       "pause",
       async () => {
         if (
-          state.applyingRemote
+          state.applyingRemote ||
+          state.player !==
+            player
         ) {
           return;
         }
@@ -2986,7 +3012,9 @@
         data
       ) => {
         if (
-          state.applyingRemote
+          state.applyingRemote ||
+          state.player !==
+            player
         ) {
           return;
         }
@@ -3011,6 +3039,7 @@
     video
   ) {
     await destroyCurrentPlayer();
+
     await loadDailymotionSdk();
 
     hidePlayers();
@@ -3095,7 +3124,9 @@
         "play",
         async () => {
           if (
-            state.applyingRemote
+            state.applyingRemote ||
+            state.player !==
+              player
           ) {
             return;
           }
@@ -3111,7 +3142,9 @@
         "pause",
         async () => {
           if (
-            state.applyingRemote
+            state.applyingRemote ||
+            state.player !==
+              player
           ) {
             return;
           }
@@ -3206,6 +3239,7 @@
     video
   ) {
     await destroyCurrentPlayer();
+
     await loadTwitchSdk();
 
     hidePlayers();
@@ -3313,6 +3347,14 @@
       (resolve) => {
         const ready =
           () => {
+            if (
+              state.player !==
+              player
+            ) {
+              resolve();
+              return;
+            }
+
             state.playerReady =
               true;
 
@@ -3331,7 +3373,9 @@
             Twitch.Player.PLAY,
             async () => {
               if (
-                state.applyingRemote
+                state.applyingRemote ||
+                state.player !==
+                  player
               ) {
                 return;
               }
@@ -3347,7 +3391,9 @@
             Twitch.Player.PAUSE,
             async () => {
               if (
-                state.applyingRemote
+                state.applyingRemote ||
+                state.player !==
+                  player
               ) {
                 return;
               }
@@ -4054,8 +4100,7 @@
 
       createdAt:
         firebase.database
-          .ServerValue
-          .TIMESTAMP
+          .ServerValue.TIMESTAMP
     });
   }
 
@@ -4224,8 +4269,7 @@
 
         updatedAt:
           firebase.database
-            .ServerValue
-            .TIMESTAMP,
+            .ServerValue.TIMESTAMP,
 
         updatedBy:
           state.uid
