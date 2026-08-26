@@ -3,7 +3,7 @@
 
   const $ = (id) => document.getElementById(id);
 
-  const YOUTUBE_API_KEY = "請換回你原本的 YouTube API Key";
+  const YOUTUBE_API_KEY = "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
   const PLATFORMS = {
     youtube: {
