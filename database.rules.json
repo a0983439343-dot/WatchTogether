@@ -2,27 +2,33 @@
   "rules": {
     "rooms": {
       "$roomId": {
+
         ".read": "auth != null",
 
-        ".write": "auth != null && (!data.exists() ? newData.child('owner').val() === auth.uid : (data.child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists()))",
+        ".write": "auth != null && (!data.exists() ? newData.child('owner').val() === auth.uid : data.child('owner').val() === auth.uid)",
 
         "owner": {
-          ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && (data.val() === auth.uid || (root.child('members').child($roomId).child(data.val()).child('online').val() === false && root.child('members').child($roomId).child(newData.val()).child('online').val() === true))))"
+          ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && newData.val() === data.val()))"
         },
 
         "name": {
+          ".write": "auth != null && ((!data.exists() && newData.isString()) || (data.exists() && data.child('owner').val() === auth.uid))",
           ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
         },
 
         "sourceType": {
+          ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
           ".validate": "newData.isString() && (newData.val() === 'youtube' || newData.val() === 'vimeo' || newData.val() === 'dailymotion' || newData.val() === 'bilibili' || newData.val() === 'twitch' || newData.val() === 'netflix' || newData.val() === 'crunchyroll' || newData.val() === 'disneyplus' || newData.val() === 'primevideo' || newData.val() === 'appletv' || newData.val() === 'max' || newData.val() === 'hulu' || newData.val() === 'paramount' || newData.val() === 'peacock')"
         },
 
         "sourceUrl": {
+          ".write": "auth != null && (data.parent().child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists())",
           ".validate": "newData.isString() && newData.val().length <= 2000"
         },
 
         "video": {
+          ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
+
           ".validate": "!newData.exists() || (newData.hasChildren(['id', 'platform', 'title', 'thumbnail', 'channel']) && newData.child('id').isString() && newData.child('platform').isString() && newData.child('title').isString() && newData.child('thumbnail').isString() && newData.child('channel').isString())",
 
           "id": {
@@ -30,7 +36,7 @@
           },
 
           "url": {
-            ".validate": "newData.isString() && newData.val().length <= 2000"
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 2000)"
           },
 
           "platform": {
@@ -55,6 +61,8 @@
         },
 
         "state": {
+          ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
+
           ".validate": "newData.hasChildren(['action', 'position', 'playing', 'updatedAt', 'updatedBy'])",
 
           "action": {
@@ -80,7 +88,10 @@
 
         "queue": {
           "$queueId": {
-            ".validate": "newData.hasChildren(['id', 'platform', 'title', 'thumbnail', 'channel', 'addedBy', 'addedByName', 'addedAt'])",
+
+            ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
+
+            ".validate": "!newData.exists() || newData.hasChildren(['id', 'platform', 'title', 'thumbnail', 'channel', 'addedBy', 'addedByName', 'addedAt'])",
 
             "id": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500"
@@ -112,14 +123,13 @@
 
             "addedAt": {
               ".validate": "newData.isNumber()"
-            },
-
-            ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()"
+            }
           }
         },
 
         "chat": {
           "$messageId": {
+
             ".read": "auth != null",
 
             ".write": "auth != null && !data.exists() && root.child('members').child($roomId).child(auth.uid).exists() && newData.child('uid').val() === auth.uid",
@@ -148,9 +158,11 @@
 
     "members": {
       "$roomId": {
+
         ".read": "auth != null",
 
         "$uid": {
+
           ".read": "auth != null",
 
           ".write": "auth != null && auth.uid === $uid && root.child('rooms').child($roomId).exists()",
@@ -162,11 +174,11 @@
           },
 
           "online": {
-            ".validate": "newData.isBoolean()"
+            ".validate": "!newData.exists() || newData.isBoolean()"
           },
 
           "lastSeen": {
-            ".validate": "newData.isNumber()"
+            ".validate": "!newData.exists() || newData.isNumber()"
           },
 
           "joinedAt": {
