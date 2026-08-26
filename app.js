@@ -11,7 +11,7 @@
    */
 
   const YOUTUBE_API_KEY =
-    "請放你的 YouTube API Key";
+    "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 50;
 
