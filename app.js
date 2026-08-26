@@ -12,78 +12,91 @@
       searchable: true,
       player: "youtube"
     },
+
     vimeo: {
       name: "Vimeo",
       icon: "▶",
       searchable: false,
       player: "vimeo"
     },
+
     dailymotion: {
       name: "Dailymotion",
       icon: "▶",
       searchable: false,
       player: "dailymotion"
     },
+
     bilibili: {
       name: "Bilibili",
       icon: "📺",
       searchable: false,
       player: "bilibili"
     },
+
     twitch: {
       name: "Twitch",
       icon: "🎮",
       searchable: false,
       player: "twitch"
     },
+
     netflix: {
       name: "Netflix",
       icon: "🔴",
       searchable: false,
       player: "external"
     },
+
     crunchyroll: {
       name: "Crunchyroll",
       icon: "🟠",
       searchable: false,
       player: "external"
     },
+
     disneyplus: {
       name: "Disney+",
       icon: "🔵",
       searchable: false,
       player: "external"
     },
+
     primevideo: {
       name: "Prime Video",
       icon: "🟦",
       searchable: false,
       player: "external"
     },
+
     appletv: {
       name: "Apple TV+",
       icon: "🍎",
       searchable: false,
       player: "external"
     },
+
     max: {
       name: "Max",
       icon: "🟣",
       searchable: false,
       player: "external"
     },
+
     hulu: {
       name: "Hulu",
       icon: "🟢",
       searchable: false,
       player: "external"
     },
+
     paramount: {
       name: "Paramount+",
       icon: "🟦",
       searchable: false,
       player: "external"
     },
+
     peacock: {
       name: "Peacock",
       icon: "🦚",
@@ -98,24 +111,32 @@
     roomId: null,
     room: null,
     isOwner: false,
+
     roomRef: null,
     stateRef: null,
     membersRef: null,
     chatRef: null,
+
     player: null,
     playerReady: false,
     playerType: null,
+
     currentVideoId: null,
     currentVideoUrl: null,
+
     applyingRemote: false,
     lastRemoteKey: "",
     lastWriteAt: 0,
+
     syncTimer: null,
+    remoteSyncTimer: null,
+
     searchResults: [],
     selectedVideo: null,
     modalSelectedVideo: null,
+
     searchBusy: false,
-    remoteSyncTimer: null,
+
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -128,7 +149,10 @@
 
   function toast(message) {
     const element = $("toast");
-    if (!element) return;
+
+    if (!element) {
+      return;
+    }
 
     element.textContent = message;
     element.classList.add("show");
@@ -141,41 +165,64 @@
   }
 
   function setError(element, message) {
-    if (!element) return;
+    if (!element) {
+      return;
+    }
+
     element.textContent = message || "";
   }
 
   function showView(view) {
-    $("homeView")?.classList.toggle("hidden", view !== "home");
-    $("roomView")?.classList.toggle("hidden", view !== "room");
+    $("homeView")?.classList.toggle(
+      "hidden",
+      view !== "home"
+    );
+
+    $("roomView")?.classList.toggle(
+      "hidden",
+      view !== "room"
+    );
   }
 
   function escapeHtml(value) {
     return String(value ?? "").replace(
       /[&<>"']/g,
-      (character) =>
-        ({
+      (character) => {
+        const map = {
           "&": "&amp;",
           "<": "&lt;",
           ">": "&gt;",
           '"': "&quot;",
           "'": "&#039;"
-        })[character]
+        };
+
+        return map[character];
+      }
     );
   }
 
   function formatTime(seconds) {
     seconds = Number(seconds);
 
-    if (!Number.isFinite(seconds) || seconds < 0) {
+    if (
+      !Number.isFinite(seconds) ||
+      seconds < 0
+    ) {
       return "00:00";
     }
 
     seconds = Math.floor(seconds);
 
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const hours =
+      Math.floor(seconds / 3600);
+
+    const minutes =
+      Math.floor(
+        (seconds % 3600) / 60
+      );
+
+    const secs =
+      seconds % 60;
 
     if (hours > 0) {
       return (
@@ -195,11 +242,18 @@
   }
 
   function randomRoomCode() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const chars =
+      "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
     let result = "";
 
     for (let i = 0; i < 6; i++) {
-      result += chars[Math.floor(Math.random() * chars.length)];
+      result +=
+        chars[
+          Math.floor(
+            Math.random() * chars.length
+          )
+        ];
     }
 
     return result;
@@ -207,7 +261,12 @@
 
   function getRoomIdFromUrl() {
     return (
-      new URLSearchParams(location.search).get("room")?.trim().toUpperCase() ||
+      new URLSearchParams(
+        location.search
+      )
+        .get("room")
+        ?.trim()
+        .toUpperCase() ||
       ""
     );
   }
@@ -222,11 +281,22 @@
   }
 
   function getMemberName() {
-    let name = localStorage.getItem("wt_name");
+    let name =
+      localStorage.getItem(
+        "wt_name"
+      );
 
     if (!name) {
-      name = "玩家" + Math.floor(Math.random() * 900 + 100);
-      localStorage.setItem("wt_name", name);
+      name =
+        "玩家" +
+        Math.floor(
+          Math.random() * 900 + 100
+        );
+
+      localStorage.setItem(
+        "wt_name",
+        name
+      );
     }
 
     return name;
@@ -234,15 +304,21 @@
 
   async function initializeFirebase() {
     if (!window.firebase) {
-      throw new Error("Firebase SDK 尚未載入");
+      throw new Error(
+        "Firebase SDK 尚未載入"
+      );
     }
 
     if (!window.FIREBASE_CONFIG) {
-      throw new Error("找不到 Firebase 設定");
+      throw new Error(
+        "找不到 Firebase 設定"
+      );
     }
 
     if (!firebase.apps.length) {
-      firebase.initializeApp(window.FIREBASE_CONFIG);
+      firebase.initializeApp(
+        window.FIREBASE_CONFIG
+      );
     }
 
     auth = firebase.auth();
@@ -252,44 +328,94 @@
       await auth.signInAnonymously();
     }
 
-    state.uid = auth.currentUser?.uid || null;
+    state.uid =
+      auth.currentUser?.uid ||
+      null;
 
     if (!state.uid) {
-      throw new Error("Firebase 匿名登入失敗");
+      throw new Error(
+        "Firebase 匿名登入失敗"
+      );
     }
 
     if ($("authStatus")) {
-      $("authStatus").textContent = "已連線";
+      $("authStatus").textContent =
+        "已連線";
     }
   }
 
   function getYoutubeId(value) {
-    if (!value) return null;
+    if (!value) {
+      return null;
+    }
 
-    const text = String(value).trim();
+    const text =
+      String(value).trim();
 
-    if (/^[A-Za-z0-9_-]{11}$/.test(text)) {
+    if (
+      /^[A-Za-z0-9_-]{11}$/.test(text)
+    ) {
       return text;
     }
 
     try {
-      const url = new URL(text);
+      const url =
+        new URL(text);
 
-      if (url.hostname.includes("youtu.be")) {
-        return url.pathname.replace(/^\/+/, "").split("/")[0] || null;
+      if (
+        url.hostname.includes(
+          "youtu.be"
+        )
+      ) {
+        return (
+          url.pathname
+            .replace(/^\/+/, "")
+            .split("/")[0] ||
+          null
+        );
       }
 
-      if (url.hostname.includes("youtube.com")) {
-        if (url.pathname === "/watch") {
-          return url.searchParams.get("v") || null;
+      if (
+        url.hostname.includes(
+          "youtube.com"
+        )
+      ) {
+        if (
+          url.pathname ===
+          "/watch"
+        ) {
+          return (
+            url.searchParams.get(
+              "v"
+            ) ||
+            null
+          );
         }
 
-        if (url.pathname.startsWith("/shorts/")) {
-          return url.pathname.split("/")[2] || null;
+        if (
+          url.pathname.startsWith(
+            "/shorts/"
+          )
+        ) {
+          return (
+            url.pathname.split(
+              "/"
+            )[2] ||
+            null
+          );
         }
 
-        if (url.pathname.startsWith("/embed/")) {
-          return url.pathname.split("/")[2] || null;
+        if (
+          url.pathname.startsWith(
+            "/embed/"
+          )
+        ) {
+          return (
+            url.pathname.split(
+              "/"
+            )[2] ||
+            null
+          );
         }
       }
     } catch (_) {}
@@ -298,52 +424,101 @@
   }
 
   function getVimeoId(value) {
-    if (!value) return null;
+    if (!value) {
+      return null;
+    }
 
-    const text = String(value).trim();
+    const text =
+      String(value).trim();
 
     if (/^\d+$/.test(text)) {
       return text;
     }
 
     try {
-      const url = new URL(text);
+      const url =
+        new URL(text);
 
       if (
-        url.hostname.includes("vimeo.com") ||
-        url.hostname.includes("player.vimeo.com")
+        url.hostname.includes(
+          "vimeo.com"
+        ) ||
+        url.hostname.includes(
+          "player.vimeo.com"
+        )
       ) {
-        const matches = url.pathname.match(/(?:video\/)?(\d+)/);
-        return matches?.[1] || null;
+        const match =
+          url.pathname.match(
+            /(?:video\/)?(\d+)/
+          );
+
+        return (
+          match?.[1] ||
+          null
+        );
       }
     } catch (_) {}
 
-    const match = text.match(/(?:vimeo\.com\/)(\d+)/);
-    return match?.[1] || null;
+    const match =
+      text.match(
+        /(?:vimeo\.com\/)(\d+)/
+      );
+
+    return (
+      match?.[1] ||
+      null
+    );
   }
 
   function getDailymotionId(value) {
-    if (!value) return null;
+    if (!value) {
+      return null;
+    }
 
-    const text = String(value).trim();
+    const text =
+      String(value).trim();
 
-    if (/^[A-Za-z0-9]+$/.test(text) && text.length >= 5) {
+    if (
+      /^[A-Za-z0-9]+$/.test(text) &&
+      text.length >= 5
+    ) {
       return text;
     }
 
     try {
-      const url = new URL(text);
+      const url =
+        new URL(text);
 
       if (
-        url.hostname.includes("dailymotion.com") ||
-        url.hostname.includes("dai.ly")
+        url.hostname.includes(
+          "dailymotion.com"
+        ) ||
+        url.hostname.includes(
+          "dai.ly"
+        )
       ) {
-        if (url.hostname.includes("dai.ly")) {
-          return url.pathname.replace(/^\/+/, "").split("/")[0] || null;
+        if (
+          url.hostname.includes(
+            "dai.ly"
+          )
+        ) {
+          return (
+            url.pathname
+              .replace(/^\/+/, "")
+              .split("/")[0] ||
+            null
+          );
         }
 
-        const match = url.pathname.match(/video\/([A-Za-z0-9]+)/);
-        return match?.[1] || null;
+        const match =
+          url.pathname.match(
+            /video\/([A-Za-z0-9]+)/
+          );
+
+        return (
+          match?.[1] ||
+          null
+        );
       }
     } catch (_) {}
 
@@ -351,57 +526,99 @@
   }
 
   function getBilibiliId(value) {
-    if (!value) return null;
+    if (!value) {
+      return null;
+    }
 
-    const text = String(value).trim();
+    const text =
+      String(value).trim();
 
-    if (/^BV[a-zA-Z0-9]+$/.test(text)) {
+    if (
+      /^BV[a-zA-Z0-9]+$/.test(text)
+    ) {
       return text;
     }
 
-    if (/^av\d+$/i.test(text)) {
+    if (
+      /^av\d+$/i.test(text)
+    ) {
       return text;
     }
 
     try {
-      const url = new URL(text);
+      const url =
+        new URL(text);
 
-      const bv = url.pathname.match(/(BV[a-zA-Z0-9]+)/);
-      if (bv?.[1]) return bv[1];
+      const bv =
+        url.pathname.match(
+          /(BV[a-zA-Z0-9]+)/
+        );
 
-      const av = url.pathname.match(/\/av(\d+)/i);
-      if (av?.[1]) return "av" + av[1];
+      if (bv?.[1]) {
+        return bv[1];
+      }
+
+      const av =
+        url.pathname.match(
+          /\/av(\d+)/i
+        );
+
+      if (av?.[1]) {
+        return "av" + av[1];
+      }
     } catch (_) {}
 
     return null;
   }
 
   function getTwitchValue(value) {
-    if (!value) return null;
+    if (!value) {
+      return null;
+    }
 
-    const text = String(value).trim();
+    const text =
+      String(value).trim();
 
     try {
-      const url = new URL(text);
+      const url =
+        new URL(text);
 
-      if (!url.hostname.includes("twitch.tv")) {
-        return text;
+      if (
+        !url.hostname.includes(
+          "twitch.tv"
+        )
+      ) {
+        return {
+          type: "channel",
+          value: text
+        };
       }
 
-      const parts = url.pathname
-        .split("/")
-        .filter(Boolean);
+      const parts =
+        url.pathname
+          .split("/")
+          .filter(Boolean);
 
-      if (!parts.length) return null;
+      if (!parts.length) {
+        return null;
+      }
 
-      if (parts[0] === "videos" && parts[1]) {
+      if (
+        parts[0] ===
+        "videos" &&
+        parts[1]
+      ) {
         return {
           type: "video",
           value: parts[1]
         };
       }
 
-      if (parts[0] === "clip" && parts[1]) {
+      if (
+        parts[0] ===
+        "clip" &&
+        parts[1]
+      ) {
         return {
           type: "clip",
           value: parts[1]
@@ -423,206 +640,407 @@
 
     return {
       type: "channel",
-      value: text.replace(/^@/, "")
+      value:
+        text.replace(
+          /^@/,
+          ""
+        )
     };
   }
 
   function getExternalInputValue() {
     const ids = [
-      "videoUrlInput",
       "sourceUrlInput",
+      "videoUrlInput",
+      "sourceUrl",
       "mediaUrlInput",
       "playerUrlInput",
       "videoInput"
     ];
 
-    for (const id of ids) {
-      const element = $(id);
+    for (
+      const id of ids
+    ) {
+      const element =
+        $(id);
 
-      if (element?.value?.trim()) {
+      if (
+        element?.value?.trim()
+      ) {
         return element.value.trim();
       }
     }
 
-    const element = document.querySelector(
-      "[data-source-url-input], [data-video-url]"
-    );
+    const element =
+      document.querySelector(
+        "[data-source-url-input], [data-video-url]"
+      );
 
-    return element?.value?.trim() || "";
+    return (
+      element?.value?.trim() ||
+      ""
+    );
   }
 
-  async function searchYoutube(query, target = "home") {
-    query = String(query || "").trim();
+  async function searchYoutube(
+    query,
+    target = "home"
+  ) {
+    query =
+      String(
+        query || ""
+      ).trim();
 
     if (!query) {
-      throw new Error("請輸入影片名稱");
+      throw new Error(
+        "請輸入影片名稱"
+      );
     }
 
     if (
       !YOUTUBE_API_KEY ||
-      YOUTUBE_API_KEY.startsWith("請填入")
+      YOUTUBE_API_KEY.startsWith(
+        "請填入"
+      )
     ) {
-      throw new Error("尚未設定 YouTube Data API Key");
+      throw new Error(
+        "尚未設定 YouTube Data API Key"
+      );
     }
 
-    const url = new URL(
-      "https://www.googleapis.com/youtube/v3/search"
+    const url =
+      new URL(
+        "https://www.googleapis.com/youtube/v3/search"
+      );
+
+    url.searchParams.set(
+      "part",
+      "snippet"
     );
 
-    url.searchParams.set("part", "snippet");
-    url.searchParams.set("q", query);
-    url.searchParams.set("type", "video");
-    url.searchParams.set("maxResults", "12");
-    url.searchParams.set("regionCode", "TW");
-    url.searchParams.set("relevanceLanguage", "zh-Hant");
-    url.searchParams.set("safeSearch", "moderate");
-    url.searchParams.set("videoEmbeddable", "true");
-    url.searchParams.set("key", YOUTUBE_API_KEY);
+    url.searchParams.set(
+      "q",
+      query
+    );
 
-    const response = await fetch(url.toString());
+    url.searchParams.set(
+      "type",
+      "video"
+    );
+
+    url.searchParams.set(
+      "maxResults",
+      "12"
+    );
+
+    url.searchParams.set(
+      "regionCode",
+      "TW"
+    );
+
+    url.searchParams.set(
+      "relevanceLanguage",
+      "zh-Hant"
+    );
+
+    url.searchParams.set(
+      "safeSearch",
+      "moderate"
+    );
+
+    url.searchParams.set(
+      "videoEmbeddable",
+      "true"
+    );
+
+    url.searchParams.set(
+      "key",
+      YOUTUBE_API_KEY
+    );
+
+    const response =
+      await fetch(
+        url.toString()
+      );
 
     if (!response.ok) {
-      let message = "YouTube 搜尋失敗";
+      let message =
+        "YouTube 搜尋失敗";
 
       try {
-        const data = await response.json();
-        message = data?.error?.message || message;
+        const data =
+          await response.json();
+
+        message =
+          data?.error?.message ||
+          message;
       } catch (_) {}
 
-      throw new Error(message);
+      throw new Error(
+        message
+      );
     }
 
-    const data = await response.json();
+    const data =
+      await response.json();
 
-    const items = Array.isArray(data.items) ? data.items : [];
+    const items =
+      Array.isArray(
+        data.items
+      )
+        ? data.items
+        : [];
 
-    const results = items
-      .map((item) => {
-        const id = item?.id?.videoId;
-        const snippet = item?.snippet || {};
+    const results =
+      items
+        .map((item) => {
+          const id =
+            item?.id?.videoId;
 
-        if (!id) return null;
+          const snippet =
+            item?.snippet ||
+            {};
 
-        return {
-          id,
-          platform: "youtube",
-          title: snippet.title || "未命名影片",
-          description: snippet.description || "",
-          channel: snippet.channelTitle || "",
-          thumbnail:
-            snippet.thumbnails?.high?.url ||
-            snippet.thumbnails?.medium?.url ||
-            snippet.thumbnails?.default?.url ||
-            ""
-        };
-      })
-      .filter(Boolean);
+          if (!id) {
+            return null;
+          }
 
-    state.searchResults = results;
+          return {
+            id,
 
-    renderSearchResults(results, target);
+            platform:
+              "youtube",
+
+            title:
+              snippet.title ||
+              "未命名影片",
+
+            description:
+              snippet.description ||
+              "",
+
+            channel:
+              snippet.channelTitle ||
+              "",
+
+            thumbnail:
+              snippet.thumbnails
+                ?.high?.url ||
+              snippet.thumbnails
+                ?.medium?.url ||
+              snippet.thumbnails
+                ?.default?.url ||
+              ""
+          };
+        })
+        .filter(Boolean);
+
+    state.searchResults =
+      results;
+
+    renderSearchResults(
+      results,
+      target
+    );
 
     return results;
   }
 
-  function renderSearchResults(results, target) {
+  function renderSearchResults(
+    results,
+    target
+  ) {
     const container =
       target === "modal"
         ? $("modalVideoSearchResults")
         : $("videoSearchResults");
 
-    if (!container) return;
-
-    if (!results.length) {
-      container.innerHTML = `
-        <div class="muted" style="padding:14px 4px;text-align:center;">
-          找不到符合的影片。
-        </div>
-      `;
+    if (!container) {
       return;
     }
 
-    container.innerHTML = results
-      .map(
-        (video) => `
-          <button
-            type="button"
-            class="video-result-card"
-            data-video-id="${escapeHtml(video.id)}"
-          >
-            <img
-              src="${escapeHtml(video.thumbnail)}"
-              alt=""
-              loading="lazy"
+    if (!results.length) {
+      container.innerHTML = `
+        <div
+          class="muted"
+          style="padding:14px 4px;text-align:center;"
+        >
+          找不到符合的影片。
+        </div>
+      `;
+
+      return;
+    }
+
+    container.innerHTML =
+      results
+        .map(
+          (video) => `
+            <button
+              type="button"
+              class="video-result-card"
+              data-video-id="${escapeHtml(
+                video.id
+              )}"
             >
-            <span class="video-result-info">
-              <strong>${escapeHtml(video.title)}</strong>
-              <small>${escapeHtml(video.channel)}</small>
-            </span>
-          </button>
-        `
-      )
-      .join("");
+              <img
+                src="${escapeHtml(
+                  video.thumbnail
+                )}"
+                alt=""
+                loading="lazy"
+              >
+
+              <span class="video-result-info">
+
+                <strong>
+                  ${escapeHtml(
+                    video.title
+                  )}
+                </strong>
+
+                <small>
+                  ${escapeHtml(
+                    video.channel
+                  )}
+                </small>
+
+              </span>
+            </button>
+          `
+        )
+        .join("");
 
     container
-      .querySelectorAll(".video-result-card")
-      .forEach((card) => {
-        card.addEventListener("click", () => {
-          const id = card.dataset.videoId;
+      .querySelectorAll(
+        ".video-result-card"
+      )
+      .forEach(
+        (card) => {
+          card.addEventListener(
+            "click",
+            () => {
+              const id =
+                card.dataset.videoId;
 
-          const video = results.find(
-            (item) => item.id === id
+              const video =
+                results.find(
+                  (item) =>
+                    item.id === id
+                );
+
+              if (!video) {
+                return;
+              }
+
+              if (
+                target ===
+                "modal"
+              ) {
+                state.modalSelectedVideo =
+                  video;
+
+                renderModalSelectedVideo(
+                  video
+                );
+              } else {
+                state.selectedVideo =
+                  video;
+
+                renderSelectedVideo(
+                  video
+                );
+              }
+            }
           );
-
-          if (!video) return;
-
-          if (target === "modal") {
-            state.modalSelectedVideo = video;
-            renderModalSelectedVideo(video);
-          } else {
-            state.selectedVideo = video;
-            renderSelectedVideo(video);
-          }
-        });
-      });
+        }
+      );
   }
 
-  function renderSelectedVideo(video) {
-    $("selectedVideoCard")?.classList.remove("hidden");
+  function renderSelectedVideo(
+    video
+  ) {
+    $("selectedVideoCard")
+      ?.classList.remove(
+        "hidden"
+      );
 
-    if ($("selectedVideoTitle")) {
-      $("selectedVideoTitle").textContent = video.title;
+    if (
+      $("selectedVideoTitle")
+    ) {
+      $("selectedVideoTitle")
+        .textContent =
+        video.title;
     }
 
-    if ($("selectedVideoMeta")) {
-      $("selectedVideoMeta").textContent =
-        video.channel || PLATFORMS[video.platform]?.name || "";
+    if (
+      $("selectedVideoMeta")
+    ) {
+      $("selectedVideoMeta")
+        .textContent =
+        video.channel ||
+        "YouTube";
     }
 
-    if ($("selectedVideoThumbnail")) {
-      $("selectedVideoThumbnail").style.backgroundImage =
-        `url("${video.thumbnail || ""}")`;
+    if (
+      $("selectedVideoThumbnail")
+    ) {
+      $("selectedVideoThumbnail")
+        .style.backgroundImage =
+        `url("${video.thumbnail}")`;
     }
 
-    toast("已選擇影片");
+    toast(
+      "已選擇影片"
+    );
   }
 
   function clearSelectedVideo() {
-    state.selectedVideo = null;
-    $("selectedVideoCard")?.classList.add("hidden");
+    state.selectedVideo =
+      null;
+
+    $("selectedVideoCard")
+      ?.classList.add(
+        "hidden"
+      );
   }
 
-  function renderModalSelectedVideo(video) {
-    const container = $("modalVideoSearchResults");
+  function renderModalSelectedVideo(
+    video
+  ) {
+    const container =
+      $("modalVideoSearchResults");
 
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     container.innerHTML = `
-      <button type="button" class="video-result-card selected">
-        <img src="${escapeHtml(video.thumbnail || "")}" alt="">
+      <button
+        type="button"
+        class="video-result-card selected"
+      >
+        <img
+          src="${escapeHtml(
+            video.thumbnail
+          )}"
+          alt=""
+        >
+
         <span class="video-result-info">
-          <strong>${escapeHtml(video.title)}</strong>
-          <small>${escapeHtml(video.channel || "")}</small>
+
+          <strong>
+            ${escapeHtml(
+              video.title
+            )}
+          </strong>
+
+          <small>
+            ${escapeHtml(
+              video.channel
+            )}
+          </small>
+
         </span>
       </button>
     `;
@@ -638,134 +1056,179 @@
       "directVideo",
       "emptyPlayer",
       "platformPlayerNotice"
-    ].forEach((id) => {
-      $(id)?.classList.add("hidden");
-    });
+    ].forEach(
+      (id) => {
+        $(id)
+          ?.classList.add(
+            "hidden"
+          );
+      }
+    );
   }
 
   function showPlayerElement(id) {
-    $(id)?.classList.remove("hidden");
+    $(id)
+      ?.classList.remove(
+        "hidden"
+      );
   }
 
   async function destroyCurrentPlayer() {
-    clearInterval(state.remoteSyncTimer);
-    state.remoteSyncTimer = null;
+    clearInterval(
+      state.remoteSyncTimer
+    );
 
-    const old = state.player;
-    const oldType = state.playerType;
+    state.remoteSyncTimer =
+      null;
 
-    state.player = null;
-    state.playerReady = false;
-    state.playerType = null;
+    const old =
+      state.player;
 
-    if (!old) return;
+    const oldType =
+      state.playerType;
+
+    state.player =
+      null;
+
+    state.playerReady =
+      false;
+
+    state.playerType =
+      null;
+
+    if (!old) {
+      return;
+    }
 
     try {
-      if (oldType === "youtube") {
+      if (
+        oldType ===
+        "youtube"
+      ) {
         old.destroy();
-      } else if (oldType === "vimeo") {
+      } else if (
+        oldType ===
+        "vimeo"
+      ) {
         await old.destroy();
-      } else if (oldType === "dailymotion") {
+      } else if (
+        oldType ===
+        "dailymotion"
+      ) {
         old.destroy?.();
       }
     } catch (_) {}
   }
 
-  function currentPosition() {
-    const type = state.playerType;
-    const player = state.player;
-
-    if (!state.playerReady || !player) {
-      return 0;
-    }
-
-    try {
-      if (type === "youtube") {
-        return Number(player.getCurrentTime()) || 0;
-      }
-
-      if (type === "twitch") {
-        return Number(player.getCurrentTime()) || 0;
-      }
-
-      if (type === "dailymotion") {
-        if (typeof player.currentTime === "function") {
-          return Number(player.currentTime()) || 0;
-        }
-
-        if ("currentTime" in player) {
-          return Number(player.currentTime) || 0;
-        }
-      }
-
-      if (type === "vimeo") {
-        return 0;
-      }
-    } catch (_) {}
-
-    return 0;
-  }
-
   async function asyncCurrentPosition() {
-    const type = state.playerType;
-    const player = state.player;
+    const player =
+      state.player;
 
-    if (!state.playerReady || !player) {
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
       return 0;
     }
 
     try {
-      if (type === "youtube") {
-        return Number(player.getCurrentTime()) || 0;
+      if (
+        type ===
+        "youtube"
+      ) {
+        return (
+          Number(
+            player.getCurrentTime()
+          ) || 0
+        );
       }
 
-      if (type === "twitch") {
-        return Number(player.getCurrentTime()) || 0;
+      if (
+        type ===
+        "twitch"
+      ) {
+        return (
+          Number(
+            player.getCurrentTime()
+          ) || 0
+        );
       }
 
-      if (type === "dailymotion") {
-        if (typeof player.currentTime === "function") {
-          return Number(await player.currentTime()) || 0;
+      if (
+        type ===
+        "vimeo"
+      ) {
+        return (
+          Number(
+            await player.getCurrentTime()
+          ) || 0
+        );
+      }
+
+      if (
+        type ===
+        "dailymotion"
+      ) {
+        if (
+          typeof player.currentTime ===
+          "function"
+        ) {
+          return (
+            Number(
+              await player.currentTime()
+            ) || 0
+          );
         }
 
-        if ("currentTime" in player) {
-          return Number(await player.currentTime) || 0;
-        }
-      }
-
-      if (type === "vimeo") {
-        return Number(await player.getCurrentTime()) || 0;
+        return (
+          Number(
+            player.currentTime
+          ) || 0
+        );
       }
     } catch (_) {}
 
     return 0;
   }
 
-  function duration() {
-    const type = state.playerType;
-    const player = state.player;
+  function currentPosition() {
+    const player =
+      state.player;
 
-    if (!state.playerReady || !player) {
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
       return 0;
     }
 
     try {
-      if (type === "youtube") {
-        return Number(player.getDuration()) || 0;
+      if (
+        type ===
+        "youtube"
+      ) {
+        return (
+          Number(
+            player.getCurrentTime()
+          ) || 0
+        );
       }
 
-      if (type === "twitch") {
-        return Number(player.getDuration()) || 0;
-      }
-
-      if (type === "dailymotion") {
-        if (typeof player.duration === "function") {
-          return Number(player.duration()) || 0;
-        }
-
-        if ("duration" in player) {
-          return Number(player.duration) || 0;
-        }
+      if (
+        type ===
+        "twitch"
+      ) {
+        return (
+          Number(
+            player.getCurrentTime()
+          ) || 0
+        );
       }
     } catch (_) {}
 
@@ -773,100 +1236,211 @@
   }
 
   async function asyncDuration() {
-    const type = state.playerType;
-    const player = state.player;
+    const player =
+      state.player;
 
-    if (!state.playerReady || !player) {
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
       return 0;
     }
 
     try {
-      if (type === "youtube") {
-        return Number(player.getDuration()) || 0;
+      if (
+        type ===
+        "youtube"
+      ) {
+        return (
+          Number(
+            player.getDuration()
+          ) || 0
+        );
       }
 
-      if (type === "twitch") {
-        return Number(player.getDuration()) || 0;
+      if (
+        type ===
+        "twitch"
+      ) {
+        return (
+          Number(
+            player.getDuration()
+          ) || 0
+        );
       }
 
-      if (type === "vimeo") {
-        return Number(await player.getDuration()) || 0;
+      if (
+        type ===
+        "vimeo"
+      ) {
+        return (
+          Number(
+            await player.getDuration()
+          ) || 0
+        );
       }
 
-      if (type === "dailymotion") {
-        if (typeof player.duration === "function") {
-          return Number(await player.duration()) || 0;
+      if (
+        type ===
+        "dailymotion"
+      ) {
+        if (
+          typeof player.duration ===
+          "function"
+        ) {
+          return (
+            Number(
+              await player.duration()
+            ) || 0
+          );
         }
 
-        if ("duration" in player) {
-          return Number(await player.duration) || 0;
-        }
+        return (
+          Number(
+            player.duration
+          ) || 0
+        );
       }
     } catch (_) {}
 
     return 0;
   }
 
-  function isPlaying() {
-    const type = state.playerType;
-    const player = state.player;
+  function duration() {
+    const player =
+      state.player;
 
-    if (!state.playerReady || !player) {
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
+      return 0;
+    }
+
+    try {
+      if (
+        type ===
+        "youtube"
+      ) {
+        return (
+          Number(
+            player.getDuration()
+          ) || 0
+        );
+      }
+
+      if (
+        type ===
+        "twitch"
+      ) {
+        return (
+          Number(
+            player.getDuration()
+          ) || 0
+        );
+      }
+    } catch (_) {}
+
+    return 0;
+  }
+
+  async function asyncIsPlaying() {
+    const player =
+      state.player;
+
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
       return false;
     }
 
     try {
-      if (type === "youtube" && window.YT) {
-        return player.getPlayerState() === YT.PlayerState.PLAYING;
+      if (
+        type ===
+        "youtube"
+      ) {
+        return (
+          player.getPlayerState() ===
+          YT.PlayerState.PLAYING
+        );
       }
 
-      if (type === "twitch") {
+      if (
+        type ===
+        "twitch"
+      ) {
         return !player.isPaused();
       }
 
-      if (type === "dailymotion") {
-        if (typeof player.paused === "function") {
-          return !player.paused();
+      if (
+        type ===
+        "vimeo"
+      ) {
+        return !(
+          await player.getPaused()
+        );
+      }
+
+      if (
+        type ===
+        "dailymotion"
+      ) {
+        if (
+          typeof player.paused ===
+          "function"
+        ) {
+          return !(
+            await player.paused()
+          );
         }
 
-        if ("paused" in player) {
-          return !player.paused;
-        }
+        return !player.paused;
       }
     } catch (_) {}
 
     return false;
   }
 
-  async function asyncIsPlaying() {
-    const type = state.playerType;
-    const player = state.player;
+  function isPlaying() {
+    const player =
+      state.player;
 
-    if (!state.playerReady || !player) {
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
       return false;
     }
 
     try {
-      if (type === "youtube" && window.YT) {
-        return player.getPlayerState() === YT.PlayerState.PLAYING;
+      if (
+        type ===
+        "youtube"
+      ) {
+        return (
+          player.getPlayerState() ===
+          YT.PlayerState.PLAYING
+        );
       }
 
-      if (type === "twitch") {
+      if (
+        type ===
+        "twitch"
+      ) {
         return !player.isPaused();
-      }
-
-      if (type === "vimeo") {
-        return !(await player.getPaused());
-      }
-
-      if (type === "dailymotion") {
-        if (typeof player.paused === "function") {
-          return !(await player.paused());
-        }
-
-        if ("paused" in player) {
-          return !player.paused;
-        }
       }
     } catch (_) {}
 
@@ -875,76 +1449,205 @@
 
   async function getPlaybackSnapshot() {
     return {
-      position: await asyncCurrentPosition(),
-      playing: await asyncIsPlaying()
+      position:
+        await asyncCurrentPosition(),
+
+      playing:
+        await asyncIsPlaying()
     };
   }
 
-  async function writePlayback(action, playing) {
-    if (!state.stateRef || !state.uid) return;
-
-    if (state.applyingRemote) return;
-
-    const now = Date.now();
-
-    if (action === "sync" && now - state.lastWriteAt < 400) {
+  async function writePlayback(
+    action,
+    playing
+  ) {
+    if (
+      !state.stateRef ||
+      !state.uid
+    ) {
       return;
     }
 
-    state.lastWriteAt = now;
+    if (
+      state.applyingRemote
+    ) {
+      return;
+    }
 
-    const snapshot = await getPlaybackSnapshot();
+    const now =
+      Date.now();
+
+    if (
+      action === "sync" &&
+      now -
+        state.lastWriteAt <
+        400
+    ) {
+      return;
+    }
+
+    state.lastWriteAt =
+      now;
+
+    const snapshot =
+      await getPlaybackSnapshot();
 
     const payload = {
       action,
+
       position:
-        Number.isFinite(Number(snapshot.position))
-          ? Number(snapshot.position)
+        Number.isFinite(
+          Number(
+            snapshot.position
+          )
+        )
+          ? Number(
+              snapshot.position
+            )
           : 0,
+
       playing:
-        typeof playing === "boolean"
+        typeof playing ===
+        "boolean"
           ? playing
           : snapshot.playing,
+
       updatedAt:
-        firebase.database.ServerValue.TIMESTAMP,
-      updatedBy: state.uid
+        firebase.database
+          .ServerValue
+          .TIMESTAMP,
+
+      updatedBy:
+        state.uid
     };
 
     try {
-      await state.stateRef.set(payload);
+      await state.stateRef.set(
+        payload
+      );
     } catch (error) {
-      console.error("播放同步失敗：", error);
-      toast("播放同步失敗，請檢查 Firebase 規則");
+      console.error(
+        "播放同步失敗：",
+        error
+      );
+
+      toast(
+        "播放同步失敗，請檢查 Firebase 規則"
+      );
+    }
+  }
+
+  async function writePlaybackWithPosition(
+    action,
+    position,
+    playing
+  ) {
+    if (
+      !state.stateRef ||
+      !state.uid
+    ) {
+      return;
+    }
+
+    if (
+      state.applyingRemote
+    ) {
+      return;
+    }
+
+    const payload = {
+      action,
+
+      position:
+        Math.max(
+          0,
+          Number(position) ||
+            0
+        ),
+
+      playing:
+        typeof playing ===
+        "boolean"
+          ? playing
+          : await asyncIsPlaying(),
+
+      updatedAt:
+        firebase.database
+          .ServerValue
+          .TIMESTAMP,
+
+      updatedBy:
+        state.uid
+    };
+
+    try {
+      await state.stateRef.set(
+        payload
+      );
+    } catch (error) {
+      console.error(
+        error
+      );
     }
   }
 
   async function syncLatestPlayback() {
-    if (!state.stateRef) return;
+    if (!state.stateRef) {
+      return;
+    }
 
     try {
-      const snapshot = await state.stateRef.once("value");
-      const data = snapshot.val();
+      const snapshot =
+        await state.stateRef.once(
+          "value"
+        );
+
+      const data =
+        snapshot.val();
 
       if (!data) {
         if (state.isOwner) {
-          await writePlayback("sync", false);
+          await writePlayback(
+            "sync",
+            false
+          );
         }
+
         return;
       }
 
-      state.lastRemoteKey = "";
+      state.lastRemoteKey =
+        "";
 
-      await applyRemotePlayback(data, true);
+      await applyRemotePlayback(
+        data,
+        true
+      );
     } catch (error) {
-      console.error("讀取初始播放狀態失敗：", error);
-      toast("無法取得目前播放進度");
+      console.error(
+        "讀取初始播放狀態失敗：",
+        error
+      );
+
+      toast(
+        "無法取得目前播放進度"
+      );
     }
   }
 
-  async function applyRemotePlayback(data, force = false) {
-    if (!data) return;
+  async function applyRemotePlayback(
+    data,
+    force = false
+  ) {
+    if (!data) {
+      return;
+    }
 
-    if (!force && data.updatedBy === state.uid) {
+    if (
+      !force &&
+      data.updatedBy ===
+        state.uid
+    ) {
       return;
     }
 
@@ -956,641 +1659,1163 @@
       data.playing
     ].join("|");
 
-    if (key === state.lastRemoteKey) {
+    if (
+      key ===
+      state.lastRemoteKey
+    ) {
       return;
     }
 
-    state.lastRemoteKey = key;
+    state.lastRemoteKey =
+      key;
 
-    const remotePosition = Math.max(
-      0,
-      Number(data.position) || 0
-    );
+    const remotePosition =
+      Math.max(
+        0,
+        Number(
+          data.position
+        ) || 0
+      );
 
-    state.applyingRemote = true;
+    state.applyingRemote =
+      true;
 
     try {
-      if (state.playerReady && state.player) {
+      if (
+        state.playerReady &&
+        state.player
+      ) {
         await applyPlayerPosition(
           remotePosition,
-          data.action === "seek" || data.action === "sync"
+          data.action ===
+            "seek" ||
+            data.action ===
+              "sync"
         );
 
-        if (data.playing === true) {
+        if (
+          data.playing === true
+        ) {
           await playPlayer();
-        } else if (data.playing === false) {
+        } else if (
+          data.playing === false
+        ) {
           await pausePlayer();
         }
       }
 
       if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          `已同步 ${formatTime(remotePosition)}`;
+        $("syncStatus")
+          .textContent =
+          `已同步 ${formatTime(
+            remotePosition
+          )}`;
       }
 
       updateTimeUI();
     } finally {
-      setTimeout(() => {
-        state.applyingRemote = false;
-      }, 400);
-    }
-  }
-
-  async function applyPlayerPosition(seconds, force = false) {
-    const type = state.playerType;
-    const player = state.player;
-
-    if (!state.playerReady || !player) return;
-
-    try {
-      const localPosition = await asyncCurrentPosition();
-      const difference = Math.abs(
-        localPosition - seconds
+      setTimeout(
+        () => {
+          state.applyingRemote =
+            false;
+        },
+        400
       );
-
-      if (!force && difference <= 0.8) {
-        return;
-      }
-
-      if (type === "youtube") {
-        player.seekTo(seconds, true);
-      } else if (type === "vimeo") {
-        await player.setCurrentTime(seconds);
-      } else if (type === "dailymotion") {
-        if (typeof player.seek === "function") {
-          await player.seek(seconds);
-        }
-      } else if (type === "twitch") {
-        if (typeof player.seek === "function") {
-          player.seek(seconds);
-        }
-      }
-    } catch (error) {
-      console.warn("播放器跳轉失敗", error);
     }
   }
 
-  async function playPlayer() {
-    const type = state.playerType;
-    const player = state.player;
+  async function applyPlayerPosition(
+    seconds,
+    force = false
+  ) {
+    const player =
+      state.player;
 
-    if (!state.playerReady || !player) return;
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
+      return;
+    }
 
     try {
-      if (type === "youtube") {
-        player.playVideo();
-      } else if (type === "vimeo") {
-        await player.play();
-      } else if (type === "dailymotion") {
-        await player.play();
-      } else if (type === "twitch") {
-        player.play();
-      }
-    } catch (error) {
-      console.warn("播放失敗", error);
-    }
-  }
+      const localPosition =
+        await asyncCurrentPosition();
 
-  async function pausePlayer() {
-    const type = state.playerType;
-    const player = state.player;
+      const difference =
+        Math.abs(
+          localPosition -
+            seconds
+        );
 
-    if (!state.playerReady || !player) return;
-
-    try {
-      if (type === "youtube") {
-        player.pauseVideo();
-      } else if (type === "vimeo") {
-        await player.pause();
-      } else if (type === "dailymotion") {
-        await player.pause();
-      } else if (type === "twitch") {
-        player.pause();
-      }
-    } catch (error) {
-      console.warn("暫停失敗", error);
-    }
-  }
-
-  function updateTimeUI() {
-    const readout = $("timeReadout");
-
-    if (!readout) return;
-
-    const position = currentPosition();
-    const total = duration();
-
-    readout.textContent =
-      `${formatTime(position)} / ${formatTime(total)}`;
-  }
-
-  function startSyncHeartbeat() {
-    clearInterval(state.syncTimer);
-
-    state.syncTimer = setInterval(async () => {
       if (
-        !state.stateRef ||
-        !state.playerReady ||
-        state.applyingRemote
+        !force &&
+        difference <=
+          0.8
       ) {
         return;
       }
 
-      if (state.isOwner) {
-        await writePlayback("sync");
+      if (
+        type ===
+        "youtube"
+      ) {
+        player.seekTo(
+          seconds,
+          true
+        );
+      } else if (
+        type ===
+        "vimeo"
+      ) {
+        await player.setCurrentTime(
+          seconds
+        );
+      } else if (
+        type ===
+        "dailymotion"
+      ) {
+        if (
+          typeof player.seek ===
+          "function"
+        ) {
+          await player.seek(
+            seconds
+          );
+        }
+      } else if (
+        type ===
+        "twitch"
+      ) {
+        if (
+          typeof player.seek ===
+          "function"
+        ) {
+          player.seek(
+            seconds
+          );
+        }
+      }
+    } catch (error) {
+      console.warn(
+        "播放器跳轉失敗",
+        error
+      );
+    }
+  }
+
+  async function playPlayer() {
+    const player =
+      state.player;
+
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
+      return;
+    }
+
+    try {
+      if (
+        type ===
+        "youtube"
+      ) {
+        player.playVideo();
+      } else if (
+        type ===
+        "vimeo"
+      ) {
+        await player.play();
+      } else if (
+        type ===
+        "dailymotion"
+      ) {
+        await player.play();
+      } else if (
+        type ===
+        "twitch"
+      ) {
+        player.play();
+      }
+    } catch (error) {
+      console.warn(
+        "播放失敗",
+        error
+      );
+    }
+  }
+
+  async function pausePlayer() {
+    const player =
+      state.player;
+
+    const type =
+      state.playerType;
+
+    if (
+      !state.playerReady ||
+      !player
+    ) {
+      return;
+    }
+
+    try {
+      if (
+        type ===
+        "youtube"
+      ) {
+        player.pauseVideo();
+      } else if (
+        type ===
+        "vimeo"
+      ) {
+        await player.pause();
+      } else if (
+        type ===
+        "dailymotion"
+      ) {
+        await player.pause();
+      } else if (
+        type ===
+        "twitch"
+      ) {
+        player.pause();
+      }
+    } catch (error) {
+      console.warn(
+        "暫停失敗",
+        error
+      );
+    }
+  }
+
+  function updateTimeUI() {
+    const readout =
+      $("timeReadout");
+
+    if (!readout) {
+      return;
+    }
+
+    readout.textContent =
+      `${formatTime(
+        currentPosition()
+      )} / ${formatTime(
+        duration()
+      )}`;
+  }
+
+  function startSyncHeartbeat() {
+    clearInterval(
+      state.syncTimer
+    );
+
+    state.syncTimer =
+      setInterval(
+        async () => {
+          if (
+            !state.stateRef ||
+            !state.playerReady ||
+            state.applyingRemote
+          ) {
+            return;
+          }
+
+          if (
+            state.isOwner
+          ) {
+            await writePlayback(
+              "sync"
+            );
+          }
+
+          updateTimeUI();
+        },
+        2500
+      );
+  }
+
+  function createVideoObject(
+    platform,
+    rawValue,
+    title = ""
+  ) {
+    if (!rawValue) {
+      return null;
+    }
+
+    if (
+      platform ===
+      "youtube"
+    ) {
+      const id =
+        getYoutubeId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
       }
 
-      updateTimeUI();
-    }, 2500);
-  }
-
-  function ensureExternalInput() {
-    const candidates = [
-      $("videoUrlInput"),
-      $("sourceUrlInput"),
-      $("mediaUrlInput"),
-      $("playerUrlInput"),
-      $("videoInput")
-    ];
-
-    return candidates.find(Boolean) || null;
-  }
-
-  function createVideoObject(platform, rawValue, title = "") {
-    if (!rawValue) return null;
-
-    if (platform === "youtube") {
-      const id = getYoutubeId(rawValue);
-      if (!id) return null;
-
       return {
         id,
+
         platform,
-        title: title || "YouTube 影片",
+
+        title:
+          title ||
+          "YouTube 影片",
+
         thumbnail:
-          `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`,
-        channel: "YouTube"
+          `https://i.ytimg.com/vi/${encodeURIComponent(
+            id
+          )}/hqdefault.jpg`,
+
+        channel:
+          "YouTube"
       };
     }
 
-    if (platform === "vimeo") {
-      const id = getVimeoId(rawValue);
-      if (!id) return null;
+    if (
+      platform ===
+      "vimeo"
+    ) {
+      const id =
+        getVimeoId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
 
       return {
         id,
-        url: String(rawValue),
+
+        url:
+          String(
+            rawValue
+          ),
+
         platform,
-        title: title || "Vimeo 影片",
-        thumbnail: "",
-        channel: "Vimeo"
+
+        title:
+          title ||
+          "Vimeo 影片",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Vimeo"
       };
     }
 
-    if (platform === "dailymotion") {
-      const id = getDailymotionId(rawValue);
-      if (!id) return null;
+    if (
+      platform ===
+      "dailymotion"
+    ) {
+      const id =
+        getDailymotionId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
 
       return {
         id,
-        url: String(rawValue),
+
+        url:
+          String(
+            rawValue
+          ),
+
         platform,
-        title: title || "Dailymotion 影片",
-        thumbnail: "",
-        channel: "Dailymotion"
+
+        title:
+          title ||
+          "Dailymotion 影片",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Dailymotion"
       };
     }
 
-    if (platform === "bilibili") {
-      const id = getBilibiliId(rawValue);
-      if (!id) return null;
+    if (
+      platform ===
+      "bilibili"
+    ) {
+      const id =
+        getBilibiliId(
+          rawValue
+        );
+
+      if (!id) {
+        return null;
+      }
 
       return {
         id,
-        url: String(rawValue),
+
+        url:
+          String(
+            rawValue
+          ),
+
         platform,
-        title: title || "Bilibili 影片",
-        thumbnail: "",
-        channel: "Bilibili"
+
+        title:
+          title ||
+          "Bilibili 影片",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Bilibili"
       };
     }
 
-    if (platform === "twitch") {
-      const value = getTwitchValue(rawValue);
-      if (!value) return null;
+    if (
+      platform ===
+      "twitch"
+    ) {
+      const value =
+        getTwitchValue(
+          rawValue
+        );
+
+      if (!value) {
+        return null;
+      }
 
       return {
-        id: value.value,
-        twitchType: value.type,
-        url: String(rawValue),
+        id:
+          value.value,
+
+        twitchType:
+          value.type,
+
+        url:
+          String(
+            rawValue
+          ),
+
         platform,
-        title: title || "Twitch",
-        thumbnail: "",
-        channel: "Twitch"
+
+        title:
+          title ||
+          "Twitch",
+
+        thumbnail:
+          "",
+
+        channel:
+          "Twitch"
       };
     }
 
     return {
-      id: String(rawValue),
-      url: String(rawValue),
+      id:
+        String(
+          rawValue
+        ),
+
+      url:
+        String(
+          rawValue
+        ),
+
       platform,
-      title: title || PLATFORMS[platform]?.name || platform,
-      thumbnail: "",
-      channel: PLATFORMS[platform]?.name || platform
+
+      title:
+        title ||
+        PLATFORMS[
+          platform
+        ]?.name ||
+        platform,
+
+      thumbnail:
+        "",
+
+      channel:
+        PLATFORMS[
+          platform
+        ]?.name ||
+        platform
     };
   }
 
   async function loadVimeoSdk() {
-    if (window.Vimeo?.Player) {
-      state.sdk.vimeo = true;
+    if (
+      window.Vimeo?.Player
+    ) {
+      state.sdk.vimeo =
+        true;
+
       return;
     }
 
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector(
-        'script[src="https://player.vimeo.com/api/player.js"]'
-      );
+    await new Promise(
+      (resolve, reject) => {
+        const existing =
+          document.querySelector(
+            'script[src="https://player.vimeo.com/api/player.js"]'
+          );
 
-      if (existing) {
-        const timer = setInterval(() => {
-          if (window.Vimeo?.Player) {
-            clearInterval(timer);
-            state.sdk.vimeo = true;
-            resolve();
-          }
-        }, 100);
+        if (existing) {
+          const timer =
+            setInterval(
+              () => {
+                if (
+                  window.Vimeo
+                    ?.Player
+                ) {
+                  clearInterval(
+                    timer
+                  );
 
-        setTimeout(() => {
-          clearInterval(timer);
+                  state.sdk.vimeo =
+                    true;
 
-          if (window.Vimeo?.Player) {
-            state.sdk.vimeo = true;
-            resolve();
-          } else {
-            reject(new Error("Vimeo SDK 載入失敗"));
-          }
-        }, 10000);
+                  resolve();
+                }
+              },
+              100
+            );
 
-        return;
-      }
+          setTimeout(
+            () => {
+              clearInterval(
+                timer
+              );
 
-      const script = document.createElement("script");
-      script.src = "https://player.vimeo.com/api/player.js";
-      script.async = true;
+              if (
+                window.Vimeo
+                  ?.Player
+              ) {
+                state.sdk.vimeo =
+                  true;
 
-      script.onload = () => {
-        if (window.Vimeo?.Player) {
-          state.sdk.vimeo = true;
-          resolve();
-        } else {
-          reject(new Error("Vimeo SDK 載入失敗"));
+                resolve();
+              } else {
+                reject(
+                  new Error(
+                    "Vimeo SDK 載入失敗"
+                  )
+                );
+              }
+            },
+            10000
+          );
+
+          return;
         }
-      };
 
-      script.onerror = () => reject(
-        new Error("Vimeo SDK 載入失敗")
-      );
+        const script =
+          document.createElement(
+            "script"
+          );
 
-      document.head.appendChild(script);
-    });
+        script.src =
+          "https://player.vimeo.com/api/player.js";
+
+        script.async =
+          true;
+
+        script.onload =
+          () => {
+            if (
+              window.Vimeo
+                ?.Player
+            ) {
+              state.sdk.vimeo =
+                true;
+
+              resolve();
+            } else {
+              reject(
+                new Error(
+                  "Vimeo SDK 載入失敗"
+                )
+              );
+            }
+          };
+
+        script.onerror =
+          () =>
+            reject(
+              new Error(
+                "Vimeo SDK 載入失敗"
+              )
+            );
+
+        document.head.appendChild(
+          script
+        );
+      }
+    );
   }
 
   async function loadDailymotionSdk() {
-    if (window.dailymotion) {
-      state.sdk.dailymotion = true;
+    if (
+      window.dailymotion
+    ) {
+      state.sdk.dailymotion =
+        true;
+
       return;
     }
 
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector(
-        'script[src*="geo.dailymotion.com/player"]'
-      );
+    await new Promise(
+      (resolve, reject) => {
+        const existing =
+          document.querySelector(
+            'script[data-wt-dailymotion-sdk="1"]'
+          );
 
-      if (existing) {
-        const timer = setInterval(() => {
-          if (window.dailymotion) {
-            clearInterval(timer);
-            state.sdk.dailymotion = true;
-            resolve();
-          }
-        }, 100);
+        if (existing) {
+          const timer =
+            setInterval(
+              () => {
+                if (
+                  window.dailymotion
+                ) {
+                  clearInterval(
+                    timer
+                  );
 
-        setTimeout(() => {
-          clearInterval(timer);
+                  state.sdk.dailymotion =
+                    true;
 
-          if (window.dailymotion) {
-            state.sdk.dailymotion = true;
-            resolve();
-          } else {
-            reject(new Error("Dailymotion SDK 載入失敗"));
-          }
-        }, 10000);
+                  resolve();
+                }
+              },
+              100
+            );
 
-        return;
-      }
+          setTimeout(
+            () => {
+              clearInterval(
+                timer
+              );
 
-      const script = document.createElement("script");
-      script.src =
-        "https://geo.dailymotion.com/player/x9b2k.js";
-      script.async = true;
+              if (
+                window.dailymotion
+              ) {
+                state.sdk.dailymotion =
+                  true;
 
-      script.onload = () => {
-        if (window.dailymotion) {
-          state.sdk.dailymotion = true;
-          resolve();
-        } else {
-          reject(new Error("Dailymotion SDK 載入失敗"));
+                resolve();
+              } else {
+                reject(
+                  new Error(
+                    "Dailymotion SDK 載入失敗"
+                  )
+                );
+              }
+            },
+            10000
+          );
+
+          return;
         }
-      };
 
-      script.onerror = () => {
-        reject(new Error("Dailymotion SDK 載入失敗"));
-      };
+        const playerId =
+          window.DAILYMOTION_PLAYER_ID ||
+          "YOUR_PLAYER_ID";
 
-      document.head.appendChild(script);
-    });
+        if (
+          playerId ===
+          "YOUR_PLAYER_ID"
+        ) {
+          throw new Error(
+            "尚未設定 DAILYMOTION_PLAYER_ID"
+          );
+        }
+
+        const script =
+          document.createElement(
+            "script"
+          );
+
+        script.src =
+          `https://geo.dailymotion.com/player/${encodeURIComponent(
+            playerId
+          )}.js`;
+
+        script.async =
+          true;
+
+        script.dataset.wtDailymotionSdk =
+          "1";
+
+        script.onload =
+          () => {
+            if (
+              window.dailymotion
+            ) {
+              state.sdk.dailymotion =
+                true;
+
+              resolve();
+            } else {
+              reject(
+                new Error(
+                  "Dailymotion SDK 載入失敗"
+                )
+              );
+            }
+          };
+
+        script.onerror =
+          () =>
+            reject(
+              new Error(
+                "Dailymotion SDK 載入失敗"
+              )
+            );
+
+        document.head.appendChild(
+          script
+        );
+      }
+    );
   }
 
   async function loadTwitchSdk() {
-    if (window.Twitch?.Player) {
-      state.sdk.twitch = true;
+    if (
+      window.Twitch?.Player
+    ) {
+      state.sdk.twitch =
+        true;
+
       return;
     }
 
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector(
-        'script[src="https://player.twitch.tv/js/embed/v1.js"]'
-      );
+    await new Promise(
+      (resolve, reject) => {
+        const existing =
+          document.querySelector(
+            'script[src="https://player.twitch.tv/js/embed/v1.js"]'
+          );
 
-      if (existing) {
-        const timer = setInterval(() => {
-          if (window.Twitch?.Player) {
-            clearInterval(timer);
-            state.sdk.twitch = true;
-            resolve();
-          }
-        }, 100);
+        if (existing) {
+          const timer =
+            setInterval(
+              () => {
+                if (
+                  window.Twitch
+                    ?.Player
+                ) {
+                  clearInterval(
+                    timer
+                  );
 
-        setTimeout(() => {
-          clearInterval(timer);
+                  state.sdk.twitch =
+                    true;
 
-          if (window.Twitch?.Player) {
-            state.sdk.twitch = true;
-            resolve();
-          } else {
-            reject(new Error("Twitch SDK 載入失敗"));
-          }
-        }, 10000);
+                  resolve();
+                }
+              },
+              100
+            );
 
-        return;
-      }
+          setTimeout(
+            () => {
+              clearInterval(
+                timer
+              );
 
-      const script = document.createElement("script");
-      script.src =
-        "https://player.twitch.tv/js/embed/v1.js";
-      script.async = true;
+              if (
+                window.Twitch
+                  ?.Player
+              ) {
+                state.sdk.twitch =
+                  true;
 
-      script.onload = () => {
-        if (window.Twitch?.Player) {
-          state.sdk.twitch = true;
-          resolve();
-        } else {
-          reject(new Error("Twitch SDK 載入失敗"));
+                resolve();
+              } else {
+                reject(
+                  new Error(
+                    "Twitch SDK 載入失敗"
+                  )
+                );
+              }
+            },
+            10000
+          );
+
+          return;
         }
-      };
 
-      script.onerror = () => {
-        reject(new Error("Twitch SDK 載入失敗"));
-      };
+        const script =
+          document.createElement(
+            "script"
+          );
 
-      document.head.appendChild(script);
-    });
+        script.src =
+          "https://player.twitch.tv/js/embed/v1.js";
+
+        script.async =
+          true;
+
+        script.onload =
+          () => {
+            if (
+              window.Twitch
+                ?.Player
+            ) {
+              state.sdk.twitch =
+                true;
+
+              resolve();
+            } else {
+              reject(
+                new Error(
+                  "Twitch SDK 載入失敗"
+                )
+              );
+            }
+          };
+
+        script.onerror =
+          () =>
+            reject(
+              new Error(
+                "Twitch SDK 載入失敗"
+              )
+            );
+
+        document.head.appendChild(
+          script
+        );
+      }
+    );
   }
 
-  function buildYoutubePlayer(videoId) {
-    const container = $("youtubePlayer");
+  function buildYoutubePlayer(
+    videoId
+  ) {
+    const container =
+      $("youtubePlayer");
 
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     hidePlayers();
-    showPlayerElement("youtubePlayer");
 
-    state.playerReady = false;
+    showPlayerElement(
+      "youtubePlayer"
+    );
+
+    state.playerReady =
+      false;
 
     if (
-      state.playerType === "youtube" &&
+      state.playerType ===
+        "youtube" &&
       state.player &&
-      state.currentVideoId === videoId
+      state.currentVideoId ===
+        videoId
     ) {
       return;
     }
 
     if (
       !window.YT ||
-      typeof YT.Player !== "function"
+      typeof YT.Player !==
+        "function"
     ) {
-      if ($("playerPlaceholder")) {
-        $("playerPlaceholder").textContent =
+      if (
+        $("playerPlaceholder")
+      ) {
+        $("playerPlaceholder")
+          .textContent =
           "YouTube 播放器載入中…";
-        $("playerPlaceholder").classList.remove("hidden");
+
+        $("playerPlaceholder")
+          .classList.remove(
+            "hidden"
+          );
       }
 
-      setTimeout(() => {
-        buildYoutubePlayer(videoId);
-      }, 700);
+      setTimeout(
+        () => {
+          buildYoutubePlayer(
+            videoId
+          );
+        },
+        700
+      );
 
       return;
     }
 
-    $("playerPlaceholder")?.classList.add("hidden");
+    $("playerPlaceholder")
+      ?.classList.add(
+        "hidden"
+      );
 
     destroyCurrentPlayer();
 
-    state.currentVideoId = videoId;
-    state.currentVideoUrl = null;
-    state.playerType = "youtube";
+    state.currentVideoId =
+      videoId;
 
-    state.player = new YT.Player(
-      "youtubePlayer",
-      {
-        videoId,
-        playerVars: {
-          autoplay: 0,
-          controls: 1,
-          playsinline: 1,
-          rel: 0,
-          modestbranding: 1,
-          enablejsapi: 1,
-          origin: location.origin
-        },
-        events: {
-          onReady: async () => {
-            state.playerReady = true;
-            updateTimeUI();
-            await syncLatestPlayback();
-            startSyncHeartbeat();
+    state.currentVideoUrl =
+      null;
+
+    state.playerType =
+      "youtube";
+
+    state.player =
+      new YT.Player(
+        "youtubePlayer",
+        {
+          videoId,
+
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            playsinline: 1,
+            rel: 0,
+            modestbranding: 1,
+            enablejsapi: 1,
+            origin:
+              location.origin
           },
-          onStateChange: async (event) => {
-            if (state.applyingRemote) return;
 
-            if (
-              event.data ===
-              YT.PlayerState.PLAYING
-            ) {
-              await writePlayback("play", true);
-            }
+          events: {
+            onReady: async () => {
+              state.playerReady =
+                true;
 
-            if (
-              event.data ===
-              YT.PlayerState.PAUSED
-            ) {
-              await writePlayback("pause", false);
-            }
+              updateTimeUI();
 
-            if (
-              event.data ===
-              YT.PlayerState.ENDED
-            ) {
-              await writePlayback("pause", false);
-            }
+              await syncLatestPlayback();
 
-            updateTimeUI();
-          },
-          onError: (event) => {
-            console.error(
-              "YouTube player error:",
-              event
-            );
+              startSyncHeartbeat();
+            },
 
-            toast("這支 YouTube 影片無法嵌入播放");
+            onStateChange:
+              async (
+                event
+              ) => {
+                if (
+                  state.applyingRemote
+                ) {
+                  return;
+                }
+
+                if (
+                  event.data ===
+                  YT.PlayerState.PLAYING
+                ) {
+                  await writePlayback(
+                    "play",
+                    true
+                  );
+                }
+
+                if (
+                  event.data ===
+                  YT.PlayerState.PAUSED
+                ) {
+                  await writePlayback(
+                    "pause",
+                    false
+                  );
+                }
+
+                if (
+                  event.data ===
+                  YT.PlayerState.ENDED
+                ) {
+                  await writePlayback(
+                    "pause",
+                    false
+                  );
+                }
+
+                updateTimeUI();
+              },
+
+            onError:
+              (
+                event
+              ) => {
+                console.error(
+                  "YouTube player error:",
+                  event
+                );
+
+                toast(
+                  "這支 YouTube 影片無法嵌入播放"
+                );
+              }
           }
         }
-      }
-    );
+      );
   }
 
-  async function buildVimeoPlayer(video) {
+  async function buildVimeoPlayer(
+    video
+  ) {
     await destroyCurrentPlayer();
 
     await loadVimeoSdk();
 
     hidePlayers();
 
-    const container = $("vimeoPlayer");
+    const container =
+      $("vimeoPlayer");
 
     if (!container) {
-      throw new Error("找不到 vimeoPlayer");
+      throw new Error(
+        "找不到 vimeoPlayer"
+      );
     }
 
-    showPlayerElement("vimeoPlayer");
-
-    container.innerHTML = "";
-
-    state.currentVideoId = video.id || null;
-    state.currentVideoUrl = video.url || null;
-    state.playerType = "vimeo";
-    state.playerReady = false;
-
-    const options = {
-      id: video.id,
-      autoplay: false,
-      controls: true,
-      responsive: true
-    };
-
-    if (video.url?.includes("h=")) {
-      delete options.id;
-      options.url = video.url;
-    }
-
-    state.player = new Vimeo.Player(
-      container,
-      options
+    showPlayerElement(
+      "vimeoPlayer"
     );
 
-    await new Promise((resolve, reject) => {
-      state.player.on("loaded", () => {
-        state.playerReady = true;
-        resolve();
-      });
+    container.src =
+      video.url ||
+      `https://player.vimeo.com/video/${encodeURIComponent(
+        video.id
+      )}`;
 
-      state.player.on("error", reject);
+    const player =
+      new Vimeo.Player(
+        container
+      );
 
-      state.player.on("play", async () => {
-        if (state.applyingRemote) return;
-        await writePlayback("play", true);
-      });
+    state.player =
+      player;
 
-      state.player.on("pause", async () => {
-        if (state.applyingRemote) return;
-        await writePlayback("pause", false);
-      });
+    state.currentVideoId =
+      video.id;
 
-      state.player.on("seeked", async (data) => {
-        if (state.applyingRemote) return;
+    state.currentVideoUrl =
+      video.url ||
+      null;
 
-        const seconds =
-          Number(data?.seconds) || 0;
+    state.playerType =
+      "vimeo";
+
+    state.playerReady =
+      false;
+
+    player.on(
+      "loaded",
+      async () => {
+        state.playerReady =
+          true;
+
+        await syncLatestPlayback();
+
+        startSyncHeartbeat();
+      }
+    );
+
+    player.on(
+      "play",
+      async () => {
+        if (
+          state.applyingRemote
+        ) {
+          return;
+        }
+
+        await writePlayback(
+          "play",
+          true
+        );
+      }
+    );
+
+    player.on(
+      "pause",
+      async () => {
+        if (
+          state.applyingRemote
+        ) {
+          return;
+        }
+
+        await writePlayback(
+          "pause",
+          false
+        );
+      }
+    );
+
+    player.on(
+      "seeked",
+      async (
+        data
+      ) => {
+        if (
+          state.applyingRemote
+        ) {
+          return;
+        }
 
         await writePlaybackWithPosition(
           "seek",
-          seconds,
-          true
+          Number(
+            data?.seconds
+          ) || 0,
+          await asyncIsPlaying()
         );
-      });
+      }
+    );
 
-      state.player.on("timeupdate", () => {
+    player.on(
+      "timeupdate",
+      () => {
         updateTimeUI();
-      });
-    });
-
-    await syncLatestPlayback();
-    startSyncHeartbeat();
+      }
+    );
   }
 
-  async function writePlaybackWithPosition(
-    action,
-    position,
-    playing
+  async function buildDailymotionPlayer(
+    video
   ) {
-    if (!state.stateRef || !state.uid) return;
-    if (state.applyingRemote) return;
-
-    const payload = {
-      action,
-      position: Math.max(0, Number(position) || 0),
-      playing:
-        typeof playing === "boolean"
-          ? playing
-          : await asyncIsPlaying(),
-      updatedAt:
-        firebase.database.ServerValue.TIMESTAMP,
-      updatedBy: state.uid
-    };
-
-    try {
-      await state.stateRef.set(payload);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function buildDailymotionPlayer(video) {
     await destroyCurrentPlayer();
 
     await loadDailymotionSdk();
 
     hidePlayers();
 
-    const container = $("dailymotionPlayer");
+    const container =
+      $("dailymotionPlayer");
 
     if (!container) {
-      throw new Error("找不到 dailymotionPlayer");
+      throw new Error(
+        "找不到 dailymotionPlayer"
+      );
     }
 
-    showPlayerElement("dailymotionPlayer");
+    showPlayerElement(
+      "dailymotionPlayer"
+    );
 
-    container.innerHTML = "";
+    container.innerHTML =
+      "";
 
     const playerId =
       "dm_" +
@@ -1598,149 +2823,214 @@
         .toString(36)
         .slice(2);
 
-    const target = document.createElement("div");
-    target.id = playerId;
-    target.style.width = "100%";
-    target.style.height = "100%";
+    const target =
+      document.createElement(
+        "div"
+      );
 
-    container.appendChild(target);
+    target.id =
+      playerId;
 
-    state.currentVideoId = video.id;
-    state.currentVideoUrl = video.url || null;
-    state.playerType = "dailymotion";
-    state.playerReady = false;
+    target.style.width =
+      "100%";
 
-    let player;
+    target.style.height =
+      "100%";
 
-    if (
-      window.dailymotion &&
-      typeof window.dailymotion.createPlayer === "function"
-    ) {
-      player = await window.dailymotion.createPlayer(
+    container.appendChild(
+      target
+    );
+
+    const player =
+      await window.dailymotion.createPlayer(
         playerId,
         {
-          video: video.id,
-          mute: false,
-          controls: true
+          video:
+            video.id,
+          mute:
+            false,
+          controls:
+            true
         }
       );
-    } else {
-      throw new Error("Dailymotion Player SDK 不可用");
-    }
 
-    state.player = player;
+    state.player =
+      player;
 
-    if (player?.addEventListener) {
+    state.currentVideoId =
+      video.id;
+
+    state.currentVideoUrl =
+      video.url ||
+      null;
+
+    state.playerType =
+      "dailymotion";
+
+    state.playerReady =
+      true;
+
+    if (
+      player?.addEventListener
+    ) {
       player.addEventListener(
         "play",
         async () => {
-          if (state.applyingRemote) return;
-          await writePlayback("play", true);
+          if (
+            state.applyingRemote
+          ) {
+            return;
+          }
+
+          await writePlayback(
+            "play",
+            true
+          );
         }
       );
 
       player.addEventListener(
         "pause",
         async () => {
-          if (state.applyingRemote) return;
-          await writePlayback("pause", false);
-        }
-      );
+          if (
+            state.applyingRemote
+          ) {
+            return;
+          }
 
-      player.addEventListener(
-        "seeked",
-        async () => {
-          if (state.applyingRemote) return;
-
-          const position =
-            await asyncCurrentPosition();
-
-          await writePlaybackWithPosition(
-            "seek",
-            position,
-            await asyncIsPlaying()
+          await writePlayback(
+            "pause",
+            false
           );
         }
       );
     }
 
-    state.playerReady = true;
-
     await syncLatestPlayback();
+
     startSyncHeartbeat();
   }
 
-  async function buildBilibiliPlayer(video) {
+  async function buildBilibiliPlayer(
+    video
+  ) {
     await destroyCurrentPlayer();
 
     hidePlayers();
 
-    const iframe = $("bilibiliPlayer");
+    const iframe =
+      $("bilibiliPlayer");
 
     if (!iframe) {
-      throw new Error("找不到 bilibiliPlayer");
+      throw new Error(
+        "找不到 bilibiliPlayer"
+      );
     }
 
-    showPlayerElement("bilibiliPlayer");
-
-    const id = video.id;
+    showPlayerElement(
+      "bilibiliPlayer"
+    );
 
     let src = "";
 
-    if (/^BV/.test(id)) {
+    if (
+      /^BV/.test(
+        video.id
+      )
+    ) {
       src =
         "https://player.bilibili.com/player.html?bvid=" +
-        encodeURIComponent(id) +
+        encodeURIComponent(
+          video.id
+        ) +
         "&page=1&autoplay=0";
-    } else if (/^av/i.test(id)) {
+    } else if (
+      /^av/i.test(
+        video.id
+      )
+    ) {
       src =
         "https://player.bilibili.com/player.html?aid=" +
-        encodeURIComponent(id.replace(/^av/i, "")) +
+        encodeURIComponent(
+          video.id.replace(
+            /^av/i,
+            ""
+          )
+        ) +
         "&page=1&autoplay=0";
     } else {
       src =
         video.url ||
         "https://www.bilibili.com/video/" +
-        encodeURIComponent(id);
+        encodeURIComponent(
+          video.id
+        );
     }
 
-    iframe.src = src;
+    iframe.src =
+      src;
+
     iframe.allow =
       "autoplay; fullscreen; picture-in-picture";
-    iframe.setAttribute("allowfullscreen", "");
 
-    state.currentVideoId = id;
-    state.currentVideoUrl = video.url || null;
-    state.playerType = "bilibili";
-    state.player = iframe;
-    state.playerReady = true;
+    state.currentVideoId =
+      video.id;
 
-    if ($("platformPlayerNotice")) {
-      $("platformPlayerNotice").classList.remove("hidden");
-      $("platformPlayerNotice").textContent =
-        "Bilibili 已載入。此平台的公開網頁嵌入沒有提供完整的跨頁面播放控制 API。";
+    state.currentVideoUrl =
+      video.url ||
+      null;
+
+    state.playerType =
+      "bilibili";
+
+    state.player =
+      iframe;
+
+    state.playerReady =
+      true;
+
+    if (
+      $("platformPlayerNotice")
+    ) {
+      $("platformPlayerNotice")
+        .classList.remove(
+          "hidden"
+        );
+
+      $("platformPlayerNotice")
+        .textContent =
+        "Bilibili 已載入。";
     }
 
     await syncLatestPlayback();
+
     startSyncHeartbeat();
   }
 
-  async function buildTwitchPlayer(video) {
+  async function buildTwitchPlayer(
+    video
+  ) {
     await destroyCurrentPlayer();
 
     await loadTwitchSdk();
 
     hidePlayers();
 
-    const container = $("twitchPlayer");
+    const container =
+      $("twitchPlayer");
 
     if (!container) {
-      throw new Error("找不到 twitchPlayer");
+      throw new Error(
+        "找不到 twitchPlayer"
+      );
     }
 
-    showPlayerElement("twitchPlayer");
+    showPlayerElement(
+      "twitchPlayer"
+    );
 
-    container.innerHTML = "";
+    container.innerHTML =
+      "";
 
     const wrapperId =
       "tw_" +
@@ -1748,39 +3038,56 @@
         .toString(36)
         .slice(2);
 
-    const target = document.createElement("div");
-    target.id = wrapperId;
-    target.style.width = "100%";
-    target.style.height = "100%";
+    const target =
+      document.createElement(
+        "div"
+      );
 
-    container.appendChild(target);
+    target.id =
+      wrapperId;
 
-    const host = location.hostname;
+    target.style.width =
+      "100%";
+
+    target.style.height =
+      "100%";
+
+    container.appendChild(
+      target
+    );
+
+    const host =
+      location.hostname ||
+      "localhost";
 
     const options = {
-      width: "100%",
-      height: "100%",
-      autoplay: false,
-      muted: false,
+      width:
+        "100%",
+
+      height:
+        "100%",
+
+      autoplay:
+        false,
+
+      muted:
+        false,
+
       parent: [
-        host || "localhost"
+        host
       ]
     };
 
-    if (video.twitchType === "video") {
-      options.video = video.id;
-    } else if (video.twitchType === "channel") {
-      options.channel = video.id;
-    } else if (video.twitchType === "clip") {
-      options.video = video.id;
+    if (
+      video.twitchType ===
+      "video"
+    ) {
+      options.video =
+        video.id;
     } else {
-      options.channel = video.id;
+      options.channel =
+        video.id;
     }
-
-    state.currentVideoId = video.id;
-    state.currentVideoUrl = video.url || null;
-    state.playerType = "twitch";
-    state.playerReady = false;
 
     const player =
       new Twitch.Player(
@@ -1788,72 +3095,88 @@
         options
       );
 
-    state.player = player;
+    state.player =
+      player;
 
-    await new Promise((resolve) => {
-      const readyEvent =
-        Twitch.Player.READY;
+    state.currentVideoId =
+      video.id;
 
-      const handler = () => {
-        state.playerReady = true;
-        resolve();
-      };
+    state.currentVideoUrl =
+      video.url ||
+      null;
 
-      if (player.addEventListener) {
-        player.addEventListener(
-          readyEvent,
-          handler
-        );
-      } else {
-        setTimeout(handler, 1500);
+    state.playerType =
+      "twitch";
+
+    state.playerReady =
+      false;
+
+    await new Promise(
+      (resolve) => {
+        const ready =
+          () => {
+            state.playerReady =
+              true;
+
+            resolve();
+          };
+
+        if (
+          player.addEventListener
+        ) {
+          player.addEventListener(
+            Twitch.Player.READY,
+            ready
+          );
+
+          player.addEventListener(
+            Twitch.Player.PLAY,
+            async () => {
+              if (
+                state.applyingRemote
+              ) {
+                return;
+              }
+
+              await writePlayback(
+                "play",
+                true
+              );
+            }
+          );
+
+          player.addEventListener(
+            Twitch.Player.PAUSE,
+            async () => {
+              if (
+                state.applyingRemote
+              ) {
+                return;
+              }
+
+              await writePlayback(
+                "pause",
+                false
+              );
+            }
+          );
+        } else {
+          setTimeout(
+            ready,
+            1500
+          );
+        }
       }
-
-      if (player.addEventListener) {
-        player.addEventListener(
-          Twitch.Player.PLAY,
-          async () => {
-            if (state.applyingRemote) return;
-            await writePlayback(
-              "play",
-              true
-            );
-          }
-        );
-
-        player.addEventListener(
-          Twitch.Player.PAUSE,
-          async () => {
-            if (state.applyingRemote) return;
-            await writePlayback(
-              "pause",
-              false
-            );
-          }
-        );
-
-        player.addEventListener(
-          Twitch.Player.SEEK,
-          async () => {
-            if (state.applyingRemote) return;
-
-            const position =
-              await asyncCurrentPosition();
-
-            await writePlaybackWithPosition(
-              "seek",
-              position,
-              await asyncIsPlaying()
-            );
-          }
-        );
-      }
-    });
+    );
 
     await syncLatestPlayback();
+
     startSyncHeartbeat();
   }
 
-  async function buildExternalPlayer(video) {
+  async function buildExternalPlayer(
+    video
+  ) {
     await destroyCurrentPlayer();
 
     hidePlayers();
@@ -1863,119 +3186,169 @@
       $("platformPlayerNotice");
 
     if (!iframe) {
-      throw new Error("找不到外部播放器");
+      throw new Error(
+        "找不到外部播放器"
+      );
     }
 
     const url =
       video.url ||
       video.id;
 
-    if (iframe.tagName === "IFRAME") {
-      iframe.src = url;
-      iframe.classList.remove("hidden");
+    if (
+      iframe.tagName ===
+      "IFRAME"
+    ) {
+      iframe.src =
+        url;
+
+      iframe.classList.remove(
+        "hidden"
+      );
+
       iframe.allow =
         "autoplay; fullscreen; picture-in-picture";
-      iframe.setAttribute(
-        "allowfullscreen",
-        ""
-      );
     } else {
-      iframe.classList.remove("hidden");
+      iframe.classList.remove(
+        "hidden"
+      );
+
       iframe.textContent =
-        `${PLATFORMS[video.platform]?.name || video.platform} 不支援本站直接控制播放。`;
+        `${
+          PLATFORMS[
+            video.platform
+          ]?.name ||
+          video.platform
+        } 不支援本站直接控制播放。`;
     }
 
-    state.playerType = "external";
-    state.player = iframe;
-    state.playerReady = false;
+    state.playerType =
+      "external";
 
-    toast(
-      `${PLATFORMS[video.platform]?.name || video.platform} 已載入`
+    state.player =
+      iframe;
+
+    state.playerReady =
+      false;
+  }
+
+  async function buildPlatformPlayer(
+    video
+  ) {
+    if (!video) {
+      hidePlayers();
+
+      $("emptyPlayer")
+        ?.classList.remove(
+          "hidden"
+        );
+
+      return;
+    }
+
+    const platform =
+      video.platform;
+
+    if (
+      platform ===
+      "youtube"
+    ) {
+      buildYoutubePlayer(
+        video.id
+      );
+
+      return;
+    }
+
+    if (
+      platform ===
+      "vimeo"
+    ) {
+      await buildVimeoPlayer(
+        video
+      );
+
+      return;
+    }
+
+    if (
+      platform ===
+      "dailymotion"
+    ) {
+      await buildDailymotionPlayer(
+        video
+      );
+
+      return;
+    }
+
+    if (
+      platform ===
+      "bilibili"
+    ) {
+      await buildBilibiliPlayer(
+        video
+      );
+
+      return;
+    }
+
+    if (
+      platform ===
+      "twitch"
+    ) {
+      await buildTwitchPlayer(
+        video
+      );
+
+      return;
+    }
+
+    await buildExternalPlayer(
+      video
     );
   }
 
-  async function buildPlatformPlayer(video) {
-    if (!video?.platform) {
-      throw new Error("沒有播放器平台");
-    }
-
-    if (
-      !PLATFORMS[video.platform]
-    ) {
-      throw new Error("不支援的平台");
-    }
-
-    if (video.platform === "youtube") {
-      buildYoutubePlayer(video.id);
-      return;
-    }
-
-    if (video.platform === "vimeo") {
-      await buildVimeoPlayer(video);
-      return;
-    }
-
-    if (video.platform === "dailymotion") {
-      await buildDailymotionPlayer(video);
-      return;
-    }
-
-    if (video.platform === "bilibili") {
-      await buildBilibiliPlayer(video);
-      return;
-    }
-
-    if (video.platform === "twitch") {
-      await buildTwitchPlayer(video);
-      return;
-    }
-
-    await buildExternalPlayer(video);
-  }
-
-  function getSelectedVideoForPlatform(platform) {
+  function getSelectedVideoForPlatform(
+    platform
+  ) {
     if (
       state.selectedVideo &&
-      state.selectedVideo.platform === platform
+      state.selectedVideo.platform ===
+        platform
     ) {
       return state.selectedVideo;
     }
 
-    const raw = getExternalInputValue();
+    const raw =
+      getExternalInputValue();
 
-    if (!raw) return null;
+    if (raw) {
+      const video =
+        createVideoObject(
+          platform,
+          raw
+        );
 
-    return createVideoObject(
-      platform,
-      raw
-    );
+      if (video) {
+        return video;
+      }
+    }
+
+    return null;
   }
 
   async function createRoom() {
     const roomName =
-      $("roomNameInput")?.value.trim() ||
+      $("roomNameInput")
+        ?.value
+        .trim() ||
       "一起看";
 
     const platform =
-      $("sourceTypeInput")?.value ||
+      $("sourceTypeInput")
+        ?.value ||
       "youtube";
-
-    let video =
-      getSelectedVideoForPlatform(
-        platform
-      );
-
-    if (!video) {
-      if (platform === "youtube") {
-        throw new Error(
-          "請先搜尋並選擇一部 YouTube 影片"
-        );
-      }
-
-      throw new Error(
-        `請輸入 ${PLATFORMS[platform]?.name || platform} 的影片網址或 ID`
-      );
-    }
 
     let roomId =
       randomRoomCode();
@@ -1983,138 +3356,210 @@
     while (
       (
         await db
-          .ref(`rooms/${roomId}`)
-          .once("value")
+          .ref(
+            `rooms/${roomId}`
+          )
+          .once(
+            "value"
+          )
       ).exists()
     ) {
-      roomId = randomRoomCode();
+      roomId =
+        randomRoomCode();
     }
 
     const room = {
-      owner: state.uid,
-      name: roomName,
-      sourceType: platform,
-      video: {
-        id: video.id || null,
-        url: video.url || null,
+      owner:
+        state.uid,
+
+      name:
+        roomName,
+
+      sourceType:
         platform,
-        title:
-          video.title ||
-          PLATFORMS[platform]?.name ||
-          platform,
-        thumbnail:
-          video.thumbnail || "",
-        channel:
-          video.channel ||
-          PLATFORMS[platform]?.name ||
-          platform,
-        twitchType:
-          video.twitchType ||
-          null
-      },
+
+      video:
+        null,
+
       state: {
-        action: "pause",
-        position: 0,
-        playing: false,
+        action:
+          "pause",
+
+        position:
+          0,
+
+        playing:
+          false,
+
         updatedAt:
-          firebase.database.ServerValue.TIMESTAMP,
-        updatedBy: state.uid
+          firebase.database
+            .ServerValue
+            .TIMESTAMP,
+
+        updatedBy:
+          state.uid
       }
     };
 
     await db
-      .ref(`rooms/${roomId}`)
-      .set(room);
+      .ref(
+        `rooms/${roomId}`
+      )
+      .set(
+        room
+      );
 
-    state.roomId = roomId;
-    state.room = room;
-    state.isOwner = true;
+    state.roomId =
+      roomId;
+
+    state.room =
+      room;
+
+    state.isOwner =
+      true;
 
     history.replaceState(
       {},
       "",
-      `?room=${encodeURIComponent(roomId)}`
+      `?room=${encodeURIComponent(
+        roomId
+      )}`
     );
 
     await enterRoom();
   }
 
-  async function joinRoom(roomId) {
-    roomId = String(roomId || "")
-      .trim()
-      .toUpperCase();
+  async function joinRoom(
+    roomId
+  ) {
+    roomId =
+      String(
+        roomId || ""
+      )
+        .trim()
+        .toUpperCase();
 
-    if (!/^[A-Z0-9]{6}$/.test(roomId)) {
-      throw new Error("房間碼必須是 6 碼");
+    if (
+      !/^[A-Z0-9]{6}$/.test(
+        roomId
+      )
+    ) {
+      throw new Error(
+        "房間碼必須是 6 碼"
+      );
     }
 
     const snapshot =
       await db
-        .ref(`rooms/${roomId}`)
-        .once("value");
+        .ref(
+          `rooms/${roomId}`
+        )
+        .once(
+          "value"
+        );
 
-    if (!snapshot.exists()) {
-      throw new Error("找不到這個房間");
+    if (
+      !snapshot.exists()
+    ) {
+      throw new Error(
+        "找不到這個房間"
+      );
     }
 
-    state.roomId = roomId;
-    state.room = snapshot.val();
+    state.roomId =
+      roomId;
+
+    state.room =
+      snapshot.val();
+
     state.isOwner =
-      state.room.owner === state.uid;
+      state.room.owner ===
+      state.uid;
 
     history.replaceState(
       {},
       "",
-      `?room=${encodeURIComponent(roomId)}`
+      `?room=${encodeURIComponent(
+        roomId
+      )}`
     );
 
     await enterRoom();
   }
 
   async function enterRoom() {
-    showView("room");
+    showView(
+      "room"
+    );
 
-    if ($("roomTitle")) {
-      $("roomTitle").textContent =
-        state.room?.name || "一起看";
+    if (
+      $("roomTitle")
+    ) {
+      $("roomTitle")
+        .textContent =
+        state.room?.name ||
+        "一起看";
     }
 
-    if ($("roomCodeLabel")) {
-      $("roomCodeLabel").textContent =
+    if (
+      $("roomCodeLabel")
+    ) {
+      $("roomCodeLabel")
+        .textContent =
         state.roomId;
     }
 
     document
-      .querySelectorAll(".owner-only")
-      .forEach((element) => {
-        element.classList.toggle(
-          "hidden",
-          !state.isOwner
-        );
-      });
+      .querySelectorAll(
+        ".owner-only"
+      )
+      .forEach(
+        (element) => {
+          element.classList.toggle(
+            "hidden",
+            !state.isOwner
+          );
+        }
+      );
 
     state.roomRef =
-      db.ref(`rooms/${state.roomId}`);
+      db.ref(
+        `rooms/${state.roomId}`
+      );
 
     state.stateRef =
-      db.ref(`rooms/${state.roomId}/state`);
+      db.ref(
+        `rooms/${state.roomId}/state`
+      );
 
     state.membersRef =
-      db.ref(`members/${state.roomId}`);
+      db.ref(
+        `members/${state.roomId}`
+      );
 
     state.chatRef =
-      db.ref(`rooms/${state.roomId}/chat`);
+      db.ref(
+        `rooms/${state.roomId}/chat`
+      );
 
     await state.membersRef
-      .child(state.uid)
+      .child(
+        state.uid
+      )
       .set({
-        name: state.memberName,
+        name:
+          state.memberName,
+
         joinedAt:
-          firebase.database.ServerValue.TIMESTAMP
+          firebase.database
+            .ServerValue
+            .TIMESTAMP
       });
 
     state.membersRef
-      .child(state.uid)
+      .child(
+        state.uid
+      )
       .onDisconnect()
       .remove();
 
@@ -2127,123 +3572,252 @@
       }
     );
 
+    state.roomRef
+      .child("video")
+      .on(
+        "value",
+        async (
+          snapshot
+        ) => {
+          const video =
+            snapshot.val();
+
+          if (!video) {
+            await destroyCurrentPlayer();
+
+            hidePlayers();
+
+            $("emptyPlayer")
+              ?.classList.remove(
+                "hidden"
+              );
+
+            if (
+              $("syncStatus")
+            ) {
+              $("syncStatus")
+                .textContent =
+                state.isOwner
+                  ? "等待你選擇影片"
+                  : "等待房主選擇影片";
+            }
+
+            return;
+          }
+
+          const roomVideo = {
+            ...video,
+
+            platform:
+              video.platform ||
+              state.room?.sourceType ||
+              "youtube"
+          };
+
+          state.room.video =
+            roomVideo;
+
+          state.room.sourceType =
+            roomVideo.platform;
+
+          try {
+            await buildPlatformPlayer(
+              roomVideo
+            );
+          } catch (error) {
+            console.error(
+              error
+            );
+
+            hidePlayers();
+
+            $("emptyPlayer")
+              ?.classList.remove(
+                "hidden"
+              );
+
+            toast(
+              error.message ||
+              "播放器載入失敗"
+            );
+          }
+        }
+      );
+
     state.membersRef.on(
       "value",
       (snapshot) => {
         renderMembers(
-          snapshot.val() || {}
+          snapshot.val() ||
+          {}
         );
       }
     );
 
     state.chatRef
-      .limitToLast(100)
+      .limitToLast(
+        100
+      )
       .on(
         "value",
         (snapshot) => {
           renderChat(
-            snapshot.val() || {}
+            snapshot.val() ||
+            {}
           );
         }
       );
 
-    const platform =
-      state.room?.sourceType;
-
-    const video =
-      state.room?.video;
-
-    if (platform && video) {
+    if (
+      state.room?.video
+    ) {
       try {
         await buildPlatformPlayer({
-          ...video,
-          platform
+          ...state.room.video,
+
+          platform:
+            state.room.video.platform ||
+            state.room.sourceType ||
+            "youtube"
         });
       } catch (error) {
-        console.error(error);
-
-        hidePlayers();
-
-        $("emptyPlayer")
-          ?.classList
-          .remove("hidden");
-
-        toast(
-          error.message ||
-          "播放器載入失敗"
+        console.error(
+          error
         );
       }
     } else {
-      $("emptyPlayer")
-        ?.classList
-        .remove("hidden");
-    }
+      hidePlayers();
 
-    if ($("syncStatus")) {
-      $("syncStatus").textContent =
-        "房間已連線";
+      $("emptyPlayer")
+        ?.classList.remove(
+          "hidden"
+        );
+
+      if (
+        $("syncStatus")
+      ) {
+        $("syncStatus")
+          .textContent =
+          state.isOwner
+            ? "等待你選擇影片"
+            : "等待房主選擇影片";
+      }
     }
   }
 
-  function renderMembers(members) {
+  function renderMembers(
+    members
+  ) {
     const entries =
-      Object.entries(members || {});
+      Object.entries(
+        members ||
+        {}
+      );
 
     entries.sort(
       (a, b) =>
-        (a[1]?.joinedAt || 0) -
-        (b[1]?.joinedAt || 0)
+        (
+          a[1]?.joinedAt ||
+          0
+        ) -
+        (
+          b[1]?.joinedAt ||
+          0
+        )
     );
 
-    if ($("memberCount")) {
-      $("memberCount").textContent =
-        String(entries.length);
+    if (
+      $("memberCount")
+    ) {
+      $("memberCount")
+        .textContent =
+        String(
+          entries.length
+        );
     }
 
-    if (!$("memberList")) return;
-
-    if (!entries.length) {
-      $("memberList").innerHTML =
-        `<div class="muted">目前沒有成員。</div>`;
+    if (
+      !$("memberList")
+    ) {
       return;
     }
 
-    $("memberList").innerHTML =
+    if (!entries.length) {
+      $("memberList")
+        .innerHTML =
+        `
+          <div class="muted">
+            目前沒有成員。
+          </div>
+        `;
+
+      return;
+    }
+
+    $("memberList")
+      .innerHTML =
       entries
-        .map(([uid, member]) => {
-          const name =
-            member?.name ||
-            "看片玩家";
+        .map(
+          ([uid, member]) => {
+            const name =
+              member?.name ||
+              "看片玩家";
 
-          const owner =
-            uid === state.room?.owner;
+            const owner =
+              uid ===
+              state.room?.owner;
 
-          return `
-            <div class="member">
-              <div class="avatar">
-                ${escapeHtml(
-                  name.slice(0, 1)
-                )}
+            return `
+              <div class="member">
+
+                <div class="avatar">
+                  ${escapeHtml(
+                    name.slice(
+                      0,
+                      1
+                    )
+                  )}
+                </div>
+
+                <div class="member-name">
+
+                  <b>
+                    ${escapeHtml(
+                      name
+                    )}
+                  </b>
+
+                  <span>
+                    ${
+                      owner
+                        ? "房主"
+                        : "成員"
+                    }
+                  </span>
+
+                </div>
+
+                <span class="online"></span>
+
               </div>
-              <div class="member-name">
-                <b>
-                  ${escapeHtml(name)}
-                </b>
-                <span>
-                  ${owner ? "房主" : "成員"}
-                </span>
-              </div>
-              <span class="online"></span>
-            </div>
-          `;
-        })
+            `;
+          }
+        )
         .join("");
   }
 
-  async function sendChat(text) {
-    text = String(text || "")
-      .trim()
-      .slice(0, 300);
+  async function sendChat(
+    text
+  ) {
+    text =
+      String(
+        text || ""
+      )
+        .trim()
+        .slice(
+          0,
+          300
+        );
 
     if (
       !text ||
@@ -2254,50 +3828,82 @@
     }
 
     await state.chatRef.push({
-      uid: state.uid,
-      name: state.memberName,
+      uid:
+        state.uid,
+
+      name:
+        state.memberName,
+
       text,
+
       createdAt:
-        firebase.database.ServerValue.TIMESTAMP
+        firebase.database
+          .ServerValue
+          .TIMESTAMP
     });
   }
 
-  function renderChat(messages) {
+  function renderChat(
+    messages
+  ) {
     const list =
-      Object.values(messages || {})
-        .sort(
-          (a, b) =>
-            (a.createdAt || 0) -
-            (b.createdAt || 0)
-        );
+      Object.values(
+        messages ||
+        {}
+      ).sort(
+        (a, b) =>
+          (
+            a.createdAt ||
+            0
+          ) -
+          (
+            b.createdAt ||
+            0
+          )
+      );
 
-    if (!$("chatMessages")) return;
-
-    if (!list.length) {
-      $("chatMessages").innerHTML =
-        `
-          <div class="muted" style="padding:12px;">
-            開始聊天吧 👋
-          </div>
-        `;
+    if (
+      !$("chatMessages")
+    ) {
       return;
     }
 
-    $("chatMessages").innerHTML =
+    if (!list.length) {
+      $("chatMessages")
+        .innerHTML =
+        `
+          <div
+            class="muted"
+            style="padding:12px;"
+          >
+            開始聊天吧 👋
+          </div>
+        `;
+
+      return;
+    }
+
+    $("chatMessages")
+      .innerHTML =
       list
         .map(
           (message) => `
             <div class="message">
+
               <b>
                 ${escapeHtml(
-                  message?.name || "玩家"
+                  message?.name ||
+                  "玩家"
                 )}
               </b>
+
               <p>
                 ${escapeHtml(
-                  message?.text || ""
+                  message?.text ||
+                  ""
                 )}
               </p>
+
             </div>
           `
         )
@@ -2310,64 +3916,122 @@
       box.scrollHeight;
   }
 
-  async function changeVideo(video) {
-    if (!state.isOwner) {
-      toast("只有房主可以更換影片");
+  async function changeVideo(
+    video
+  ) {
+    if (
+      !state.isOwner
+    ) {
+      toast(
+        "只有房主可以更換影片"
+      );
+
       return;
     }
 
-    if (!video?.id && !video?.url) {
-      throw new Error("沒有選擇影片");
+    if (
+      !video?.id &&
+      !video?.url
+    ) {
+      throw new Error(
+        "沒有選擇影片"
+      );
     }
 
     const platform =
       video.platform ||
-      $("sourceTypeInput")?.value ||
       "youtube";
 
     const roomVideo = {
-      id: video.id || null,
-      url: video.url || null,
+      id:
+        video.id ||
+        null,
+
+      url:
+        video.url ||
+        null,
+
       platform,
+
       title:
         video.title ||
-        PLATFORMS[platform]?.name ||
+        PLATFORMS[
+          platform
+        ]?.name ||
         platform,
+
       thumbnail:
-        video.thumbnail || "",
+        video.thumbnail ||
+        "",
+
       channel:
         video.channel ||
-        PLATFORMS[platform]?.name ||
+        PLATFORMS[
+          platform
+        ]?.name ||
         platform,
+
       twitchType:
-        video.twitchType || null
+        video.twitchType ||
+        null
     };
 
     await state.roomRef
-      .child("sourceType")
-      .set(platform);
+      .child(
+        "sourceType"
+      )
+      .set(
+        platform
+      );
 
     await state.roomRef
-      .child("video")
-      .set(roomVideo);
+      .child(
+        "video"
+      )
+      .set(
+        roomVideo
+      );
 
-    await state.stateRef.set({
-      action: "seek",
-      position: 0,
-      playing: false,
-      updatedAt:
-        firebase.database.ServerValue.TIMESTAMP,
-      updatedBy: state.uid
-    });
+    await state.stateRef
+      .set({
+        action:
+          "seek",
 
-    state.room.sourceType = platform;
-    state.room.video = roomVideo;
+        position:
+          0,
 
-    await buildPlatformPlayer(roomVideo);
+        playing:
+          false,
+
+        updatedAt:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP,
+
+        updatedBy:
+          state.uid
+      });
+
+    state.room.sourceType =
+      platform;
+
+    state.room.video =
+      roomVideo;
+
+    await buildPlatformPlayer(
+      roomVideo
+    );
 
     $("sourceModal")
-      ?.classList
-      .add("hidden");
+      ?.classList.add(
+        "hidden"
+      );
+
+    state.selectedVideo =
+      null;
+
+    state.modalSelectedVideo =
+      null;
 
     toast(
       `已切換${PLATFORMS[platform]?.name || platform}影片`
@@ -2387,12 +4051,14 @@
 
             await createRoom();
           } catch (error) {
-            console.error(error);
+            console.error(
+              error
+            );
 
             setError(
               $("homeError"),
               error.message ||
-              "建立房間失敗"
+                "建立房間失敗"
             );
           }
         }
@@ -2404,10 +4070,13 @@
         async () => {
           try {
             await joinRoom(
-              $("joinCodeInput")?.value
+              $("joinCodeInput")
+                ?.value
             );
           } catch (error) {
-            console.error(error);
+            console.error(
+              error
+            );
 
             toast(
               error.message ||
@@ -2435,20 +4104,27 @@
       ?.addEventListener(
         "click",
         async () => {
-          if (state.searchBusy) return;
+          if (
+            state.searchBusy
+          ) {
+            return;
+          }
 
           const query =
             $("videoSearchInput")
               ?.value
               .trim();
 
-          state.searchBusy = true;
+          state.searchBusy =
+            true;
 
           const button =
             $("searchVideoBtn");
 
           if (button) {
-            button.disabled = true;
+            button.disabled =
+              true;
+
             button.textContent =
               "搜尋中…";
           }
@@ -2459,17 +4135,22 @@
               "home"
             );
           } catch (error) {
-            console.error(error);
+            console.error(
+              error
+            );
 
             setError(
               $("homeError"),
               error.message
             );
           } finally {
-            state.searchBusy = false;
+            state.searchBusy =
+              false;
 
             if (button) {
-              button.disabled = false;
+              button.disabled =
+                false;
+
               button.textContent =
                 "搜尋";
             }
@@ -2481,9 +4162,14 @@
       ?.addEventListener(
         "keydown",
         (event) => {
-          if (event.key === "Enter") {
+          if (
+            event.key ===
+            "Enter"
+          ) {
             event.preventDefault();
-            $("searchVideoBtn")?.click();
+
+            $("searchVideoBtn")
+              ?.click();
           }
         }
       );
@@ -2497,58 +4183,59 @@
     $("sourceTypeInput")
       ?.addEventListener(
         "change",
-        (event) => {
-          const platform =
-            event.target.value;
+        () => {
+          state.selectedVideo =
+            null;
 
-          if (
-            platform !== "youtube"
-          ) {
-            clearSelectedVideo();
-
-            const input =
-              ensureExternalInput();
-
-            if (input) {
-              input.placeholder =
-                `${PLATFORMS[platform]?.name || platform} 影片網址或 ID`;
-            }
-          }
+          $("selectedVideoCard")
+            ?.classList.add(
+              "hidden"
+            );
         }
       );
 
     document
-      .querySelectorAll(".platform-card")
-      .forEach((card) => {
-        card.addEventListener(
-          "click",
-          () => {
-            const platform =
-              card.dataset.platform;
+      .querySelectorAll(
+        ".platform-card"
+      )
+      .forEach(
+        (card) => {
+          card.addEventListener(
+            "click",
+            () => {
+              const platform =
+                card.dataset.platform;
 
-            const select =
-              $("sourceTypeInput");
+              const select =
+                $("sourceTypeInput");
 
-            if (!select) return;
+              if (!select) {
+                return;
+              }
 
-            select.value =
-              platform;
+              select.value =
+                platform;
 
-            select.dispatchEvent(
-              new Event("change")
-            );
+              select.dispatchEvent(
+                new Event(
+                  "change"
+                )
+              );
 
-            document
-              .querySelector(
-                ".creator-panel"
-              )
-              ?.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-              });
-          }
-        );
-      });
+              document
+                .querySelector(
+                  ".creator-panel"
+                )
+                ?.scrollIntoView({
+                  behavior:
+                    "smooth",
+                  block:
+                    "center"
+                });
+            }
+          );
+        }
+      );
 
     $("copyRoomBtn")
       ?.addEventListener(
@@ -2561,9 +4248,13 @@
               )
             );
 
-            toast("房間連結已複製");
+            toast(
+              "房間連結已複製"
+            );
           } catch (_) {
-            toast("複製失敗");
+            toast(
+              "複製失敗"
+            );
           }
         }
       );
@@ -2586,8 +4277,11 @@
             !state.player
           ) {
             toast(
-              "目前沒有可控制的影片"
+              state.isOwner
+                ? "請先選擇影片"
+                : "等待房主選擇影片"
             );
+
             return;
           }
 
@@ -2598,6 +4292,7 @@
             toast(
               "Bilibili 無法由本站直接控制播放"
             );
+
             return;
           }
 
@@ -2608,6 +4303,7 @@
             toast(
               "此平台不支援本站播放控制"
             );
+
             return;
           }
 
@@ -2635,8 +4331,9 @@
           const target =
             Math.max(
               0,
-              (await asyncCurrentPosition()) -
-              10
+              (
+                await asyncCurrentPosition()
+              ) - 10
             );
 
           await applyPlayerPosition(
@@ -2668,9 +4365,11 @@
 
           const target =
             Math.min(
-              total || Infinity,
-              (await asyncCurrentPosition()) +
-              10
+              total ||
+                Infinity,
+              (
+                await asyncCurrentPosition()
+              ) + 10
             );
 
           await applyPlayerPosition(
@@ -2690,7 +4389,11 @@
       ?.addEventListener(
         "click",
         async () => {
-          if (!state.stateRef) return;
+          if (
+            !state.stateRef
+          ) {
+            return;
+          }
 
           const snapshot =
             await state.stateRef.once(
@@ -2702,7 +4405,9 @@
             true
           );
 
-          toast("已重新同步");
+          toast(
+            "已重新同步"
+          );
         }
       );
 
@@ -2711,7 +4416,9 @@
         "input",
         (event) => {
           const value =
-            Number(event.target.value);
+            Number(
+              event.target.value
+            );
 
           try {
             if (
@@ -2783,7 +4490,9 @@
               `已複製 ${time}`
             );
           } catch (_) {
-            toast("複製失敗");
+            toast(
+              "複製失敗"
+            );
           }
         }
       );
@@ -2800,15 +4509,25 @@
           const text =
             input?.value.trim();
 
-          if (!text) return;
+          if (!text) {
+            return;
+          }
 
-          input.value = "";
+          input.value =
+            "";
 
           try {
-            await sendChat(text);
+            await sendChat(
+              text
+            );
           } catch (error) {
-            console.error(error);
-            toast("訊息送出失敗");
+            console.error(
+              error
+            );
+
+            toast(
+              "訊息送出失敗"
+            );
           }
         }
       );
@@ -2817,19 +4536,34 @@
       ?.addEventListener(
         "click",
         () => {
-          if (!state.isOwner) return;
+          if (
+            !state.isOwner
+          ) {
+            return;
+          }
 
           $("sourceModal")
-            ?.classList
-            .remove("hidden");
+            ?.classList.remove(
+              "hidden"
+            );
 
-          state.modalSelectedVideo = null;
+          state.modalSelectedVideo =
+            null;
 
           if (
             $("modalVideoSearchResults")
           ) {
             $("modalVideoSearchResults")
-              .innerHTML = "";
+              .innerHTML =
+              "";
+          }
+
+          if (
+            $("modalVideoSearchInput")
+          ) {
+            $("modalVideoSearchInput")
+              .value =
+              "";
           }
         }
       );
@@ -2854,7 +4588,9 @@
               "modal"
             );
           } catch (error) {
-            console.error(error);
+            console.error(
+              error
+            );
 
             setError(
               $("modalError"),
@@ -2868,8 +4604,12 @@
       ?.addEventListener(
         "keydown",
         (event) => {
-          if (event.key === "Enter") {
+          if (
+            event.key ===
+            "Enter"
+          ) {
             event.preventDefault();
+
             $("modalSearchVideoBtn")
               ?.click();
           }
@@ -2881,8 +4621,9 @@
         "click",
         () => {
           $("sourceModal")
-            ?.classList
-            .add("hidden");
+            ?.classList.add(
+              "hidden"
+            );
 
           setError(
             $("modalError"),
@@ -2911,30 +4652,13 @@
               return;
             }
 
-            const platform =
-              $("sourceTypeInput")
-                ?.value ||
-              state.room?.sourceType ||
-              "youtube";
-
-            const raw =
-              getExternalInputValue();
-
-            const video =
-              createVideoObject(
-                platform,
-                raw
-              );
-
-            if (!video) {
-              throw new Error(
-                `請輸入有效的 ${PLATFORMS[platform]?.name || platform} 影片網址或 ID`
-              );
-            }
-
-            await changeVideo(video);
+            throw new Error(
+              "請先搜尋並選擇一部影片"
+            );
           } catch (error) {
-            console.error(error);
+            console.error(
+              error
+            );
 
             setError(
               $("modalError"),
@@ -2959,9 +4683,13 @@
 
       if (roomId) {
         try {
-          await joinRoom(roomId);
+          await joinRoom(
+            roomId
+          );
         } catch (error) {
-          console.error(error);
+          console.error(
+            error
+          );
 
           history.replaceState(
             {},
@@ -2969,7 +4697,9 @@
             location.pathname
           );
 
-          showView("home");
+          showView(
+            "home"
+          );
 
           toast(
             error.message ||
@@ -2977,13 +4707,20 @@
           );
         }
       } else {
-        showView("home");
+        showView(
+          "home"
+        );
       }
     } catch (error) {
-      console.error(error);
+      console.error(
+        error
+      );
 
-      if ($("authStatus")) {
-        $("authStatus").textContent =
+      if (
+        $("authStatus")
+      ) {
+        $("authStatus")
+          .textContent =
           "連線失敗";
       }
 
@@ -2999,7 +4736,7 @@
       if (
         state.room &&
         state.room.sourceType ===
-        "youtube" &&
+          "youtube" &&
         state.room.video?.id
       ) {
         buildYoutubePlayer(
