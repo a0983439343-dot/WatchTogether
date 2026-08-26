@@ -10,7 +10,7 @@
 
   <meta
     name="theme-color"
-    content="#0b1020"
+    content="#0b0b0f"
   >
 
   <meta
@@ -20,7 +20,7 @@
 
   <meta
     name="description"
-    content="WatchTogether - 和朋友一起看同一部影片"
+    content="WatchTogether - 和朋友一起同步觀看影片"
   >
 
   <meta
@@ -58,8 +58,37 @@
 
   <header class="topbar">
 
-    <div class="brand">
-      WATCH<span>TOGETHER</span>
+    <div
+      class="brand"
+      style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+      "
+    >
+
+      <span
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          width:34px;
+          height:34px;
+          border-radius:10px;
+          background:#ff0000;
+          color:#fff;
+          font-size:15px;
+          font-weight:900;
+          letter-spacing:0;
+        "
+      >
+        ▶
+      </span>
+
+      <span>
+        WATCH<span>TOGETHER</span>
+      </span>
+
     </div>
 
     <div class="topbar-right">
@@ -100,9 +129,9 @@
         </h1>
 
         <p>
-          建立房間後直接進入觀看空間。
-          所有人都可以搜尋影片，
-          也可以把影片加入待播放清單。
+          建立房間後進入專屬觀看空間。
+          所有人都可以搜尋 YouTube、
+          播放影片、加入待播放清單，
           播放進度會即時同步。
         </p>
 
@@ -111,9 +140,7 @@
 
       <div class="home-grid">
 
-        <!-- =================================================
-             CREATE ROOM
-        ================================================== -->
+        <!-- CREATE -->
 
         <section
           class="panel creator-panel"
@@ -123,8 +150,9 @@
             建立房間
           </div>
 
-
-          <label for="roomNameInput">
+          <label
+            for="roomNameInput"
+          >
             房間名稱
           </label>
 
@@ -137,7 +165,9 @@
           >
 
 
-          <label for="sourceTypeInput">
+          <label
+            for="sourceTypeInput"
+          >
             預設影片平台
           </label>
 
@@ -221,7 +251,7 @@
                 line-height:1.5;
               "
             >
-              建立房間後，所有成員都可以搜尋並選擇影片。
+              建立房間後，所有成員都可以搜尋 YouTube。
             </div>
 
           </div>
@@ -311,9 +341,7 @@
         </section>
 
 
-        <!-- =================================================
-             JOIN ROOM
-        ================================================== -->
+        <!-- JOIN -->
 
         <section
           class="panel join-panel"
@@ -322,7 +350,6 @@
           <div class="panel-title">
             加入房間
           </div>
-
 
           <label
             for="joinCodeInput"
@@ -339,7 +366,6 @@
             spellcheck="false"
           >
 
-
           <button
             id="joinRoomBtn"
             class="secondary-btn"
@@ -355,8 +381,8 @@
 
 
           <p class="muted">
-            朋友也可以直接把邀請連結傳給你。
-            打開後會自動進入同一個房間。
+            直接打開朋友傳來的邀請連結，
+            會自動加入同一個房間。
           </p>
 
 
@@ -364,12 +390,12 @@
 
             <div class="join-feature">
               <span>✓</span>
-              同一部影片
+              YouTube 同步播放
             </div>
 
             <div class="join-feature">
               <span>✓</span>
-              同步播放
+              所有人都可選片
             </div>
 
             <div class="join-feature">
@@ -418,7 +444,6 @@
             <small>搜尋 / 影片</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="vimeo"
@@ -428,7 +453,6 @@
             <strong>Vimeo</strong>
             <small>影片</small>
           </button>
-
 
           <button
             class="platform-card"
@@ -440,7 +464,6 @@
             <small>影片</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="bilibili"
@@ -450,7 +473,6 @@
             <strong>Bilibili</strong>
             <small>影片</small>
           </button>
-
 
           <button
             class="platform-card"
@@ -462,7 +484,6 @@
             <small>直播 / VOD</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="netflix"
@@ -472,7 +493,6 @@
             <strong>Netflix</strong>
             <small>串流</small>
           </button>
-
 
           <button
             class="platform-card"
@@ -484,7 +504,6 @@
             <small>動漫</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="disneyplus"
@@ -494,7 +513,6 @@
             <strong>Disney+</strong>
             <small>串流</small>
           </button>
-
 
           <button
             class="platform-card"
@@ -506,7 +524,6 @@
             <small>串流</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="appletv"
@@ -516,7 +533,6 @@
             <strong>Apple TV+</strong>
             <small>串流</small>
           </button>
-
 
           <button
             class="platform-card"
@@ -528,7 +544,6 @@
             <small>串流</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="hulu"
@@ -539,7 +554,6 @@
             <small>串流</small>
           </button>
 
-
           <button
             class="platform-card"
             data-platform="paramount"
@@ -549,7 +563,6 @@
             <strong>Paramount+</strong>
             <small>串流</small>
           </button>
-
 
           <button
             class="platform-card"
@@ -573,7 +586,7 @@
             line-height:1.65;
           "
         >
-          建立房間後，所有成員都可以搜尋並選擇實際觀看內容。
+          建立房間後，所有成員都可以搜尋並選擇內容。
         </div>
 
       </section>
@@ -598,11 +611,9 @@
             WATCH PARTY
           </div>
 
-
           <h2 id="roomTitle">
             一起看
           </h2>
-
 
           <div class="room-meta">
 
@@ -654,9 +665,7 @@
 
       <div class="room-layout">
 
-        <!-- =================================================
-             PLAYER
-        ================================================== -->
+        <!-- PLAYER -->
 
         <section
           class="watch-panel panel"
@@ -672,7 +681,6 @@
               class="youtube-player hidden"
             ></div>
 
-
             <iframe
               id="vimeoPlayer"
               class="external-player hidden"
@@ -680,7 +688,6 @@
               allow="autoplay; fullscreen; picture-in-picture"
               frameborder="0"
             ></iframe>
-
 
             <iframe
               id="dailymotionPlayer"
@@ -690,7 +697,6 @@
               frameborder="0"
             ></iframe>
 
-
             <iframe
               id="bilibiliPlayer"
               class="external-player hidden"
@@ -699,12 +705,10 @@
               frameborder="0"
             ></iframe>
 
-
             <div
               id="twitchPlayer"
               class="external-player hidden"
             ></div>
-
 
             <video
               id="directVideo"
@@ -724,15 +728,13 @@
                 🎬
               </div>
 
-
               <h3>
-                等待有人選擇影片
+                等待選擇影片
               </h3>
 
-
               <p>
-                房間內任何成員都可以搜尋 YouTube，
-                選擇影片或加入待播放清單。
+                房間內任何成員都可以搜尋 YouTube、
+                播放影片或加入待播放清單。
               </p>
 
             </div>
@@ -750,20 +752,17 @@
                 🌐
               </div>
 
-
               <h3
                 id="roomPlatformName"
               >
                 影片平台
               </h3>
 
-
               <p
                 id="roomPlatformDescription"
               >
                 正在準備播放器。
               </p>
-
 
               <button
                 id="openPlatformBtn"
@@ -786,8 +785,6 @@
           </div>
 
 
-          <!-- SYNC -->
-
           <div class="sync-bar">
 
             <div>
@@ -800,7 +797,6 @@
 
             </div>
 
-
             <button
               id="syncNowBtn"
               class="tiny-btn"
@@ -811,8 +807,6 @@
 
           </div>
 
-
-          <!-- PLAYER CONTROLS -->
 
           <div
             id="roomControls"
@@ -827,7 +821,6 @@
               ▶
             </button>
 
-
             <button
               id="backBtn"
               class="control-btn"
@@ -835,7 +828,6 @@
             >
               ↶ 10
             </button>
-
 
             <button
               id="forwardBtn"
@@ -845,14 +837,12 @@
               10 ↷
             </button>
 
-
             <div
               id="timeReadout"
               class="time-readout"
             >
               00:00 / 00:00
             </div>
-
 
             <input
               id="volumeInput"
@@ -862,7 +852,6 @@
               max="100"
               value="100"
             >
-
 
             <button
               id="fullscreenBtn"
@@ -875,8 +864,6 @@
           </div>
 
 
-          <!-- ROOM ACTIONS -->
-
           <div class="room-actions">
 
             <button
@@ -887,13 +874,12 @@
               複製目前時間
             </button>
 
-
             <button
               id="changeSourceBtn"
               class="secondary-btn"
               type="button"
             >
-              🔎 搜尋 / 選擇影片
+              🔎 搜尋 YouTube / 選擇影片
             </button>
 
           </div>
@@ -901,9 +887,7 @@
         </section>
 
 
-        <!-- =================================================
-             SIDEBAR
-        ================================================== -->
+        <!-- SIDEBAR -->
 
         <aside class="side-column">
 
@@ -921,13 +905,11 @@
                 👥 房間成員
               </span>
 
-
               <span id="memberCount">
                 0
               </span>
 
             </div>
-
 
             <div
               id="memberList"
@@ -952,7 +934,6 @@
                 📋 待播放清單
               </span>
 
-
               <button
                 id="playQueueNowBtn"
                 class="tiny-btn"
@@ -962,7 +943,6 @@
               </button>
 
             </div>
-
 
             <div
               id="queueList"
@@ -994,12 +974,10 @@
               💬 聊天室
             </div>
 
-
             <div
               id="chatMessages"
               class="chat-messages"
             ></div>
-
 
             <form
               id="chatForm"
@@ -1012,7 +990,6 @@
                 placeholder="說點什麼…"
                 autocomplete="off"
               >
-
 
               <button
                 type="submit"
@@ -1035,237 +1012,521 @@
 </div>
 
 
-<!-- =======================================================
-     VIDEO SOURCE MODAL
-======================================================= -->
+<!-- =====================================================
+     YOUTUBE STYLE SEARCH
+====================================================== -->
 
 <div
   id="sourceModal"
   class="modal hidden"
+  style="
+    align-items:stretch;
+    justify-content:stretch;
+    padding:0;
+    background:#0b0b0f;
+  "
 >
 
-  <div class="modal-card">
+  <div
+    class="modal-card"
+    style="
+      width:100%;
+      max-width:none;
+      height:100%;
+      max-height:none;
+      padding:0;
+      overflow:hidden;
+      border:0;
+      border-radius:0;
+      background:#0b0b0f;
+      box-shadow:none;
+    "
+  >
 
-    <div class="panel-title">
-      🔎 搜尋 / 選擇影片
-    </div>
-
-
-    <div
-      class="muted"
-      style="
-        margin-bottom:12px;
-        font-size:12px;
-        line-height:1.5;
-      "
-    >
-      所有房間成員都可以搜尋影片。
-      可以直接播放，也可以加入待播放清單。
-    </div>
-
-
-    <label
-      for="sourceTypeModal"
-    >
-      影片平台
-    </label>
-
-
-    <select
-      id="sourceTypeModal"
-    >
-
-      <option
-        value="youtube"
-        selected
-      >
-        ▶ YouTube
-      </option>
-
-      <option value="vimeo">
-        ▶ Vimeo
-      </option>
-
-      <option value="dailymotion">
-        ▶ Dailymotion
-      </option>
-
-      <option value="bilibili">
-        📺 Bilibili
-      </option>
-
-      <option value="twitch">
-        🎮 Twitch
-      </option>
-
-      <option value="netflix">
-        🔴 Netflix
-      </option>
-
-      <option value="crunchyroll">
-        🟠 Crunchyroll
-      </option>
-
-      <option value="disneyplus">
-        🔵 Disney+
-      </option>
-
-      <option value="primevideo">
-        🟦 Prime Video
-      </option>
-
-      <option value="appletv">
-        🍎 Apple TV+
-      </option>
-
-      <option value="max">
-        🟣 Max
-      </option>
-
-      <option value="hulu">
-        🟢 Hulu
-      </option>
-
-      <option value="paramount">
-        🟦 Paramount+
-      </option>
-
-      <option value="peacock">
-        🦚 Peacock
-      </option>
-
-    </select>
-
-
-    <!-- EXTERNAL INPUT -->
+    <!-- SEARCH HEADER -->
 
     <div
-      id="modalExternalSourceArea"
-      class="hidden"
       style="
-        margin-top:14px;
+        display:flex;
+        align-items:center;
+        gap:14px;
+        height:68px;
+        padding:0 20px;
+        border-bottom:1px solid rgba(255,255,255,.08);
+        background:#0b0b0f;
       "
     >
-
-      <label
-        for="modalSourceUrlInput"
-      >
-        影片網址或 ID
-      </label>
-
-
-      <input
-        id="modalSourceUrlInput"
-        type="text"
-        maxlength="1000"
-        placeholder="貼上影片網址或輸入 ID"
-        autocomplete="off"
-        spellcheck="false"
-      >
-
-
-      <div
-        id="modalSourceHint"
-        class="muted"
-        style="
-          margin-top:8px;
-          font-size:12px;
-          line-height:1.5;
-        "
-      >
-        貼上影片網址或輸入平台影片 ID。
-      </div>
-
-    </div>
-
-
-    <!-- YOUTUBE SEARCH -->
-
-    <div
-      id="modalVideoSearchArea"
-      style="
-        margin-top:14px;
-      "
-    >
-
-      <label
-        for="modalVideoSearchInput"
-      >
-        搜尋 YouTube
-      </label>
-
-
-      <div class="search-row">
-
-        <input
-          id="modalVideoSearchInput"
-          type="search"
-          maxlength="100"
-          placeholder="搜尋動漫、影片名稱…"
-          autocomplete="off"
-        >
-
-
-        <button
-          id="modalSearchVideoBtn"
-          class="search-btn"
-          type="button"
-        >
-          搜尋
-        </button>
-
-      </div>
-
-
-      <div
-        class="muted"
-        style="
-          margin-top:8px;
-          font-size:12px;
-          line-height:1.5;
-        "
-      >
-        搜尋結果可以直接播放，
-        或加入待播放清單。
-      </div>
-
-
-      <div
-        id="modalVideoSearchResults"
-        class="video-search-results"
-      ></div>
-
-    </div>
-
-
-    <!-- MODAL ACTIONS -->
-
-    <div class="modal-actions">
 
       <button
         id="cancelModalBtn"
-        class="secondary-btn"
         type="button"
+        class="ghost-btn"
+        style="
+          min-width:42px;
+          padding:0;
+          font-size:20px;
+        "
+        aria-label="關閉"
       >
-        取消
+        ←
       </button>
 
 
-      <button
-        id="saveSourceBtn"
-        class="primary-btn"
-        type="button"
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:8px;
+          flex:0 0 auto;
+          color:#fff;
+          font-weight:900;
+        "
       >
-        播放這部影片
-      </button>
+
+        <span
+          style="
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            width:30px;
+            height:30px;
+            border-radius:8px;
+            background:#ff0000;
+            color:#fff;
+            font-size:13px;
+          "
+        >
+          ▶
+        </span>
+
+        <span>
+          YouTube
+        </span>
+
+      </div>
+
+
+      <div
+        style="
+          flex:1;
+          max-width:720px;
+          margin:0 auto;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            width:100%;
+            height:42px;
+          "
+        >
+
+          <input
+            id="modalVideoSearchInput"
+            type="search"
+            maxlength="100"
+            placeholder="搜尋"
+            autocomplete="off"
+            style="
+              min-height:42px;
+              height:42px;
+              border-radius:21px 0 0 21px;
+              border-right:0;
+              background:#18181c;
+            "
+          >
+
+
+          <button
+            id="modalSearchVideoBtn"
+            class="search-btn"
+            type="button"
+            style="
+              min-width:60px;
+              height:42px;
+              min-height:42px;
+              border-radius:0 21px 21px 0;
+              background:#27272b;
+              color:#fff;
+            "
+            aria-label="搜尋"
+          >
+            🔍
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          width:42px;
+          height:42px;
+          flex:0 0 42px;
+          border-radius:50%;
+          background:#27272b;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:15px;
+        "
+      >
+        👤
+      </div>
 
     </div>
 
 
+    <!-- MAIN SEARCH BODY -->
+
     <div
-      id="modalError"
-      class="error-text"
-    ></div>
+      style="
+        display:grid;
+        grid-template-columns:220px minmax(0,1fr);
+        height:calc(100% - 68px);
+        min-height:0;
+      "
+    >
+
+      <!-- LEFT -->
+
+      <aside
+        style="
+          padding:16px 10px;
+          border-right:1px solid rgba(255,255,255,.07);
+          overflow-y:auto;
+        "
+      >
+
+        <div
+          style="
+            padding:11px 13px;
+            border-radius:10px;
+            background:rgba(255,255,255,.08);
+            color:#fff;
+            font-size:13px;
+            font-weight:750;
+          "
+        >
+          🏠 首頁
+        </div>
+
+
+        <div
+          style="
+            margin-top:4px;
+            padding:11px 13px;
+            border-radius:10px;
+            color:#cbd5e1;
+            font-size:13px;
+          "
+        >
+          🔥 熱門
+        </div>
+
+
+        <div
+          style="
+            padding:11px 13px;
+            border-radius:10px;
+            color:#cbd5e1;
+            font-size:13px;
+          "
+        >
+          🎬 影片
+        </div>
+
+
+        <div
+          style="
+            padding:11px 13px;
+            border-radius:10px;
+            color:#cbd5e1;
+            font-size:13px;
+          "
+        >
+          🎵 音樂
+        </div>
+
+
+        <div
+          style="
+            padding:11px 13px;
+            border-radius:10px;
+            color:#cbd5e1;
+            font-size:13px;
+          "
+        >
+          🎮 遊戲
+        </div>
+
+
+        <div
+          style="
+            height:1px;
+            margin:14px 8px;
+            background:rgba(255,255,255,.07);
+          "
+        ></div>
+
+
+        <div
+          style="
+            padding:11px 13px;
+            color:#94a3b8;
+            font-size:11px;
+            font-weight:800;
+            letter-spacing:.08em;
+          "
+        >
+          WATCH TOGETHER
+        </div>
+
+
+        <div
+          style="
+            padding:11px 13px;
+            border-radius:10px;
+            color:#cbd5e1;
+            font-size:13px;
+          "
+        >
+          📋 待播放清單
+        </div>
+
+
+        <div
+          style="
+            padding:11px 13px;
+            border-radius:10px;
+            color:#cbd5e1;
+            font-size:13px;
+          "
+        >
+          👥 房間成員
+        </div>
+
+      </aside>
+
+
+      <!-- RESULTS -->
+
+      <section
+        style="
+          min-width:0;
+          overflow-y:auto;
+          padding:20px 24px 30px;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            margin-bottom:16px;
+          "
+        >
+
+          <div
+            style="
+              color:#fff;
+              font-size:18px;
+              font-weight:800;
+            "
+          >
+            YouTube 搜尋
+          </div>
+
+
+          <select
+            id="sourceTypeModal"
+            style="
+              width:auto;
+              min-width:150px;
+              min-height:38px;
+              height:38px;
+              padding:0 12px;
+              border-radius:10px;
+              font-size:12px;
+            "
+          >
+
+            <option
+              value="youtube"
+              selected
+            >
+              ▶ YouTube
+            </option>
+
+            <option value="vimeo">
+              ▶ Vimeo
+            </option>
+
+            <option value="dailymotion">
+              ▶ Dailymotion
+            </option>
+
+            <option value="bilibili">
+              📺 Bilibili
+            </option>
+
+            <option value="twitch">
+              🎮 Twitch
+            </option>
+
+            <option value="netflix">
+              🔴 Netflix
+            </option>
+
+            <option value="crunchyroll">
+              🟠 Crunchyroll
+            </option>
+
+            <option value="disneyplus">
+              🔵 Disney+
+            </option>
+
+            <option value="primevideo">
+              🟦 Prime Video
+            </option>
+
+            <option value="appletv">
+              🍎 Apple TV+
+            </option>
+
+            <option value="max">
+              🟣 Max
+            </option>
+
+            <option value="hulu">
+              🟢 Hulu
+            </option>
+
+            <option value="paramount">
+              🟦 Paramount+
+            </option>
+
+            <option value="peacock">
+              🦚 Peacock
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <!-- EXTERNAL AREA -->
+
+        <div
+          id="modalExternalSourceArea"
+          class="hidden"
+          style="
+            max-width:700px;
+            padding:18px;
+            margin-bottom:16px;
+            border:1px solid rgba(255,255,255,.08);
+            border-radius:14px;
+            background:#18181c;
+          "
+        >
+
+          <label
+            for="modalSourceUrlInput"
+          >
+            影片網址或 ID
+          </label>
+
+          <input
+            id="modalSourceUrlInput"
+            type="text"
+            maxlength="1000"
+            placeholder="貼上影片網址或輸入 ID"
+            autocomplete="off"
+            spellcheck="false"
+          >
+
+          <div
+            id="modalSourceHint"
+            class="muted"
+            style="
+              margin-top:8px;
+              font-size:12px;
+            "
+          >
+            貼上影片網址或影片 ID。
+          </div>
+
+        </div>
+
+
+        <!-- YOUTUBE SEARCH AREA -->
+
+        <div
+          id="modalVideoSearchArea"
+        >
+
+          <div
+            class="muted"
+            style="
+              margin-bottom:14px;
+              font-size:12px;
+            "
+          >
+            搜尋結果來自 YouTube。
+            可以直接播放，也可以加入 WatchTogether 待播放清單。
+          </div>
+
+
+          <div
+            id="modalVideoSearchResults"
+            class="video-search-results"
+          >
+
+            <div
+              style="
+                padding:70px 20px;
+                text-align:center;
+                color:#64748b;
+              "
+            >
+
+              <div
+                style="
+                  font-size:48px;
+                  margin-bottom:12px;
+                "
+              >
+                🔎
+              </div>
+
+              <div
+                style="
+                  color:#94a3b8;
+                  font-size:14px;
+                "
+              >
+                輸入關鍵字搜尋 YouTube
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="modalError"
+          class="error-text"
+        ></div>
+
+      </section>
+
+    </div>
 
   </div>
 
@@ -1280,9 +1541,9 @@
 ></div>
 
 
-<!-- =======================================================
+<!-- =====================================================
      FIREBASE
-======================================================= -->
+====================================================== -->
 
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
 
@@ -1291,7 +1552,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
 
 
-<!-- YOUTUBE -->
+<!-- YOUTUBE API -->
 
 <script src="https://www.youtube.com/iframe_api"></script>
 
@@ -1301,7 +1562,7 @@
 <script src="https://player.vimeo.com/api/player.js"></script>
 
 
-<!-- CONFIG -->
+<!-- FIREBASE CONFIG -->
 
 <script src="firebase-config.js"></script>
 
@@ -1311,9 +1572,9 @@
 <script src="app.js"></script>
 
 
-<!-- =======================================================
+<!-- =====================================================
      PLATFORM UI
-======================================================= -->
+====================================================== -->
 
 <script>
 document.addEventListener(
@@ -1436,7 +1697,7 @@ document.addEventListener(
         icon: "📺",
         name: "Bilibili",
         text:
-          "進入房間後可以貼上 Bilibili BV 號碼、av 號碼或影片網址。",
+          "進入房間後可以貼上 Bilibili BV、av 或影片網址。",
         placeholder:
           "例如 https://www.bilibili.com/video/BVxxxxxx",
         searchable: false
@@ -1582,7 +1843,9 @@ document.addEventListener(
 
       if (searchHint) {
         searchHint.textContent =
-          "建立房間後，所有成員都可以搜尋並選擇影片。";
+          info.searchable
+            ? "建立房間後，所有成員都可以搜尋 YouTube。"
+            : `建立房間後，可以輸入 ${info.name} 影片網址或 ID。`;
       }
 
 
