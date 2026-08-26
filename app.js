@@ -108,12 +108,10 @@
 
   const state = {
     uid: null,
-
     memberName: "看片玩家",
 
     roomId: null,
     room: null,
-
     isOwner: false,
 
     roomRef: null,
@@ -135,6 +133,7 @@
     lastWriteAt: 0,
 
     syncTimer: null,
+    memberHeartbeatTimer: null,
 
     searchResults: [],
     modalSelectedVideo: null,
@@ -729,13 +728,31 @@
     );
 
     url.searchParams.set(
+      "videoSyndicated",
+      "true"
+    );
+
+    url.searchParams.set(
+      "order",
+      "relevance"
+    );
+
+    url.searchParams.set(
       "key",
       YOUTUBE_API_KEY
     );
 
     const response =
       await fetch(
-        url.toString()
+        url.toString(),
+        {
+          method:
+            "GET",
+          headers: {
+            Accept:
+              "application/json"
+          }
+        }
       );
 
     if (!response.ok) {
@@ -751,7 +768,9 @@
           message;
       } catch (_) {}
 
-      throw new Error(message);
+      throw new Error(
+        message
+      );
     }
 
     const data =
@@ -759,44 +778,62 @@
 
     const results =
       (
-        Array.isArray(data.items)
+        Array.isArray(
+          data.items
+        )
           ? data.items
           : []
       )
-        .map((item) => {
-          const id =
-            item?.id?.videoId;
+        .map(
+          (item) => {
+            const id =
+              item?.id?.videoId;
 
-          const snippet =
-            item?.snippet || {};
+            const snippet =
+              item?.snippet ||
+              {};
 
-          if (!id) {
-            return null;
+            if (!id) {
+              return null;
+            }
+
+            return {
+              id,
+
+              platform:
+                "youtube",
+
+              title:
+                snippet.title ||
+                "未命名影片",
+
+              description:
+                snippet.description ||
+                "",
+
+              channel:
+                snippet.channelTitle ||
+                "",
+
+              publishedAt:
+                snippet.publishedAt ||
+                "",
+
+              thumbnail:
+                snippet.thumbnails
+                  ?.maxres?.url ||
+                snippet.thumbnails
+                  ?.high?.url ||
+                snippet.thumbnails
+                  ?.medium?.url ||
+                snippet.thumbnails
+                  ?.default?.url ||
+                `https://i.ytimg.com/vi/${encodeURIComponent(
+                  id
+                )}/hqdefault.jpg`
+            };
           }
-
-          return {
-            id,
-            platform: "youtube",
-
-            title:
-              snippet.title ||
-              "未命名影片",
-
-            description:
-              snippet.description ||
-              "",
-
-            channel:
-              snippet.channelTitle ||
-              "",
-
-            thumbnail:
-              snippet.thumbnails?.high?.url ||
-              snippet.thumbnails?.medium?.url ||
-              snippet.thumbnails?.default?.url ||
-              ""
-          };
-        })
+        )
         .filter(Boolean);
 
     state.searchResults =
@@ -819,7 +856,9 @@
      SEARCH RESULTS
   ===================================================== */
 
-  function renderSearchResults(results) {
+  function renderSearchResults(
+    results
+  ) {
     const container =
       $("modalVideoSearchResults");
 
@@ -846,13 +885,40 @@
     ) {
       container.innerHTML = `
         <div
-          class="muted"
+          class="youtube-search-empty"
           style="
-            padding:14px 4px;
+            padding:34px 16px;
             text-align:center;
           "
         >
-          找不到符合的影片。
+          <div
+            style="
+              font-size:42px;
+              margin-bottom:12px;
+            "
+          >
+            🔎
+          </div>
+
+          <strong
+            style="
+              display:block;
+              color:#e2e8f0;
+              font-size:16px;
+              margin-bottom:6px;
+            "
+          >
+            找不到影片
+          </strong>
+
+          <span
+            class="muted"
+            style="
+              font-size:13px;
+            "
+          >
+            試試其他關鍵字。
+          </span>
         </div>
       `;
 
@@ -862,82 +928,148 @@
     container.innerHTML =
       state.searchResults
         .map(
-          (video) => `
-            <div
-              class="video-result-card"
-              data-video-id="${escapeHtml(
+          (video) => {
+
+            const id =
+              escapeHtml(
                 video.id
-              )}"
-            >
+              );
 
-              <button
-                type="button"
-                class="video-result-main"
-                data-video-select="${escapeHtml(
+            const title =
+              escapeHtml(
+                video.title ||
+                "未命名影片"
+              );
+
+            const channel =
+              escapeHtml(
+                video.channel ||
+                "YouTube"
+              );
+
+            const thumbnail =
+              escapeHtml(
+                video.thumbnail ||
+                `https://i.ytimg.com/vi/${encodeURIComponent(
                   video.id
-                )}"
-              >
+                )}/hqdefault.jpg`
+              );
 
-                <img
-                  src="${escapeHtml(
-                    video.thumbnail
-                  )}"
-                  alt=""
-                  loading="lazy"
-                >
-
-                <span
-                  class="video-result-info"
-                >
-
-                  <strong>
-                    ${escapeHtml(
-                      video.title
-                    )}
-                  </strong>
-
-                  <small>
-                    ${escapeHtml(
-                      video.channel
-                    )}
-                  </small>
-
-                </span>
-
-              </button>
-
-              <div
-                style="
-                  display:flex;
-                  gap:6px;
-                  margin-top:8px;
-                "
+            return `
+              <article
+                class="video-result-card"
+                data-video-id="${id}"
               >
 
                 <button
                   type="button"
-                  class="tiny-btn"
-                  data-video-play="${escapeHtml(
-                    video.id
-                  )}"
+                  class="video-result-main"
+                  data-video-select="${id}"
+                  aria-label="選擇 ${title}"
+                  style="
+                    width:100%;
+                    padding:0;
+                    border:0;
+                    background:transparent;
+                    color:inherit;
+                    text-align:left;
+                  "
                 >
-                  ▶ 播放
+
+                  <div
+                    style="
+                      position:relative;
+                      width:100%;
+                      aspect-ratio:16/9;
+                      overflow:hidden;
+                      border-radius:9px;
+                      background:#111827;
+                    "
+                  >
+
+                    <img
+                      src="${thumbnail}"
+                      alt=""
+                      loading="lazy"
+                      style="
+                        display:block;
+                        width:100%;
+                        height:100%;
+                        object-fit:cover;
+                      "
+                    >
+
+                    <div
+                      style="
+                        position:absolute;
+                        left:50%;
+                        top:50%;
+                        transform:translate(-50%,-50%);
+                        width:48px;
+                        height:48px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        border-radius:50%;
+                        background:rgba(0,0,0,.72);
+                        color:#fff;
+                        font-size:18px;
+                        pointer-events:none;
+                      "
+                    >
+                      ▶
+                    </div>
+
+                  </div>
+
+                  <div
+                    class="video-result-info"
+                    style="
+                      margin-top:9px;
+                    "
+                  >
+
+                    <strong>
+                      ${title}
+                    </strong>
+
+                    <small>
+                      ${channel}
+                    </small>
+
+                  </div>
+
                 </button>
 
-                <button
-                  type="button"
-                  class="tiny-btn"
-                  data-video-queue="${escapeHtml(
-                    video.id
-                  )}"
+                <div
+                  style="
+                    display:flex;
+                    gap:6px;
+                    margin-top:9px;
+                  "
                 >
-                  ＋ 待播放
-                </button>
 
-              </div>
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-video-play="${id}"
+                  >
+                    ▶ 播放
+                  </button>
 
-            </div>
-          `
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-video-queue="${id}"
+                  >
+                    ＋ 待播放
+                  </button>
+
+                </div>
+
+              </article>
+            `;
+          }
         )
         .join("");
 
@@ -947,11 +1079,20 @@
       )
       .forEach(
         (button) => {
+
           button.addEventListener(
             "click",
             () => {
+
+              const id =
+                String(
+                  button.dataset
+                    .videoSelect ||
+                  ""
+                );
+
               selectSearchVideo(
-                button.dataset.videoSelect
+                id
               );
             }
           );
@@ -964,19 +1105,26 @@
       )
       .forEach(
         (button) => {
+
           button.addEventListener(
             "click",
             async (event) => {
+
               event.stopPropagation();
+
+              const id =
+                String(
+                  button.dataset
+                    .videoPlay ||
+                  ""
+                );
 
               const video =
                 state.searchResults.find(
                   (item) =>
-                    String(item.id) ===
                     String(
-                      button.dataset
-                        .videoPlay
-                    )
+                      item.id
+                    ) === id
                 );
 
               if (!video) {
@@ -984,11 +1132,15 @@
               }
 
               try {
+
                 await changeVideo({
                   ...video,
-                  platform: "youtube"
+                  platform:
+                    "youtube"
                 });
+
               } catch (error) {
+
                 console.error(
                   error
                 );
@@ -1010,19 +1162,26 @@
       )
       .forEach(
         (button) => {
+
           button.addEventListener(
             "click",
             async (event) => {
+
               event.stopPropagation();
+
+              const id =
+                String(
+                  button.dataset
+                    .videoQueue ||
+                  ""
+                );
 
               const video =
                 state.searchResults.find(
                   (item) =>
-                    String(item.id) ===
                     String(
-                      button.dataset
-                        .videoQueue
-                    )
+                      item.id
+                    ) === id
                 );
 
               if (!video) {
@@ -1030,15 +1189,19 @@
               }
 
               try {
+
                 await addToQueue({
                   ...video,
-                  platform: "youtube"
+                  platform:
+                    "youtube"
                 });
 
                 toast(
                   "已加入待播放清單"
                 );
+
               } catch (error) {
+
                 console.error(
                   error
                 );
@@ -1072,7 +1235,8 @@
 
     state.modalSelectedVideo = {
       ...video,
-      platform: "youtube"
+      platform:
+        "youtube"
     };
 
     state.modalSelectedVideoId =
@@ -1088,12 +1252,13 @@
         )
         .forEach(
           (item) => {
+
             item.classList.toggle(
               "selected",
               String(
                 item.dataset.videoId
               ) ===
-                String(id)
+              String(id)
             );
           }
         );
@@ -1149,7 +1314,8 @@
 
     return {
       ...video,
-      platform: "youtube"
+      platform:
+        "youtube"
     };
   }
 
@@ -1213,7 +1379,9 @@
       return {
         id,
         url:
-          String(rawValue),
+          String(
+            rawValue
+          ),
 
         platform,
 
@@ -1245,7 +1413,9 @@
       return {
         id,
         url:
-          String(rawValue),
+          String(
+            rawValue
+          ),
 
         platform,
 
@@ -1277,7 +1447,9 @@
       return {
         id,
         url:
-          String(rawValue),
+          String(
+            rawValue
+          ),
 
         platform,
 
@@ -1314,7 +1486,9 @@
           value.type,
 
         url:
-          String(rawValue),
+          String(
+            rawValue
+          ),
 
         platform,
 
@@ -1332,10 +1506,14 @@
 
     return {
       id:
-        String(rawValue),
+        String(
+          rawValue
+        ),
 
       url:
-        String(rawValue),
+        String(
+          rawValue
+        ),
 
       platform,
 
@@ -1382,8 +1560,13 @@
         state.queue || {}
       ).some(
         (item) =>
-          String(item?.id || "") ===
-          String(video.id) &&
+          String(
+            item?.id ||
+            ""
+          ) ===
+          String(
+            video.id
+          ) &&
           String(
             item?.platform ||
             "youtube"
@@ -1402,7 +1585,9 @@
 
     const item = {
       id:
-        String(video.id),
+        String(
+          video.id
+        ),
 
       platform:
         video.platform ||
@@ -1434,7 +1619,9 @@
 
     if (video.url) {
       item.url =
-        String(video.url);
+        String(
+          video.url
+        );
     }
 
     if (video.twitchType) {
@@ -1458,7 +1645,9 @@
     }
 
     await state.queueRef
-      .child(queueId)
+      .child(
+        queueId
+      )
       .remove();
 
     toast(
@@ -1512,7 +1701,9 @@
 
     if (state.queueRef) {
       await state.queueRef
-        .child(queueId)
+        .child(
+          queueId
+        )
         .remove();
     }
   }
@@ -1524,13 +1715,20 @@
       .map(
         ([id, item]) => ({
           ...item,
-          queueId: id
+          queueId:
+            id
         })
       )
       .sort(
         (a, b) =>
-          Number(a.addedAt || 0) -
-          Number(b.addedAt || 0)
+          Number(
+            a.addedAt ||
+            0
+          ) -
+          Number(
+            b.addedAt ||
+            0
+          )
       );
   }
 
@@ -1564,125 +1762,141 @@
     container.innerHTML =
       list
         .map(
-          (item, index) => `
-            <div
-              class="queue-item"
-              data-queue-id="${escapeHtml(
-                item.queueId
-              )}"
-            >
+          (item, index) => {
 
+            const currentlyPlaying =
+              state.room?.video?.id &&
+              String(
+                state.room.video.id
+              ) ===
+              String(
+                item.id
+              );
+
+            return `
               <div
-                style="
-                  display:flex;
-                  align-items:center;
-                  gap:10px;
-                  min-width:0;
-                "
-              >
-
-                <div
-                  style="
-                    width:28px;
-                    flex:0 0 28px;
-                    text-align:center;
-                    font-weight:800;
-                    color:#93c5fd;
-                  "
-                >
-                  ${index + 1}
-                </div>
-
-                ${
-                  item.thumbnail
-                    ? `
-                      <img
-                        src="${escapeHtml(
-                          item.thumbnail
-                        )}"
-                        alt=""
-                        style="
-                          width:72px;
-                          height:40px;
-                          object-fit:cover;
-                          border-radius:7px;
-                        "
-                      >
-                    `
+                class="queue-item${
+                  currentlyPlaying
+                    ? " active"
                     : ""
-                }
+                }"
+                data-queue-id="${escapeHtml(
+                  item.queueId
+                )}"
+              >
 
                 <div
                   style="
+                    display:flex;
+                    align-items:center;
+                    gap:10px;
                     min-width:0;
-                    flex:1;
                   "
                 >
 
                   <div
                     style="
-                      overflow:hidden;
-                      text-overflow:ellipsis;
-                      white-space:nowrap;
-                      font-size:13px;
-                      font-weight:700;
+                      width:28px;
+                      flex:0 0 28px;
+                      text-align:center;
+                      font-weight:800;
+                      color:#93c5fd;
                     "
                   >
-                    ${escapeHtml(
-                      item.title ||
-                      "未命名影片"
-                    )}
+                    ${index + 1}
                   </div>
 
+                  ${
+                    item.thumbnail
+                      ? `
+                        <img
+                          src="${escapeHtml(
+                            item.thumbnail
+                          )}"
+                          alt=""
+                          style="
+                            width:72px;
+                            height:40px;
+                            object-fit:cover;
+                            border-radius:7px;
+                          "
+                        >
+                      `
+                      : ""
+                  }
+
                   <div
-                    class="muted"
                     style="
-                      margin-top:3px;
-                      font-size:10px;
+                      min-width:0;
+                      flex:1;
                     "
                   >
-                    ${escapeHtml(
-                      item.addedByName ||
-                      "玩家"
-                    )}
+
+                    <div
+                      style="
+                        overflow:hidden;
+                        text-overflow:ellipsis;
+                        white-space:nowrap;
+                        font-size:13px;
+                        font-weight:700;
+                      "
+                    >
+                      ${escapeHtml(
+                        item.title ||
+                        "未命名影片"
+                      )}
+                    </div>
+
+                    <div
+                      class="muted"
+                      style="
+                        margin-top:3px;
+                        font-size:10px;
+                      "
+                    >
+                      ${escapeHtml(
+                        item.addedByName ||
+                        "玩家"
+                      )}
+                    </div>
+
                   </div>
 
                 </div>
 
-              </div>
-
-              <div
-                style="
-                  display:flex;
-                  gap:6px;
-                  margin-top:8px;
-                "
-              >
-
-                <button
-                  type="button"
-                  class="tiny-btn"
-                  data-queue-play="${escapeHtml(
-                    item.queueId
-                  )}"
+                <div
+                  style="
+                    display:flex;
+                    gap:6px;
+                    margin-top:8px;
+                  "
                 >
-                  ▶ 播放
-                </button>
 
-                <button
-                  type="button"
-                  class="tiny-btn"
-                  data-queue-remove="${escapeHtml(
-                    item.queueId
-                  )}"
-                >
-                  移除
-                </button>
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-queue-play="${escapeHtml(
+                      item.queueId
+                    )}"
+                  >
+                    ▶ 播放
+                  </button>
+
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-queue-remove="${escapeHtml(
+                      item.queueId
+                    )}"
+                  >
+                    移除
+                  </button>
+
+                </div>
 
               </div>
-
-            </div>
-          `
+            `;
+          }
         )
         .join("");
 
@@ -1692,15 +1906,20 @@
       )
       .forEach(
         (button) => {
+
           button.addEventListener(
             "click",
             async () => {
+
               try {
+
                 await playQueueItem(
                   button.dataset
                     .queuePlay
                 );
+
               } catch (error) {
+
                 console.error(
                   error
                 );
@@ -1721,15 +1940,20 @@
       )
       .forEach(
         (button) => {
+
           button.addEventListener(
             "click",
             async () => {
+
               try {
+
                 await removeFromQueue(
                   button.dataset
                     .queueRemove
                 );
+
               } catch (error) {
+
                 console.error(
                   error
                 );
@@ -1756,12 +1980,15 @@
       list[0];
 
     try {
+
       await playQueueItem(
         next.queueId
       );
 
       return true;
+
     } catch (error) {
+
       console.error(
         "播放下一部失敗:",
         error
@@ -1852,6 +2079,11 @@
     ) {
       element.style.border =
         "0";
+
+      element.setAttribute(
+        "allowfullscreen",
+        ""
+      );
     }
   }
 
@@ -1886,6 +2118,7 @@
     }
 
     try {
+
       if (
         oldType ===
         "youtube"
@@ -1906,6 +2139,7 @@
       ) {
         old.destroy?.();
       }
+
     } catch (_) {}
   }
 
@@ -1928,6 +2162,7 @@
     }
 
     try {
+
       if (
         type ===
         "youtube"
@@ -1954,6 +2189,7 @@
         type ===
         "dailymotion"
       ) {
+
         if (
           typeof player.currentTime ===
           "function"
@@ -1982,6 +2218,7 @@
           ) || 0
         );
       }
+
     } catch (_) {}
 
     return 0;
@@ -1996,6 +2233,7 @@
     }
 
     try {
+
       if (
         state.playerType ===
         "youtube"
@@ -2017,6 +2255,7 @@
           ) || 0
         );
       }
+
     } catch (_) {}
 
     return 0;
@@ -2037,6 +2276,7 @@
     }
 
     try {
+
       if (
         type ===
         "youtube"
@@ -2063,6 +2303,7 @@
         type ===
         "dailymotion"
       ) {
+
         if (
           typeof player.duration ===
           "function"
@@ -2091,6 +2332,7 @@
           ) || 0
         );
       }
+
     } catch (_) {}
 
     return 0;
@@ -2105,6 +2347,7 @@
     }
 
     try {
+
       if (
         state.playerType ===
         "youtube"
@@ -2115,6 +2358,7 @@
           ) || 0
         );
       }
+
     } catch (_) {}
 
     return 0;
@@ -2135,6 +2379,7 @@
     }
 
     try {
+
       if (
         type ===
         "youtube"
@@ -2158,6 +2403,7 @@
         type ===
         "dailymotion"
       ) {
+
         if (
           typeof player.paused ===
           "function"
@@ -2176,6 +2422,7 @@
       ) {
         return !player.isPaused();
       }
+
     } catch (_) {}
 
     return false;
@@ -2226,6 +2473,7 @@
       await asyncIsPlaying();
 
     try {
+
       await state.stateRef.set({
         action,
 
@@ -2250,7 +2498,9 @@
         updatedBy:
           state.uid
       });
+
     } catch (error) {
+
       console.error(
         "播放同步失敗:",
         error
@@ -2279,13 +2529,16 @@
     }
 
     try {
+
       await state.stateRef.set({
         action,
 
         position:
           Math.max(
             0,
-            Number(position) || 0
+            Number(
+              position
+            ) || 0
           ),
 
         playing:
@@ -2302,7 +2555,9 @@
         updatedBy:
           state.uid
       });
+
     } catch (error) {
+
       console.error(
         "播放同步失敗:",
         error
@@ -2316,6 +2571,7 @@
     }
 
     try {
+
       const snapshot =
         await state.stateRef.once(
           "value"
@@ -2335,7 +2591,9 @@
         data,
         true
       );
+
     } catch (error) {
+
       console.error(
         "讀取播放狀態失敗:",
         error
@@ -2389,6 +2647,7 @@
       true;
 
     try {
+
       if (
         state.playerReady &&
         state.player &&
@@ -2397,11 +2656,15 @@
         state.playerType !==
           "external"
       ) {
+
         await applyPlayerPosition(
           remotePosition,
-          data.action === "seek" ||
-          data.action === "sync" ||
-          data.action === "play"
+          data.action ===
+            "seek" ||
+          data.action ===
+            "sync" ||
+          data.action ===
+            "play"
         );
 
         if (
@@ -2419,9 +2682,7 @@
         }
       }
 
-      if (
-        $("syncStatus")
-      ) {
+      if ($("syncStatus")) {
         $("syncStatus")
           .textContent =
           `已同步 ${formatTime(
@@ -2437,7 +2698,9 @@
       ) {
         forceYoutubeVisible();
       }
+
     } finally {
+
       setTimeout(
         () => {
           state.applyingRemote =
@@ -2466,6 +2729,7 @@
     }
 
     try {
+
       const local =
         await asyncCurrentPosition();
 
@@ -2529,6 +2793,7 @@
           );
         }
       }
+
     } catch (_) {}
   }
 
@@ -2541,6 +2806,7 @@
     }
 
     try {
+
       if (
         state.playerType ===
         "youtube"
@@ -2569,6 +2835,7 @@
       ) {
         state.player.play();
       }
+
     } catch (_) {}
   }
 
@@ -2581,6 +2848,7 @@
     }
 
     try {
+
       if (
         state.playerType ===
         "youtube"
@@ -2608,6 +2876,7 @@
       ) {
         state.player.pause();
       }
+
     } catch (_) {}
   }
 
@@ -2635,6 +2904,7 @@
     state.syncTimer =
       setInterval(
         async () => {
+
           if (
             !state.stateRef ||
             !state.playerReady ||
@@ -2656,6 +2926,7 @@
           ) {
             forceYoutubeVisible();
           }
+
         },
         2500
       );
@@ -2677,18 +2948,22 @@
 
     await new Promise(
       (resolve, reject) => {
+
         const existing =
           document.querySelector(
             'script[src="https://player.vimeo.com/api/player.js"]'
           );
 
         if (existing) {
+
           const timer =
             setInterval(
               () => {
+
                 if (
                   window.Vimeo?.Player
                 ) {
+
                   clearInterval(
                     timer
                   );
@@ -2698,12 +2973,14 @@
 
                   resolve();
                 }
+
               },
               100
             );
 
           setTimeout(
             () => {
+
               clearInterval(
                 timer
               );
@@ -2711,17 +2988,21 @@
               if (
                 window.Vimeo?.Player
               ) {
+
                 state.sdk.vimeo =
                   true;
 
                 resolve();
+
               } else {
+
                 reject(
                   new Error(
                     "Vimeo SDK 載入失敗"
                   )
                 );
               }
+
             },
             10000
           );
@@ -2742,20 +3023,25 @@
 
         script.onload =
           () => {
+
             if (
               window.Vimeo?.Player
             ) {
+
               state.sdk.vimeo =
                 true;
 
               resolve();
+
             } else {
+
               reject(
                 new Error(
                   "Vimeo SDK 載入失敗"
                 )
               );
             }
+
           };
 
         script.onerror =
@@ -2785,18 +3071,22 @@
 
     await new Promise(
       (resolve, reject) => {
+
         const existing =
           document.querySelector(
             'script[data-wt-dailymotion-sdk="1"]'
           );
 
         if (existing) {
+
           const timer =
             setInterval(
               () => {
+
                 if (
                   window.dailymotion
                 ) {
+
                   clearInterval(
                     timer
                   );
@@ -2806,12 +3096,14 @@
 
                   resolve();
                 }
+
               },
               100
             );
 
           setTimeout(
             () => {
+
               clearInterval(
                 timer
               );
@@ -2819,17 +3111,21 @@
               if (
                 window.dailymotion
               ) {
+
                 state.sdk.dailymotion =
                   true;
 
                 resolve();
+
               } else {
+
                 reject(
                   new Error(
                     "Dailymotion SDK 載入失敗"
                   )
                 );
               }
+
             },
             10000
           );
@@ -2842,6 +3138,7 @@
           "";
 
         if (!playerId) {
+
           reject(
             new Error(
               "尚未設定 DAILYMOTION_PLAYER_ID"
@@ -2870,20 +3167,25 @@
 
         script.onload =
           () => {
+
             if (
               window.dailymotion
             ) {
+
               state.sdk.dailymotion =
                 true;
 
               resolve();
+
             } else {
+
               reject(
                 new Error(
                   "Dailymotion SDK 載入失敗"
                 )
               );
             }
+
           };
 
         script.onerror =
@@ -2913,18 +3215,22 @@
 
     await new Promise(
       (resolve, reject) => {
+
         const existing =
           document.querySelector(
             'script[src="https://player.twitch.tv/js/embed/v1.js"]'
           );
 
         if (existing) {
+
           const timer =
             setInterval(
               () => {
+
                 if (
                   window.Twitch?.Player
                 ) {
+
                   clearInterval(
                     timer
                   );
@@ -2934,12 +3240,14 @@
 
                   resolve();
                 }
+
               },
               100
             );
 
           setTimeout(
             () => {
+
               clearInterval(
                 timer
               );
@@ -2947,17 +3255,21 @@
               if (
                 window.Twitch?.Player
               ) {
+
                 state.sdk.twitch =
                   true;
 
                 resolve();
+
               } else {
+
                 reject(
                   new Error(
                     "Twitch SDK 載入失敗"
                   )
                 );
               }
+
             },
             10000
           );
@@ -2978,20 +3290,25 @@
 
         script.onload =
           () => {
+
             if (
               window.Twitch?.Player
             ) {
+
               state.sdk.twitch =
                 true;
 
               resolve();
+
             } else {
+
               reject(
                 new Error(
                   "Twitch SDK 載入失敗"
                 )
               );
             }
+
           };
 
         script.onerror =
@@ -3036,12 +3353,16 @@
       state.currentVideoId ===
         videoId
     ) {
+
       forceYoutubeVisible();
 
       if (autoplay) {
+
         try {
+
           state.player.mute();
           state.player.playVideo();
+
         } catch (_) {}
       }
 
@@ -3066,11 +3387,13 @@
       ++state.youtubeBuildToken;
 
     try {
+
       if (
         !window.YT ||
         typeof window.YT.Player !==
           "function"
       ) {
+
         initial.classList.remove(
           "hidden"
         );
@@ -3078,6 +3401,7 @@
         if (
           $("playerPlaceholder")
         ) {
+
           $("playerPlaceholder")
             .classList.remove(
               "hidden"
@@ -3090,6 +3414,7 @@
 
         setTimeout(
           () => {
+
             if (
               state.youtubeBuildToken !==
                 token ||
@@ -3103,6 +3428,7 @@
               videoId,
               autoplay
             );
+
           },
           500
         );
@@ -3115,6 +3441,7 @@
         state.playerType ===
           "youtube"
       ) {
+
         const old =
           state.player;
 
@@ -3130,9 +3457,11 @@
         try {
           old.destroy?.();
         } catch (_) {}
+
       } else if (
         state.player
       ) {
+
         await destroyCurrentPlayer();
       }
 
@@ -3154,15 +3483,11 @@
         );
       }
 
-      /*
-       * YouTube API 會把 div 轉成 iframe。
-       * 如果上一個版本已經留下 iframe，
-       * 先換回乾淨 div。
-       */
       if (
         container.tagName ===
         "IFRAME"
       ) {
+
         const replacement =
           document.createElement(
             "div"
@@ -3182,7 +3507,9 @@
           replacement;
       }
 
-      hidePlayers(true);
+      hidePlayers(
+        true
+      );
 
       container.classList.remove(
         "hidden"
@@ -3202,6 +3529,12 @@
 
       container.style.height =
         "100%";
+
+      container.style.position =
+        "relative";
+
+      container.style.zIndex =
+        "3";
 
       $("playerPlaceholder")
         ?.classList.add(
@@ -3234,7 +3567,9 @@
 
             playerVars: {
               autoplay:
-                autoplay ? 1 : 0,
+                autoplay
+                  ? 1
+                  : 0,
 
               controls:
                 1,
@@ -3251,21 +3586,30 @@
               enablejsapi:
                 1,
 
+              iv_load_policy:
+                3,
+
+              fs:
+                1,
+
               origin:
                 location.origin
             },
 
             events: {
+
               onReady:
                 async (
                   event
                 ) => {
+
                   if (
                     state.youtubeBuildToken !==
                       token ||
                     state.youtubeRequestedId !==
                       videoId
                   ) {
+
                     try {
                       event.target.destroy?.();
                     } catch (_) {}
@@ -3304,30 +3648,37 @@
                   if (
                     $("syncStatus")
                   ) {
+
                     $("syncStatus")
                       .textContent =
-                      autoplay
-                        ? "影片正在播放"
-                        : "影片已載入";
+                      "影片已載入";
                   }
 
                   updateTimeUI();
 
                   /*
-                   * 先取得 Firebase 最新狀態。
-                   * 如果房間狀態是 paused，
-                   * 不會被初始 autoplay 硬改成播放。
+                   * 先取得 Firebase 最新播放狀態。
                    */
                   await syncLatestPlayback();
 
+                  /*
+                   * 新影片由使用者選擇時，
+                   * 嘗試自動播放。
+                   *
+                   * 瀏覽器若阻擋有聲播放，
+                   * 先靜音啟動。
+                   */
                   if (
                     autoplay &&
                     state.player ===
                       event.target
                   ) {
+
                     try {
+
                       event.target.mute();
                       event.target.playVideo();
+
                     } catch (_) {}
                   }
 
@@ -3355,6 +3706,7 @@
                 async (
                   event
                 ) => {
+
                   if (
                     state.youtubeBuildToken !==
                       token
@@ -3381,6 +3733,7 @@
                     event.data ===
                     YT.PlayerState.PLAYING
                   ) {
+
                     await writePlayback(
                       "play",
                       true
@@ -3391,6 +3744,7 @@
                     event.data ===
                     YT.PlayerState.PAUSED
                   ) {
+
                     await writePlayback(
                       "pause",
                       false
@@ -3401,18 +3755,20 @@
                     event.data ===
                     YT.PlayerState.ENDED
                   ) {
+
                     await writePlayback(
                       "pause",
                       false
                     );
 
                     /*
-                     * 只讓房主自動切下一部，
-                     * 避免所有成員同時搶著切換。
+                     * 只有房主自動切下一部，
+                     * 避免所有成員同時操作。
                      */
                     if (
                       state.isOwner
                     ) {
+
                       setTimeout(
                         async () => {
                           await playNextQueueItem();
@@ -3429,6 +3785,7 @@
                 (
                   event
                 ) => {
+
                   console.error(
                     "YouTube player error:",
                     event
@@ -3437,6 +3794,7 @@
                   if (
                     $("syncStatus")
                   ) {
+
                     $("syncStatus")
                       .textContent =
                       "YouTube 播放器錯誤";
@@ -3452,7 +3810,9 @@
 
       state.player =
         player;
+
     } catch (error) {
+
       console.error(
         "YouTube 播放器建立失敗:",
         error
@@ -3479,11 +3839,14 @@
       toast(
         "YouTube 播放器建立失敗"
       );
+
     } finally {
+
       if (
         state.youtubeBuildToken ===
         token
       ) {
+
         state.youtubeLoading =
           false;
       }
@@ -3554,6 +3917,7 @@
     player.on(
       "loaded",
       async () => {
+
         if (
           state.player !==
           player
@@ -3573,6 +3937,7 @@
     player.on(
       "play",
       async () => {
+
         if (
           state.applyingRemote ||
           state.player !==
@@ -3591,6 +3956,7 @@
     player.on(
       "pause",
       async () => {
+
         if (
           state.applyingRemote ||
           state.player !==
@@ -3611,6 +3977,7 @@
       async (
         data
       ) => {
+
         if (
           state.applyingRemote ||
           state.player !==
@@ -3667,8 +4034,12 @@
     const playerId =
       "dm_" +
       Math.random()
-        .toString(36)
-        .slice(2);
+        .toString(
+          36
+        )
+        .slice(
+          2
+        );
 
     const target =
       document.createElement(
@@ -3723,9 +4094,11 @@
     if (
       player?.addEventListener
     ) {
+
       player.addEventListener(
         "play",
         async () => {
+
           if (
             state.applyingRemote ||
             state.player !==
@@ -3744,6 +4117,7 @@
       player.addEventListener(
         "pause",
         async () => {
+
           if (
             state.applyingRemote ||
             state.player !==
@@ -3797,17 +4171,20 @@
         video.id
       )
     ) {
+
       src =
         "https://player.bilibili.com/player.html?bvid=" +
         encodeURIComponent(
           video.id
         ) +
         "&page=1&autoplay=1";
+
     } else if (
       /^av/i.test(
         video.id
       )
     ) {
+
       src =
         "https://player.bilibili.com/player.html?aid=" +
         encodeURIComponent(
@@ -3817,7 +4194,9 @@
           )
         ) +
         "&page=1&autoplay=1";
+
     } else {
+
       src =
         video.url ||
         "https://www.bilibili.com/video/" +
@@ -3886,8 +4265,12 @@
     const wrapperId =
       "tw_" +
       Math.random()
-        .toString(36)
-        .slice(2);
+        .toString(
+          36
+        )
+        .slice(
+          2
+        );
 
     const target =
       document.createElement(
@@ -3933,9 +4316,12 @@
       video.twitchType ===
       "video"
     ) {
+
       options.video =
         video.id;
+
     } else {
+
       options.channel =
         video.id;
     }
@@ -3964,12 +4350,15 @@
 
     await new Promise(
       (resolve) => {
+
         const ready =
           () => {
+
             if (
               state.player !==
               player
             ) {
+
               resolve();
               return;
             }
@@ -3983,6 +4372,7 @@
         if (
           player.addEventListener
         ) {
+
           player.addEventListener(
             Twitch.Player.READY,
             ready
@@ -3991,6 +4381,7 @@
           player.addEventListener(
             Twitch.Player.PLAY,
             async () => {
+
               if (
                 state.applyingRemote ||
                 state.player !==
@@ -4009,6 +4400,7 @@
           player.addEventListener(
             Twitch.Player.PAUSE,
             async () => {
+
               if (
                 state.applyingRemote ||
                 state.player !==
@@ -4023,7 +4415,9 @@
               );
             }
           );
+
         } else {
+
           setTimeout(
             ready,
             1500
@@ -4102,8 +4496,10 @@
       $("openPlatformBtn");
 
     if (button) {
+
       button.onclick =
         () => {
+
           if (!url) {
             return;
           }
@@ -4134,6 +4530,7 @@
     video
   ) {
     if (!video) {
+
       hidePlayers();
 
       showPlayerElement(
@@ -4147,6 +4544,7 @@
       video.platform ===
       "youtube"
     ) {
+
       await buildYoutubePlayer(
         video.id,
         true
@@ -4159,6 +4557,7 @@
       video.platform ===
       "vimeo"
     ) {
+
       await buildVimeoPlayer(
         video
       );
@@ -4170,6 +4569,7 @@
       video.platform ===
       "dailymotion"
     ) {
+
       await buildDailymotionPlayer(
         video
       );
@@ -4181,6 +4581,7 @@
       video.platform ===
       "bilibili"
     ) {
+
       await buildBilibiliPlayer(
         video
       );
@@ -4192,6 +4593,7 @@
       video.platform ===
       "twitch"
     ) {
+
       await buildTwitchPlayer(
         video
       );
@@ -4229,6 +4631,7 @@
           )
       ).exists()
     ) {
+
       roomId =
         randomRoomCode();
     }
@@ -4294,7 +4697,9 @@
     await enterRoom();
   }
 
-  async function joinRoom(roomId) {
+  async function joinRoom(
+    roomId
+  ) {
     roomId =
       String(
         roomId || ""
@@ -4358,6 +4763,7 @@
     video
   ) {
     if (!video) {
+
       state.youtubeRequestedId =
         null;
 
@@ -4377,6 +4783,7 @@
       if (
         $("syncStatus")
       ) {
+
         $("syncStatus")
           .textContent =
           "等待有人選擇影片";
@@ -4406,6 +4813,7 @@
       normalized.platform ===
       "youtube"
     ) {
+
       const videoId =
         getYoutubeId(
           normalized.id
@@ -4425,6 +4833,7 @@
         state.playerType ===
           "youtube"
       ) {
+
         forceYoutubeVisible();
 
         if (
@@ -4464,9 +4873,12 @@
     if (
       state.isOwner
     ) {
+
       element.textContent =
         "👑 房主";
+
     } else {
+
       element.textContent =
         "👥 成員";
     }
@@ -4499,6 +4911,11 @@
       lastSeen:
         firebase.database
           .ServerValue
+          .TIMESTAMP,
+
+      joinedAt:
+        firebase.database
+          .ServerValue
           .TIMESTAMP
     });
 
@@ -4524,8 +4941,11 @@
     }
 
     try {
+
       await state.membersRef
-        .child(state.uid)
+        .child(
+          state.uid
+        )
         .update({
           online:
             true,
@@ -4535,6 +4955,7 @@
               .ServerValue
               .TIMESTAMP
         });
+
     } catch (_) {}
   }
 
@@ -4550,6 +4971,7 @@
     if (
       $("roomTitle")
     ) {
+
       $("roomTitle")
         .textContent =
         state.room?.name ||
@@ -4559,6 +4981,7 @@
     if (
       $("roomCodeLabel")
     ) {
+
       $("roomCodeLabel")
         .textContent =
         state.roomId;
@@ -4602,6 +5025,14 @@
         joinedAt:
           firebase.database
             .ServerValue
+            .TIMESTAMP,
+
+        online:
+          true,
+
+        lastSeen:
+          firebase.database
+            .ServerValue
             .TIMESTAMP
       });
 
@@ -4610,12 +5041,15 @@
     if (
       !state.stateListenerAttached
     ) {
+
       state.stateRef.on(
         "value",
         (snapshot) => {
+
           applyRemotePlayback(
             snapshot.val()
           );
+
         }
       );
 
@@ -4626,6 +5060,7 @@
     if (
       !state.videoListenerAttached
     ) {
+
       state.roomRef
         .child("video")
         .on(
@@ -4633,11 +5068,15 @@
           async (
             snapshot
           ) => {
+
             try {
+
               await handleRoomVideo(
                 snapshot.val()
               );
+
             } catch (error) {
+
               console.error(
                 "影片載入失敗:",
                 error
@@ -4658,9 +5097,11 @@
     if (
       !state.membersListenerAttached
     ) {
+
       state.membersRef.on(
         "value",
         (snapshot) => {
+
           renderMembers(
             snapshot.val() ||
             {}
@@ -4675,11 +5116,13 @@
     if (
       !state.chatListenerAttached
     ) {
+
       state.chatRef
         .limitToLast(100)
         .on(
           "value",
           (snapshot) => {
+
             renderChat(
               snapshot.val() ||
               {}
@@ -4694,9 +5137,11 @@
     if (
       !state.queueListenerAttached
     ) {
+
       state.queueRef.on(
         "value",
         (snapshot) => {
+
           state.queue =
             snapshot.val() ||
             {};
@@ -4704,6 +5149,7 @@
           if (
             state.room
           ) {
+
             state.room.queue =
               state.queue;
           }
@@ -4723,10 +5169,13 @@
     if (
       initialVideo
     ) {
+
       await handleRoomVideo(
         initialVideo
       );
+
     } else {
+
       hidePlayers();
 
       showPlayerElement(
@@ -4736,6 +5185,7 @@
       if (
         $("syncStatus")
       ) {
+
         $("syncStatus")
           .textContent =
           "等待有人選擇影片";
@@ -4749,7 +5199,9 @@
      MEMBERS UI
   ===================================================== */
 
-  function renderMembers(members) {
+  function renderMembers(
+    members
+  ) {
     const entries =
       Object.entries(
         members || {}
@@ -4770,6 +5222,7 @@
     if (
       $("memberCount")
     ) {
+
       $("memberCount")
         .textContent =
         String(
@@ -4783,7 +5236,10 @@
       return;
     }
 
-    if (!entries.length) {
+    if (
+      !entries.length
+    ) {
+
       $("memberList")
         .innerHTML = `
           <div class="muted">
@@ -4799,6 +5255,7 @@
       entries
         .map(
           ([uid, member]) => {
+
             const name =
               member?.name ||
               "看片玩家";
@@ -4871,7 +5328,9 @@
      CHAT
   ===================================================== */
 
-  async function sendChat(text) {
+  async function sendChat(
+    text
+  ) {
     text =
       String(
         text || ""
@@ -4906,7 +5365,9 @@
     });
   }
 
-  function renderChat(messages) {
+  function renderChat(
+    messages
+  ) {
     const list =
       Object.values(
         messages || {}
@@ -4928,7 +5389,10 @@
       return;
     }
 
-    if (!list.length) {
+    if (
+      !list.length
+    ) {
+
       $("chatMessages")
         .innerHTML = `
           <div
@@ -4983,7 +5447,9 @@
      CHANGE VIDEO
   ===================================================== */
 
-  async function changeVideo(video) {
+  async function changeVideo(
+    video
+  ) {
     if (
       !video?.id &&
       !video?.url
@@ -5034,6 +5500,7 @@
     if (
       video.url
     ) {
+
       roomVideo.url =
         String(
           video.url
@@ -5043,6 +5510,7 @@
     if (
       video.twitchType
     ) {
+
       roomVideo.twitchType =
         video.twitchType;
     }
@@ -5142,6 +5610,7 @@
     if (
       $("sourceTypeModal")
     ) {
+
       $("sourceTypeModal")
         .value =
         "youtube";
@@ -5150,6 +5619,7 @@
     if (
       $("modalVideoSearchInput")
     ) {
+
       $("modalVideoSearchInput")
         .value =
         "";
@@ -5158,6 +5628,7 @@
     if (
       $("modalVideoSearchResults")
     ) {
+
       $("modalVideoSearchResults")
         .innerHTML =
         "";
@@ -5170,6 +5641,7 @@
     if (
       $("modalSourceUrlInput")
     ) {
+
       $("modalSourceUrlInput")
         .value =
         "";
@@ -5186,6 +5658,7 @@
       $("saveSourceBtn");
 
     if (saveButton) {
+
       saveButton.disabled =
         false;
 
@@ -5195,8 +5668,10 @@
 
     setTimeout(
       () => {
+
         $("modalVideoSearchInput")
           ?.focus();
+
       },
       100
     );
@@ -5241,6 +5716,7 @@
     if (
       searchArea
     ) {
+
       searchArea.classList.toggle(
         "hidden",
         !searchable
@@ -5250,6 +5726,7 @@
     if (
       externalArea
     ) {
+
       externalArea.classList.toggle(
         "hidden",
         searchable
@@ -5257,6 +5734,7 @@
     }
 
     if (!searchable) {
+
       state.modalSelectedVideo =
         null;
 
@@ -5266,6 +5744,7 @@
       if (
         $("modalVideoSearchResults")
       ) {
+
         $("modalVideoSearchResults")
           .innerHTML =
           "";
@@ -5283,6 +5762,7 @@
 
   function detachRoomListeners() {
     try {
+
       state.stateRef?.off();
 
       state.membersRef?.off();
@@ -5294,6 +5774,7 @@
       state.roomRef
         ?.child("video")
         .off();
+
     } catch (_) {}
 
     state.stateListenerAttached =
@@ -5320,20 +5801,25 @@
   ===================================================== */
 
   function setupEvents() {
+
     /* CREATE */
 
     $("createRoomBtn")
       ?.addEventListener(
         "click",
         async () => {
+
           try {
+
             setError(
               $("homeError"),
               ""
             );
 
             await createRoom();
+
           } catch (error) {
+
             console.error(
               error
             );
@@ -5353,12 +5839,16 @@
       ?.addEventListener(
         "click",
         async () => {
+
           try {
+
             await joinRoom(
               $("joinCodeInput")
                 ?.value
             );
+
           } catch (error) {
+
             console.error(
               error
             );
@@ -5375,6 +5865,7 @@
       ?.addEventListener(
         "input",
         (event) => {
+
           event.target.value =
             event.target.value
               .toUpperCase()
@@ -5391,7 +5882,9 @@
       ?.addEventListener(
         "click",
         async () => {
+
           try {
+
             await navigator.clipboard.writeText(
               getRoomLink(
                 state.roomId
@@ -5401,7 +5894,9 @@
             toast(
               "房間連結已複製"
             );
+
           } catch (_) {
+
             toast(
               "複製失敗"
             );
@@ -5415,6 +5910,7 @@
       ?.addEventListener(
         "click",
         async () => {
+
           const confirmed =
             window.confirm(
               "確定要離開這個房間嗎？"
@@ -5425,20 +5921,27 @@
           }
 
           try {
+
             if (
               state.membersRef &&
               state.uid
             ) {
+
               await state.membersRef
                 .child(
                   state.uid
                 )
                 .remove();
             }
+
           } catch (_) {}
 
           clearInterval(
             state.syncTimer
+          );
+
+          clearInterval(
+            state.memberHeartbeatTimer
           );
 
           detachRoomListeners();
@@ -5480,10 +5983,12 @@
       ?.addEventListener(
         "click",
         async () => {
+
           if (
             !state.playerReady ||
             !state.player
           ) {
+
             toast(
               "請先選擇影片"
             );
@@ -5497,6 +6002,7 @@
             state.playerType ===
               "external"
           ) {
+
             toast(
               "此平台目前無法由本站控制播放"
             );
@@ -5507,8 +6013,11 @@
           if (
             await asyncIsPlaying()
           ) {
+
             await pausePlayer();
+
           } else {
+
             await playPlayer();
           }
         }
@@ -5520,6 +6029,7 @@
       ?.addEventListener(
         "click",
         async () => {
+
           if (
             !state.playerReady ||
             !state.player
@@ -5554,6 +6064,7 @@
       ?.addEventListener(
         "click",
         async () => {
+
           if (
             !state.playerReady ||
             !state.player
@@ -5586,12 +6097,13 @@
         }
       );
 
-    /* SYNC NOW */
+    /* SYNC */
 
     $("syncNowBtn")
       ?.addEventListener(
         "click",
         async () => {
+
           if (
             !state.stateRef
           ) {
@@ -5612,6 +6124,7 @@
             state.playerType ===
             "youtube"
           ) {
+
             forceYoutubeVisible();
           }
 
@@ -5627,16 +6140,19 @@
       ?.addEventListener(
         "input",
         (event) => {
+
           const value =
             Number(
               event.target.value
             );
 
           try {
+
             if (
               state.playerType ===
               "youtube"
             ) {
+
               state.player?.setVolume(
                 value
               );
@@ -5644,8 +6160,11 @@
               if (
                 value > 0
               ) {
+
                 state.player?.unMute();
+
               } else {
+
                 state.player?.mute();
               }
             }
@@ -5654,6 +6173,7 @@
               state.playerType ===
               "vimeo"
             ) {
+
               state.player?.setVolume(
                 value / 100
               );
@@ -5663,6 +6183,7 @@
               state.playerType ===
               "twitch"
             ) {
+
               state.player?.setVolume(
                 value / 100
               );
@@ -5672,10 +6193,12 @@
               state.playerType ===
               "dailymotion"
             ) {
+
               state.player?.setVolume?.(
                 value / 100
               );
             }
+
           } catch (_) {}
         }
       );
@@ -5686,13 +6209,16 @@
       ?.addEventListener(
         "click",
         () => {
+
           const playerWrap =
             $("playerWrap");
 
           if (
             document.fullscreenElement
           ) {
+
             document.exitFullscreen?.();
+
             return;
           }
 
@@ -5707,7 +6233,9 @@
       ?.addEventListener(
         "click",
         async () => {
+
           try {
+
             const time =
               formatTime(
                 currentPosition()
@@ -5720,7 +6248,9 @@
             toast(
               `已複製 ${time}`
             );
+
           } catch (_) {
+
             toast(
               "複製失敗"
             );
@@ -5733,7 +6263,10 @@
     $("chatForm")
       ?.addEventListener(
         "submit",
-        async (event) => {
+        async (
+          event
+        ) => {
+
           event.preventDefault();
 
           const input =
@@ -5750,10 +6283,13 @@
             "";
 
           try {
+
             await sendChat(
               text
             );
+
           } catch (error) {
+
             console.error(
               error
             );
@@ -5791,6 +6327,7 @@
       ?.addEventListener(
         "click",
         async () => {
+
           if (
             (
               $("sourceTypeModal")
@@ -5813,6 +6350,16 @@
               ?.value
               .trim();
 
+          if (!query) {
+
+            setError(
+              $("modalError"),
+              "請輸入搜尋內容"
+            );
+
+            return;
+          }
+
           state.searchBusy =
             true;
 
@@ -5820,6 +6367,7 @@
             $("modalSearchVideoBtn");
 
           if (button) {
+
             button.disabled =
               true;
 
@@ -5833,10 +6381,13 @@
           );
 
           try {
+
             await searchYoutube(
               query
             );
+
           } catch (error) {
+
             console.error(
               error
             );
@@ -5846,11 +6397,14 @@
               error.message ||
                 "搜尋失敗"
             );
+
           } finally {
+
             state.searchBusy =
               false;
 
             if (button) {
+
               button.disabled =
                 false;
 
@@ -5865,10 +6419,12 @@
       ?.addEventListener(
         "keydown",
         (event) => {
+
           if (
             event.key ===
             "Enter"
           ) {
+
             event.preventDefault();
 
             $("modalSearchVideoBtn")
@@ -5883,7 +6439,9 @@
       ?.addEventListener(
         "click",
         async () => {
+
           try {
+
             setError(
               $("modalError"),
               ""
@@ -5898,6 +6456,7 @@
               platform ===
               "youtube"
             ) {
+
               const video =
                 getSelectedModalYoutubeVideo();
 
@@ -5905,6 +6464,7 @@
                 !video ||
                 !video.id
               ) {
+
                 throw new Error(
                   "請先點選搜尋結果中的影片"
                 );
@@ -5923,6 +6483,7 @@
                 ?.trim();
 
             if (!raw) {
+
               throw new Error(
                 `請輸入${
                   PLATFORMS[
@@ -5940,6 +6501,7 @@
               );
 
             if (!video) {
+
               throw new Error(
                 `無法辨識${
                   PLATFORMS[
@@ -5953,7 +6515,9 @@
             await changeVideo(
               video
             );
+
           } catch (error) {
+
             console.error(
               error
             );
@@ -5973,16 +6537,21 @@
       ?.addEventListener(
         "click",
         async () => {
+
           try {
+
             const played =
               await playNextQueueItem();
 
             if (!played) {
+
               toast(
                 "待播放清單是空的"
               );
             }
+
           } catch (error) {
+
             console.error(
               error
             );
@@ -6002,6 +6571,7 @@
 
   async function start() {
     try {
+
       state.memberName =
         getMemberName();
 
@@ -6009,20 +6579,25 @@
 
       setupEvents();
 
-      setInterval(
-        heartbeatMember,
-        15000
-      );
+      state.memberHeartbeatTimer =
+        setInterval(
+          heartbeatMember,
+          15000
+        );
 
       const roomId =
         getRoomIdFromUrl();
 
       if (roomId) {
+
         try {
+
           await joinRoom(
             roomId
           );
+
         } catch (error) {
+
           console.error(
             error
           );
@@ -6042,12 +6617,16 @@
             "無法進入房間"
           );
         }
+
       } else {
+
         showView(
           "home"
         );
       }
+
     } catch (error) {
+
       console.error(
         error
       );
@@ -6055,6 +6634,7 @@
       if (
         $("authStatus")
       ) {
+
         $("authStatus")
           .textContent =
           "連線失敗";
@@ -6073,6 +6653,7 @@
 
   window.onYouTubeIframeAPIReady =
     () => {
+
       state.youtubeReady =
         true;
 
@@ -6088,7 +6669,9 @@
         state.playerType ===
           "youtube"
       ) {
+
         forceYoutubeVisible();
+
         return;
       }
 
@@ -6104,6 +6687,7 @@
         ) &&
         video.id
       ) {
+
         buildYoutubePlayer(
           getYoutubeId(
             video.id
