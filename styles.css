@@ -68,16 +68,10 @@ select {
 .error-text {
   min-height: 20px;
   margin-top: 10px;
-
   color: #fb7185;
-
   font-size: 13px;
   line-height: 1.5;
 }
-
-/* =========================================================
-   APP
-========================================================= */
 
 .app-shell {
   width: min(1450px, 100%);
@@ -737,13 +731,9 @@ select:focus {
   font-weight: 800;
 }
 
-/* Room code */
-
 #roomCodeLabel {
   letter-spacing: .08em;
 }
-
-/* Owner state */
 
 #roomOwnerStatus {
   display: inline-flex;
@@ -759,10 +749,6 @@ select:focus {
   background:
     rgba(96, 165, 250, .06) !important;
 }
-
-/* =========================================================
-   ROOM LAYOUT
-========================================================= */
 
 .room-layout {
   display: grid;
@@ -825,8 +811,6 @@ select:focus {
   border-radius: 0;
 }
 
-/* YouTube */
-
 #youtubePlayer {
   position: relative;
 
@@ -836,7 +820,6 @@ select:focus {
   display: block;
 
   visibility: visible;
-
   opacity: 1;
 
   background: #000;
@@ -868,8 +851,6 @@ select:focus {
 
   z-index: 3;
 }
-
-/* Other players */
 
 .external-player,
 .direct-video,
@@ -948,7 +929,7 @@ select:focus {
 }
 
 /* =========================================================
-   EXTERNAL PLATFORM NOTICE
+   EXTERNAL PLAYER NOTICE
 ========================================================= */
 
 .platform-player-notice {
@@ -1008,10 +989,6 @@ select:focus {
 .room-platform-icon {
   font-size: 54px;
 }
-
-/* =========================================================
-   PLACEHOLDER
-========================================================= */
 
 .player-placeholder {
   position: absolute;
@@ -1079,7 +1056,7 @@ select:focus {
 }
 
 /* =========================================================
-   PLAYER CONTROLS
+   CONTROLS
 ========================================================= */
 
 .room-controls {
@@ -1199,23 +1176,6 @@ select:focus {
   text-align: center;
 
   font-size: 11px;
-}
-
-/*
-  Override owner status because it is also
-  a span inside room-meta.
-*/
-
-.room-meta #roomOwnerStatus {
-  min-width: auto;
-
-  padding:
-    6px 9px;
-
-  border-radius: 8px;
-
-  background:
-    rgba(96, 165, 250, .06);
 }
 
 .member-list {
@@ -1397,10 +1357,6 @@ select:focus {
     0 0 0 1px rgba(96, 165, 250, .06);
 }
 
-.queue-item > div:first-child {
-  min-width: 0;
-}
-
 .queue-item button {
   white-space: nowrap;
 }
@@ -1418,10 +1374,6 @@ select:focus {
 .queue-item [data-queue-play]:hover {
   background:
     rgba(96, 165, 250, .17);
-}
-
-.queue-item [data-queue-remove] {
-  color: #cbd5e1;
 }
 
 .queue-item img {
@@ -1533,7 +1485,7 @@ select:focus {
 }
 
 /* =========================================================
-   MODAL
+   MODAL BASE
 ========================================================= */
 
 .modal {
@@ -1541,7 +1493,7 @@ select:focus {
 
   inset: 0;
 
-  z-index: 100;
+  z-index: 1000;
 
   display: flex;
 
@@ -1553,10 +1505,15 @@ select:focus {
   background:
     rgba(0, 0, 0, .68);
 
-  backdrop-filter: blur(10px);
+  backdrop-filter:
+    blur(10px);
 
   -webkit-backdrop-filter:
     blur(10px);
+}
+
+.modal.hidden {
+  display: none !important;
 }
 
 .modal-card {
@@ -1638,83 +1595,262 @@ select:focus {
 }
 
 .search-btn:hover {
-  filter:
-    brightness(1.08);
+  filter: brightness(1.08);
 }
 
 /* =========================================================
-   SEARCH RESULTS
+   YOUTUBE FULL SEARCH UI
 ========================================================= */
 
-.video-search-results {
-  display: grid;
+#sourceModal {
+  position: fixed !important;
 
-  gap: 8px;
+  inset: 0 !important;
 
-  margin-top: 10px;
+  z-index: 1000 !important;
 
-  max-height: 350px;
+  display: flex !important;
 
-  overflow-y: auto;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+
+  padding: 0 !important;
+
+  background:
+    #0b0b0f !important;
+
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-.video-result-card {
-  width: 100%;
+#sourceModal.hidden {
+  display: none !important;
+}
 
-  padding: 9px;
+#sourceModal .modal-card {
+  width: 100% !important;
+  max-width: none !important;
+
+  height: 100% !important;
+  max-height: none !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  overflow: hidden !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  background:
+    #0b0b0f !important;
+
+  box-shadow: none !important;
+}
+
+/* =========================================================
+   YOUTUBE SEARCH HEADER
+========================================================= */
+
+#sourceModal .modal-card > div:first-child {
+  flex: 0 0 auto;
+
+  height: 68px;
+}
+
+#sourceModal #modalVideoSearchInput {
+  min-height: 42px !important;
+  height: 42px !important;
+
+  margin: 0 !important;
 
   border:
-    1px solid rgba(255, 255, 255, .06);
+    1px solid rgba(255,255,255,.12) !important;
 
-  border-radius: 13px;
+  border-right:
+    0 !important;
+
+  border-radius:
+    21px 0 0 21px !important;
 
   background:
-    rgba(255, 255, 255, .025);
+    #18181c !important;
 
-  color: #e2e8f0;
+  color:
+    #fff !important;
+}
 
-  text-align: left;
+#sourceModal #modalVideoSearchInput:focus {
+  border-color:
+    rgba(255,255,255,.25) !important;
+
+  box-shadow: none !important;
+
+  background:
+    #18181c !important;
+}
+
+#sourceModal #modalSearchVideoBtn {
+  min-width: 64px !important;
+
+  height: 42px !important;
+  min-height: 42px !important;
+
+  margin: 0 !important;
+
+  padding: 0 !important;
+
+  border:
+    1px solid rgba(255,255,255,.12) !important;
+
+  border-left:
+    0 !important;
+
+  border-radius:
+    0 21px 21px 0 !important;
+
+  background:
+    #27272b !important;
+
+  color:
+    #fff !important;
+}
+
+#sourceModal #modalSearchVideoBtn:hover {
+  background:
+    #333338 !important;
+}
+
+/* =========================================================
+   SEARCH BODY
+========================================================= */
+
+#sourceModal .modal-card > div:nth-child(2) {
+  flex:
+    1 1 auto;
+
+  min-height: 0;
+}
+
+/* =========================================================
+   SEARCH SIDEBAR
+========================================================= */
+
+#sourceModal .modal-card > div:nth-child(2) > aside {
+  scrollbar-width: thin;
+}
+
+#sourceModal .modal-card > div:nth-child(2) > aside > div {
+  cursor: pointer;
 
   transition:
-    border-color .16s ease,
-    background .16s ease,
-    transform .16s ease;
+    background .15s ease,
+    color .15s ease;
 }
 
-.video-result-card:hover {
-  border-color:
-    rgba(96, 165, 250, .28);
-
+#sourceModal .modal-card > div:nth-child(2) > aside > div:hover {
   background:
-    rgba(96, 165, 250, .08);
+    rgba(255,255,255,.06);
 
-  transform:
-    translateY(-1px);
+  color:
+    #fff;
 }
 
-.video-result-card.selected {
-  border-color:
-    rgba(96, 165, 250, .60);
+/* =========================================================
+   SEARCH RESULT AREA
+========================================================= */
 
-  background:
-    linear-gradient(
-      135deg,
-      rgba(96, 165, 250, .16),
-      rgba(139, 92, 246, .10)
+#sourceModal #modalVideoSearchResults {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      auto-fill,
+      minmax(340px, 1fr)
     );
 
-  box-shadow:
-    0 0 0 1px rgba(96, 165, 250, .12);
-}
-
-.video-result-main {
-  display: flex;
-
-  align-items: center;
-
-  gap: 10px;
+  gap: 14px;
 
   width: 100%;
+
+  max-height: none;
+
+  margin-top: 12px;
+
+  padding-bottom: 30px;
+
+  overflow: visible;
+}
+
+/* =========================================================
+   SEARCH RESULT CARD
+========================================================= */
+
+#sourceModal .video-result-card {
+  width: 100%;
+
+  min-width: 0;
+
+  padding: 0;
+
+  border:
+    1px solid rgba(255,255,255,.06);
+
+  border-radius: 14px;
+
+  background:
+    #151518;
+
+  overflow: hidden;
+
+  transition:
+    transform .16s ease,
+    border-color .16s ease,
+    background .16s ease,
+    box-shadow .16s ease;
+}
+
+#sourceModal .video-result-card:hover {
+  transform:
+    translateY(-2px);
+
+  border-color:
+    rgba(255,255,255,.16);
+
+  background:
+    #1b1b1f;
+
+  box-shadow:
+    0 10px 30px rgba(0,0,0,.25);
+}
+
+#sourceModal .video-result-card.selected {
+  border-color:
+    rgba(255,255,255,.35);
+
+  background:
+    #1d1d21;
+
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.08);
+}
+
+/* =========================================================
+   RESULT MAIN
+========================================================= */
+
+#sourceModal .video-result-main {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: stretch;
+
+  gap: 0;
+
+  width: 100%;
+
+  margin: 0;
 
   padding: 0;
 
@@ -1723,163 +1859,208 @@ select:focus {
   background:
     transparent;
 
-  color: inherit;
+  color:
+    inherit;
 
-  text-align: left;
+  text-align:
+    left;
 }
 
-.video-result-main:hover {
+#sourceModal .video-result-main:hover {
   background:
     transparent;
 }
 
-.video-result-card img {
-  width: 100px;
-  height: 56px;
+/* =========================================================
+   RESULT THUMBNAIL
+========================================================= */
 
-  flex: 0 0 auto;
+#sourceModal .video-result-main img {
+  display: block;
 
-  border-radius: 8px;
+  width: 100%;
+  height: auto;
 
-  object-fit: cover;
+  aspect-ratio:
+    16 / 9;
+
+  flex:
+    none;
+
+  border-radius: 0;
+
+  object-fit:
+    cover;
 
   background:
-    rgba(255, 255, 255, .05);
-}
-
-.video-result-info {
-  display: grid;
-
-  gap: 3px;
-
-  min-width: 0;
-}
-
-.video-result-info strong {
-  overflow: hidden;
-
-  font-size: 13px;
-
-  line-height: 1.35;
-
-  font-weight: 700;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
-
-.video-result-info small {
-  overflow: hidden;
-
-  color: #64748b;
-
-  font-size: 11px;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
-
-/* Search result action row */
-
-.video-result-card > div {
-  min-width: 0;
-}
-
-.video-result-card [data-video-play] {
-  background:
-    rgba(96, 165, 250, .10);
-
-  border-color:
-    rgba(96, 165, 250, .18);
-
-  color: #bfdbfe;
-}
-
-.video-result-card [data-video-play]:hover {
-  background:
-    rgba(96, 165, 250, .18);
-}
-
-.video-result-card [data-video-queue] {
-  color: #cbd5e1;
-}
-
-.video-result-card [data-video-queue]:hover {
-  background:
-    rgba(255, 255, 255, .09);
+    #050505;
 }
 
 /* =========================================================
-   SELECTED VIDEO
+   RESULT INFO
 ========================================================= */
 
-.selected-video-card {
-  display: flex;
-
-  align-items: center;
-
-  gap: 10px;
-
-  margin-top: 10px;
-
-  padding: 9px;
-
-  border:
-    1px solid rgba(96, 165, 250, .22);
-
-  border-radius: 12px;
-
-  background:
-    linear-gradient(
-      135deg,
-      rgba(96, 165, 250, .10),
-      rgba(139, 92, 246, .07)
-    );
-}
-
-.selected-video-thumbnail {
-  width: 84px;
-  height: 47px;
-
-  flex: 0 0 auto;
-
-  border-radius: 8px;
-
-  background-position:
-    center;
-
-  background-size:
-    cover;
-
-  background-color:
-    rgba(255, 255, 255, .05);
-}
-
-.selected-video-info {
+#sourceModal .video-result-info {
   display: grid;
 
-  gap: 3px;
+  gap: 5px;
 
   min-width: 0;
 
-  flex:
-    1 1 auto;
+  padding:
+    11px 12px 8px;
 }
 
-.selected-video-title {
+#sourceModal .video-result-info strong {
+  display: -webkit-box;
+
   overflow: hidden;
 
-  color: #e2e8f0;
+  color:
+    #f8fafc;
 
-  font-size: 13px;
+  font-size: 14px;
 
-  font-weight: 700;
+  line-height: 1.4;
 
-  text-overflow: ellipsis;
+  font-weight: 750;
 
-  white-space: nowrap;
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    normal;
+
+  -webkit-line-clamp:
+    2;
+
+  -webkit-box-orient:
+    vertical;
+}
+
+#sourceModal .video-result-info small {
+  display: block;
+
+  overflow: hidden;
+
+  color:
+    #a1a1aa;
+
+  font-size: 11px;
+
+  line-height: 1.4;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+/* =========================================================
+   RESULT ACTIONS
+========================================================= */
+
+#sourceModal .video-result-card > div {
+  display: flex;
+
+  gap: 7px;
+
+  padding:
+    0 12px 12px;
+}
+
+#sourceModal .video-result-card .tiny-btn {
+  min-height: 34px;
+
+  border-radius: 9px;
+
+  font-size: 11px;
+}
+
+#sourceModal
+.video-result-card
+[data-video-play] {
+  background:
+    #27272b;
+
+  border:
+    1px solid rgba(255,255,255,.08);
+
+  color:
+    #fff;
+}
+
+#sourceModal
+.video-result-card
+[data-video-play]:hover {
+  background:
+    #333338;
+}
+
+#sourceModal
+.video-result-card
+[data-video-queue] {
+  background:
+    rgba(255,255,255,.04);
+
+  border:
+    1px solid rgba(255,255,255,.07);
+
+  color:
+    #d4d4d8;
+}
+
+#sourceModal
+.video-result-card
+[data-video-queue]:hover {
+  background:
+    rgba(255,255,255,.08);
+}
+
+/* =========================================================
+   EMPTY SEARCH
+========================================================= */
+
+#sourceModal
+#modalVideoSearchResults
+> div:not(.video-result-card) {
+  grid-column:
+    1 / -1;
+
+  width: 100%;
+
+  min-height: 260px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  color:
+    #71717a;
+}
+
+/* =========================================================
+   EXTERNAL SOURCE
+========================================================= */
+
+#sourceModal #modalExternalSourceArea {
+  max-width: 760px;
+
+  margin-bottom: 20px;
+
+  padding: 18px;
+
+  border:
+    1px solid rgba(255,255,255,.08);
+
+  border-radius: 14px;
+
+  background:
+    #151518;
 }
 
 /* =========================================================
@@ -1893,7 +2074,7 @@ select:focus {
 
   bottom: 24px;
 
-  z-index: 200;
+  z-index: 2000;
 
   max-width:
     min(92vw, 520px);
@@ -1909,7 +2090,8 @@ select:focus {
   background:
     rgba(15, 23, 42, .94);
 
-  color: #e2e8f0;
+  color:
+    #e2e8f0;
 
   font-size: 13px;
 
@@ -1923,7 +2105,8 @@ select:focus {
 
   opacity: 0;
 
-  pointer-events: none;
+  pointer-events:
+    none;
 
   transition:
     opacity .2s ease,
@@ -1970,6 +2153,25 @@ select:focus {
    RESPONSIVE
 ========================================================= */
 
+@media (max-width: 1100px) {
+
+  #sourceModal
+  #modalVideoSearchResults {
+    grid-template-columns:
+      repeat(
+        auto-fill,
+        minmax(280px, 1fr)
+      );
+  }
+
+  .room-layout {
+    grid-template-columns:
+      minmax(0, 1fr)
+      320px;
+  }
+
+}
+
 @media (max-width: 1000px) {
 
   .room-layout {
@@ -1993,6 +2195,47 @@ select:focus {
 
   .queue-list {
     max-height: 360px;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2) {
+    grid-template-columns:
+      72px minmax(0, 1fr) !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > aside {
+    padding:
+      14px 7px !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > aside
+  > div {
+    font-size:
+      0 !important;
+
+    text-align:
+      center;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    padding:
+      16px 14px 24px !important;
+  }
+
+  #sourceModal
+  #modalVideoSearchResults {
+    grid-template-columns:
+      1fr;
   }
 
 }
@@ -2043,42 +2286,129 @@ select:focus {
   }
 
   .platform-card {
-    min-height: 64px;
+    min-height:
+      64px;
   }
 
   .room-controls {
-    gap: 6px;
+    gap:
+      6px;
   }
 
   .time-readout {
-    order: 10;
+    order:
+      10;
 
-    width: 100%;
+    width:
+      100%;
 
-    min-width: 0;
+    min-width:
+      0;
 
-    margin-top: 3px;
+    margin-top:
+      3px;
   }
 
   .volume {
-    margin-left: 0;
+    margin-left:
+      0;
   }
 
   .watch-panel {
-    padding: 10px;
+    padding:
+      10px;
   }
 
   .player-wrap {
-    border-radius: 11px;
+    border-radius:
+      11px;
   }
 
-  .video-result-card img {
-    width: 88px;
-    height: 50px;
+  /* SEARCH HEADER */
+
+  #sourceModal
+  .modal-card
+  > div:first-child {
+    height:
+      60px !important;
+
+    padding:
+      0 10px !important;
   }
 
-  .queue-item {
-    padding: 9px;
+  #sourceModal
+  .modal-card
+  > div:first-child
+  > div:nth-child(2) {
+    display:
+      none !important;
+  }
+
+  #sourceModal
+  #modalVideoSearchInput {
+    border-radius:
+      21px !important;
+
+    border-right:
+      1px solid rgba(255,255,255,.12) !important;
+  }
+
+  #sourceModal
+  #modalSearchVideoBtn {
+    width:
+      42px !important;
+
+    min-width:
+      42px !important;
+
+    margin-left:
+      6px !important;
+
+    border:
+      1px solid rgba(255,255,255,.12) !important;
+
+    border-radius:
+      50% !important;
+  }
+
+}
+
+@media (max-width: 600px) {
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2) {
+    grid-template-columns:
+      1fr !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > aside {
+    display:
+      none !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    padding:
+      14px 12px 24px !important;
+  }
+
+  #sourceModal
+  #modalVideoSearchResults {
+    grid-template-columns:
+      1fr;
+  }
+
+  #sourceModal
+  .video-result-info
+  strong {
+    font-size:
+      13px;
   }
 
 }
@@ -2086,29 +2416,34 @@ select:focus {
 @media (max-width: 480px) {
 
   .topbar {
-    gap: 10px;
+    gap:
+      10px;
   }
 
   .status-pill {
     padding:
       7px 9px;
 
-    font-size: 10px;
+    font-size:
+      10px;
   }
 
   .hero h1 {
-    font-size: 34px;
+    font-size:
+      34px;
   }
 
   .hero-badge {
-    font-size: 9px;
+    font-size:
+      9px;
   }
 
   .creator-panel,
   .join-panel,
   .members-panel,
   .chat-panel {
-    padding: 14px;
+    padding:
+      14px;
   }
 
   .room-toolbar {
@@ -2116,8 +2451,10 @@ select:focus {
       column;
   }
 
-  .room-toolbar .ghost-btn {
-    width: 100%;
+  .room-toolbar
+  .ghost-btn {
+    width:
+      100%;
   }
 
   .room-meta {
@@ -2126,14 +2463,16 @@ select:focus {
   }
 
   .room-actions {
-    display: grid;
+    display:
+      grid;
 
     grid-template-columns:
       1fr;
   }
 
   .room-actions button {
-    width: 100%;
+    width:
+      100%;
   }
 
   .chat-form {
@@ -2142,34 +2481,8 @@ select:focus {
   }
 
   .chat-form button {
-    min-height: 42px;
-  }
-
-  .modal {
-    padding: 12px;
-  }
-
-  .modal-card {
-    padding: 16px;
-  }
-
-  .modal-actions {
-    grid-template-columns:
-      1fr;
-  }
-
-  .search-row {
-    grid-template-columns:
-      1fr;
-  }
-
-  .search-btn {
-    width: 100%;
-  }
-
-  .video-result-card img {
-    width: 82px;
-    height: 46px;
+    min-height:
+      42px;
   }
 
   .platform-grid {
@@ -2181,16 +2494,22 @@ select:focus {
   }
 
   #roomOwnerStatus {
-    font-size: 10px !important;
+    font-size:
+      10px !important;
   }
 
   .queue-item {
-    padding: 8px;
+    padding:
+      8px;
   }
 
-  .queue-item .tiny-btn {
-    min-height: 30px;
-    font-size: 11px;
+  .queue-item
+  .tiny-btn {
+    min-height:
+      30px;
+
+    font-size:
+      11px;
   }
 
 }
