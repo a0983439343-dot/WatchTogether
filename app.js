@@ -3,7 +3,7 @@
 
   const $ = (id) => document.getElementById(id);
 
-  const YOUTUBE_API_KEY = "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
+  const YOUTUBE_API_KEY = "請保留你目前 app.js 裡的 YouTube API Key";
 
   const PLATFORMS = {
     youtube: {
@@ -235,7 +235,8 @@
       result +=
         chars[
           Math.floor(
-            Math.random() * chars.length
+            Math.random() *
+            chars.length
           )
         ];
     }
@@ -360,9 +361,14 @@
           "youtube.com"
         )
       ) {
-        if (url.pathname === "/watch") {
+        if (
+          url.pathname ===
+          "/watch"
+        ) {
           return (
-            url.searchParams.get("v") ||
+            url.searchParams.get(
+              "v"
+            ) ||
             null
           );
         }
@@ -423,7 +429,10 @@
             /(?:video\/)?(\d+)/
           );
 
-        return match?.[1] || null;
+        return (
+          match?.[1] ||
+          null
+        );
       }
     } catch (_) {}
 
@@ -432,7 +441,10 @@
         /(?:vimeo\.com\/)(\d+)/
       );
 
-    return match?.[1] || null;
+    return (
+      match?.[1] ||
+      null
+    );
   }
 
   function getDailymotionId(value) {
@@ -457,7 +469,10 @@
             /video\/([A-Za-z0-9]+)/
           );
 
-        return match?.[1] || null;
+        return (
+          match?.[1] ||
+          null
+        );
       }
 
       if (
@@ -498,7 +513,9 @@
       return text;
     }
 
-    if (/^av\d+$/i.test(text)) {
+    if (
+      /^av\d+$/i.test(text)
+    ) {
       return text;
     }
 
@@ -561,7 +578,8 @@
       }
 
       if (
-        parts[0] === "videos" &&
+        parts[0] ===
+          "videos" &&
         parts[1]
       ) {
         return {
@@ -571,7 +589,8 @@
       }
 
       if (
-        parts[0] === "clip" &&
+        parts[0] ===
+          "clip" &&
         parts[1]
       ) {
         return {
@@ -586,7 +605,9 @@
       };
     } catch (_) {}
 
-    if (/^\d+$/.test(text)) {
+    if (
+      /^\d+$/.test(text)
+    ) {
       return {
         type: "video",
         value: text
@@ -595,16 +616,19 @@
 
     return {
       type: "channel",
-      value: text.replace(
-        /^@/,
-        ""
-      )
+      value:
+        text.replace(
+          /^@/,
+          ""
+        )
     };
   }
 
   async function searchYoutube(query) {
     query =
-      String(query || "").trim();
+      String(
+        query || ""
+      ).trim();
 
     if (!query) {
       throw new Error(
@@ -614,10 +638,15 @@
 
     if (
       !YOUTUBE_API_KEY ||
-      YOUTUBE_API_KEY.startsWith("請填入")
+      YOUTUBE_API_KEY.startsWith(
+        "請填入"
+      ) ||
+      YOUTUBE_API_KEY.startsWith(
+        "請保留"
+      )
     ) {
       throw new Error(
-        "尚未設定 YouTube Data API Key"
+        "請把你原本的 YouTube API Key 放回 YOUTUBE_API_KEY"
       );
     }
 
@@ -689,7 +718,9 @@
           message;
       } catch (_) {}
 
-      throw new Error(message);
+      throw new Error(
+        message
+      );
     }
 
     const data =
@@ -697,40 +728,49 @@
 
     const results =
       (
-        Array.isArray(data.items)
+        Array.isArray(
+          data.items
+        )
           ? data.items
           : []
       )
-        .map((item) => {
-          const id =
-            item?.id?.videoId;
+        .map(
+          (item) => {
+            const id =
+              item?.id?.videoId;
 
-          const snippet =
-            item?.snippet || {};
+            const snippet =
+              item?.snippet ||
+              {};
 
-          if (!id) {
-            return null;
+            if (!id) {
+              return null;
+            }
+
+            return {
+              id,
+              platform:
+                "youtube",
+              title:
+                snippet.title ||
+                "未命名影片",
+              description:
+                snippet.description ||
+                "",
+              channel:
+                snippet.channelTitle ||
+                "",
+              thumbnail:
+                snippet.thumbnails
+                  ?.high?.url ||
+                snippet.thumbnails
+                  ?.medium?.url ||
+                snippet.thumbnails
+                  ?.default?.url ||
+                ""
+            };
           }
-
-          return {
-            id,
-            platform: "youtube",
-            title:
-              snippet.title ||
-              "未命名影片",
-            description:
-              snippet.description ||
-              "",
-            channel:
-              snippet.channelTitle ||
-              "",
-            thumbnail:
-              snippet.thumbnails?.high?.url ||
-              snippet.thumbnails?.medium?.url ||
-              snippet.thumbnails?.default?.url ||
-              ""
-          };
-        })
+        )
         .filter(Boolean);
 
     state.searchResults =
@@ -749,7 +789,9 @@
     return results;
   }
 
-  function renderSearchResults(results) {
+  function renderSearchResults(
+    results
+  ) {
     const container =
       $("modalVideoSearchResults");
 
@@ -811,7 +853,6 @@
               <span
                 class="video-result-info"
               >
-
                 <strong>
                   ${escapeHtml(
                     video.title
@@ -823,87 +864,93 @@
                     video.channel
                   )}
                 </small>
-
               </span>
             </button>
           `
         )
         .join("");
 
-    container.querySelectorAll(
-      ".video-result-card"
-    ).forEach(
-      (card) => {
-        card.addEventListener(
-          "click",
-          () => {
-            const id =
-              String(
-                card.dataset.videoId ||
+    container
+      .querySelectorAll(
+        ".video-result-card"
+      )
+      .forEach(
+        (card) => {
+          card.addEventListener(
+            "click",
+            () => {
+              const id =
+                String(
+                  card.dataset
+                    .videoId ||
+                  ""
+                );
+
+              const video =
+                state.searchResults.find(
+                  (item) =>
+                    String(
+                      item.id
+                    ) === id
+                );
+
+              if (!video) {
+                return;
+              }
+
+              state.modalSelectedVideo = {
+                ...video,
+                platform:
+                  "youtube"
+              };
+
+              state.modalSelectedVideoId =
+                id;
+
+              container.dataset.selectedVideoId =
+                id;
+
+              container
+                .querySelectorAll(
+                  ".video-result-card"
+                )
+                .forEach(
+                  (item) => {
+                    item.classList.toggle(
+                      "selected",
+                      String(
+                        item.dataset
+                          .videoId ||
+                        ""
+                      ) ===
+                        id
+                    );
+                  }
+                );
+
+              const saveButton =
+                $("saveSourceBtn");
+
+              if (saveButton) {
+                saveButton.disabled =
+                  false;
+
+                saveButton.textContent =
+                  "使用這部影片";
+              }
+
+              setError(
+                $("modalError"),
                 ""
               );
 
-            const video =
-              state.searchResults.find(
-                (item) =>
-                  String(item.id) ===
-                  id
+              toast(
+                "已選擇影片"
               );
-
-            if (!video) {
-              return;
             }
-
-            state.modalSelectedVideo = {
-              ...video,
-              platform: "youtube"
-            };
-
-            state.modalSelectedVideoId =
-              id;
-
-            container.dataset.selectedVideoId =
-              id;
-
-            container
-              .querySelectorAll(
-                ".video-result-card"
-              )
-              .forEach(
-                (item) => {
-                  item.classList.toggle(
-                    "selected",
-                    String(
-                      item.dataset.videoId ||
-                      ""
-                    ) === id
-                  );
-                }
-              );
-
-            const saveButton =
-              $("saveSourceBtn");
-
-            if (saveButton) {
-              saveButton.disabled =
-                false;
-
-              saveButton.textContent =
-                "使用這部影片";
-            }
-
-            setError(
-              $("modalError"),
-              ""
-            );
-
-            toast(
-              "已選擇影片"
-            );
-          }
-        );
-      }
-    );
+          );
+        }
+      );
   }
 
   function getSelectedModalYoutubeVideo() {
@@ -912,7 +959,8 @@
 
     const storedId =
       String(
-        container?.dataset?.selectedVideoId ||
+        container?.dataset
+          ?.selectedVideoId ||
         state.modalSelectedVideoId ||
         ""
       ).trim();
@@ -924,7 +972,9 @@
     const video =
       state.searchResults.find(
         (item) =>
-          String(item.id) ===
+          String(
+            item.id
+          ) ===
           storedId
       );
 
@@ -934,11 +984,14 @@
 
     return {
       ...video,
-      platform: "youtube"
+      platform:
+        "youtube"
     };
   }
 
-  function hidePlayers(keepYoutube = false) {
+  function hidePlayers(
+    keepYoutube = false
+  ) {
     [
       "vimeoPlayer",
       "dailymotionPlayer",
@@ -949,9 +1002,9 @@
       "platformPlayerNotice"
     ].forEach(
       (id) => {
-        $(id)?.classList.add(
-          "hidden"
-        );
+        $(id)
+          ?.classList
+          .add("hidden");
       }
     );
 
@@ -968,10 +1021,12 @@
     }
   }
 
-  function showPlayerElement(id) {
-    $(id)?.classList.remove(
-      "hidden"
-    );
+  function showPlayerElement(
+    id
+  ) {
+    $(id)
+      ?.classList
+      .remove("hidden");
   }
 
   function forceYoutubeVisible() {
@@ -981,13 +1036,6 @@
       );
 
     if (!element) {
-      return;
-    }
-
-    if (
-      !state.youtubeRequestedId &&
-      !state.currentVideoId
-    ) {
       return;
     }
 
@@ -1020,14 +1068,23 @@
       element.tagName ===
       "IFRAME"
     ) {
+      element.style.display =
+        "block";
+
+      element.style.visibility =
+        "visible";
+
+      element.style.opacity =
+        "1";
+
+      element.style.width =
+        "100%";
+
+      element.style.height =
+        "100%";
+
       element.style.border =
         "0";
-
-      element.style.minWidth =
-        "100%";
-
-      element.style.minHeight =
-        "100%";
 
       element.style.zIndex =
         "3";
@@ -1046,9 +1103,7 @@
     const oldType =
       state.playerType;
 
-    if (
-      !old
-    ) {
+    if (!old) {
       state.playerReady =
         false;
 
@@ -1479,7 +1534,8 @@
         position:
           Math.max(
             0,
-            Number(position) || 0
+            Number(position) ||
+              0
           ),
 
         playing:
@@ -1900,7 +1956,8 @@
         title:
           title ||
           "Vimeo 影片",
-        thumbnail: "",
+        thumbnail:
+          "",
         channel:
           "Vimeo"
       };
@@ -1929,7 +1986,8 @@
         title:
           title ||
           "Dailymotion 影片",
-        thumbnail: "",
+        thumbnail:
+          "",
         channel:
           "Dailymotion"
       };
@@ -1958,7 +2016,8 @@
         title:
           title ||
           "Bilibili 影片",
-        thumbnail: "",
+        thumbnail:
+          "",
         channel:
           "Bilibili"
       };
@@ -1990,7 +2049,8 @@
         title:
           title ||
           "Twitch",
-        thumbnail: "",
+        thumbnail:
+          "",
         channel:
           "Twitch"
       };
@@ -2012,7 +2072,8 @@
           platform
         ]?.name ||
         platform,
-      thumbnail: "",
+      thumbnail:
+        "",
       channel:
         PLATFORMS[
           platform
@@ -2367,7 +2428,10 @@
     );
   }
 
-  async function buildYoutubePlayer(videoId) {
+  async function buildYoutubePlayer(
+    videoId,
+    autoplay = true
+  ) {
     if (!videoId) {
       return;
     }
@@ -2382,10 +2446,10 @@
     }
 
     if (
-      state.playerType ===
-        "youtube" &&
       state.playerReady &&
       state.player &&
+      state.playerType ===
+        "youtube" &&
       state.currentVideoId ===
         videoId
     ) {
@@ -2393,6 +2457,13 @@
         videoId;
 
       forceYoutubeVisible();
+
+      if (autoplay) {
+        try {
+          state.player.mute();
+          state.player.playVideo();
+        } catch (_) {}
+      }
 
       return;
     }
@@ -2417,34 +2488,12 @@
     try {
       if (
         !window.YT ||
-        typeof YT.Player !==
+        typeof window.YT.Player !==
           "function"
       ) {
-        const existing =
-          document.getElementById(
-            "youtubePlayer"
-          );
-
-        if (existing) {
-          existing.classList.remove(
-            "hidden"
-          );
-
-          existing.style.display =
-            "block";
-
-          existing.style.visibility =
-            "visible";
-
-          existing.style.opacity =
-            "1";
-
-          existing.style.width =
-            "100%";
-
-          existing.style.height =
-            "100%";
-        }
+        initial.classList.remove(
+          "hidden"
+        );
 
         if (
           $("playerPlaceholder")
@@ -2462,42 +2511,22 @@
         setTimeout(
           () => {
             if (
-              state.youtubeRequestedId !==
-                videoId ||
               state.youtubeBuildToken !==
-                token
+                token ||
+              state.youtubeRequestedId !==
+                videoId
             ) {
               return;
             }
 
             buildYoutubePlayer(
-              videoId
+              videoId,
+              autoplay
             );
           },
           500
         );
 
-        return;
-      }
-
-      if (
-        state.youtubeBuildToken !==
-          token ||
-        state.youtubeRequestedId !==
-          videoId
-      ) {
-        return;
-      }
-
-      if (
-        state.player &&
-        state.playerType ===
-          "youtube" &&
-        state.currentVideoId ===
-          videoId &&
-        state.playerReady
-      ) {
-        forceYoutubeVisible();
         return;
       }
 
@@ -2544,42 +2573,39 @@
         return;
       }
 
-      let current =
+      let container =
         document.getElementById(
           "youtubePlayer"
         );
 
-      if (!current) {
+      if (!container) {
         throw new Error(
           "找不到 youtubePlayer"
         );
       }
 
       if (
-        current.tagName ===
+        container.tagName ===
         "IFRAME"
       ) {
-        const fresh =
+        const replacement =
           document.createElement(
             "div"
           );
 
-        fresh.id =
+        replacement.id =
           "youtubePlayer";
 
-        fresh.className =
+        replacement.className =
           "youtube-player";
 
-        current.replaceWith(
-          fresh
+        container.replaceWith(
+          replacement
         );
 
-        current =
-          fresh;
+        container =
+          replacement;
       }
-
-      const container =
-        current;
 
       hidePlayers(
         true
@@ -2603,12 +2629,6 @@
 
       container.style.height =
         "100%";
-
-      container.style.position =
-        "relative";
-
-      container.style.zIndex =
-        "2";
 
       $("playerPlaceholder")
         ?.classList.add(
@@ -2640,12 +2660,24 @@
               "100%",
 
             playerVars: {
-              autoplay: 0,
-              controls: 1,
-              playsinline: 1,
-              rel: 0,
-              modestbranding: 1,
-              enablejsapi: 1,
+              autoplay:
+                autoplay ? 1 : 0,
+
+              controls:
+                1,
+
+              playsinline:
+                1,
+
+              rel:
+                0,
+
+              modestbranding:
+                1,
+
+              enablejsapi:
+                1,
+
               origin:
                 location.origin
             },
@@ -2660,21 +2692,6 @@
                       token ||
                     state.youtubeRequestedId !==
                       videoId
-                  ) {
-                    try {
-                      event.target.destroy();
-                    } catch (_) {}
-
-                    return;
-                  }
-
-                  if (
-                    !document.documentElement.contains(
-                      event.target.getIframe?.() ||
-                      document.getElementById(
-                        "youtubePlayer"
-                      )
-                    )
                   ) {
                     return;
                   }
@@ -2705,12 +2722,27 @@
                       "hidden"
                     );
 
+                  try {
+                    event.target.setVolume(
+                      100
+                    );
+
+                    if (
+                      autoplay
+                    ) {
+                      event.target.mute();
+                      event.target.playVideo();
+                    }
+                  } catch (_) {}
+
                   if (
                     $("syncStatus")
                   ) {
                     $("syncStatus")
                       .textContent =
-                      "影片已載入";
+                      autoplay
+                        ? "影片正在播放"
+                        : "影片已載入";
                   }
 
                   updateTimeUI();
@@ -2718,13 +2750,17 @@
                   await syncLatestPlayback();
 
                   if (
-                    state.youtubeBuildToken ===
-                      token &&
+                    autoplay &&
                     state.player ===
                       event.target
                   ) {
-                    forceYoutubeVisible();
+                    try {
+                      event.target.mute();
+                      event.target.playVideo();
+                    } catch (_) {}
                   }
+
+                  forceYoutubeVisible();
 
                   startSyncHeartbeat();
 
@@ -2740,7 +2776,23 @@
 
                   setTimeout(
                     forceYoutubeVisible,
-                    1500
+                    1200
+                  );
+
+                  setTimeout(
+                    () => {
+                      if (
+                        autoplay &&
+                        state.player ===
+                          event.target
+                      ) {
+                        try {
+                          event.target.mute();
+                          event.target.playVideo();
+                        } catch (_) {}
+                      }
+                    },
+                    800
                   );
                 },
 
@@ -2759,9 +2811,7 @@
 
                   if (
                     state.player !==
-                    event.target &&
-                    state.player !==
-                      null
+                    event.target
                   ) {
                     return;
                   }
@@ -2841,20 +2891,6 @@
 
       state.player =
         player;
-
-      setTimeout(
-        () => {
-          if (
-            state.youtubeBuildToken ===
-              token &&
-            state.player ===
-              player
-          ) {
-            forceYoutubeVisible();
-          }
-        },
-        250
-      );
 
     } catch (error) {
       console.error(
@@ -3094,8 +3130,10 @@
         {
           video:
             video.id,
+
           mute:
             false,
+
           controls:
             true
         }
@@ -3156,6 +3194,8 @@
         }
       );
     }
+
+    await syncLatestPlayback();
 
     startSyncHeartbeat();
   }
@@ -3300,10 +3340,10 @@
         "100%",
 
       autoplay:
-        false,
+        true,
 
       muted:
-        false,
+        true,
 
       parent: [
         host
@@ -3413,6 +3453,8 @@
       }
     );
 
+    await syncLatestPlayback();
+
     startSyncHeartbeat();
   }
 
@@ -3519,7 +3561,8 @@
       "youtube"
     ) {
       await buildYoutubePlayer(
-        video.id
+        video.id,
+        true
       );
 
       return;
@@ -3797,7 +3840,8 @@
       }
 
       await buildYoutubePlayer(
-        videoId
+        videoId,
+        true
       );
 
       return;
@@ -3906,7 +3950,9 @@
         .child("video")
         .on(
           "value",
-          async (snapshot) => {
+          async (
+            snapshot
+          ) => {
             try {
               await handleRoomVideo(
                 snapshot.val()
@@ -3963,6 +4009,34 @@
 
       state.chatListenerAttached =
         true;
+    }
+
+    const initialVideo =
+      state.room?.video ||
+      null;
+
+    if (
+      initialVideo
+    ) {
+      await handleRoomVideo(
+        initialVideo
+      );
+    } else {
+      hidePlayers();
+
+      showPlayerElement(
+        "emptyPlayer"
+      );
+
+      if (
+        $("syncStatus")
+      ) {
+        $("syncStatus")
+          .textContent =
+          state.isOwner
+            ? "等待你選擇影片"
+            : "等待房主選擇影片";
+      }
     }
   }
 
@@ -4245,34 +4319,30 @@
     }
 
     await state.roomRef
-      .child("sourceType")
-      .set(
-        platform
-      );
+      .update({
+        sourceType:
+          platform,
 
-    await state.roomRef
-      .child("video")
-      .set(
-        roomVideo
-      );
+        video:
+          roomVideo,
 
-    await state.stateRef
-      .set({
-        action:
-          "seek",
+        state: {
+          action:
+            "play",
 
-        position:
-          0,
+          position:
+            0,
 
-        playing:
-          false,
+          playing:
+            true,
 
-        updatedAt:
-          firebase.database
-            .ServerValue.TIMESTAMP,
+          updatedAt:
+            firebase.database
+              .ServerValue.TIMESTAMP,
 
-        updatedBy:
-          state.uid
+          updatedBy:
+            state.uid
+        }
       });
 
     state.room.sourceType =
@@ -4280,6 +4350,23 @@
 
     state.room.video =
       roomVideo;
+
+    state.room.state = {
+      action:
+        "play",
+
+      position:
+        0,
+
+      playing:
+        true,
+
+      updatedAt:
+        Date.now(),
+
+      updatedBy:
+        state.uid
+    };
 
     closeSourceModal();
 
@@ -4289,7 +4376,7 @@
           platform
         ]?.name ||
         platform
-      }影片`
+      }影片，準備播放`
     );
   }
 
@@ -4798,6 +4885,14 @@
               state.player?.setVolume(
                 value
               );
+
+              if (
+                value > 0
+              ) {
+                state.player?.unMute();
+              } else {
+                state.player?.mute();
+              }
             } else if (
               state.playerType ===
               "vimeo"
@@ -4871,7 +4966,9 @@
     $("chatForm")
       ?.addEventListener(
         "submit",
-        async (event) => {
+        async (
+          event
+        ) => {
           event.preventDefault();
 
           const input =
@@ -5171,18 +5268,35 @@
         state.room?.video;
 
       if (
+        state.youtubeLoading
+      ) {
+        return;
+      }
+
+      if (
+        state.playerReady &&
+        state.player &&
+        state.playerType ===
+          "youtube"
+      ) {
+        forceYoutubeVisible();
+        return;
+      }
+
+      if (
         roomVideo &&
         (
           roomVideo.platform ===
             "youtube" ||
           !roomVideo.platform
         ) &&
-        roomVideo.id &&
-        !state.player &&
-        !state.youtubeLoading
+        roomVideo.id
       ) {
         buildYoutubePlayer(
-          roomVideo.id
+          getYoutubeId(
+            roomVideo.id
+          ),
+          true
         );
       }
     };
