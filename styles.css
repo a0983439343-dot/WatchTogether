@@ -67,25 +67,15 @@ select {
 
 .error-text {
   min-height: 20px;
-
   margin-top: 10px;
-
   color: #fb7185;
-
   font-size: 13px;
-
   line-height: 1.5;
 }
 
-/* =========================================================
-   APP
-========================================================= */
-
 .app-shell {
   width: min(1450px, 100%);
-
   min-height: 100vh;
-
   margin: 0 auto;
 }
 
@@ -95,21 +85,15 @@ select {
 
 .topbar {
   position: sticky;
-
   top: 0;
-
   z-index: 20;
 
   display: flex;
-
   align-items: center;
-
   justify-content: space-between;
 
   min-height: 68px;
-
-  padding:
-    0 24px;
+  padding: 0 24px;
 
   border-bottom:
     1px solid rgba(255, 255, 255, .07);
@@ -117,18 +101,13 @@ select {
   background:
     rgba(8, 12, 24, .82);
 
-  backdrop-filter:
-    blur(18px);
-
-  -webkit-backdrop-filter:
-    blur(18px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .brand {
   font-size: 18px;
-
   font-weight: 900;
-
   letter-spacing: .16em;
 }
 
@@ -138,13 +117,10 @@ select {
 
 .status-pill {
   display: inline-flex;
-
   align-items: center;
-
   gap: 7px;
 
-  padding:
-    8px 12px;
+  padding: 8px 12px;
 
   border:
     1px solid rgba(255, 255, 255, .08);
@@ -154,11 +130,9 @@ select {
   background:
     rgba(255, 255, 255, .05);
 
-  color:
-    #cbd5e1;
+  color: #cbd5e1;
 
   font-size: 12px;
-
   font-weight: 700;
 }
 
@@ -166,13 +140,11 @@ select {
   content: "";
 
   width: 7px;
-
   height: 7px;
 
   border-radius: 50%;
 
-  background:
-    #22c55e;
+  background: #22c55e;
 
   box-shadow:
     0 0 12px rgba(34, 197, 94, .7);
@@ -184,9 +156,7 @@ select {
 
 main {
   width: 100%;
-
-  padding:
-    32px 24px 60px;
+  padding: 32px 24px 60px;
 }
 
 .view {
@@ -208,11 +178,9 @@ main {
 
 .hero-badge {
   display: inline-flex;
-
   align-items: center;
 
-  padding:
-    7px 12px;
+  padding: 7px 12px;
 
   border:
     1px solid rgba(96, 165, 250, .2);
@@ -222,15 +190,12 @@ main {
   background:
     rgba(96, 165, 250, .08);
 
-  color:
-    #93c5fd;
+  color: #93c5fd;
 
   font-size: 11px;
-
   font-weight: 800;
 
-  letter-spacing:
-    .12em;
+  letter-spacing: .12em;
 }
 
 .hero h1 {
@@ -240,33 +205,24 @@ main {
   font-size:
     clamp(36px, 6vw, 68px);
 
-  line-height:
-    1.04;
+  line-height: 1.04;
 
-  letter-spacing:
-    -.04em;
+  letter-spacing: -.04em;
 }
 
 .hero h1 span {
-  color:
-    #60a5fa;
+  color: #60a5fa;
 }
 
 .hero p {
-  max-width:
-    700px;
+  max-width: 700px;
 
-  margin:
-    0 auto;
+  margin: 0 auto;
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  font-size:
-    16px;
-
-  line-height:
-    1.75;
+  font-size: 16px;
+  line-height: 1.75;
 }
 
 /* =========================================================
@@ -277,8 +233,7 @@ main {
   border:
     1px solid rgba(255, 255, 255, .07);
 
-  border-radius:
-    20px;
+  border-radius: 20px;
 
   background:
     linear-gradient(
@@ -290,46 +245,35 @@ main {
   box-shadow:
     0 18px 55px rgba(0, 0, 0, .20);
 
-  overflow:
-    hidden;
+  overflow: hidden;
 }
 
 .panel-title {
-  margin-bottom:
-    18px;
+  margin-bottom: 18px;
 
-  color:
-    #f8fafc;
+  color: #f8fafc;
 
-  font-size:
-    16px;
-
-  font-weight:
-    850;
+  font-size: 16px;
+  font-weight: 850;
 }
 
 .creator-panel,
 .join-panel {
-  padding:
-    22px;
+  padding: 22px;
 }
 
 .home-grid {
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     minmax(0, 1.4fr)
     minmax(300px, .8fr);
 
-  gap:
-    18px;
+  gap: 18px;
 
-  max-width:
-    1120px;
+  max-width: 1120px;
 
-  margin:
-    0 auto;
+  margin: 0 auto;
 }
 
 /* =========================================================
@@ -337,41 +281,31 @@ main {
 ========================================================= */
 
 label {
-  display:
-    block;
+  display: block;
 
   margin:
     15px 0 7px;
 
-  color:
-    #cbd5e1;
+  color: #cbd5e1;
 
-  font-size:
-    13px;
-
-  font-weight:
-    700;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 input,
 select {
-  width:
-    100%;
-
-  min-height:
-    46px;
+  width: 100%;
+  min-height: 46px;
 
   border:
     1px solid rgba(255, 255, 255, .09);
 
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     rgba(15, 23, 42, .8);
 
-  color:
-    #f8fafc;
+  color: #f8fafc;
 
   padding:
     0 14px;
@@ -383,13 +317,11 @@ select {
 }
 
 select {
-  cursor:
-    pointer;
+  cursor: pointer;
 }
 
 input::placeholder {
-  color:
-    #64748b;
+  color: #64748b;
 }
 
 input:focus,
@@ -409,26 +341,18 @@ select:focus {
 ========================================================= */
 
 .platform-notice {
-  display:
-    flex;
+  display: flex;
+  align-items: flex-start;
 
-  align-items:
-    flex-start;
+  gap: 12px;
 
-  gap:
-    12px;
-
-  margin-top:
-    14px;
-
-  padding:
-    14px;
+  margin-top: 14px;
+  padding: 14px;
 
   border:
     1px solid rgba(255, 255, 255, .06);
 
-  border-radius:
-    14px;
+  border-radius: 14px;
 
   background:
     linear-gradient(
@@ -439,59 +363,41 @@ select:focus {
 }
 
 .platform-notice-icon {
-  display:
-    flex;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-  align-items:
-    center;
+  width: 38px;
+  height: 38px;
 
-  justify-content:
-    center;
+  flex: 0 0 auto;
 
-  width:
-    38px;
-
-  height:
-    38px;
-
-  flex:
-    0 0 auto;
-
-  border-radius:
-    10px;
+  border-radius: 10px;
 
   background:
     rgba(255, 255, 255, .05);
 
-  font-size:
-    20px;
+  font-size: 20px;
 }
 
 .platform-notice strong {
-  display:
-    block;
+  display: block;
 
-  font-size:
-    14px;
+  font-size: 14px;
 }
 
 .platform-notice p {
   margin:
     5px 0 0;
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  font-size:
-    12px;
-
-  line-height:
-    1.55;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .platform-input-area {
-  width:
-    100%;
+  width: 100%;
 }
 
 /* =========================================================
@@ -503,8 +409,7 @@ select:focus {
 .ghost-btn,
 .control-btn,
 .tiny-btn {
-  border:
-    0;
+  border: 0;
 
   transition:
     transform .16s ease,
@@ -519,22 +424,16 @@ select:focus {
 .ghost-btn:active,
 .control-btn:active,
 .tiny-btn:active {
-  transform:
-    scale(.97);
+  transform: scale(.97);
 }
 
 .primary-btn {
-  width:
-    100%;
+  width: 100%;
+  min-height: 48px;
 
-  min-height:
-    48px;
+  margin-top: 18px;
 
-  margin-top:
-    18px;
-
-  border-radius:
-    13px;
+  border-radius: 13px;
 
   background:
     linear-gradient(
@@ -543,24 +442,20 @@ select:focus {
       #6366f1
     );
 
-  color:
-    white;
+  color: white;
 
-  font-weight:
-    850;
+  font-weight: 850;
 
   box-shadow:
     0 10px 28px rgba(59, 130, 246, .22);
 }
 
 .primary-btn:hover {
-  filter:
-    brightness(1.07);
+  filter: brightness(1.07);
 }
 
 .secondary-btn {
-  min-height:
-    44px;
+  min-height: 44px;
 
   padding:
     0 16px;
@@ -568,17 +463,14 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .08);
 
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     rgba(255, 255, 255, .05);
 
-  color:
-    #e2e8f0;
+  color: #e2e8f0;
 
-  font-weight:
-    750;
+  font-weight: 750;
 }
 
 .secondary-btn:hover,
@@ -590,8 +482,7 @@ select:focus {
 }
 
 .ghost-btn {
-  min-height:
-    42px;
+  min-height: 42px;
 
   padding:
     0 14px;
@@ -599,22 +490,18 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .08);
 
-  border-radius:
-    11px;
+  border-radius: 11px;
 
   background:
     transparent;
 
-  color:
-    #cbd5e1;
+  color: #cbd5e1;
 
-  font-weight:
-    700;
+  font-weight: 700;
 }
 
 .tiny-btn {
-  min-height:
-    32px;
+  min-height: 32px;
 
   padding:
     0 11px;
@@ -622,43 +509,32 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .08);
 
-  border-radius:
-    9px;
+  border-radius: 9px;
 
   background:
     rgba(255, 255, 255, .045);
 
-  color:
-    #cbd5e1;
+  color: #cbd5e1;
 
-  font-size:
-    12px;
-
-  font-weight:
-    700;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .control-btn {
-  min-width:
-    42px;
-
-  min-height:
-    40px;
+  min-width: 42px;
+  min-height: 40px;
 
   padding:
     0 11px;
 
-  border-radius:
-    10px;
+  border-radius: 10px;
 
   background:
     rgba(255, 255, 255, .055);
 
-  color:
-    #f8fafc;
+  color: #f8fafc;
 
-  font-weight:
-    800;
+  font-weight: 800;
 }
 
 /* =========================================================
@@ -666,35 +542,26 @@ select:focus {
 ========================================================= */
 
 .divider {
-  display:
-    flex;
+  display: flex;
+  align-items: center;
 
-  align-items:
-    center;
-
-  gap:
-    10px;
+  gap: 10px;
 
   margin:
     22px 0;
 
-  color:
-    #64748b;
+  color: #64748b;
 
-  font-size:
-    12px;
+  font-size: 12px;
 }
 
 .divider::before,
 .divider::after {
-  content:
-    "";
+  content: "";
 
-  height:
-    1px;
+  height: 1px;
 
-  flex:
-    1;
+  flex: 1;
 
   background:
     rgba(255, 255, 255, .07);
@@ -705,8 +572,7 @@ select:focus {
 ========================================================= */
 
 .platform-grid {
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     repeat(
@@ -714,37 +580,26 @@ select:focus {
       minmax(130px, 1fr)
     );
 
-  gap:
-    9px;
+  gap: 9px;
 }
 
 .platform-card {
-  min-height:
-    72px;
+  min-height: 72px;
 
-  display:
-    flex;
+  display: flex;
+  flex-direction: column;
 
-  flex-direction:
-    column;
+  align-items: center;
+  justify-content: center;
 
-  align-items:
-    center;
+  gap: 4px;
 
-  justify-content:
-    center;
-
-  gap:
-    4px;
-
-  padding:
-    10px;
+  padding: 10px;
 
   border:
     1px solid rgba(255, 255, 255, .07);
 
-  border-radius:
-    13px;
+  border-radius: 13px;
 
   background:
     linear-gradient(
@@ -753,8 +608,7 @@ select:focus {
       rgba(255, 255, 255, .025)
     );
 
-  color:
-    #e2e8f0;
+  color: #e2e8f0;
 
   transition:
     transform .16s ease,
@@ -763,24 +617,17 @@ select:focus {
 }
 
 .platform-card > span {
-  font-size:
-    18px;
-
-  line-height:
-    1;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .platform-card strong {
-  font-size:
-    12px;
+  font-size: 12px;
 }
 
 .platform-card small {
-  color:
-    #64748b;
-
-  font-size:
-    10px;
+  color: #64748b;
+  font-size: 10px;
 }
 
 .platform-card:hover {
@@ -823,71 +670,50 @@ select:focus {
 ========================================================= */
 
 .room-toolbar {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
+  justify-content: space-between;
 
-  justify-content:
-    space-between;
+  gap: 20px;
 
-  gap:
-    20px;
-
-  margin-bottom:
-    18px;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
-  margin-bottom:
-    4px;
+  margin-bottom: 4px;
 
-  color:
-    #60a5fa;
+  color: #60a5fa;
 
-  font-size:
-    10px;
+  font-size: 10px;
+  font-weight: 900;
 
-  font-weight:
-    900;
-
-  letter-spacing:
-    .16em;
+  letter-spacing: .16em;
 }
 
 .room-toolbar h2 {
-  margin:
-    0;
+  margin: 0;
 
   font-size:
     clamp(22px, 4vw, 34px);
 
-  line-height:
-    1.1;
+  line-height: 1.1;
 
-  letter-spacing:
-    -.03em;
+  letter-spacing: -.03em;
 }
 
 .room-meta {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  margin-top:
-    9px;
+  margin-top: 9px;
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  font-size:
-    12px;
+  font-size: 12px;
 }
 
 .room-meta > span {
@@ -897,80 +723,60 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .07);
 
-  border-radius:
-    8px;
+  border-radius: 8px;
 
   background:
     rgba(255, 255, 255, .035);
 
-  font-weight:
-    800;
+  font-weight: 800;
 }
 
 #roomCodeLabel {
-  letter-spacing:
-    .08em;
+  letter-spacing: .08em;
 }
 
 #roomOwnerStatus {
-  display:
-    inline-flex;
+  display: inline-flex;
 
-  align-items:
-    center;
+  align-items: center;
 
-  white-space:
-    nowrap;
+  white-space: nowrap;
 
-  letter-spacing:
-    0 !important;
+  letter-spacing: 0 !important;
 
-  color:
-    #93c5fd !important;
+  color: #93c5fd !important;
 
   background:
     rgba(96, 165, 250, .06) !important;
 }
 
-/* =========================================================
-   ROOM LAYOUT
-========================================================= */
-
 .room-layout {
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     minmax(0, 1fr)
     360px;
 
-  gap:
-    18px;
+  gap: 18px;
 
-  align-items:
-    start;
+  align-items: start;
 }
 
 .watch-panel {
-  padding:
-    14px;
+  padding: 14px;
 }
 
 .side-column {
-  display:
-    grid;
+  display: grid;
 
-  gap:
-    18px;
+  gap: 18px;
 
-  min-width:
-    0;
+  min-width: 0;
 }
 
 .members-panel,
 .chat-panel {
-  padding:
-    16px;
+  padding: 16px;
 }
 
 /* =========================================================
@@ -978,20 +784,16 @@ select:focus {
 ========================================================= */
 
 .player-wrap {
-  position:
-    relative;
+  position: relative;
 
-  width:
-    100%;
+  width: 100%;
 
   aspect-ratio:
     16 / 9;
 
-  overflow:
-    hidden;
+  overflow: hidden;
 
-  border-radius:
-    14px;
+  border-radius: 14px;
 
   background:
     #020617;
@@ -1001,118 +803,77 @@ select:focus {
 }
 
 .player-wrap:fullscreen {
-  width:
-    100vw;
+  width: 100vw;
+  height: 100vh;
 
-  height:
-    100vh;
+  aspect-ratio: auto;
 
-  aspect-ratio:
-    auto;
-
-  border-radius:
-    0;
+  border-radius: 0;
 }
 
 #youtubePlayer {
-  position:
-    relative;
+  position: relative;
 
-  width:
-    100%;
+  width: 100%;
+  height: 100%;
 
-  height:
-    100%;
+  display: block;
 
-  display:
-    block;
+  visibility: visible;
+  opacity: 1;
 
-  visibility:
-    visible;
+  background: #000;
 
-  opacity:
-    1;
+  overflow: hidden;
 
-  background:
-    #000;
-
-  overflow:
-    hidden;
-
-  z-index:
-    2;
+  z-index: 2;
 }
 
 #youtubePlayer.hidden {
-  display:
-    none !important;
+  display: none !important;
 }
 
 #youtubePlayer iframe {
-  display:
-    block !important;
+  display: block !important;
 
-  width:
-    100% !important;
+  width: 100% !important;
+  height: 100% !important;
 
-  height:
-    100% !important;
+  min-width: 100%;
+  min-height: 100%;
 
-  min-width:
-    100%;
+  border: 0;
 
-  min-height:
-    100%;
+  visibility: visible !important;
+  opacity: 1 !important;
 
-  border:
-    0;
+  position: relative;
 
-  visibility:
-    visible !important;
-
-  opacity:
-    1 !important;
-
-  position:
-    relative;
-
-  z-index:
-    3;
+  z-index: 3;
 }
 
 .external-player,
 .direct-video,
 #twitchPlayer {
-  width:
-    100%;
+  width: 100%;
+  height: 100%;
 
-  height:
-    100%;
+  display: block;
 
-  display:
-    block;
+  border: 0;
 
-  border:
-    0;
-
-  background:
-    #000;
+  background: #000;
 }
 
 .player-wrap iframe.external-player {
-  width:
-    100%;
+  width: 100%;
+  height: 100%;
 
-  height:
-    100%;
-
-  border:
-    0;
+  border: 0;
 }
 
 .direct-video {
-  object-fit:
-    contain;
+  object-fit: contain;
 }
 
 /* =========================================================
@@ -1120,32 +881,22 @@ select:focus {
 ========================================================= */
 
 .empty-player {
-  position:
-    absolute;
+  position: absolute;
 
-  inset:
-    0;
+  inset: 0;
 
-  display:
-    flex;
+  display: flex;
 
-  flex-direction:
-    column;
+  flex-direction: column;
 
-  align-items:
-    center;
+  align-items: center;
+  justify-content: center;
 
-  justify-content:
-    center;
+  gap: 8px;
 
-  gap:
-    8px;
+  padding: 30px;
 
-  padding:
-    30px;
-
-  text-align:
-    center;
+  text-align: center;
 
   background:
     radial-gradient(
@@ -1157,33 +908,24 @@ select:focus {
 }
 
 .empty-player-icon {
-  font-size:
-    48px;
+  font-size: 48px;
 }
 
 .empty-player h3 {
-  margin:
-    0;
+  margin: 0;
 
-  font-size:
-    22px;
+  font-size: 22px;
 }
 
 .empty-player p {
-  max-width:
-    450px;
+  max-width: 450px;
 
-  margin:
-    0;
+  margin: 0;
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  font-size:
-    13px;
-
-  line-height:
-    1.65;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 /* =========================================================
@@ -1191,32 +933,22 @@ select:focus {
 ========================================================= */
 
 .platform-player-notice {
-  position:
-    absolute;
+  position: absolute;
 
-  inset:
-    0;
+  inset: 0;
 
-  display:
-    flex;
+  display: flex;
 
-  flex-direction:
-    column;
+  flex-direction: column;
 
-  align-items:
-    center;
+  align-items: center;
+  justify-content: center;
 
-  justify-content:
-    center;
+  gap: 8px;
 
-  gap:
-    8px;
+  padding: 25px;
 
-  padding:
-    25px;
-
-  text-align:
-    center;
+  text-align: center;
 
   background:
     radial-gradient(
@@ -1228,73 +960,52 @@ select:focus {
 }
 
 .platform-player-notice h3 {
-  margin:
-    0;
+  margin: 0;
 
-  color:
-    #f8fafc;
+  color: #f8fafc;
 
-  font-size:
-    24px;
+  font-size: 24px;
 }
 
 .platform-player-notice p {
-  max-width:
-    420px;
+  max-width: 420px;
 
-  margin:
-    0;
+  margin: 0;
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  font-size:
-    13px;
-
-  line-height:
-    1.65;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .platform-player-notice .primary-btn {
-  width:
-    auto;
+  width: auto;
 
-  min-width:
-    170px;
+  min-width: 170px;
 
-  margin-top:
-    8px;
+  margin-top: 8px;
 }
 
 .room-platform-icon {
-  font-size:
-    54px;
+  font-size: 54px;
 }
 
 .player-placeholder {
-  position:
-    absolute;
+  position: absolute;
 
-  inset:
-    0;
+  inset: 0;
 
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
-
-  justify-content:
-    center;
+  align-items: center;
+  justify-content: center;
 
   background:
     #020617;
 
-  color:
-    #cbd5e1;
+  color: #cbd5e1;
 
-  font-size:
-    14px;
+  font-size: 14px;
 }
 
 /* =========================================================
@@ -1302,57 +1013,40 @@ select:focus {
 ========================================================= */
 
 .sync-bar {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
+  justify-content: space-between;
 
-  justify-content:
-    space-between;
+  gap: 12px;
 
-  gap:
-    12px;
-
-  margin-top:
-    12px;
+  margin-top: 12px;
 
   padding:
     10px 2px;
 }
 
 .sync-bar > div {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  font-size:
-    12px;
+  font-size: 12px;
 
-  font-weight:
-    700;
+  font-weight: 700;
 }
 
 .live-dot {
-  width:
-    7px;
+  width: 7px;
+  height: 7px;
 
-  height:
-    7px;
+  flex: 0 0 auto;
 
-  flex:
-    0 0 auto;
-
-  border-radius:
-    50%;
+  border-radius: 50%;
 
   background:
     #22c55e;
@@ -1366,86 +1060,62 @@ select:focus {
 ========================================================= */
 
 .room-controls {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  flex-wrap:
-    wrap;
+  flex-wrap: wrap;
 
-  padding-top:
-    4px;
+  padding-top: 4px;
 }
 
 .time-readout {
-  min-width:
-    126px;
+  min-width: 126px;
 
-  margin-left:
-    2px;
+  margin-left: 2px;
 
-  color:
-    #cbd5e1;
+  color: #cbd5e1;
 
-  font-size:
-    12px;
+  font-size: 12px;
 
   font-variant-numeric:
     tabular-nums;
 
-  font-weight:
-    750;
+  font-weight: 750;
 }
 
 .volume {
-  width:
-    100px;
+  width: 100px;
 
-  min-height:
-    auto;
+  min-height: auto;
 
-  height:
-    5px;
+  height: 5px;
 
-  margin-left:
-    auto;
+  margin-left: auto;
 
-  padding:
-    0;
+  padding: 0;
 
-  border:
-    0;
+  border: 0;
 
-  appearance:
-    none;
+  appearance: none;
 
   background:
     rgba(255, 255, 255, .14);
 
-  cursor:
-    pointer;
+  cursor: pointer;
 }
 
 .volume::-webkit-slider-thumb {
-  appearance:
-    none;
+  appearance: none;
 
-  width:
-    14px;
+  width: 14px;
+  height: 14px;
 
-  height:
-    14px;
+  border: 0;
 
-  border:
-    0;
-
-  border-radius:
-    50%;
+  border-radius: 50%;
 
   background:
     #60a5fa;
@@ -1455,34 +1125,25 @@ select:focus {
 }
 
 .volume::-moz-range-thumb {
-  width:
-    14px;
+  width: 14px;
+  height: 14px;
 
-  height:
-    14px;
+  border: 0;
 
-  border:
-    0;
-
-  border-radius:
-    50%;
+  border-radius: 50%;
 
   background:
     #60a5fa;
 }
 
 .room-actions {
-  display:
-    flex;
+  display: flex;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  flex-wrap:
-    wrap;
+  flex-wrap: wrap;
 
-  margin-top:
-    12px;
+  margin-top: 12px;
 }
 
 /* =========================================================
@@ -1490,83 +1151,58 @@ select:focus {
 ========================================================= */
 
 .row-title {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
 
-  justify-content:
-    space-between;
+  justify-content: space-between;
 
-  gap:
-    12px;
+  gap: 12px;
 }
 
 .row-title > span:last-child {
-  min-width:
-    26px;
+  min-width: 26px;
 
   padding:
     3px 7px;
 
-  border-radius:
-    999px;
+  border-radius: 999px;
 
   background:
     rgba(255, 255, 255, .06);
 
-  color:
-    #94a3b8;
+  color: #94a3b8;
 
-  text-align:
-    center;
+  text-align: center;
 
-  font-size:
-    11px;
+  font-size: 11px;
 }
 
 .member-list {
-  display:
-    grid;
+  display: grid;
 
-  gap:
-    9px;
+  gap: 9px;
 
-  max-height:
-    300px;
+  max-height: 300px;
 
-  overflow-y:
-    auto;
-
-  overscroll-behavior:
-    contain;
-
-  -webkit-overflow-scrolling:
-    touch;
+  overflow-y: auto;
 }
 
 .member {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
 
-  gap:
-    10px;
+  gap: 10px;
 
-  min-width:
-    0;
+  min-width: 0;
 
-  padding:
-    9px;
+  padding: 9px;
 
   border:
     1px solid rgba(255, 255, 255, .05);
 
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     rgba(255, 255, 255, .025);
@@ -1585,26 +1221,17 @@ select:focus {
 }
 
 .avatar {
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
+  justify-content: center;
 
-  justify-content:
-    center;
+  width: 34px;
+  height: 34px;
 
-  width:
-    34px;
+  flex: 0 0 auto;
 
-  height:
-    34px;
-
-  flex:
-    0 0 auto;
-
-  border-radius:
-    10px;
+  border-radius: 10px;
 
   background:
     linear-gradient(
@@ -1613,67 +1240,48 @@ select:focus {
       rgba(139, 92, 246, .23)
     );
 
-  color:
-    #dbeafe;
+  color: #dbeafe;
 
-  font-size:
-    13px;
+  font-size: 13px;
 
-  font-weight:
-    850;
+  font-weight: 850;
 }
 
 .member-name {
-  min-width:
-    0;
+  min-width: 0;
 
-  display:
-    grid;
+  display: grid;
 
-  gap:
-    2px;
+  gap: 2px;
 }
 
 .member-name b {
-  overflow:
-    hidden;
+  overflow: hidden;
 
-  color:
-    #e2e8f0;
+  color: #e2e8f0;
 
-  font-size:
-    13px;
+  font-size: 13px;
 
-  text-overflow:
-    ellipsis;
+  text-overflow: ellipsis;
 
-  white-space:
-    nowrap;
+  white-space: nowrap;
 }
 
 .member-name span {
-  color:
-    #64748b;
+  color: #64748b;
 
-  font-size:
-    10px;
+  font-size: 10px;
 }
 
 .online {
-  width:
-    7px;
+  width: 7px;
+  height: 7px;
 
-  height:
-    7px;
+  margin-left: auto;
 
-  margin-left:
-    auto;
+  flex: 0 0 auto;
 
-  flex:
-    0 0 auto;
-
-  border-radius:
-    50%;
+  border-radius: 50%;
 
   background:
     #22c55e;
@@ -1687,37 +1295,24 @@ select:focus {
 ========================================================= */
 
 .queue-list {
-  display:
-    grid;
+  display: grid;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  max-height:
-    430px;
+  max-height: 430px;
 
-  overflow-y:
-    auto;
+  overflow-y: auto;
 
-  overscroll-behavior:
-    contain;
-
-  -webkit-overflow-scrolling:
-    touch;
-
-  padding-right:
-    2px;
+  padding-right: 2px;
 }
 
 .queue-item {
-  padding:
-    10px;
+  padding: 10px;
 
   border:
     1px solid rgba(255, 255, 255, .06);
 
-  border-radius:
-    13px;
+  border-radius: 13px;
 
   background:
     linear-gradient(
@@ -1763,8 +1358,7 @@ select:focus {
 }
 
 .queue-item button {
-  white-space:
-    nowrap;
+  white-space: nowrap;
 }
 
 .queue-item [data-queue-play] {
@@ -1774,8 +1368,7 @@ select:focus {
   border-color:
     rgba(96, 165, 250, .18);
 
-  color:
-    #bfdbfe;
+  color: #bfdbfe;
 }
 
 .queue-item [data-queue-play]:hover {
@@ -1784,8 +1377,7 @@ select:focus {
 }
 
 .queue-item img {
-  flex:
-    0 0 auto;
+  flex: 0 0 auto;
 }
 
 /* =========================================================
@@ -1793,54 +1385,36 @@ select:focus {
 ========================================================= */
 
 .chat-panel {
-  display:
-    flex;
+  display: flex;
 
-  flex-direction:
-    column;
+  flex-direction: column;
 
-  min-height:
-    390px;
+  min-height: 390px;
 }
 
 .chat-messages {
-  display:
-    flex;
+  display: flex;
 
-  flex-direction:
-    column;
+  flex-direction: column;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  min-height:
-    260px;
+  min-height: 260px;
 
-  max-height:
-    430px;
+  max-height: 430px;
 
-  overflow-y:
-    auto;
+  overflow-y: auto;
 
-  overscroll-behavior:
-    contain;
+  padding-right: 3px;
 
-  -webkit-overflow-scrolling:
-    touch;
-
-  padding-right:
-    3px;
-
-  scroll-behavior:
-    smooth;
+  scroll-behavior: smooth;
 }
 
 .message {
   padding:
     9px 10px;
 
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     rgba(255, 255, 255, .035);
@@ -1850,67 +1424,51 @@ select:focus {
 }
 
 .message b {
-  display:
-    block;
+  display: block;
 
-  margin-bottom:
-    3px;
+  margin-bottom: 3px;
 
-  color:
-    #93c5fd;
+  color: #93c5fd;
 
-  font-size:
-    12px;
+  font-size: 12px;
 }
 
 .message p {
-  margin:
-    0;
+  margin: 0;
 
-  color:
-    #dbe3ee;
+  color: #dbe3ee;
 
-  font-size:
-    13px;
+  font-size: 13px;
 
-  line-height:
-    1.55;
+  line-height: 1.55;
 
-  word-break:
-    break-word;
+  word-break: break-word;
 }
 
 .chat-form {
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     1fr auto;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  margin-top:
-    12px;
+  margin-top: 12px;
 }
 
 .chat-form input {
-  min-height:
-    42px;
+  min-height: 42px;
 }
 
 .chat-form button {
-  min-width:
-    58px;
+  min-width: 58px;
 
   padding:
     0 13px;
 
-  border:
-    0;
+  border: 0;
 
-  border-radius:
-    11px;
+  border-radius: 11px;
 
   background:
     linear-gradient(
@@ -1919,14 +1477,11 @@ select:focus {
       #6366f1
     );
 
-  color:
-    white;
+  color: white;
 
-  font-size:
-    12px;
+  font-size: 12px;
 
-  font-weight:
-    850;
+  font-weight: 850;
 }
 
 /* =========================================================
@@ -1934,26 +1489,18 @@ select:focus {
 ========================================================= */
 
 .modal {
-  position:
-    fixed;
+  position: fixed;
 
-  inset:
-    0;
+  inset: 0;
 
-  z-index:
-    1000;
+  z-index: 1000;
 
-  display:
-    flex;
+  display: flex;
 
-  align-items:
-    center;
+  align-items: center;
+  justify-content: center;
 
-  justify-content:
-    center;
-
-  padding:
-    20px;
+  padding: 20px;
 
   background:
     rgba(0, 0, 0, .68);
@@ -1966,8 +1513,7 @@ select:focus {
 }
 
 .modal.hidden {
-  display:
-    none !important;
+  display: none !important;
 }
 
 .modal-card {
@@ -1977,23 +1523,14 @@ select:focus {
   max-height:
     min(88vh, 760px);
 
-  overflow-y:
-    auto;
+  overflow-y: auto;
 
-  overscroll-behavior:
-    contain;
-
-  -webkit-overflow-scrolling:
-    touch;
-
-  padding:
-    22px;
+  padding: 22px;
 
   border:
     1px solid rgba(255, 255, 255, .09);
 
-  border-radius:
-    20px;
+  border-radius: 20px;
 
   background:
     #101827;
@@ -2003,22 +1540,18 @@ select:focus {
 }
 
 .modal-actions {
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     1fr 1fr;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  margin-top:
-    18px;
+  margin-top: 18px;
 }
 
 .modal-actions .primary-btn {
-  margin-top:
-    0;
+  margin-top: 0;
 }
 
 /* =========================================================
@@ -2026,25 +1559,20 @@ select:focus {
 ========================================================= */
 
 .search-row {
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     1fr auto;
 
-  gap:
-    8px;
+  gap: 8px;
 
-  width:
-    100%;
+  width: 100%;
 }
 
 .search-btn {
-  min-width:
-    74px;
+  min-width: 74px;
 
-  min-height:
-    46px;
+  min-height: 46px;
 
   padding:
     0 14px;
@@ -2052,8 +1580,7 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .08);
 
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     linear-gradient(
@@ -2062,227 +1589,104 @@ select:focus {
       rgba(99, 102, 241, .16)
     );
 
-  color:
-    #dbeafe;
+  color: #dbeafe;
 
-  font-weight:
-    800;
+  font-weight: 800;
 }
 
 .search-btn:hover {
-  filter:
-    brightness(1.08);
+  filter: brightness(1.08);
 }
 
 /* =========================================================
-   YOUTUBE FULL SEARCH MODAL
-   ========================================================= */
+   YOUTUBE FULL SEARCH UI
+========================================================= */
 
 #sourceModal {
-  position:
-    fixed !important;
+  position: fixed !important;
 
-  inset:
-    0 !important;
+  inset: 0 !important;
 
-  z-index:
-    1000 !important;
+  z-index: 1000 !important;
 
-  display:
-    block !important;
+  display: flex !important;
 
-  width:
-    100vw !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
 
-  height:
-    100vh !important;
+  width: 100vw !important;
+  height: 100vh !important;
 
-  padding:
-    0 !important;
+  padding: 0 !important;
+
+  overflow: hidden !important;
 
   background:
     #0b0b0f !important;
 
-  backdrop-filter:
-    none !important;
-
-  -webkit-backdrop-filter:
-    none !important;
-
-  overflow-y:
-    auto !important;
-
-  overflow-x:
-    hidden !important;
-
-  overscroll-behavior:
-    contain !important;
-
-  -webkit-overflow-scrolling:
-    touch !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 #sourceModal.hidden {
-  display:
-    none !important;
+  display: none !important;
 }
 
-
 /* =========================================================
-   YOUTUBE MODAL CARD
+   SEARCH CARD
 ========================================================= */
 
 #sourceModal .modal-card {
-  position:
-    relative !important;
+  display: flex !important;
 
-  width:
-    100% !important;
+  flex-direction: column !important;
 
-  max-width:
-    none !important;
+  width: 100% !important;
+  max-width: none !important;
 
-  min-width:
-    0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
 
-  min-height:
-    100vh !important;
+  min-height: 0 !important;
 
-  height:
-    auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
 
-  max-height:
-    none !important;
+  overflow: hidden !important;
 
-  margin:
-    0 !important;
+  border: 0 !important;
 
-  padding:
-    0 !important;
-
-  overflow:
-    visible !important;
-
-  border:
-    0 !important;
-
-  border-radius:
-    0 !important;
+  border-radius: 0 !important;
 
   background:
     #0b0b0f !important;
 
-  box-shadow:
-    none !important;
+  box-shadow: none !important;
 }
-
-
-/* =========================================================
-   MODAL DIRECT CHILDREN
-========================================================= */
-
-#sourceModal .modal-card > * {
-  max-width:
-    100% !important;
-
-  box-sizing:
-    border-box !important;
-}
-
 
 /* =========================================================
    SEARCH HEADER
 ========================================================= */
 
 #sourceModal .modal-card > div:first-child {
-  position:
-    sticky !important;
+  flex: 0 0 auto !important;
 
-  top:
-    0 !important;
+  width: 100% !important;
 
-  z-index:
-    50 !important;
+  height: 68px !important;
+  min-height: 68px !important;
 
-  display:
-    flex !important;
-
-  align-items:
-    center !important;
-
-  width:
-    100% !important;
-
-  min-height:
-    68px !important;
-
-  height:
-    68px !important;
-
-  padding:
-    0 16px !important;
-
-  background:
-    rgba(11, 11, 15, .96) !important;
-
-  border-bottom:
-    1px solid rgba(255, 255, 255, .08) !important;
-
-  backdrop-filter:
-    blur(14px) !important;
-
-  -webkit-backdrop-filter:
-    blur(14px) !important;
+  overflow: hidden !important;
 }
-
-
-/* =========================================================
-   SEARCH AREA
-========================================================= */
-
-#sourceModal #modalVideoSearchArea {
-  display:
-    block !important;
-
-  width:
-    100% !important;
-
-  min-width:
-    0 !important;
-
-  height:
-    auto !important;
-
-  min-height:
-    0 !important;
-
-  max-height:
-    none !important;
-
-  overflow:
-    visible !important;
-
-  padding:
-    20px 24px 50px !important;
-}
-
-
-/* =========================================================
-   SEARCH INPUT
-========================================================= */
 
 #sourceModal #modalVideoSearchInput {
-  min-height:
-    42px !important;
+  min-height: 42px !important;
+  height: 42px !important;
 
-  height:
-    42px !important;
-
-  margin:
-    0 !important;
+  margin: 0 !important;
 
   border:
-    1px solid rgba(255, 255, 255, .12) !important;
+    1px solid rgba(255,255,255,.12) !important;
 
   border-right:
     0 !important;
@@ -2299,7 +1703,7 @@ select:focus {
 
 #sourceModal #modalVideoSearchInput:focus {
   border-color:
-    rgba(255, 255, 255, .25) !important;
+    rgba(255,255,255,.25) !important;
 
   box-shadow:
     none !important;
@@ -2308,32 +1712,18 @@ select:focus {
     #18181c !important;
 }
 
-
-/* =========================================================
-   SEARCH BUTTON
-========================================================= */
-
 #sourceModal #modalSearchVideoBtn {
-  min-width:
-    64px !important;
+  min-width: 64px !important;
 
-  width:
-    auto !important;
+  height: 42px !important;
+  min-height: 42px !important;
 
-  height:
-    42px !important;
+  margin: 0 !important;
 
-  min-height:
-    42px !important;
-
-  margin:
-    0 !important;
-
-  padding:
-    0 14px !important;
+  padding: 0 !important;
 
   border:
-    1px solid rgba(255, 255, 255, .12) !important;
+    1px solid rgba(255,255,255,.12) !important;
 
   border-left:
     0 !important;
@@ -2353,33 +1743,25 @@ select:focus {
     #333338 !important;
 }
 
-
 /* =========================================================
-   SEARCH RESULTS
-   ★ 最重要區域
+   SEARCH BODY
 ========================================================= */
 
-#sourceModal #modalVideoSearchResults {
-  position:
-    relative !important;
+/*
+ * 這裡是這次修正的核心：
+ *
+ * 上層 body 不滾
+ * 右側 section 才是唯一主要滾動容器。
+ */
 
-  display:
-    grid !important;
+#sourceModal .modal-card > div:nth-child(2) {
+  display: grid !important;
 
   grid-template-columns:
-    repeat(
-      auto-fill,
-      minmax(340px, 1fr)
-    ) !important;
+    220px minmax(0, 1fr) !important;
 
-  align-items:
-    start !important;
-
-  justify-items:
-    stretch !important;
-
-  gap:
-    14px !important;
+  flex:
+    1 1 auto !important;
 
   width:
     100% !important;
@@ -2387,8 +1769,130 @@ select:focus {
   height:
     auto !important;
 
+  min-width:
+    0 !important;
+
   min-height:
     0 !important;
+
+  overflow:
+    hidden !important;
+}
+
+/* =========================================================
+   SEARCH SIDEBAR
+========================================================= */
+
+#sourceModal .modal-card > div:nth-child(2) > aside {
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+
+  scrollbar-width: thin !important;
+
+  overscroll-behavior:
+    contain !important;
+
+  -webkit-overflow-scrolling:
+    touch !important;
+}
+
+#sourceModal .modal-card > div:nth-child(2) > aside > div {
+  cursor:
+    pointer;
+
+  transition:
+    background .15s ease,
+    color .15s ease;
+}
+
+#sourceModal .modal-card > div:nth-child(2) > aside > div:hover {
+  background:
+    rgba(255,255,255,.06);
+
+  color:
+    #fff;
+}
+
+/* =========================================================
+   RIGHT SEARCH SECTION
+========================================================= */
+
+#sourceModal .modal-card > div:nth-child(2) > section {
+  display:
+    block !important;
+
+  position:
+    relative !important;
+
+  min-width:
+    0 !important;
+
+  min-height:
+    0 !important;
+
+  width:
+    100% !important;
+
+  height:
+    100% !important;
+
+  overflow-x:
+    hidden !important;
+
+  overflow-y:
+    auto !important;
+
+  overscroll-behavior:
+    contain !important;
+
+  -webkit-overflow-scrolling:
+    touch !important;
+
+  scrollbar-width:
+    thin !important;
+}
+
+/*
+ * 避免 section 內部子元素
+ * 把高度撐壞。
+ */
+
+#sourceModal .modal-card > div:nth-child(2) > section > * {
+  max-width:
+    100% !important;
+}
+
+/* =========================================================
+   RESULT CONTAINER
+========================================================= */
+
+#sourceModal #modalVideoSearchResults {
+  display:
+    grid !important;
+
+  grid-template-columns:
+    repeat(
+      auto-fill,
+      minmax(320px, 1fr)
+    ) !important;
+
+  gap:
+    14px !important;
+
+  width:
+    100% !important;
+
+  min-width:
+    0 !important;
+
+  min-height:
+    0 !important;
+
+  height:
+    auto !important;
 
   max-height:
     none !important;
@@ -2397,62 +1901,54 @@ select:focus {
     12px !important;
 
   padding:
-    0 0 40px !important;
+    0 0 60px !important;
 
   overflow:
     visible !important;
-
-  box-sizing:
-    border-box !important;
 }
 
+/*
+ * 不讓任何搜尋結果卡片產生
+ * 自己的巨大高度或獨立滾動條。
+ */
 
-/* =========================================================
-   SEARCH RESULT CARD
-========================================================= */
+#sourceModal #modalVideoSearchResults > * {
+  min-width:
+    0 !important;
+}
 
-#sourceModal .video-result-card {
-  display:
-    block !important;
-
+#sourceModal #modalVideoSearchResults
+> .video-result-card {
   width:
     100% !important;
 
   min-width:
     0 !important;
 
-  max-width:
-    100% !important;
-
   height:
     auto !important;
+}
 
-  min-height:
-    0 !important;
+/* =========================================================
+   SEARCH RESULT CARD
+========================================================= */
 
-  max-height:
-    none !important;
+#sourceModal .video-result-card {
+  width: 100%;
 
-  margin:
-    0 !important;
+  min-width: 0;
 
-  padding:
-    0 !important;
+  padding: 0;
 
   border:
-    1px solid rgba(255, 255, 255, .06) !important;
+    1px solid rgba(255,255,255,.06);
 
-  border-radius:
-    14px !important;
+  border-radius: 14px;
 
   background:
-    #151518 !important;
+    #151518;
 
-  overflow:
-    hidden !important;
-
-  box-sizing:
-    border-box !important;
+  overflow: hidden;
 
   transition:
     transform .16s ease,
@@ -2466,26 +1962,25 @@ select:focus {
     translateY(-2px);
 
   border-color:
-    rgba(255, 255, 255, .16);
+    rgba(255,255,255,.16);
 
   background:
     #1b1b1f;
 
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, .25);
+    0 10px 30px rgba(0,0,0,.25);
 }
 
 #sourceModal .video-result-card.selected {
   border-color:
-    rgba(255, 255, 255, .35);
+    rgba(255,255,255,.35);
 
   background:
     #1d1d21;
 
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, .08);
+    0 0 0 1px rgba(255,255,255,.08);
 }
-
 
 /* =========================================================
    RESULT MAIN
@@ -2493,96 +1988,76 @@ select:focus {
 
 #sourceModal .video-result-main {
   display:
-    flex !important;
+    flex;
 
   flex-direction:
-    column !important;
+    column;
 
   align-items:
-    stretch !important;
+    stretch;
 
   gap:
-    0 !important;
+    0;
 
   width:
-    100% !important;
+    100%;
 
   min-width:
-    0 !important;
-
-  max-width:
-    100% !important;
-
-  height:
-    auto !important;
+    0;
 
   margin:
-    0 !important;
+    0;
 
   padding:
-    0 !important;
+    0;
 
   border:
-    0 !important;
+    0;
 
   background:
-    transparent !important;
+    transparent;
 
   color:
-    inherit !important;
+    inherit;
 
   text-align:
-    left !important;
-
-  overflow:
-    visible !important;
+    left;
 }
 
 #sourceModal .video-result-main:hover {
   background:
-    transparent !important;
+    transparent;
 }
 
-
 /* =========================================================
-   THUMBNAIL
+   RESULT THUMBNAIL
 ========================================================= */
 
 #sourceModal .video-result-main img {
   display:
-    block !important;
+    block;
 
   width:
-    100% !important;
-
-  max-width:
-    100% !important;
+    100%;
 
   height:
-    auto !important;
+    auto;
 
   aspect-ratio:
-    16 / 9 !important;
+    16 / 9;
 
   flex:
-    none !important;
-
-  margin:
-    0 !important;
-
-  padding:
-    0 !important;
+    none;
 
   border-radius:
-    0 !important;
+    0;
 
   object-fit:
-    cover !important;
+    cover;
 
   background:
-    #050505 !important;
+    #050505;
 }
-
 
 /* =========================================================
    RESULT INFO
@@ -2590,82 +2065,72 @@ select:focus {
 
 #sourceModal .video-result-info {
   display:
-    grid !important;
+    grid;
 
   gap:
-    5px !important;
-
-  width:
-    100% !important;
+    5px;
 
   min-width:
-    0 !important;
-
-  max-width:
-    100% !important;
+    0;
 
   padding:
-    11px 12px 8px !important;
-
-  box-sizing:
-    border-box !important;
+    11px 12px 8px;
 }
 
 #sourceModal .video-result-info strong {
   display:
-    -webkit-box !important;
+    -webkit-box;
 
   overflow:
-    hidden !important;
+    hidden;
 
   color:
-    #f8fafc !important;
+    #f8fafc;
 
   font-size:
-    14px !important;
+    14px;
 
   line-height:
-    1.4 !important;
+    1.4;
 
   font-weight:
-    750 !important;
+    750;
 
   text-overflow:
-    ellipsis !important;
+    ellipsis;
 
   white-space:
-    normal !important;
+    normal;
 
   -webkit-line-clamp:
-    2 !important;
+    2;
 
   -webkit-box-orient:
-    vertical !important;
+    vertical;
 }
 
 #sourceModal .video-result-info small {
   display:
-    block !important;
+    block;
 
   overflow:
-    hidden !important;
+    hidden;
 
   color:
-    #a1a1aa !important;
+    #a1a1aa;
 
   font-size:
-    11px !important;
+    11px;
 
   line-height:
-    1.4 !important;
+    1.4;
 
   text-overflow:
-    ellipsis !important;
+    ellipsis;
 
   white-space:
-    nowrap !important;
+    nowrap;
 }
-
 
 /* =========================================================
    RESULT ACTIONS
@@ -2678,20 +2143,11 @@ select:focus {
   gap:
     7px;
 
-  flex-wrap:
-    wrap;
-
-  width:
-    100%;
-
-  max-width:
-    100%;
-
-  box-sizing:
-    border-box;
-
   padding:
     0 12px 12px;
+
+  min-width:
+    0;
 }
 
 #sourceModal .video-result-card .tiny-btn {
@@ -2712,7 +2168,7 @@ select:focus {
     #27272b;
 
   border:
-    1px solid rgba(255, 255, 255, .08);
+    1px solid rgba(255,255,255,.08);
 
   color:
     #fff;
@@ -2729,10 +2185,10 @@ select:focus {
 .video-result-card
 [data-video-queue] {
   background:
-    rgba(255, 255, 255, .04);
+    rgba(255,255,255,.04);
 
   border:
-    1px solid rgba(255, 255, 255, .07);
+    1px solid rgba(255,255,255,.07);
 
   color:
     #d4d4d8;
@@ -2742,9 +2198,40 @@ select:focus {
 .video-result-card
 [data-video-queue]:hover {
   background:
-    rgba(255, 255, 255, .08);
+    rgba(255,255,255,.08);
 }
 
+/* =========================================================
+   EMPTY SEARCH
+========================================================= */
+
+#sourceModal
+#modalVideoSearchResults
+> div:not(.video-result-card) {
+  grid-column:
+    1 / -1;
+
+  width:
+    100%;
+
+  min-height:
+    260px;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  color:
+    #71717a;
+}
 
 /* =========================================================
    LOAD MORE
@@ -2758,62 +2245,16 @@ select:focus {
     100% !important;
 
   min-height:
-    80px !important;
-
-  height:
-    auto !important;
+    0 !important;
 
   margin:
     0 !important;
-
-  padding:
-    16px 4px 8px !important;
-
-  overflow:
-    visible !important;
 }
 
 #sourceModal #youtubeLoadMoreBtn {
   width:
     100% !important;
-
-  min-height:
-    44px;
 }
-
-
-/* =========================================================
-   EMPTY SEARCH
-========================================================= */
-
-#sourceModal
-#modalVideoSearchResults
-> div:not(.video-result-card):not(#youtubeLoadMore) {
-  grid-column:
-    1 / -1 !important;
-
-  width:
-    100% !important;
-
-  min-height:
-    260px !important;
-
-  display:
-    flex !important;
-
-  flex-direction:
-    column !important;
-
-  align-items:
-    center !important;
-
-  justify-content:
-    center !important;
-
-  color:
-    #71717a;
-}
-
 
 /* =========================================================
    EXTERNAL SOURCE
@@ -2830,7 +2271,7 @@ select:focus {
     18px;
 
   border:
-    1px solid rgba(255, 255, 255, .08);
+    1px solid rgba(255,255,255,.08);
 
   border-radius:
     14px;
@@ -2839,23 +2280,18 @@ select:focus {
     #151518;
 }
 
-
 /* =========================================================
    TOAST
 ========================================================= */
 
 .toast {
-  position:
-    fixed;
+  position: fixed;
 
-  left:
-    50%;
+  left: 50%;
 
-  bottom:
-    24px;
+  bottom: 24px;
 
-  z-index:
-    2000;
+  z-index: 2000;
 
   max-width:
     min(92vw, 520px);
@@ -2866,8 +2302,7 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .08);
 
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     rgba(15, 23, 42, .94);
@@ -2875,11 +2310,9 @@ select:focus {
   color:
     #e2e8f0;
 
-  font-size:
-    13px;
+  font-size: 13px;
 
-  font-weight:
-    700;
+  font-weight: 700;
 
   box-shadow:
     0 18px 50px rgba(0, 0, 0, .35);
@@ -2887,8 +2320,7 @@ select:focus {
   transform:
     translate(-50%, 20px);
 
-  opacity:
-    0;
+  opacity: 0;
 
   pointer-events:
     none;
@@ -2899,8 +2331,7 @@ select:focus {
 }
 
 .toast.show {
-  opacity:
-    1;
+  opacity: 1;
 
   transform:
     translate(-50%, 0);
@@ -2911,8 +2342,7 @@ select:focus {
 ========================================================= */
 
 * {
-  scrollbar-width:
-    thin;
+  scrollbar-width: thin;
 
   scrollbar-color:
     rgba(148, 163, 184, .35)
@@ -2920,11 +2350,8 @@ select:focus {
 }
 
 ::-webkit-scrollbar {
-  width:
-    8px;
-
-  height:
-    8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -2933,67 +2360,36 @@ select:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-  border-radius:
-    999px;
+  border-radius: 999px;
 
   background:
-    rgba(148, 163, 184, .35);
+    rgba(148, 163, 184, .3);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background:
-    rgba(148, 163, 184, .55);
-}
-
-
-/* =========================================================
-   SOURCE MODAL SCROLLBAR
-   ★ 主要捲軸
-========================================================= */
-
-#sourceModal {
-  scrollbar-width:
-    thin;
-
-  scrollbar-color:
-    rgba(148, 163, 184, .48)
-    transparent;
-}
-
-#sourceModal::-webkit-scrollbar {
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar {
   width:
-    10px;
+    8px;
 }
 
-#sourceModal::-webkit-scrollbar-track {
+#sourceModal .modal-card > div:nth-child(2) > aside::-webkit-scrollbar {
+  width:
+    7px;
+}
+
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-track,
+#sourceModal .modal-card > div:nth-child(2) > aside::-webkit-scrollbar-track {
   background:
     transparent;
 }
 
-#sourceModal::-webkit-scrollbar-thumb {
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-thumb,
+#sourceModal .modal-card > div:nth-child(2) > aside::-webkit-scrollbar-thumb {
   border-radius:
     999px;
 
   background:
-    rgba(148, 163, 184, .48);
+    rgba(148, 163, 184, .32);
 }
-
-#sourceModal::-webkit-scrollbar-thumb:hover {
-  background:
-    rgba(148, 163, 184, .70);
-}
-
-
-/* =========================================================
-   防止 Modal 開啟時 body 搶捲動
-========================================================= */
-
-html:has(#sourceModal:not(.hidden)),
-body:has(#sourceModal:not(.hidden)) {
-  overflow:
-    hidden !important;
-}
-
 
 /* =========================================================
    RESPONSIVE
@@ -3001,13 +2397,12 @@ body:has(#sourceModal:not(.hidden)) {
 
 @media (max-width: 1100px) {
 
-  #sourceModal
-  #modalVideoSearchResults {
+  #sourceModal #modalVideoSearchResults {
     grid-template-columns:
       repeat(
         auto-fill,
         minmax(280px, 1fr)
-      ) !important;
+      );
   }
 
   .room-layout {
@@ -3015,8 +2410,8 @@ body:has(#sourceModal:not(.hidden)) {
       minmax(0, 1fr)
       320px;
   }
-}
 
+}
 
 @media (max-width: 1000px) {
 
@@ -3047,22 +2442,47 @@ body:has(#sourceModal:not(.hidden)) {
   }
 
   #sourceModal
-  #modalVideoSearchArea {
+  .modal-card
+  > div:nth-child(2) {
+    grid-template-columns:
+      72px minmax(0, 1fr) !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > aside {
     padding:
-      16px 14px 40px !important;
+      14px 7px !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > aside
+  > div {
+    font-size:
+      0 !important;
+
+    text-align:
+      center;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    padding:
+      16px 14px 24px !important;
   }
 
   #sourceModal
   #modalVideoSearchResults {
     grid-template-columns:
-      repeat(
-        auto-fill,
-        minmax(260px, 1fr)
-      ) !important;
+      1fr;
   }
 
 }
-
 
 @media (max-width: 760px) {
 
@@ -3153,18 +2573,15 @@ body:has(#sourceModal:not(.hidden)) {
       11px;
   }
 
-
-  /* =======================================================
-     SEARCH MOBILE HEADER
-  ======================================================= */
+  /* SEARCH HEADER */
 
   #sourceModal
   .modal-card
   > div:first-child {
-    min-height:
+    height:
       60px !important;
 
-    height:
+    min-height:
       60px !important;
 
     padding:
@@ -3185,7 +2602,7 @@ body:has(#sourceModal:not(.hidden)) {
       21px !important;
 
     border-right:
-      1px solid rgba(255, 255, 255, .12) !important;
+      1px solid rgba(255,255,255,.12) !important;
   }
 
   #sourceModal
@@ -3200,45 +2617,60 @@ body:has(#sourceModal:not(.hidden)) {
       6px !important;
 
     border:
-      1px solid rgba(255, 255, 255, .12) !important;
+      1px solid rgba(255,255,255,.12) !important;
 
     border-radius:
       50% !important;
-
-    padding:
-      0 !important;
-  }
-
-
-  #sourceModal
-  #modalVideoSearchArea {
-    padding:
-      12px 10px 32px !important;
   }
 
   #sourceModal
-  #modalVideoSearchResults {
-    grid-template-columns:
-      1fr !important;
-
-    gap:
-      12px !important;
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    padding:
+      14px 12px 24px !important;
   }
 
 }
 
-
 @media (max-width: 600px) {
 
-  .room-layout {
+  #sourceModal
+  .modal-card
+  > div:nth-child(2) {
     grid-template-columns:
-      1fr;
+      1fr !important;
   }
 
   #sourceModal
-  #modalVideoSearchArea {
-    padding:
-      12px 10px 32px !important;
+  .modal-card
+  > div:nth-child(2)
+  > aside {
+    display:
+      none !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    width:
+      100% !important;
+
+    height:
+      100% !important;
+
+    min-width:
+      0 !important;
+
+    min-height:
+      0 !important;
+
+    overflow-y:
+      auto !important;
+
+    overflow-x:
+      hidden !important;
   }
 
   #sourceModal
@@ -3251,11 +2683,10 @@ body:has(#sourceModal:not(.hidden)) {
   .video-result-info
   strong {
     font-size:
-      13px !important;
+      13px;
   }
 
 }
-
 
 @media (max-width: 480px) {
 
@@ -3295,7 +2726,8 @@ body:has(#sourceModal:not(.hidden)) {
       column;
   }
 
-  .room-toolbar .ghost-btn {
+  .room-toolbar
+  .ghost-btn {
     width:
       100%;
   }
@@ -3346,7 +2778,8 @@ body:has(#sourceModal:not(.hidden)) {
       8px;
   }
 
-  .queue-item .tiny-btn {
+  .queue-item
+  .tiny-btn {
     min-height:
       30px;
 
@@ -3354,52 +2787,4 @@ body:has(#sourceModal:not(.hidden)) {
       11px;
   }
 
-  #sourceModal
-  #modalVideoSearchArea {
-    padding:
-      10px 8px 28px !important;
-  }
-
-  #sourceModal
-  #modalVideoSearchResults {
-    grid-template-columns:
-      1fr !important;
-
-    gap:
-      10px !important;
-  }
-
-  #sourceModal
-  .video-result-info {
-    padding:
-      10px 10px 7px !important;
-  }
-
-  #sourceModal
-  .video-result-card > div {
-    padding:
-      0 10px 10px !important;
-  }
-
-}
-
-
-/* =========================================================
-   EXTRA SAFETY
-   防止任何舊規則把 YouTube 搜尋結果截斷
-========================================================= */
-
-#sourceModal #modalVideoSearchResults,
-#sourceModal #modalVideoSearchArea,
-#sourceModal .modal-card {
-  clip-path:
-    none !important;
-
-  contain:
-    none !important;
-}
-
-#sourceModal #modalVideoSearchResults {
-  transform:
-    none !important;
 }
