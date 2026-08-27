@@ -1,29 +1,20 @@
-```javascript
 (() => {
   "use strict";
 
-  const $ = (id) =>
-    document.getElementById(id);
+  const $ = (id) => document.getElementById(id);
 
   /*
    * =========================================================
    * CONFIG
    * =========================================================
-   *
-   * 把你的 YouTube API Key 放這裡。
-   *
-   * 注意：
-   * 這個 Key 不能放到正式公開網站而完全不限制，
-   * 建議到 Google Cloud Console 限制 API Key 的網域與 API。
    */
 
   const YOUTUBE_API_KEY =
-    "請放你的 YouTube API Key";
+    "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 50;
 
   const PLATFORMS = {
-
     youtube: {
       name: "YouTube",
       icon: "▶",
@@ -121,8 +112,8 @@
       searchable: false,
       player: "external"
     }
-
   };
+
 
   /*
    * =========================================================
@@ -131,7 +122,6 @@
    */
 
   const state = {
-
     uid: null,
 
     memberName:
@@ -161,7 +151,7 @@
 
     currentVideoUrl: null,
 
-    syncTimer: null,
+    localTimer: null,
 
     memberHeartbeatTimer: null,
 
@@ -201,20 +191,19 @@
 
     modalBodyScrollLocked: false,
 
+    wasMemberInRoom: false,
+
+    kickedLocally: false,
+
     sdk: {
-
       vimeo: false,
-
       dailymotion: false,
-
       twitch: false
-
     }
-
   };
 
-  let db = null;
 
+  let db = null;
   let auth = null;
 
 
@@ -225,9 +214,7 @@
    */
 
   function toast(message) {
-
-    const element =
-      $("toast");
+    const element = $("toast");
 
     if (!element) {
       return;
@@ -245,17 +232,11 @@
     );
 
     toast.timer =
-      setTimeout(
-        () => {
-
-          element.classList.remove(
-            "show"
-          );
-
-        },
-        2400
-      );
-
+      setTimeout(() => {
+        element.classList.remove(
+          "show"
+        );
+      }, 2400);
   }
 
 
@@ -263,21 +244,16 @@
     element,
     message
   ) {
-
     if (!element) {
       return;
     }
 
     element.textContent =
       message || "";
-
   }
 
 
-  function showView(
-    view
-  ) {
-
+  function showView(view) {
     $("homeView")?.classList.toggle(
       "hidden",
       view !== "home"
@@ -287,307 +263,160 @@
       "hidden",
       view !== "room"
     );
-
   }
 
 
-  function escapeHtml(
-    value
-  ) {
-
+  function escapeHtml(value) {
     return String(
       value ?? ""
     ).replace(
       /[&<>"']/g,
       (character) => {
-
         const map = {
-
-          "&":
-            "&amp;",
-
-          "<":
-            "&lt;",
-
-          ">":
-            "&gt;",
-
-          '"':
-            "&quot;",
-
-          "'":
-            "&#039;"
-
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;"
         };
 
-        return map[
-          character
-        ];
-
+        return map[character];
       }
     );
-
   }
 
 
-  function formatTime(
-    seconds
-  ) {
-
+  function formatTime(seconds) {
     const number =
-      Number(
-        seconds
-      );
+      Number(seconds);
 
     if (
-      !Number.isFinite(
-        number
-      ) ||
+      !Number.isFinite(number) ||
       number < 0
     ) {
-
       return "00:00";
-
     }
 
     const total =
-      Math.floor(
-        number
-      );
+      Math.floor(number);
 
     const hours =
       Math.floor(
-        total /
-          3600
+        total / 3600
       );
 
     const minutes =
       Math.floor(
-        (total % 3600) /
-          60
+        (total % 3600) / 60
       );
 
     const secs =
-      total %
-      60;
+      total % 60;
 
-    if (
-      hours > 0
-    ) {
-
+    if (hours > 0) {
       return (
-        String(
-          hours
-        ).padStart(
-          2,
-          "0"
-        ) +
+        String(hours).padStart(2, "0") +
         ":" +
-        String(
-          minutes
-        ).padStart(
-          2,
-          "0"
-        ) +
+        String(minutes).padStart(2, "0") +
         ":" +
-        String(
-          secs
-        ).padStart(
-          2,
-          "0"
-        )
+        String(secs).padStart(2, "0")
       );
-
     }
 
     return (
-      String(
-        minutes
-      ).padStart(
-        2,
-        "0"
-      ) +
+      String(minutes).padStart(2, "0") +
       ":" +
-      String(
-        secs
-      ).padStart(
-        2,
-        "0"
-      )
+      String(secs).padStart(2, "0")
     );
-
   }
 
 
-  function formatViews(
-    value
-  ) {
-
+  function formatViews(value) {
     const number =
-      Number(
-        value
-      );
+      Number(value);
 
     if (
-      !Number.isFinite(
-        number
-      ) ||
+      !Number.isFinite(number) ||
       number <= 0
     ) {
-
       return "";
-
     }
 
-    if (
-      number >=
-      100000000
-    ) {
-
+    if (number >= 100000000) {
       return (
-        (
-          number /
-          100000000
-        )
-          .toFixed(
-            1
-          )
-          .replace(
-            /\.0$/,
-            ""
-          ) +
+        (number / 100000000)
+          .toFixed(1)
+          .replace(/\.0$/, "") +
         " 億次觀看"
       );
-
     }
 
-    if (
-      number >=
-      10000
-    ) {
-
+    if (number >= 10000) {
       return (
-        (
-          number /
-          10000
-        )
-          .toFixed(
-            1
-          )
-          .replace(
-            /\.0$/,
-            ""
-          ) +
+        (number / 10000)
+          .toFixed(1)
+          .replace(/\.0$/, "") +
         " 萬次觀看"
       );
-
     }
 
     return (
-      number.toLocaleString(
-        "zh-TW"
-      ) +
+      number.toLocaleString("zh-TW") +
       " 次觀看"
     );
-
   }
 
 
-  function formatDuration(
-    seconds
-  ) {
-
+  function formatDuration(seconds) {
     const number =
-      Number(
-        seconds
-      );
+      Number(seconds);
 
     if (
-      !Number.isFinite(
-        number
-      ) ||
+      !Number.isFinite(number) ||
       number < 0
     ) {
-
       return "";
-
     }
 
     const total =
-      Math.floor(
-        number
-      );
+      Math.floor(number);
 
     const hours =
-      Math.floor(
-        total /
-        3600
-      );
+      Math.floor(total / 3600);
 
     const minutes =
       Math.floor(
-        (total % 3600) /
-        60
+        (total % 3600) / 60
       );
 
     const secs =
-      total %
-      60;
+      total % 60;
 
-    if (
-      hours > 0
-    ) {
-
+    if (hours > 0) {
       return (
-        String(
-          hours
-        ) +
+        String(hours) +
         ":" +
-        String(
-          minutes
-        ).padStart(
-          2,
-          "0"
-        ) +
+        String(minutes).padStart(2, "0") +
         ":" +
-        String(
-          secs
-        ).padStart(
-          2,
-          "0"
-        )
+        String(secs).padStart(2, "0")
       );
-
     }
 
     return (
-      String(
-        minutes
-      ) +
+      String(minutes) +
       ":" +
-      String(
-        secs
-      ).padStart(
-        2,
-        "0"
-      )
+      String(secs).padStart(2, "0")
     );
-
   }
 
 
-  function parseISO8601Duration(
-    value
-  ) {
-
+  function parseISO8601Duration(value) {
     if (!value) {
       return 0;
     }
 
     const match =
-      String(
-        value
-      ).match(
+      String(value).match(
         /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/
       );
 
@@ -596,40 +425,27 @@
     }
 
     const days =
-      Number(
-        match[1] || 0
-      );
+      Number(match[1] || 0);
 
     const hours =
-      Number(
-        match[2] || 0
-      );
+      Number(match[2] || 0);
 
     const minutes =
-      Number(
-        match[3] || 0
-      );
+      Number(match[3] || 0);
 
     const seconds =
-      Number(
-        match[4] || 0
-      );
+      Number(match[4] || 0);
 
     return (
-      days *
-        86400 +
-      hours *
-        3600 +
-      minutes *
-        60 +
+      days * 86400 +
+      hours * 3600 +
+      minutes * 60 +
       seconds
     );
-
   }
 
 
   function randomRoomCode() {
-
     const chars =
       "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -640,7 +456,6 @@
       i < 6;
       i++
     ) {
-
       result +=
         chars[
           Math.floor(
@@ -648,96 +463,68 @@
             chars.length
           )
         ];
-
     }
 
     return result;
-
   }
 
 
   function getRoomIdFromUrl() {
-
     return (
       new URLSearchParams(
         location.search
       )
-        .get(
-          "room"
-        )
+        .get("room")
         ?.trim()
         .toUpperCase() ||
       ""
     );
-
   }
 
 
-  function getRoomLink(
-    roomId
-  ) {
-
+  function getRoomLink(roomId) {
     return (
       location.origin +
       location.pathname +
       "?room=" +
-      encodeURIComponent(
-        roomId
-      )
+      encodeURIComponent(roomId)
     );
-
   }
 
 
   function getMemberName() {
-
     let name =
       localStorage.getItem(
         "wt_name"
       );
 
     if (!name) {
-
       name =
         "玩家" +
         Math.floor(
-          Math.random() *
-            900 +
-            100
+          Math.random() * 900 + 100
         );
 
       localStorage.setItem(
         "wt_name",
         name
       );
-
     }
 
     return name;
-
   }
 
 
-  function setMemberName(
-    name
-  ) {
-
+  function setMemberName(name) {
     const normalized =
-      String(
-        name || ""
-      )
+      String(name || "")
         .trim()
-        .slice(
-          0,
-          30
-        );
+        .slice(0, 30);
 
     if (!normalized) {
-
       throw new Error(
         "名稱不能是空白"
       );
-
     }
 
     state.memberName =
@@ -747,28 +534,20 @@
       "wt_name",
       normalized
     );
-
   }
 
 
   /*
    * =========================================================
-   * PAGE / MODAL SCROLL
+   * MODAL SCROLL
    * =========================================================
-   *
-   * 重要：
-   * 不再使用 body.touchAction = none。
-   * 手機搜尋結果由真正的結果容器自己滾動。
    */
 
   function lockPageScroll() {
-
     if (
       state.modalBodyScrollLocked
     ) {
-
       return;
-
     }
 
     state.modalBodyScrollLocked =
@@ -782,18 +561,14 @@
 
     document.body.style.overscrollBehavior =
       "none";
-
   }
 
 
   function unlockPageScroll() {
-
     if (
       !state.modalBodyScrollLocked
     ) {
-
       return;
-
     }
 
     state.modalBodyScrollLocked =
@@ -807,27 +582,41 @@
 
     document.body.style.overscrollBehavior =
       "";
-
   }
 
 
   function configureSearchScroll() {
-
     const modal =
       $("sourceModal");
+
+    const card =
+      modal?.querySelector(
+        ".modal-card"
+      );
+
+    const body =
+      card?.querySelector(
+        ":scope > div:nth-child(2)"
+      );
 
     const container =
       $("modalVideoSearchResults");
 
     if (
       !modal ||
+      !card ||
       !container
     ) {
-
       return;
-
     }
 
+    const viewportHeight =
+      window.visualViewport?.height ||
+      window.innerHeight ||
+      700;
+
+    const isMobile =
+      window.innerWidth <= 760;
 
     modal.style.position =
       "fixed";
@@ -847,18 +636,93 @@
     modal.style.overflow =
       "hidden";
 
-    modal.style.overscrollBehavior =
-      "none";
+    modal.style.padding =
+      "0";
 
+    card.style.width =
+      "100%";
 
-    const isMobile =
-      window.innerWidth <=
-      760;
+    card.style.height =
+      "100%";
 
-    const viewportHeight =
-      window.visualViewport?.height ||
-      window.innerHeight;
+    card.style.maxHeight =
+      "100%";
 
+    card.style.margin =
+      "0";
+
+    card.style.padding =
+      "0";
+
+    card.style.overflow =
+      "hidden";
+
+    card.style.display =
+      "flex";
+
+    card.style.flexDirection =
+      "column";
+
+    if (body) {
+      body.style.flex =
+        "1 1 auto";
+
+      body.style.minHeight =
+        "0";
+
+      body.style.height =
+        `${Math.max(
+          200,
+          viewportHeight - 68
+        )}px`;
+
+      body.style.overflow =
+        "hidden";
+
+      body.style.display =
+        "grid";
+
+      if (isMobile) {
+        body.style.gridTemplateColumns =
+          "1fr";
+      } else {
+        body.style.gridTemplateColumns =
+          "72px minmax(0, 1fr)";
+      }
+    }
+
+    const section =
+      body?.querySelector(
+        "section"
+      );
+
+    if (section) {
+      section.style.minWidth =
+        "0";
+
+      section.style.minHeight =
+        "0";
+
+      section.style.height =
+        "100%";
+
+      section.style.overflow =
+        "hidden";
+
+      section.style.display =
+        "flex";
+
+      section.style.flexDirection =
+        "column";
+    }
+
+    const searchArea =
+      $("modalVideoSearchArea");
+
+    if (searchArea) {
+      searchArea.style.minHeight =
+        "0";
+    }
 
     container.style.position =
       "relative";
@@ -866,17 +730,31 @@
     container.style.display =
       "grid";
 
+    container.style.gridTemplateColumns =
+      isMobile
+        ? "1fr"
+        : "repeat(auto-fill, minmax(280px, 1fr))";
+
+    container.style.alignContent =
+      "start";
+
     container.style.width =
+      "100%";
+
+    container.style.maxWidth =
       "100%";
 
     container.style.boxSizing =
       "border-box";
 
+    container.style.minWidth =
+      "0";
+
     container.style.minHeight =
       "0";
 
-    container.style.maxWidth =
-      "100%";
+    container.style.flex =
+      "1 1 auto";
 
     container.style.overflowX =
       "hidden";
@@ -887,120 +765,69 @@
     container.style.webkitOverflowScrolling =
       "touch";
 
-    container.style.overscrollBehaviorY =
-      "contain";
-
     container.style.touchAction =
       "pan-y";
+
+    container.style.overscrollBehaviorY =
+      "contain";
 
     container.style.scrollBehavior =
       "auto";
 
+    container.style.padding =
+      isMobile
+        ? "8px 10px 32px"
+        : "12px 14px 32px";
 
-    if (isMobile) {
+    container.style.maxHeight =
+      "none";
 
-      const height =
-        Math.max(
-          200,
-          viewportHeight -
-            60
-        );
-
-      container.style.height =
-        `${height}px`;
-
-      container.style.maxHeight =
-        `${height}px`;
-
-      container.style.padding =
-        "8px 10px 30px";
-
-    } else {
-
-      const height =
-        Math.max(
-          300,
-          viewportHeight -
-            150
-        );
-
-      container.style.height =
-        `${height}px`;
-
-      container.style.maxHeight =
-        `${height}px`;
-
-      container.style.paddingRight =
-        "10px";
-
-    }
-
-
-    /*
-     * 桌面滑鼠滾輪。
-     */
+    container.style.height =
+      "100%";
 
     if (
       !container.__wtWheelAttached
     ) {
-
       container.addEventListener(
         "wheel",
         (event) => {
+          if (
+            container.scrollHeight <=
+            container.clientHeight
+          ) {
+            return;
+          }
 
           if (
             Math.abs(
               event.deltaY
             ) < 0.01
           ) {
-
             return;
-
-          }
-
-          if (
-            container.scrollHeight <=
-            container.clientHeight
-          ) {
-
-            return;
-
           }
 
           event.preventDefault();
 
           container.scrollTop +=
             event.deltaY;
-
         },
         {
-          passive:
-            false
+          passive: false
         }
       );
 
       container.__wtWheelAttached =
         true;
-
     }
-
-
-    /*
-     * 手機：
-     * 不 preventDefault。
-     * 完全交給瀏覽器原生觸控滾動。
-     */
 
     if (
       !container.__wtTouchConfigured
     ) {
-
       container.addEventListener(
         "touchstart",
         () => {},
         {
-          passive:
-            true
+          passive: true
         }
       );
 
@@ -1008,16 +835,13 @@
         "touchmove",
         () => {},
         {
-          passive:
-            true
+          passive: true
         }
       );
 
       container.__wtTouchConfigured =
         true;
-
     }
-
   }
 
 
@@ -1028,7 +852,6 @@
    */
 
   function updateAuthUI() {
-
     const loginButton =
       $("googleLoginBtn");
 
@@ -1045,61 +868,41 @@
       auth?.currentUser ||
       null;
 
-
     if (currentUser) {
-
-      /*
-       * 登入之後頂部只顯示「已連線」。
-       */
-
       if (authStatus) {
-
         authStatus.textContent =
           "已連線";
-
       }
 
-
       /*
-       * Google 已登入後：
-       * 隱藏 Google 登入按鈕。
+       * Google 登入後隱藏登入按鈕。
        */
-
       loginButton?.classList.toggle(
         "hidden",
         !currentUser.isAnonymous
       );
 
-
       /*
-       * 帳號按鈕只有已登入 Firebase
-       * 才顯示。
+       * 帳號功能。
        */
-
       accountButton?.classList.remove(
         "hidden"
       );
 
-
       /*
-       * 只有非匿名 Google 帳號才顯示登出。
+       * 訪客模式不顯示登出。
        */
-
       logoutButton?.classList.toggle(
         "hidden",
         currentUser.isAnonymous
       );
 
       return;
-
     }
 
-
     if (authStatus) {
-
       authStatus.textContent =
         "未登入";
-
     }
 
     loginButton?.classList.remove(
@@ -1113,7 +916,6 @@
     logoutButton?.classList.add(
       "hidden"
     );
-
   }
 
 
@@ -1124,36 +926,23 @@
    */
 
   async function initializeFirebase() {
-
     if (!window.firebase) {
-
       throw new Error(
         "Firebase SDK 尚未載入"
       );
-
     }
 
-    if (
-      !window.FIREBASE_CONFIG
-    ) {
-
+    if (!window.FIREBASE_CONFIG) {
       throw new Error(
         "找不到 Firebase 設定"
       );
-
     }
 
-
-    if (
-      !firebase.apps.length
-    ) {
-
+    if (!firebase.apps.length) {
       firebase.initializeApp(
         window.FIREBASE_CONFIG
       );
-
     }
-
 
     auth =
       firebase.auth();
@@ -1161,12 +950,9 @@
     db =
       firebase.database();
 
-
     auth.onAuthStateChanged(
       (user) => {
-
         if (user) {
-
           state.uid =
             user.uid;
 
@@ -1177,177 +963,116 @@
               "wt_name"
             )
           ) {
-
             try {
-
               setMemberName(
                 user.displayName
               );
-
             } catch (_) {}
-
           }
-
         } else {
-
           state.uid =
             null;
-
         }
 
         updateAuthUI();
-
       }
     );
 
-
-    if (
-      !auth.currentUser
-    ) {
-
+    if (!auth.currentUser) {
       await auth.signInAnonymously();
-
     }
-
 
     state.uid =
       auth.currentUser?.uid ||
       null;
 
-
     if (!state.uid) {
-
       throw new Error(
         "Firebase 匿名登入失敗"
       );
-
     }
 
-
     updateAuthUI();
-
   }
 
 
   /*
    * =========================================================
-   * GOOGLE LOGIN
+   * GOOGLE
    * =========================================================
    */
 
   async function googleLogin() {
-
     if (!auth) {
-
       throw new Error(
         "Firebase Auth 尚未初始化"
       );
-
     }
-
 
     const provider =
       new firebase.auth.GoogleAuthProvider();
-
 
     provider.setCustomParameters({
       prompt:
         "select_account"
     });
 
-
     const currentUser =
       auth.currentUser;
-
-
-    /*
-     * 優先把匿名帳號連結 Google。
-     * 成功後 UID 不會改變。
-     */
 
     if (
       currentUser &&
       currentUser.isAnonymous
     ) {
-
       try {
-
-        localStorage.setItem(
-          "wt_google_link_pending",
-          "1"
-        );
-
         await currentUser.linkWithRedirect(
           provider
         );
 
         return;
-
       } catch (error) {
-
-        localStorage.removeItem(
-          "wt_google_link_pending"
-        );
-
-
         if (
           error?.code ===
           "auth/credential-already-in-use"
         ) {
-
           await auth.signInWithRedirect(
             provider
           );
 
           return;
-
         }
 
         throw error;
-
       }
-
     }
-
 
     await auth.signInWithRedirect(
       provider
     );
-
   }
 
 
   async function handleGoogleRedirectResult() {
-
     if (
       !auth ||
       state.googleRedirectHandled
     ) {
-
       return;
-
     }
 
     state.googleRedirectHandled =
       true;
 
-
     try {
-
       const result =
         await auth.getRedirectResult();
 
-
-      if (
-        result?.user
-      ) {
-
+      if (result?.user) {
         const user =
           result.user;
 
         state.uid =
           user.uid;
-
 
         if (
           user.displayName &&
@@ -1355,49 +1080,20 @@
             "wt_name"
           )
         ) {
-
           try {
-
             setMemberName(
               user.displayName
             );
-
           } catch (_) {}
-
         }
-
 
         updateAuthUI();
-
-
-        if (
-          state.membersRef
-        ) {
-
-          try {
-
-            await updateCurrentMemberName();
-
-          } catch (error) {
-
-            console.warn(
-              "更新成員名稱失敗:",
-              error
-            );
-
-          }
-
-        }
-
 
         toast(
           "Google 登入成功"
         );
-
       }
-
     } catch (error) {
-
       console.error(
         "Google 登入失敗:",
         error
@@ -1407,59 +1103,41 @@
         error?.message ||
         "Google 登入失敗"
       );
-
     }
-
   }
 
 
   async function logout() {
-
     if (!auth) {
       return;
     }
 
-
     const currentUser =
       auth.currentUser;
-
-
-    /*
-     * 未登入或匿名使用者
-     * 不應該執行登出流程。
-     */
 
     if (
       !currentUser ||
       currentUser.isAnonymous
     ) {
-
+      updateAuthUI();
       return;
-
     }
 
-
     try {
-
       await auth.signOut();
 
       await auth.signInAnonymously();
-
 
       state.uid =
         auth.currentUser?.uid ||
         null;
 
-
       updateAuthUI();
-
 
       toast(
         "已登出，現在使用訪客模式"
       );
-
     } catch (error) {
-
       console.error(
         "登出失敗:",
         error
@@ -1468,9 +1146,7 @@
       toast(
         "登出失敗"
       );
-
     }
-
   }
 
 
@@ -1481,61 +1157,43 @@
    */
 
   function openNameModal() {
-
     const modal =
       $("nameModal");
 
     if (!modal) {
-
       toast(
         "找不到修改名稱視窗"
       );
 
       return;
-
     }
-
 
     const input =
       $("nameInput");
 
-
     if (input) {
-
       input.value =
         state.memberName ||
         getMemberName();
-
     }
-
 
     setError(
       $("nameError"),
       ""
     );
 
-
     modal.classList.remove(
       "hidden"
     );
 
-
-    setTimeout(
-      () => {
-
-        input?.focus();
-
-        input?.select();
-
-      },
-      100
-    );
-
+    setTimeout(() => {
+      input?.focus();
+      input?.select();
+    }, 100);
   }
 
 
   function closeNameModal() {
-
     $("nameModal")?.classList.add(
       "hidden"
     );
@@ -1544,70 +1202,42 @@
       $("nameError"),
       ""
     );
-
   }
 
 
   async function updateCurrentMemberName() {
-
     if (
       !state.membersRef ||
       !state.uid
     ) {
-
       return;
-
     }
 
+    await state.membersRef
+      .child(
+        state.uid
+      )
+      .update({
+        name:
+          state.memberName,
 
-    try {
+        online:
+          true,
 
-      await state.membersRef
-        .child(
-          state.uid
-        )
-        .update({
-
-          name:
-            state.memberName,
-
-          online:
-            true,
-
-          lastSeen:
-            firebase.database
-              .ServerValue
-              .TIMESTAMP
-
-        });
-
-    } catch (error) {
-
-      console.error(
-        "更新成員資料失敗:",
-        error
-      );
-
-      throw error;
-
-    }
-
+        lastSeen:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP
+      });
   }
 
 
   async function getMembersOnce() {
-
-    if (
-      !state.membersRef
-    ) {
-
+    if (!state.membersRef) {
       return {};
-
     }
 
-
     try {
-
       const snapshot =
         await state.membersRef.once(
           "value"
@@ -1617,21 +1247,15 @@
         snapshot.val() ||
         {}
       );
-
     } catch (_) {
-
       return {};
-
     }
-
   }
 
 
   async function saveName() {
-
     const input =
       $("nameInput");
-
 
     const newName =
       String(
@@ -1639,113 +1263,76 @@
         ""
       )
         .trim()
-        .slice(
-          0,
-          30
-        );
-
+        .slice(0, 30);
 
     if (!newName) {
-
       setError(
         $("nameError"),
         "名稱不能是空白"
       );
 
       return;
-
     }
 
-
     try {
-
       setMemberName(
         newName
       );
 
-
       const user =
         auth?.currentUser;
-
 
       if (
         user &&
         !user.isAnonymous
       ) {
-
         try {
-
           await user.updateProfile({
             displayName:
               newName
           });
-
         } catch (error) {
-
           console.warn(
             "更新 Google displayName 失敗:",
             error
           );
-
         }
-
       }
 
-
       try {
-
         await updateCurrentMemberName();
-
       } catch (error) {
-
-        /*
-         * 名稱先保存到 localStorage，
-         * Firebase 權限錯誤不再讓整個改名失敗。
-         */
-
         console.warn(
           "Firebase 成員名稱同步失敗:",
           error
         );
-
       }
-
 
       updateAuthUI();
 
-
       try {
-
         renderMembers(
           await getMembersOnce()
         );
-
       } catch (_) {}
 
-
       closeNameModal();
-
 
       toast(
         "名稱已更新"
       );
-
     } catch (error) {
-
       console.error(
         "修改名稱失敗:",
         error
       );
-
 
       setError(
         $("nameError"),
         error.message ||
           "修改名稱失敗"
       );
-
     }
-
   }
 
 
@@ -1755,193 +1342,119 @@
    * =========================================================
    */
 
-  function getYoutubeId(
-    value
-  ) {
-
+  function getYoutubeId(value) {
     if (!value) {
       return null;
     }
 
-
     const text =
-      String(
-        value
-      ).trim();
-
+      String(value).trim();
 
     if (
       /^[A-Za-z0-9_-]{11}$/.test(
         text
       )
     ) {
-
       return text;
-
     }
 
-
     try {
-
       const url =
-        new URL(
-          text
-        );
-
+        new URL(text);
 
       if (
         url.hostname.includes(
           "youtu.be"
         )
       ) {
-
         return (
           url.pathname
-            .replace(
-              /^\/+/,
-              ""
-            )
-            .split(
-              "/"
-            )[0] ||
+            .replace(/^\/+/, "")
+            .split("/")[0] ||
           null
         );
-
       }
-
 
       if (
         url.hostname.includes(
           "youtube.com"
         )
       ) {
-
         if (
           url.pathname ===
           "/watch"
         ) {
-
           return (
-            url.searchParams.get(
-              "v"
-            ) ||
+            url.searchParams.get("v") ||
             null
           );
-
         }
-
 
         if (
           url.pathname.startsWith(
             "/shorts/"
           )
         ) {
-
           return (
-            url.pathname
-              .split(
-                "/"
-              )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
-
         }
-
 
         if (
           url.pathname.startsWith(
             "/embed/"
           )
         ) {
-
           return (
-            url.pathname
-              .split(
-                "/"
-              )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
-
         }
-
       }
-
 
       if (
         url.hostname.includes(
           "youtube-nocookie.com"
         )
       ) {
-
         if (
           url.pathname.startsWith(
             "/embed/"
           )
         ) {
-
           return (
-            url.pathname
-              .split(
-                "/"
-              )[2] ||
+            url.pathname.split("/")[2] ||
             null
           );
-
         }
-
       }
-
     } catch (_) {}
 
-
     return null;
-
   }
 
 
-  function getVimeoId(
-    value
-  ) {
-
+  function getVimeoId(value) {
     if (!value) {
       return null;
     }
 
-
     const text =
-      String(
-        value
-      ).trim();
+      String(value).trim();
 
-
-    if (
-      /^\d+$/.test(
-        text
-      )
-    ) {
-
+    if (/^\d+$/.test(text)) {
       return text;
-
     }
 
-
     try {
-
       const url =
-        new URL(
-          text
-        );
-
+        new URL(text);
 
       if (
-        url.hostname.includes(
-          "vimeo.com"
-        ) ||
-        url.hostname.includes(
-          "player.vimeo.com"
-        )
+        url.hostname.includes("vimeo.com") ||
+        url.hostname.includes("player.vimeo.com")
       ) {
-
         const match =
           url.pathname.match(
             /(?:video\/)?(\d+)/
@@ -1951,55 +1464,38 @@
           match?.[1] ||
           null
         );
-
       }
-
     } catch (_) {}
-
 
     const match =
       text.match(
         /vimeo\.com\/(\d+)/
       );
 
-
     return (
       match?.[1] ||
       null
     );
-
   }
 
 
-  function getDailymotionId(
-    value
-  ) {
-
+  function getDailymotionId(value) {
     if (!value) {
       return null;
     }
 
-
     const text =
-      String(
-        value
-      ).trim();
-
+      String(value).trim();
 
     try {
-
       const url =
-        new URL(
-          text
-        );
-
+        new URL(text);
 
       if (
         url.hostname.includes(
           "dailymotion.com"
         )
       ) {
-
         const match =
           url.pathname.match(
             /video\/([A-Za-z0-9]+)/
@@ -2009,279 +1505,159 @@
           match?.[1] ||
           null
         );
-
       }
-
 
       if (
-        url.hostname.includes(
-          "dai.ly"
-        )
+        url.hostname.includes("dai.ly")
       ) {
-
         return (
           url.pathname
-            .replace(
-              /^\/+/,
-              ""
-            )
-            .split(
-              "/"
-            )[0] ||
+            .replace(/^\/+/, "")
+            .split("/")[0] ||
           null
         );
-
       }
-
     } catch (_) {}
 
-
     if (
-      /^[A-Za-z0-9]+$/.test(
-        text
-      ) &&
+      /^[A-Za-z0-9]+$/.test(text) &&
       text.length >= 5
     ) {
-
       return text;
-
     }
 
-
     return null;
-
   }
 
 
-  function getBilibiliId(
-    value
-  ) {
-
+  function getBilibiliId(value) {
     if (!value) {
       return null;
     }
 
-
     const text =
-      String(
-        value
-      ).trim();
-
+      String(value).trim();
 
     if (
-      /^BV[a-zA-Z0-9]+$/.test(
-        text
-      )
+      /^BV[a-zA-Z0-9]+$/.test(text)
     ) {
-
       return text;
-
     }
-
 
     if (
-      /^av\d+$/i.test(
-        text
-      )
+      /^av\d+$/i.test(text)
     ) {
-
       return text;
-
     }
-
 
     try {
-
       const url =
-        new URL(
-          text
-        );
-
+        new URL(text);
 
       const bv =
         url.pathname.match(
           /(BV[a-zA-Z0-9]+)/
         );
 
-
-      if (
-        bv?.[1]
-      ) {
-
+      if (bv?.[1]) {
         return bv[1];
-
       }
-
 
       const av =
         url.pathname.match(
           /\/av(\d+)/i
         );
 
-
-      if (
-        av?.[1]
-      ) {
-
-        return (
-          "av" +
-          av[1]
-        );
-
+      if (av?.[1]) {
+        return "av" + av[1];
       }
-
     } catch (_) {}
 
-
     return null;
-
   }
 
 
-  function getTwitchValue(
-    value
-  ) {
-
+  function getTwitchValue(value) {
     if (!value) {
       return null;
     }
 
-
     const text =
-      String(
-        value
-      ).trim();
-
+      String(value).trim();
 
     try {
-
       const url =
-        new URL(
-          text
-        );
-
+        new URL(text);
 
       if (
         !url.hostname.includes(
           "twitch.tv"
         )
       ) {
-
         return {
-
           type:
             "channel",
-
           value:
             text
-
         };
-
       }
-
 
       const parts =
         url.pathname
-          .split(
-            "/"
-          )
-          .filter(
-            Boolean
-          );
+          .split("/")
+          .filter(Boolean);
 
-
-      if (
-        !parts.length
-      ) {
-
+      if (!parts.length) {
         return null;
-
       }
 
-
       if (
-        parts[0] ===
-          "videos" &&
+        parts[0] === "videos" &&
         parts[1]
       ) {
-
         return {
-
           type:
             "video",
-
           value:
             parts[1]
-
         };
-
       }
-
 
       if (
-        parts[0] ===
-          "clip" &&
+        parts[0] === "clip" &&
         parts[1]
       ) {
-
         return {
-
           type:
             "clip",
-
           value:
             parts[1]
-
         };
-
       }
 
-
       return {
-
         type:
           "channel",
-
         value:
           parts[0]
-
       };
-
     } catch (_) {}
 
-
-    if (
-      /^\d+$/.test(
-        text
-      )
-    ) {
-
+    if (/^\d+$/.test(text)) {
       return {
-
         type:
           "video",
-
         value:
           text
-
       };
-
     }
 
-
     return {
-
       type:
         "channel",
-
       value:
-        text.replace(
-          /^@/,
-          ""
-        )
-
+        text.replace(/^@/, "")
     };
-
   }
 
 
@@ -2295,75 +1671,57 @@
     query,
     append = false
   ) {
-
     query =
       String(
         query || ""
       ).trim();
 
-
     if (!query) {
-
       throw new Error(
         "請輸入影片名稱"
       );
-
     }
-
 
     if (
       !YOUTUBE_API_KEY ||
-      YOUTUBE_API_KEY.startsWith(
-        "請"
-      )
+      YOUTUBE_API_KEY.startsWith("請")
     ) {
-
       throw new Error(
-        "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY"
+        "請先把 YouTube API Key 放到 app.js"
       );
-
     }
-
 
     if (
       append &&
-      state.searchQuery ===
-        query &&
+      state.searchQuery === query &&
       !state.searchNextPageToken
     ) {
-
       toast(
         "已經沒有更多結果"
       );
 
       return [];
-
     }
-
 
     const url =
       new URL(
         "https://www.googleapis.com/youtube/v3/search"
       );
 
-
     url.searchParams.set(
       "part",
       "snippet"
     );
-
 
     url.searchParams.set(
       "q",
       query
     );
 
-
     url.searchParams.set(
       "type",
       "video"
     );
-
 
     url.searchParams.set(
       "maxResults",
@@ -2372,96 +1730,71 @@
       )
     );
 
-
     url.searchParams.set(
       "regionCode",
       "TW"
     );
-
 
     url.searchParams.set(
       "relevanceLanguage",
       "zh-Hant"
     );
 
-
     url.searchParams.set(
       "safeSearch",
       "moderate"
     );
-
-
-    /*
-     * 只要求 YouTube 回傳可以嵌入的影片。
-     */
 
     url.searchParams.set(
       "videoEmbeddable",
       "true"
     );
 
-
     if (
       append &&
       state.searchNextPageToken
     ) {
-
       url.searchParams.set(
         "pageToken",
         state.searchNextPageToken
       );
-
     }
-
 
     url.searchParams.set(
       "key",
       YOUTUBE_API_KEY
     );
 
-
     const response =
       await fetch(
         url.toString()
       );
 
-
     if (!response.ok) {
-
       let message =
         "YouTube 搜尋失敗";
 
-
       try {
-
         const data =
           await response.json();
 
         message =
           data?.error?.message ||
           message;
-
       } catch (_) {}
-
 
       throw new Error(
         message
       );
-
     }
-
 
     const data =
       await response.json();
 
-
     const items =
-      Array.isArray(
-        data.items
-      )
+      Array.isArray(data.items)
         ? data.items
         : [];
-
 
     const ids =
       items
@@ -2469,64 +1802,40 @@
           (item) =>
             item?.id?.videoId
         )
-        .filter(
-          Boolean
-        );
-
-
-    /*
-     * 一次用 videos API 取得影片
-     * 長度與觀看數。
-     */
+        .filter(Boolean);
 
     let detailMap = {};
 
-
-    if (
-      ids.length
-    ) {
-
+    if (ids.length) {
       try {
-
         const detailUrl =
           new URL(
             "https://www.googleapis.com/youtube/v3/videos"
           );
-
 
         detailUrl.searchParams.set(
           "part",
           "contentDetails,statistics"
         );
 
-
         detailUrl.searchParams.set(
           "id",
-          ids.join(
-            ","
-          )
+          ids.join(",")
         );
-
 
         detailUrl.searchParams.set(
           "key",
           YOUTUBE_API_KEY
         );
 
-
         const detailResponse =
           await fetch(
             detailUrl.toString()
           );
 
-
-        if (
-          detailResponse.ok
-        ) {
-
+        if (detailResponse.ok) {
           const detailData =
             await detailResponse.json();
-
 
           for (
             const item of
@@ -2536,182 +1845,134 @@
               ? detailData.items
               : []
           ) {
-
-            detailMap[
-              item.id
-            ] =
+            detailMap[item.id] =
               item;
-
           }
-
         }
-
       } catch (error) {
-
         console.warn(
           "YouTube 詳細資料載入失敗:",
           error
         );
-
       }
-
     }
-
 
     const results =
       items
-        .map(
-          (item) => {
+        .map((item) => {
+          const id =
+            item?.id?.videoId;
 
-            const id =
-              item?.id?.videoId;
+          const snippet =
+            item?.snippet ||
+            {};
 
-
-            const snippet =
-              item?.snippet ||
-              {};
-
-
-            if (!id) {
-              return null;
-            }
-
-
-            const detail =
-              detailMap[id] ||
-              {};
-
-
-            const statistics =
-              detail.statistics ||
-              {};
-
-
-            const contentDetails =
-              detail.contentDetails ||
-              {};
-
-
-            return {
-
-              id,
-
-              platform:
-                "youtube",
-
-              title:
-                snippet.title ||
-                "未命名影片",
-
-              description:
-                snippet.description ||
-                "",
-
-              channel:
-                snippet.channelTitle ||
-                "",
-
-              publishedAt:
-                snippet.publishedAt ||
-                "",
-
-              thumbnail:
-                snippet.thumbnails
-                  ?.maxres
-                  ?.url ||
-                snippet.thumbnails
-                  ?.high
-                  ?.url ||
-                snippet.thumbnails
-                  ?.medium
-                  ?.url ||
-                snippet.thumbnails
-                  ?.default
-                  ?.url ||
-                "",
-
-              viewCount:
-                Number(
-                  statistics.viewCount ||
-                  0
-                ),
-
-              likeCount:
-                Number(
-                  statistics.likeCount ||
-                  0
-                ),
-
-              duration:
-                contentDetails.duration ||
-                "",
-
-              durationSeconds:
-                parseISO8601Duration(
-                  contentDetails.duration
-                ),
-
-              live:
-                Boolean(
-                  snippet.liveBroadcastContent &&
-                  snippet.liveBroadcastContent !==
-                    "none"
-                )
-
-            };
-
+          if (!id) {
+            return null;
           }
-        )
-        .filter(
-          Boolean
-        );
 
+          const detail =
+            detailMap[id] ||
+            {};
+
+          const statistics =
+            detail.statistics ||
+            {};
+
+          const contentDetails =
+            detail.contentDetails ||
+            {};
+
+          return {
+            id,
+
+            platform:
+              "youtube",
+
+            title:
+              snippet.title ||
+              "未命名影片",
+
+            description:
+              snippet.description ||
+              "",
+
+            channel:
+              snippet.channelTitle ||
+              "",
+
+            publishedAt:
+              snippet.publishedAt ||
+              "",
+
+            thumbnail:
+              snippet.thumbnails?.maxres?.url ||
+              snippet.thumbnails?.high?.url ||
+              snippet.thumbnails?.medium?.url ||
+              snippet.thumbnails?.default?.url ||
+              "",
+
+            viewCount:
+              Number(
+                statistics.viewCount ||
+                0
+              ),
+
+            likeCount:
+              Number(
+                statistics.likeCount ||
+                0
+              ),
+
+            duration:
+              contentDetails.duration ||
+              "",
+
+            durationSeconds:
+              parseISO8601Duration(
+                contentDetails.duration
+              ),
+
+            live:
+              Boolean(
+                snippet.liveBroadcastContent &&
+                snippet.liveBroadcastContent !==
+                  "none"
+              )
+          };
+        })
+        .filter(Boolean);
 
     state.searchNextPageToken =
       data.nextPageToken ||
       "";
 
-
     state.searchQuery =
       query;
 
-
     if (append) {
-
       const existingIds =
         new Set(
           state.searchResults.map(
             (item) =>
-              String(
-                item.id
-              )
+              String(item.id)
           )
         );
 
-
       for (
-        const item of
-        results
+        const item of results
       ) {
-
         if (
           !existingIds.has(
-            String(
-              item.id
-            )
+            String(item.id)
           )
         ) {
-
           state.searchResults.push(
             item
           );
-
         }
-
       }
-
     } else {
-
       state.searchResults =
         results;
 
@@ -2720,17 +1981,13 @@
 
       state.modalSelectedVideoId =
         "";
-
     }
-
 
     renderSearchResults(
       state.searchResults
     );
 
-
     return results;
-
   }
 
 
@@ -2741,199 +1998,154 @@
    */
 
   function disconnectSearchObserver() {
-
     const container =
       $("modalVideoSearchResults");
-
 
     if (!container) {
       return;
     }
 
-
     if (
       container.__youtubeObserver
     ) {
-
       try {
-
         container
           .__youtubeObserver
           .disconnect();
-
       } catch (_) {}
-
 
       container.__youtubeObserver =
         null;
-
     }
-
   }
 
 
   async function loadMoreYoutubeResults() {
-
     if (
       state.searchLoadingMore
     ) {
-
       return;
-
     }
-
 
     if (
       !state.searchNextPageToken
     ) {
-
       toast(
         "已經沒有更多結果"
       );
 
       return;
-
     }
 
-
-    if (
-      !state.searchQuery
-    ) {
-
+    if (!state.searchQuery) {
       return;
-
     }
-
 
     state.searchLoadingMore =
       true;
 
-
     const button =
       $("youtubeLoadMoreBtn");
 
-
     if (button) {
-
       button.disabled =
         true;
 
       button.textContent =
         "載入更多中…";
-
     }
 
-
     try {
-
       await searchYoutube(
         state.searchQuery,
         true
       );
-
     } catch (error) {
-
       console.error(
         "載入更多 YouTube 失敗:",
         error
       );
 
-
       toast(
         error.message ||
         "載入更多失敗"
       );
-
     } finally {
-
       state.searchLoadingMore =
         false;
 
+      const currentButton =
+        $("youtubeLoadMoreBtn");
+
+      if (currentButton) {
+        currentButton.disabled =
+          false;
+
+        currentButton.textContent =
+          state.searchNextPageToken
+            ? "載入更多 YouTube 影片"
+            : "已載入全部結果";
+      }
+
       configureSearchScroll();
-
     }
-
   }
 
 
   function setupYoutubeInfiniteScroll() {
-
     disconnectSearchObserver();
-
 
     const container =
       $("modalVideoSearchResults");
-
 
     if (!container) {
       return;
     }
 
-
     const sentinel =
       $("youtubeLoadMore");
-
 
     if (
       !sentinel ||
       !state.searchNextPageToken
     ) {
-
       return;
-
     }
-
 
     if (
       typeof IntersectionObserver ===
       "undefined"
     ) {
-
       return;
-
     }
-
 
     const observer =
       new IntersectionObserver(
         (entries) => {
-
           const entry =
             entries[0];
-
 
           if (
             !entry?.isIntersecting
           ) {
-
             return;
-
           }
-
 
           if (
             state.searchLoadingMore
           ) {
-
             return;
-
           }
-
 
           if (
             !state.searchNextPageToken
           ) {
-
             return;
-
           }
 
-
           void loadMoreYoutubeResults();
-
         },
         {
-
           root:
             container,
 
@@ -2942,19 +2154,15 @@
 
           threshold:
             0.01
-
         }
       );
-
 
     container.__youtubeObserver =
       observer;
 
-
     observer.observe(
       sentinel
     );
-
   }
 
 
@@ -2967,36 +2175,27 @@
   function renderSearchResults(
     results
   ) {
-
     const container =
       $("modalVideoSearchResults");
-
 
     if (!container) {
       return;
     }
 
-
     disconnectSearchObserver();
 
-
     state.searchResults =
-      Array.isArray(
-        results
-      )
+      Array.isArray(results)
         ? results
         : [];
-
 
     container.dataset.selectedVideoId =
       state.modalSelectedVideoId ||
       "";
 
-
     if (
       !state.searchResults.length
     ) {
-
       container.innerHTML = `
         <div
           class="muted"
@@ -3015,215 +2214,191 @@
         </div>
       `;
 
-
       configureSearchScroll();
 
-
       return;
-
     }
-
 
     container.innerHTML =
       state.searchResults
-        .map(
-          (video) => {
+        .map((video) => {
+          const selected =
+            String(
+              state.modalSelectedVideoId ||
+              ""
+            ) ===
+            String(video.id);
 
-            const selected =
-              String(
-                state.modalSelectedVideoId ||
-                ""
-              ) ===
-              String(
+          const durationText =
+            formatDuration(
+              video.durationSeconds
+            );
+
+          const viewsText =
+            formatViews(
+              video.viewCount
+            );
+
+          const liveBadge =
+            video.live
+              ? `
+                <span
+                  style="
+                    display:inline-flex;
+                    align-items:center;
+                    padding:2px 5px;
+                    border-radius:5px;
+                    background:#dc2626;
+                    color:#fff;
+                    font-size:9px;
+                    font-weight:800;
+                  "
+                >
+                  LIVE
+                </span>
+              `
+              : "";
+
+          return `
+            <div
+              class="video-result-card${
+                selected
+                  ? " selected"
+                  : ""
+              }"
+              data-video-id="${escapeHtml(
                 video.id
-              );
+              )}"
+            >
 
-
-            const durationText =
-              formatDuration(
-                video.durationSeconds
-              );
-
-
-            const viewsText =
-              formatViews(
-                video.viewCount
-              );
-
-
-            const liveBadge =
-              video.live
-                ? `
-                  <span
-                    style="
-                      display:inline-flex;
-                      align-items:center;
-                      padding:2px 5px;
-                      border-radius:5px;
-                      background:#dc2626;
-                      color:#fff;
-                      font-size:9px;
-                      font-weight:800;
-                    "
-                  >
-                    LIVE
-                  </span>
-                `
-                : "";
-
-
-            return `
-              <div
-                class="video-result-card${
-                  selected
-                    ? " selected"
-                    : ""
-                }"
-                data-video-id="${escapeHtml(
+              <button
+                type="button"
+                class="video-result-main"
+                data-video-select="${escapeHtml(
                   video.id
                 )}"
               >
 
-                <button
-                  type="button"
-                  class="video-result-main"
-                  data-video-select="${escapeHtml(
-                    video.id
-                  )}"
-                >
-
-                  <div
-                    style="
-                      position:relative;
-                      width:100%;
-                    "
-                  >
-
-                    <img
-                      src="${escapeHtml(
-                        video.thumbnail
-                      )}"
-                      alt=""
-                      loading="lazy"
-                    >
-
-                    ${
-                      durationText
-                        ? `
-                          <span
-                            style="
-                              position:absolute;
-                              right:5px;
-                              bottom:5px;
-                              padding:3px 6px;
-                              border-radius:5px;
-                              background:rgba(0,0,0,.88);
-                              color:#fff;
-                              font-size:10px;
-                              font-weight:700;
-                            "
-                          >
-                            ${escapeHtml(
-                              durationText
-                            )}
-                          </span>
-                        `
-                        : ""
-                    }
-
-                  </div>
-
-
-                  <span
-                    class="video-result-info"
-                  >
-
-                    <strong>
-                      ${escapeHtml(
-                        video.title
-                      )}
-                    </strong>
-
-                    <small>
-                      ${escapeHtml(
-                        video.channel
-                      )}
-                    </small>
-
-                    <small
-                      style="
-                        display:flex;
-                        align-items:center;
-                        gap:5px;
-                      "
-                    >
-
-                      ${
-                        viewsText
-                          ? escapeHtml(
-                              viewsText
-                            )
-                          : ""
-                      }
-
-                      ${liveBadge}
-
-                    </small>
-
-                  </span>
-
-                </button>
-
-
                 <div
                   style="
-                    display:flex;
-                    gap:7px;
-                    padding:
-                      0 12px 12px;
-                    flex-wrap:wrap;
+                    position:relative;
+                    width:100%;
                   "
                 >
 
-                  <button
-                    type="button"
-                    class="tiny-btn"
-                    data-video-play="${escapeHtml(
-                      video.id
+                  <img
+                    src="${escapeHtml(
+                      video.thumbnail
                     )}"
+                    alt=""
+                    loading="lazy"
                   >
-                    ▶ 播放
-                  </button>
 
-
-                  <button
-                    type="button"
-                    class="tiny-btn"
-                    data-video-queue="${escapeHtml(
-                      video.id
-                    )}"
-                  >
-                    ＋ 待播放
-                  </button>
+                  ${
+                    durationText
+                      ? `
+                        <span
+                          style="
+                            position:absolute;
+                            right:5px;
+                            bottom:5px;
+                            padding:3px 6px;
+                            border-radius:5px;
+                            background:rgba(0,0,0,.88);
+                            color:#fff;
+                            font-size:10px;
+                            font-weight:700;
+                          "
+                        >
+                          ${escapeHtml(
+                            durationText
+                          )}
+                        </span>
+                      `
+                      : ""
+                  }
 
                 </div>
 
+                <span
+                  class="video-result-info"
+                >
+
+                  <strong>
+                    ${escapeHtml(
+                      video.title
+                    )}
+                  </strong>
+
+                  <small>
+                    ${escapeHtml(
+                      video.channel
+                    )}
+                  </small>
+
+                  <small
+                    style="
+                      display:flex;
+                      align-items:center;
+                      gap:5px;
+                    "
+                  >
+
+                    ${
+                      viewsText
+                        ? escapeHtml(
+                            viewsText
+                          )
+                        : ""
+                    }
+
+                    ${liveBadge}
+
+                  </small>
+
+                </span>
+
+              </button>
+
+              <div
+                style="
+                  display:flex;
+                  gap:7px;
+                  padding:0 12px 12px;
+                  flex-wrap:wrap;
+                "
+              >
+
+                <button
+                  type="button"
+                  class="tiny-btn"
+                  data-video-play="${escapeHtml(
+                    video.id
+                  )}"
+                >
+                  ▶ 播放
+                </button>
+
+                <button
+                  type="button"
+                  class="tiny-btn"
+                  data-video-queue="${escapeHtml(
+                    video.id
+                  )}"
+                >
+                  ＋ 待播放
+                </button>
+
               </div>
-            `;
 
-          }
-        )
+            </div>
+          `;
+        })
         .join("");
-
-
-    /*
-     * 載入更多。
-     */
 
     if (
       state.searchNextPageToken
     ) {
-
       container.insertAdjacentHTML(
         "beforeend",
         `
@@ -3261,9 +2436,7 @@
           </div>
         `
       );
-
     } else {
-
       container.insertAdjacentHTML(
         "beforeend",
         `
@@ -3281,325 +2454,205 @@
           </div>
         `
       );
-
     }
-
-
-    /*
-     * 選取。
-     */
 
     container
       .querySelectorAll(
         "[data-video-select]"
       )
-      .forEach(
-        (button) => {
-
-          button.addEventListener(
-            "click",
-            () => {
-
-              selectSearchVideo(
-                button.dataset
-                  .videoSelect
-              );
-
-            }
-          );
-
-        }
-      );
-
-
-    /*
-     * 直接播放。
-     */
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            selectSearchVideo(
+              button.dataset
+                .videoSelect
+            );
+          }
+        );
+      });
 
     container
       .querySelectorAll(
         "[data-video-play]"
       )
-      .forEach(
-        (button) => {
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
 
-          button.addEventListener(
-            "click",
-            async (
-              event
-            ) => {
+            const video =
+              state.searchResults.find(
+                (item) =>
+                  String(item.id) ===
+                  String(
+                    button.dataset
+                      .videoPlay
+                  )
+              );
 
-              event.preventDefault();
-
-              event.stopPropagation();
-
-
-              const video =
-                state.searchResults.find(
-                  (item) =>
-                    String(
-                      item.id
-                    ) ===
-                    String(
-                      button.dataset
-                        .videoPlay
-                    )
-                );
-
-
-              if (!video) {
-                return;
-              }
-
-
-              try {
-
-                await changeVideo({
-
-                  ...video,
-
-                  platform:
-                    "youtube"
-
-                });
-
-              } catch (error) {
-
-                console.error(
-                  error
-                );
-
-
-                setError(
-                  $("modalError"),
-                  error.message ||
-                    "播放影片失敗"
-                );
-
-              }
-
+            if (!video) {
+              return;
             }
-          );
 
-        }
-      );
+            try {
+              await changeVideo({
+                ...video,
+                platform:
+                  "youtube"
+              });
+            } catch (error) {
+              console.error(
+                error
+              );
 
-
-    /*
-     * 加入待播放。
-     */
+              setError(
+                $("modalError"),
+                error.message ||
+                  "播放影片失敗"
+              );
+            }
+          }
+        );
+      });
 
     container
       .querySelectorAll(
         "[data-video-queue]"
       )
-      .forEach(
-        (button) => {
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
 
-          button.addEventListener(
-            "click",
-            async (
-              event
-            ) => {
+            const video =
+              state.searchResults.find(
+                (item) =>
+                  String(item.id) ===
+                  String(
+                    button.dataset
+                      .videoQueue
+                  )
+              );
 
-              event.preventDefault();
-
-              event.stopPropagation();
-
-
-              const video =
-                state.searchResults.find(
-                  (item) =>
-                    String(
-                      item.id
-                    ) ===
-                    String(
-                      button.dataset
-                        .videoQueue
-                    )
-                );
-
-
-              if (!video) {
-                return;
-              }
-
-
-              try {
-
-                await addToQueue({
-
-                  ...video,
-
-                  platform:
-                    "youtube"
-
-                });
-
-
-                toast(
-                  "已加入待播放清單"
-                );
-
-              } catch (error) {
-
-                console.error(
-                  error
-                );
-
-
-                setError(
-                  $("modalError"),
-                  error.message ||
-                    "加入待播放失敗"
-                );
-
-              }
-
+            if (!video) {
+              return;
             }
-          );
 
-        }
-      );
+            try {
+              await addToQueue({
+                ...video,
+                platform:
+                  "youtube"
+              });
 
+              toast(
+                "已加入待播放清單"
+              );
+            } catch (error) {
+              console.error(
+                error
+              );
+
+              setError(
+                $("modalError"),
+                error.message ||
+                  "加入待播放失敗"
+              );
+            }
+          }
+        );
+      });
 
     const moreButton =
       $("youtubeLoadMoreBtn");
 
-
     moreButton?.addEventListener(
       "click",
       (event) => {
-
         event.preventDefault();
-
         void loadMoreYoutubeResults();
-
       }
     );
 
-
-    /*
-     * 重新建立手機 / 桌面 scroll host。
-     */
-
     configureSearchScroll();
 
-
     setupYoutubeInfiniteScroll();
-
   }
 
 
-  function selectSearchVideo(
-    id
-  ) {
-
+  function selectSearchVideo(id) {
     const video =
       state.searchResults.find(
         (item) =>
-          String(
-            item.id
-          ) ===
-          String(
-            id
-          )
+          String(item.id) ===
+          String(id)
       );
-
 
     if (!video) {
       return;
     }
 
-
-    state.modalSelectedVideo =
-      {
-
-        ...video,
-
-        platform:
-          "youtube"
-
-      };
-
+    state.modalSelectedVideo = {
+      ...video,
+      platform:
+        "youtube"
+    };
 
     state.modalSelectedVideoId =
-      String(
-        id
-      );
-
+      String(id);
 
     const container =
       $("modalVideoSearchResults");
 
-
     if (container) {
-
       container.dataset.selectedVideoId =
-        String(
-          id
-        );
-
+        String(id);
 
       container
         .querySelectorAll(
           "[data-video-id]"
         )
-        .forEach(
-          (item) => {
-
-            item.classList.toggle(
-              "selected",
-
-              String(
-                item.dataset
-                  .videoId
-              ) ===
-              String(
-                id
-              )
-
-            );
-
-          }
-        );
-
+        .forEach((item) => {
+          item.classList.toggle(
+            "selected",
+            String(
+              item.dataset.videoId
+            ) ===
+            String(id)
+          );
+        });
     }
-
 
     const saveButton =
       $("saveSourceBtn");
 
-
     if (saveButton) {
-
       saveButton.disabled =
         false;
 
       saveButton.textContent =
         "播放這部影片";
-
     }
-
 
     setError(
       $("modalError"),
       ""
     );
 
-
     toast(
       "已選擇影片"
     );
-
   }
 
 
   function getSelectedModalYoutubeVideo() {
-
     const container =
       $("modalVideoSearchResults");
-
 
     const storedId =
       String(
@@ -3609,36 +2662,26 @@
         ""
       ).trim();
 
-
     if (!storedId) {
       return null;
     }
 
-
     const video =
       state.searchResults.find(
         (item) =>
-          String(
-            item.id
-          ) ===
+          String(item.id) ===
           storedId
       );
-
 
     if (!video) {
       return null;
     }
 
-
     return {
-
       ...video,
-
       platform:
         "youtube"
-
     };
-
   }
 
 
@@ -3653,255 +2696,149 @@
     rawValue,
     title = ""
   ) {
-
     if (!rawValue) {
       return null;
     }
 
-
-    if (
-      platform ===
-      "youtube"
-    ) {
-
+    if (platform === "youtube") {
       const id =
-        getYoutubeId(
-          rawValue
-        );
-
+        getYoutubeId(rawValue);
 
       if (!id) {
         return null;
       }
 
-
       return {
-
         id,
-
         platform,
-
         title:
           title ||
           "YouTube 影片",
-
         thumbnail:
           `https://i.ytimg.com/vi/${encodeURIComponent(
             id
           )}/hqdefault.jpg`,
-
         channel:
           "YouTube"
-
       };
-
     }
 
-
-    if (
-      platform ===
-      "vimeo"
-    ) {
-
+    if (platform === "vimeo") {
       const id =
-        getVimeoId(
-          rawValue
-        );
-
+        getVimeoId(rawValue);
 
       if (!id) {
         return null;
       }
 
-
       return {
-
         id,
-
         url:
-          String(
-            rawValue
-          ),
-
+          String(rawValue),
         platform,
-
         title:
           title ||
           "Vimeo 影片",
-
         thumbnail:
           "",
-
         channel:
           "Vimeo"
-
       };
-
     }
 
-
-    if (
-      platform ===
-      "dailymotion"
-    ) {
-
+    if (platform === "dailymotion") {
       const id =
-        getDailymotionId(
-          rawValue
-        );
-
+        getDailymotionId(rawValue);
 
       if (!id) {
         return null;
       }
 
-
       return {
-
         id,
-
         url:
-          String(
-            rawValue
-          ),
-
+          String(rawValue),
         platform,
-
         title:
           title ||
           "Dailymotion 影片",
-
         thumbnail:
           "",
-
         channel:
           "Dailymotion"
-
       };
-
     }
 
-
-    if (
-      platform ===
-      "bilibili"
-    ) {
-
+    if (platform === "bilibili") {
       const id =
-        getBilibiliId(
-          rawValue
-        );
-
+        getBilibiliId(rawValue);
 
       if (!id) {
         return null;
       }
 
-
       return {
-
         id,
-
         url:
-          String(
-            rawValue
-          ),
-
+          String(rawValue),
         platform,
-
         title:
           title ||
           "Bilibili 影片",
-
         thumbnail:
           "",
-
         channel:
           "Bilibili"
-
       };
-
     }
 
-
-    if (
-      platform ===
-      "twitch"
-    ) {
-
+    if (platform === "twitch") {
       const value =
-        getTwitchValue(
-          rawValue
-        );
-
+        getTwitchValue(rawValue);
 
       if (!value) {
         return null;
       }
 
-
       return {
-
         id:
           value.value,
-
         twitchType:
           value.type,
-
         url:
-          String(
-            rawValue
-          ),
-
+          String(rawValue),
         platform,
-
         title:
           title ||
           "Twitch",
-
         thumbnail:
           "",
-
         channel:
           "Twitch"
-
       };
-
     }
 
-
     return {
-
       id:
-        String(
-          rawValue
-        ),
+        String(rawValue),
 
       url:
-        String(
-          rawValue
-        ),
+        String(rawValue),
 
       platform,
 
       title:
         title ||
-        PLATFORMS[
-          platform
-        ]?.name ||
+        PLATFORMS[platform]?.name ||
         platform,
 
       thumbnail:
         "",
 
       channel:
-        PLATFORMS[
-          platform
-        ]?.name ||
+        PLATFORMS[platform]?.name ||
         platform
-
     };
-
   }
 
 
@@ -3911,75 +2848,50 @@
    * =========================================================
    */
 
-  async function addToQueue(
-    video
-  ) {
-
+  async function addToQueue(video) {
     if (
       !state.queueRef ||
       !state.uid
     ) {
-
       throw new Error(
         "目前不在房間內"
       );
-
     }
 
-
     if (!video?.id) {
-
       throw new Error(
         "無效的影片"
       );
-
     }
-
 
     const duplicate =
       Object.values(
-        state.queue ||
-        {}
+        state.queue || {}
       ).some(
-        (item) => {
-
-          return (
-            String(
-              item?.id ||
-              ""
-            ) ===
-            String(
-              video.id
-            ) &&
-            String(
-              item?.platform ||
-              "youtube"
-            ) ===
-            String(
-              video.platform ||
-              "youtube"
-            )
-          );
-
-        }
+        (item) =>
+          String(
+            item?.id || ""
+          ) ===
+          String(video.id) &&
+          String(
+            item?.platform ||
+            "youtube"
+          ) ===
+          String(
+            video.platform ||
+            "youtube"
+          )
       );
 
-
     if (duplicate) {
-
       throw new Error(
         "這部影片已經在待播放清單"
       );
-
     }
 
-
     const item = {
-
       id:
-        String(
-          video.id
-        ),
+        String(video.id),
 
       platform:
         video.platform ||
@@ -4007,84 +2919,53 @@
         firebase.database
           .ServerValue
           .TIMESTAMP
-
     };
 
-
     if (video.url) {
-
       item.url =
-        String(
-          video.url
-        );
-
+        String(video.url);
     }
-
 
     if (video.twitchType) {
-
       item.twitchType =
         video.twitchType;
-
     }
-
 
     await state.queueRef.push(
       item
     );
-
   }
 
 
-  async function removeFromQueue(
-    queueId
-  ) {
-
+  async function removeFromQueue(queueId) {
     if (
       !state.queueRef ||
       !queueId
     ) {
-
       return;
-
     }
 
-
     await state.queueRef
-      .child(
-        queueId
-      )
+      .child(queueId)
       .remove();
-
 
     toast(
       "已從待播放清單移除"
     );
-
   }
 
 
-  async function playQueueItem(
-    queueId
-  ) {
-
+  async function playQueueItem(queueId) {
     const item =
-      state.queue?.[
-        queueId
-      ];
-
+      state.queue?.[queueId];
 
     if (!item) {
-
       throw new Error(
         "找不到待播放影片"
       );
-
     }
 
-
     const video = {
-
       id:
         item.id,
 
@@ -4100,99 +2981,65 @@
 
       channel:
         item.channel
-
     };
 
-
     if (item.url) {
-
       video.url =
         item.url;
-
     }
-
 
     if (item.twitchType) {
-
       video.twitchType =
         item.twitchType;
-
     }
-
 
     await changeVideo(
       video
     );
 
-
-    if (
-      state.queueRef
-    ) {
-
+    if (state.queueRef) {
       await state.queueRef
-        .child(
-          queueId
-        )
+        .child(queueId)
         .remove();
-
     }
-
   }
 
 
   function getSortedQueue() {
-
     return Object.entries(
-      state.queue ||
-      {}
+      state.queue || {}
     )
       .map(
         ([id, item]) => ({
-
           ...item,
-
           queueId:
             id
-
         })
       )
       .sort(
-        (a, b) => {
-
-          return (
-            Number(
-              a.addedAt ||
-              0
-            ) -
-            Number(
-              b.addedAt ||
-              0
-            )
-          );
-
-        }
+        (a, b) =>
+          Number(
+            a.addedAt || 0
+          ) -
+          Number(
+            b.addedAt || 0
+          )
       );
-
   }
 
 
   function renderQueue() {
-
     const container =
       $("queueList");
-
 
     if (!container) {
       return;
     }
 
-
     const list =
       getSortedQueue();
 
-
     if (!list.length) {
-
       container.innerHTML = `
         <div
           class="muted"
@@ -4206,9 +3053,7 @@
       `;
 
       return;
-
     }
-
 
     container.innerHTML =
       list
@@ -4216,135 +3061,127 @@
           (
             item,
             index
-          ) => {
+          ) => `
+            <div
+              class="queue-item"
+              data-queue-id="${escapeHtml(
+                item.queueId
+              )}"
+            >
 
-            return `
               <div
-                class="queue-item"
-                data-queue-id="${escapeHtml(
-                  item.queueId
-                )}"
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:10px;
+                  min-width:0;
+                "
               >
 
                 <div
                   style="
-                    display:flex;
-                    align-items:center;
-                    gap:10px;
-                    min-width:0;
+                    width:28px;
+                    flex:0 0 28px;
+                    text-align:center;
+                    font-weight:800;
+                    color:#93c5fd;
                   "
                 >
-
-                  <div
-                    style="
-                      width:28px;
-                      flex:0 0 28px;
-                      text-align:center;
-                      font-weight:800;
-                      color:#93c5fd;
-                    "
-                  >
-                    ${
-                      index +
-                      1
-                    }
-                  </div>
-
-                  ${
-                    item.thumbnail
-                      ? `
-                        <img
-                          src="${escapeHtml(
-                            item.thumbnail
-                          )}"
-                          alt=""
-                          style="
-                            width:72px;
-                            height:40px;
-                            object-fit:cover;
-                            border-radius:7px;
-                          "
-                        >
-                      `
-                      : ""
-                  }
-
-                  <div
-                    style="
-                      min-width:0;
-                      flex:1;
-                    "
-                  >
-
-                    <div
-                      style="
-                        overflow:hidden;
-                        text-overflow:ellipsis;
-                        white-space:nowrap;
-                        font-size:13px;
-                        font-weight:700;
-                      "
-                    >
-                      ${escapeHtml(
-                        item.title ||
-                        "未命名影片"
-                      )}
-                    </div>
-
-                    <div
-                      class="muted"
-                      style="
-                        margin-top:3px;
-                        font-size:10px;
-                      "
-                    >
-                      ${escapeHtml(
-                        item.addedByName ||
-                        "玩家"
-                      )}
-                    </div>
-
-                  </div>
-
+                  ${index + 1}
                 </div>
+
+                ${
+                  item.thumbnail
+                    ? `
+                      <img
+                        src="${escapeHtml(
+                          item.thumbnail
+                        )}"
+                        alt=""
+                        style="
+                          width:72px;
+                          height:40px;
+                          object-fit:cover;
+                          border-radius:7px;
+                        "
+                      >
+                    `
+                    : ""
+                }
 
                 <div
                   style="
-                    display:flex;
-                    gap:6px;
-                    margin-top:8px;
+                    min-width:0;
+                    flex:1;
                   "
                 >
 
-                  <button
-                    type="button"
-                    class="tiny-btn"
-                    data-queue-play="${escapeHtml(
-                      item.queueId
-                    )}"
+                  <div
+                    style="
+                      overflow:hidden;
+                      text-overflow:ellipsis;
+                      white-space:nowrap;
+                      font-size:13px;
+                      font-weight:700;
+                    "
                   >
-                    ▶ 播放
-                  </button>
+                    ${escapeHtml(
+                      item.title ||
+                      "未命名影片"
+                    )}
+                  </div>
 
-                  <button
-                    type="button"
-                    class="tiny-btn"
-                    data-queue-remove="${escapeHtml(
-                      item.queueId
-                    )}"
+                  <div
+                    class="muted"
+                    style="
+                      margin-top:3px;
+                      font-size:10px;
+                    "
                   >
-                    移除
-                  </button>
+                    ${escapeHtml(
+                      item.addedByName ||
+                      "玩家"
+                    )}
+                  </div>
 
                 </div>
 
               </div>
-            `;
 
-          }
+              <div
+                style="
+                  display:flex;
+                  gap:6px;
+                  margin-top:8px;
+                "
+              >
+
+                <button
+                  type="button"
+                  class="tiny-btn"
+                  data-queue-play="${escapeHtml(
+                    item.queueId
+                  )}"
+                >
+                  ▶ 播放
+                </button>
+
+                <button
+                  type="button"
+                  class="tiny-btn"
+                  data-queue-remove="${escapeHtml(
+                    item.queueId
+                  )}"
+                >
+                  移除
+                </button>
+
+              </div>
+
+            </div>
+          `
         )
         .join("");
-
 
     container
       .querySelectorAll(
@@ -4352,20 +3189,15 @@
       )
       .forEach(
         (button) => {
-
           button.addEventListener(
             "click",
             async () => {
-
               try {
-
                 await playQueueItem(
                   button.dataset
                     .queuePlay
                 );
-
               } catch (error) {
-
                 console.error(
                   error
                 );
@@ -4374,15 +3206,11 @@
                   error.message ||
                   "播放失敗"
                 );
-
               }
-
             }
           );
-
         }
       );
-
 
     container
       .querySelectorAll(
@@ -4390,20 +3218,15 @@
       )
       .forEach(
         (button) => {
-
           button.addEventListener(
             "click",
             async () => {
-
               try {
-
                 await removeFromQueue(
                   button.dataset
                     .queueRemove
                 );
-
               } catch (error) {
-
                 console.error(
                   error
                 );
@@ -4411,50 +3234,36 @@
                 toast(
                   "移除失敗"
                 );
-
               }
-
             }
           );
-
         }
       );
-
   }
 
 
   async function playNextQueueItem() {
-
     const list =
       getSortedQueue();
 
-
     if (!list.length) {
-
       return false;
-
     }
 
-
     try {
-
       await playQueueItem(
         list[0].queueId
       );
 
       return true;
-
     } catch (error) {
-
       console.error(
         "播放下一部失敗:",
         error
       );
 
       return false;
-
     }
-
   }
 
 
@@ -4467,78 +3276,54 @@
   function hidePlayers(
     keepYoutube = false
   ) {
-
     [
-
       "vimeoPlayer",
-
       "dailymotionPlayer",
-
       "bilibiliPlayer",
-
       "twitchPlayer",
-
       "directVideo",
-
       "emptyPlayer",
-
       "platformPlayerNotice"
-
     ].forEach(
       (id) => {
-
         $(id)?.classList.add(
           "hidden"
         );
-
       }
     );
 
-
     const youtube =
       $("youtubePlayer");
-
 
     if (
       youtube &&
       !keepYoutube
     ) {
-
       youtube.classList.add(
         "hidden"
       );
-
     }
-
   }
 
 
-  function showPlayerElement(
-    id
-  ) {
-
+  function showPlayerElement(id) {
     $(id)?.classList.remove(
       "hidden"
     );
-
   }
 
 
   function forceYoutubeVisible() {
-
     const element =
       $("youtubePlayer");
-
 
     if (!element) {
       return;
     }
 
-
     element.classList.remove(
       "hidden"
     );
-
 
     element.style.display =
       "block";
@@ -4561,17 +3346,13 @@
     element.style.zIndex =
       "3";
 
-
     if (
       element.tagName ===
       "IFRAME"
     ) {
-
       element.style.border =
         "0";
-
     }
-
   }
 
 
@@ -4582,13 +3363,11 @@
    */
 
   async function destroyCurrentPlayer() {
-
     const old =
       state.player;
 
     const oldType =
       state.playerType;
-
 
     state.player =
       null;
@@ -4605,47 +3384,32 @@
     state.currentVideoUrl =
       null;
 
-
     if (!old) {
-
       return;
-
     }
 
-
     try {
-
       if (
         oldType ===
         "youtube"
       ) {
-
         old.destroy?.();
-
       }
-
 
       if (
         oldType ===
         "vimeo"
       ) {
-
         await old.destroy?.();
-
       }
-
 
       if (
         oldType ===
         "dailymotion"
       ) {
-
         old.destroy?.();
-
       }
-
     } catch (_) {}
-
   }
 
 
@@ -4654,130 +3418,92 @@
    * LOCAL PLAYER STATE
    * =========================================================
    *
-   * 注意：
-   * 這版刻意不再使用 Firebase /state。
-   * 每個人的播放只由自己本地播放器控制。
-   * 房間內所有人仍然是同一個影片。
+   * 完全不使用 rooms/{room}/state。
+   * 每個人自己控制自己的播放。
    */
 
   function currentPosition() {
-
     const player =
       state.player;
-
 
     if (
       !state.playerReady ||
       !player
     ) {
-
       return 0;
-
     }
 
-
     try {
-
       if (
         state.playerType ===
         "youtube"
       ) {
-
         return (
           Number(
             player.getCurrentTime()
           ) || 0
         );
-
       }
-
 
       if (
         state.playerType ===
         "twitch"
       ) {
-
         return (
           Number(
             player.getCurrentTime()
           ) || 0
         );
-
       }
-
     } catch (_) {}
 
-
     return 0;
-
   }
 
 
   async function asyncCurrentPosition() {
-
     const player =
       state.player;
 
     const type =
       state.playerType;
 
-
     if (
       !state.playerReady ||
       !player
     ) {
-
       return 0;
-
     }
 
-
     try {
-
-      if (
-        type ===
-        "youtube"
-      ) {
-
+      if (type === "youtube") {
         return (
           Number(
             player.getCurrentTime()
           ) || 0
         );
-
       }
 
-
-      if (
-        type ===
-        "vimeo"
-      ) {
-
+      if (type === "vimeo") {
         return (
           Number(
             await player.getCurrentTime()
           ) || 0
         );
-
       }
 
-
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
-
         if (
           typeof player.currentTime ===
           "function"
         ) {
-
           return (
             Number(
               await player.currentTime()
             ) || 0
           );
-
         }
 
         return (
@@ -4785,135 +3511,92 @@
             player.currentTime
           ) || 0
         );
-
       }
 
-
-      if (
-        type ===
-        "twitch"
-      ) {
-
+      if (type === "twitch") {
         return (
           Number(
             player.getCurrentTime()
           ) || 0
         );
-
       }
-
     } catch (_) {}
 
-
     return 0;
-
   }
 
 
   function duration() {
-
     const player =
       state.player;
-
 
     if (
       !state.playerReady ||
       !player
     ) {
-
       return 0;
-
     }
 
-
     try {
-
       if (
         state.playerType ===
         "youtube"
       ) {
-
         return (
           Number(
             player.getDuration()
           ) || 0
         );
-
       }
-
     } catch (_) {}
 
-
     return 0;
-
   }
 
 
   async function asyncDuration() {
-
     const player =
       state.player;
 
     const type =
       state.playerType;
 
-
     if (
       !state.playerReady ||
       !player
     ) {
-
       return 0;
-
     }
 
-
     try {
-
-      if (
-        type ===
-        "youtube"
-      ) {
-
+      if (type === "youtube") {
         return (
           Number(
             player.getDuration()
           ) || 0
         );
-
       }
 
-
-      if (
-        type ===
-        "vimeo"
-      ) {
-
+      if (type === "vimeo") {
         return (
           Number(
             await player.getDuration()
           ) || 0
         );
-
       }
 
-
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
-
         if (
           typeof player.duration ===
           "function"
         ) {
-
           return (
             Number(
               await player.duration()
             ) || 0
           );
-
         }
 
         return (
@@ -4921,131 +3604,83 @@
             player.duration
           ) || 0
         );
-
       }
 
-
-      if (
-        type ===
-        "twitch"
-      ) {
-
+      if (type === "twitch") {
         return (
           Number(
             player.getDuration()
           ) || 0
         );
-
       }
-
     } catch (_) {}
 
-
     return 0;
-
   }
 
 
   async function asyncIsPlaying() {
-
     const player =
       state.player;
 
     const type =
       state.playerType;
 
-
     if (
       !state.playerReady ||
       !player
     ) {
-
       return false;
-
     }
 
-
     try {
-
       if (
-        type ===
-        "youtube" &&
+        type === "youtube" &&
         window.YT?.PlayerState
       ) {
-
         return (
           player.getPlayerState() ===
           YT.PlayerState.PLAYING
         );
-
       }
 
-
-      if (
-        type ===
-        "vimeo"
-      ) {
-
+      if (type === "vimeo") {
         return !(
           await player.getPaused()
         );
-
       }
 
-
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
-
         if (
           typeof player.paused ===
           "function"
         ) {
-
           return !(
             await player.paused()
           );
-
         }
 
         return !player.paused;
-
       }
 
-
-      if (
-        type ===
-        "twitch"
-      ) {
-
+      if (type === "twitch") {
         return !player.isPaused();
-
       }
-
     } catch (_) {}
 
-
     return false;
-
   }
 
 
   function updateTimeUI() {
-
     const readout =
       $("timeReadout");
-
 
     if (!readout) {
       return;
     }
-
-
-    /*
-     * updateTimeUI 保留，
-     * 但是不再寫 Firebase。
-     */
 
     readout.textContent =
       `${formatTime(
@@ -5053,269 +3688,176 @@
       )} / ${formatTime(
         duration()
       )}`;
-
   }
 
 
   function startLocalTimeUpdate() {
-
     clearInterval(
-      state.syncTimer
+      state.localTimer
     );
 
+    state.localTimer =
+      setInterval(() => {
+        updateTimeUI();
 
-    state.syncTimer =
-      setInterval(
-        () => {
-
-          updateTimeUI();
-
-
-          if (
-            state.playerType ===
-            "youtube"
-          ) {
-
-            forceYoutubeVisible();
-
-          }
-
-        },
-        1000
-      );
-
+        if (
+          state.playerType ===
+          "youtube"
+        ) {
+          forceYoutubeVisible();
+        }
+      }, 1000);
   }
 
 
   async function applyPlayerPosition(
     seconds
   ) {
-
     const player =
       state.player;
 
     const type =
       state.playerType;
 
-
     if (
       !state.playerReady ||
       !player
     ) {
-
       return;
-
     }
-
 
     const target =
       Math.max(
         0,
-        Number(
-          seconds
-        ) || 0
+        Number(seconds) || 0
       );
 
-
     try {
-
-      if (
-        type ===
-        "youtube"
-      ) {
-
+      if (type === "youtube") {
         player.seekTo(
           target,
           true
         );
-
       }
 
-
-      if (
-        type ===
-        "vimeo"
-      ) {
-
+      if (type === "vimeo") {
         await player.setCurrentTime(
           target
         );
-
       }
 
-
       if (
-        type ===
-        "dailymotion"
+        type === "dailymotion"
       ) {
-
         if (
           typeof player.seek ===
           "function"
         ) {
-
           await player.seek(
             target
           );
-
         }
-
       }
 
-
-      if (
-        type ===
-        "twitch"
-      ) {
-
+      if (type === "twitch") {
         if (
           typeof player.seek ===
           "function"
         ) {
-
           player.seek(
             target
           );
-
         }
-
       }
-
     } catch (error) {
-
       console.warn(
         "播放器跳轉失敗:",
         error
       );
-
     }
 
-
     updateTimeUI();
-
   }
 
 
   async function playPlayer() {
-
     if (
       !state.playerReady ||
       !state.player
     ) {
-
       return;
-
     }
 
-
     try {
-
       if (
         state.playerType ===
         "youtube"
       ) {
-
-        /*
-         * 瀏覽器自動播放限制。
-         * mute 只在程式自動播放時暫時使用。
-         */
-
         state.player.mute();
-
         state.player.playVideo();
-
       }
-
 
       if (
         state.playerType ===
         "vimeo"
       ) {
-
         await state.player.play();
-
       }
-
 
       if (
         state.playerType ===
         "dailymotion"
       ) {
-
         await state.player.play();
-
       }
-
 
       if (
         state.playerType ===
         "twitch"
       ) {
-
         state.player.play();
-
       }
-
     } catch (_) {}
-
   }
 
 
   async function pausePlayer() {
-
     if (
       !state.playerReady ||
       !state.player
     ) {
-
       return;
-
     }
 
-
     try {
-
       if (
         state.playerType ===
         "youtube"
       ) {
-
         state.player.pauseVideo();
-
       }
-
 
       if (
         state.playerType ===
         "vimeo"
       ) {
-
         await state.player.pause();
-
       }
-
 
       if (
         state.playerType ===
         "dailymotion"
       ) {
-
         await state.player.pause();
-
       }
-
 
       if (
         state.playerType ===
         "twitch"
       ) {
-
         state.player.pause();
-
       }
-
     } catch (_) {}
-
   }
 
 
@@ -5326,132 +3868,94 @@
    */
 
   async function loadVimeoSdk() {
-
     if (
       window.Vimeo?.Player
     ) {
-
       state.sdk.vimeo =
         true;
 
       return;
-
     }
-
 
     await new Promise(
       (
         resolve,
         reject
       ) => {
-
         const existing =
           document.querySelector(
             'script[src="https://player.vimeo.com/api/player.js"]'
           );
 
-
         if (existing) {
-
           const timer =
-            setInterval(
-              () => {
-
-                if (
-                  window.Vimeo?.Player
-                ) {
-
-                  clearInterval(
-                    timer
-                  );
-
-                  state.sdk.vimeo =
-                    true;
-
-                  resolve();
-
-                }
-
-              },
-              100
-            );
-
-
-          setTimeout(
-            () => {
-
-              clearInterval(
-                timer
-              );
-
-
+            setInterval(() => {
               if (
                 window.Vimeo?.Player
               ) {
+                clearInterval(
+                  timer
+                );
 
                 state.sdk.vimeo =
                   true;
 
                 resolve();
-
-              } else {
-
-                reject(
-                  new Error(
-                    "Vimeo SDK 載入失敗"
-                  )
-                );
-
               }
+            }, 100);
 
-            },
-            10000
-          );
+          setTimeout(() => {
+            clearInterval(
+              timer
+            );
 
+            if (
+              window.Vimeo?.Player
+            ) {
+              state.sdk.vimeo =
+                true;
+
+              resolve();
+            } else {
+              reject(
+                new Error(
+                  "Vimeo SDK 載入失敗"
+                )
+              );
+            }
+          }, 10000);
 
           return;
-
         }
-
 
         const script =
           document.createElement(
             "script"
           );
 
-
         script.src =
           "https://player.vimeo.com/api/player.js";
-
 
         script.async =
           true;
 
-
         script.onload =
           () => {
-
             if (
               window.Vimeo?.Player
             ) {
-
               state.sdk.vimeo =
                 true;
 
               resolve();
-
             } else {
-
               reject(
                 new Error(
                   "Vimeo SDK 載入失敗"
                 )
               );
-
             }
-
           };
-
 
         script.onerror =
           () =>
@@ -5461,113 +3965,80 @@
               )
             );
 
-
         document.head.appendChild(
           script
         );
-
       }
     );
-
   }
 
 
   async function loadDailymotionSdk() {
-
     if (
       window.dailymotion
     ) {
-
       state.sdk.dailymotion =
         true;
 
       return;
-
     }
-
 
     await new Promise(
       (
         resolve,
         reject
       ) => {
-
         const existing =
           document.querySelector(
             'script[data-wt-dailymotion-sdk="1"]'
           );
 
-
         if (existing) {
-
           const timer =
-            setInterval(
-              () => {
-
-                if (
-                  window.dailymotion
-                ) {
-
-                  clearInterval(
-                    timer
-                  );
-
-                  state.sdk.dailymotion =
-                    true;
-
-                  resolve();
-
-                }
-
-              },
-              100
-            );
-
-
-          setTimeout(
-            () => {
-
-              clearInterval(
-                timer
-              );
-
-
+            setInterval(() => {
               if (
                 window.dailymotion
               ) {
+                clearInterval(
+                  timer
+                );
 
                 state.sdk.dailymotion =
                   true;
 
                 resolve();
-
-              } else {
-
-                reject(
-                  new Error(
-                    "Dailymotion SDK 載入失敗"
-                  )
-                );
-
               }
+            }, 100);
 
-            },
-            10000
-          );
+          setTimeout(() => {
+            clearInterval(
+              timer
+            );
 
+            if (
+              window.dailymotion
+            ) {
+              state.sdk.dailymotion =
+                true;
+
+              resolve();
+            } else {
+              reject(
+                new Error(
+                  "Dailymotion SDK 載入失敗"
+                )
+              );
+            }
+          }, 10000);
 
           return;
-
         }
-
 
         const playerId =
           window.DAILYMOTION_PLAYER_ID ||
           "";
 
-
         if (!playerId) {
-
           reject(
             new Error(
               "尚未設定 DAILYMOTION_PLAYER_ID"
@@ -5575,55 +4046,42 @@
           );
 
           return;
-
         }
-
 
         const script =
           document.createElement(
             "script"
           );
 
-
         script.src =
           `https://geo.dailymotion.com/player/${encodeURIComponent(
             playerId
           )}.js`;
 
-
         script.async =
           true;
-
 
         script.dataset
           .wtDailymotionSdk =
           "1";
 
-
         script.onload =
           () => {
-
             if (
               window.dailymotion
             ) {
-
               state.sdk.dailymotion =
                 true;
 
               resolve();
-
             } else {
-
               reject(
                 new Error(
                   "Dailymotion SDK 載入失敗"
                 )
               );
-
             }
-
           };
-
 
         script.onerror =
           () =>
@@ -5633,144 +4091,103 @@
               )
             );
 
-
         document.head.appendChild(
           script
         );
-
       }
     );
-
   }
 
 
   async function loadTwitchSdk() {
-
     if (
       window.Twitch?.Player
     ) {
-
       state.sdk.twitch =
         true;
 
       return;
-
     }
-
 
     await new Promise(
       (
         resolve,
         reject
       ) => {
-
         const existing =
           document.querySelector(
             'script[src="https://player.twitch.tv/js/embed/v1.js"]'
           );
 
-
         if (existing) {
-
           const timer =
-            setInterval(
-              () => {
-
-                if (
-                  window.Twitch?.Player
-                ) {
-
-                  clearInterval(
-                    timer
-                  );
-
-                  state.sdk.twitch =
-                    true;
-
-                  resolve();
-
-                }
-
-              },
-              100
-            );
-
-
-          setTimeout(
-            () => {
-
-              clearInterval(
-                timer
-              );
-
-
+            setInterval(() => {
               if (
                 window.Twitch?.Player
               ) {
+                clearInterval(
+                  timer
+                );
 
                 state.sdk.twitch =
                   true;
 
                 resolve();
-
-              } else {
-
-                reject(
-                  new Error(
-                    "Twitch SDK 載入失敗"
-                  )
-                );
-
               }
+            }, 100);
 
-            },
-            10000
-          );
+          setTimeout(() => {
+            clearInterval(
+              timer
+            );
 
+            if (
+              window.Twitch?.Player
+            ) {
+              state.sdk.twitch =
+                true;
+
+              resolve();
+            } else {
+              reject(
+                new Error(
+                  "Twitch SDK 載入失敗"
+                )
+              );
+            }
+          }, 10000);
 
           return;
-
         }
-
 
         const script =
           document.createElement(
             "script"
           );
 
-
         script.src =
           "https://player.twitch.tv/js/embed/v1.js";
-
 
         script.async =
           true;
 
-
         script.onload =
           () => {
-
             if (
               window.Twitch?.Player
             ) {
-
               state.sdk.twitch =
                 true;
 
               resolve();
-
             } else {
-
               reject(
                 new Error(
                   "Twitch SDK 載入失敗"
                 )
               );
-
             }
-
           };
-
 
         script.onerror =
           () =>
@@ -5780,14 +4197,11 @@
               )
             );
 
-
         document.head.appendChild(
           script
         );
-
       }
     );
-
   }
 
 
@@ -5801,24 +4215,18 @@
     videoId,
     autoplay = true
   ) {
-
     if (!videoId) {
       return;
     }
 
-
     const initial =
       $("youtubePlayer");
 
-
     if (!initial) {
-
       throw new Error(
         "找不到 youtubePlayer"
       );
-
     }
-
 
     if (
       state.playerReady &&
@@ -5828,127 +4236,74 @@
       state.currentVideoId ===
         videoId
     ) {
-
       forceYoutubeVisible();
 
-
       if (autoplay) {
-
         try {
-
           state.player.mute();
-
           state.player.playVideo();
-
         } catch (_) {}
-
       }
 
-
       return;
-
     }
-
 
     if (
       state.youtubeLoading &&
       state.youtubeRequestedId ===
         videoId
     ) {
-
       return;
-
     }
-
 
     state.youtubeRequestedId =
       videoId;
 
-    state.youtubeLoading =
-      true;
-
-
     const token =
       ++state.youtubeBuildToken;
 
+    /*
+     * YT API 尚未準備好。
+     */
+    if (
+      !window.YT ||
+      typeof window.YT.Player !==
+        "function"
+    ) {
+      state.youtubeLoading =
+        false;
 
-    try {
+      initial.classList.remove(
+        "hidden"
+      );
 
-      /*
-       * YT API 尚未準備好。
-       */
-
-      if (
-        !window.YT ||
-        typeof window.YT.Player !==
-          "function"
-      ) {
-
-        initial.classList.remove(
+      $("playerPlaceholder")
+        ?.classList.remove(
           "hidden"
         );
 
-
+      if (
         $("playerPlaceholder")
-          ?.classList.remove(
-            "hidden"
-          );
-
-
-        if (
-          $("playerPlaceholder")
-        ) {
-
-          $("playerPlaceholder")
-            .textContent =
-            "YouTube 播放器載入中…";
-
-        }
-
-
-        setTimeout(
-          () => {
-
-            if (
-              state.youtubeBuildToken !==
-                token ||
-              state.youtubeRequestedId !==
-                videoId
-            ) {
-
-              return;
-
-            }
-
-
-            void buildYoutubePlayer(
-              videoId,
-              autoplay
-            );
-
-          },
-          500
-        );
-
-
-        return;
-
+      ) {
+        $("playerPlaceholder")
+          .textContent =
+          "YouTube 播放器載入中…";
       }
 
+      return;
+    }
 
-      /*
-       * 清掉舊播放器。
-       */
+    state.youtubeLoading =
+      true;
 
+    try {
       if (
         state.player &&
         state.playerType ===
           "youtube"
       ) {
-
         const old =
           state.player;
-
 
         state.player =
           null;
@@ -5959,21 +4314,12 @@
         state.playerType =
           null;
 
-
         try {
-
           old.destroy?.();
-
         } catch (_) {}
-
-      } else if (
-        state.player
-      ) {
-
+      } else if (state.player) {
         await destroyCurrentPlayer();
-
       }
-
 
       if (
         state.youtubeBuildToken !==
@@ -5981,69 +4327,46 @@
         state.youtubeRequestedId !==
           videoId
       ) {
-
         return;
-
       }
-
 
       let container =
         $("youtubePlayer");
 
-
       if (!container) {
-
         throw new Error(
           "找不到 youtubePlayer"
         );
-
       }
-
-
-      /*
-       * YouTube API 建立播放器時，
-       * 必須使用乾淨 DIV。
-       */
 
       if (
         container.tagName ===
         "IFRAME"
       ) {
-
         const replacement =
           document.createElement(
             "div"
           );
 
-
         replacement.id =
           "youtubePlayer";
 
-
         replacement.className =
           "youtube-player";
-
 
         container.replaceWith(
           replacement
         );
 
-
         container =
           replacement;
-
       }
 
-
-      hidePlayers(
-        true
-      );
-
+      hidePlayers(true);
 
       container.classList.remove(
         "hidden"
       );
-
 
       container.style.display =
         "block";
@@ -6060,12 +4383,10 @@
       container.style.height =
         "100%";
 
-
       $("playerPlaceholder")
         ?.classList.add(
           "hidden"
         );
-
 
       state.player =
         null;
@@ -6082,12 +4403,10 @@
       state.currentVideoUrl =
         null;
 
-
       const player =
         new YT.Player(
           "youtubePlayer",
           {
-
             videoId,
 
             width:
@@ -6096,13 +4415,9 @@
             height:
               "100%",
 
-
             playerVars: {
-
               autoplay:
-                autoplay
-                  ? 1
-                  : 0,
+                autoplay ? 1 : 0,
 
               controls:
                 1,
@@ -6121,34 +4436,23 @@
 
               origin:
                 location.origin
-
             },
 
-
             events: {
-
               onReady:
-                async (
-                  event
-                ) => {
-
+                async (event) => {
                   if (
                     state.youtubeBuildToken !==
                       token ||
                     state.youtubeRequestedId !==
                       videoId
                   ) {
-
                     try {
-
                       event.target.destroy?.();
-
                     } catch (_) {}
 
                     return;
-
                   }
-
 
                   state.player =
                     event.target;
@@ -6165,65 +4469,41 @@
                   state.currentVideoUrl =
                     null;
 
-
                   forceYoutubeVisible();
-
 
                   $("playerPlaceholder")
                     ?.classList.add(
                       "hidden"
                     );
 
-
                   try {
-
                     event.target.setVolume(
                       100
                     );
-
                   } catch (_) {}
 
-
-                  if (
-                    $("syncStatus")
-                  ) {
-
+                  if ($("syncStatus")) {
                     $("syncStatus")
                       .textContent =
                       "影片已載入";
-
                   }
 
-
                   updateTimeUI();
-
-
-                  /*
-                   * 不再從 Firebase 讀取播放位置。
-                   */
 
                   if (
                     autoplay &&
                     state.player ===
                       event.target
                   ) {
-
                     try {
-
                       event.target.mute();
-
                       event.target.playVideo();
-
                     } catch (_) {}
-
                   }
-
 
                   forceYoutubeVisible();
 
-
                   startLocalTimeUpdate();
-
 
                   setTimeout(
                     forceYoutubeVisible,
@@ -6239,114 +4519,72 @@
                     forceYoutubeVisible,
                     1200
                   );
-
                 },
 
-
               onStateChange:
-                async (
-                  event
-                ) => {
-
+                async (event) => {
                   if (
                     state.youtubeBuildToken !==
                       token
                   ) {
-
                     return;
-
                   }
-
 
                   if (
                     state.player !==
                     event.target
                   ) {
-
                     return;
-
                   }
 
-
                   forceYoutubeVisible();
-
 
                   if (
                     event.data ===
                     YT.PlayerState.ENDED
                   ) {
-
-                    /*
-                     * 房主仍然可以自動播放
-                     * 待播放清單下一部。
-                     */
-
                     if (
                       state.isOwner
                     ) {
-
                       setTimeout(
                         async () => {
-
                           await playNextQueueItem();
-
                         },
                         300
                       );
-
                     }
-
                   }
 
-
                   updateTimeUI();
-
                 },
 
-
               onError:
-                (
-                  event
-                ) => {
-
+                (event) => {
                   console.error(
                     "YouTube player error:",
                     event
                   );
 
-
-                  if (
-                    $("syncStatus")
-                  ) {
-
+                  if ($("syncStatus")) {
                     $("syncStatus")
                       .textContent =
                       "YouTube 播放器錯誤";
-
                   }
-
 
                   toast(
                     "這支 YouTube 影片無法嵌入播放"
                   );
-
                 }
-
             }
-
           }
         );
 
-
       void player;
-
     } catch (error) {
-
       console.error(
         "YouTube 播放器建立失敗:",
         error
       );
-
 
       state.player =
         null;
@@ -6360,34 +4598,25 @@
       state.currentVideoId =
         null;
 
-
       hidePlayers();
-
 
       showPlayerElement(
         "emptyPlayer"
       );
 
-
       toast(
         error.message ||
         "YouTube 播放器建立失敗"
       );
-
     } finally {
-
       if (
         state.youtubeBuildToken ===
         token
       ) {
-
         state.youtubeLoading =
           false;
-
       }
-
     }
-
   }
 
 
@@ -6400,7 +4629,6 @@
   async function buildVimeoPlayer(
     video
   ) {
-
     await destroyCurrentPlayer();
 
     await loadVimeoSdk();
@@ -6411,19 +4639,14 @@
       "vimeoPlayer"
     );
 
-
     const container =
       $("vimeoPlayer");
 
-
     if (!container) {
-
       throw new Error(
         "找不到 vimeoPlayer"
       );
-
     }
-
 
     container.src =
       video.url ||
@@ -6431,22 +4654,18 @@
         video.id
       )}`;
 
-
     container.allow =
       "autoplay; fullscreen; picture-in-picture";
-
 
     container.setAttribute(
       "allowfullscreen",
       ""
     );
 
-
     const player =
       new Vimeo.Player(
         container
       );
-
 
     state.player =
       player;
@@ -6464,36 +4683,29 @@
     state.playerReady =
       false;
 
-
     player.on(
       "loaded",
-      async () => {
-
+      () => {
         if (
           state.player !==
           player
         ) {
-
           return;
-
         }
-
 
         state.playerReady =
           true;
 
-
         startLocalTimeUpdate();
 
+        updateTimeUI();
       }
     );
-
 
     player.on(
       "timeupdate",
       updateTimeUI
     );
-
   }
 
 
@@ -6506,7 +4718,6 @@
   async function buildDailymotionPlayer(
     video
   ) {
-
     await destroyCurrentPlayer();
 
     await loadDailymotionSdk();
@@ -6517,44 +4728,31 @@
       "dailymotionPlayer"
     );
 
-
     const container =
       $("dailymotionPlayer");
 
-
     if (!container) {
-
       throw new Error(
         "找不到 dailymotionPlayer"
       );
-
     }
-
 
     container.innerHTML =
       "";
 
-
     const playerId =
       "dm_" +
       Math.random()
-        .toString(
-          36
-        )
-        .slice(
-          2
-        );
-
+        .toString(36)
+        .slice(2);
 
     const target =
       document.createElement(
         "div"
       );
 
-
     target.id =
       playerId;
-
 
     target.style.width =
       "100%";
@@ -6562,18 +4760,15 @@
     target.style.height =
       "100%";
 
-
     container.appendChild(
       target
     );
-
 
     const player =
       await window.dailymotion
         .createPlayer(
           playerId,
           {
-
             video:
               video.id,
 
@@ -6582,10 +4777,8 @@
 
             controls:
               true
-
           }
         );
-
 
     state.player =
       player;
@@ -6603,9 +4796,7 @@
     state.playerReady =
       true;
 
-
     startLocalTimeUpdate();
-
   }
 
 
@@ -6618,7 +4809,6 @@
   async function buildBilibiliPlayer(
     video
   ) {
-
     await destroyCurrentPlayer();
 
     hidePlayers();
@@ -6627,43 +4817,33 @@
       "bilibiliPlayer"
     );
 
-
     const iframe =
       $("bilibiliPlayer");
 
-
     if (!iframe) {
-
       throw new Error(
         "找不到 bilibiliPlayer"
       );
-
     }
 
-
-    let src =
-      "";
-
+    let src = "";
 
     if (
       /^BV/.test(
         video.id
       )
     ) {
-
       src =
         "https://player.bilibili.com/player.html?bvid=" +
         encodeURIComponent(
           video.id
         ) +
         "&page=1&autoplay=1";
-
     } else if (
       /^av/i.test(
         video.id
       )
     ) {
-
       src =
         "https://player.bilibili.com/player.html?aid=" +
         encodeURIComponent(
@@ -6673,32 +4853,25 @@
           )
         ) +
         "&page=1&autoplay=1";
-
     } else {
-
       src =
         video.url ||
         "https://www.bilibili.com/video/" +
         encodeURIComponent(
           video.id
         );
-
     }
-
 
     iframe.src =
       src;
 
-
     iframe.allow =
       "autoplay; fullscreen; picture-in-picture";
-
 
     iframe.setAttribute(
       "allowfullscreen",
       ""
     );
-
 
     state.currentVideoId =
       video.id;
@@ -6716,9 +4889,7 @@
     state.playerReady =
       true;
 
-
     startLocalTimeUpdate();
-
   }
 
 
@@ -6731,7 +4902,6 @@
   async function buildTwitchPlayer(
     video
   ) {
-
     await destroyCurrentPlayer();
 
     await loadTwitchSdk();
@@ -6742,44 +4912,31 @@
       "twitchPlayer"
     );
 
-
     const container =
       $("twitchPlayer");
 
-
     if (!container) {
-
       throw new Error(
         "找不到 twitchPlayer"
       );
-
     }
-
 
     container.innerHTML =
       "";
 
-
     const wrapperId =
       "tw_" +
       Math.random()
-        .toString(
-          36
-        )
-        .slice(
-          2
-        );
-
+        .toString(36)
+        .slice(2);
 
     const target =
       document.createElement(
         "div"
       );
 
-
     target.id =
       wrapperId;
-
 
     target.style.width =
       "100%";
@@ -6787,19 +4944,15 @@
     target.style.height =
       "100%";
 
-
     container.appendChild(
       target
     );
-
 
     const host =
       location.hostname ||
       "localhost";
 
-
     const options = {
-
       width:
         "100%",
 
@@ -6815,32 +4968,24 @@
       parent: [
         host
       ]
-
     };
-
 
     if (
       video.twitchType ===
       "video"
     ) {
-
       options.video =
         video.id;
-
     } else {
-
       options.channel =
         video.id;
-
     }
-
 
     const player =
       new Twitch.Player(
         wrapperId,
         options
       );
-
 
     state.player =
       player;
@@ -6858,58 +5003,55 @@
     state.playerReady =
       false;
 
-
     await new Promise(
       (resolve) => {
+        let done =
+          false;
 
         const ready =
           () => {
+            if (done) {
+              return;
+            }
+
+            done = true;
 
             if (
               state.player !==
               player
             ) {
-
               resolve();
-
               return;
-
             }
-
 
             state.playerReady =
               true;
 
-
             resolve();
-
           };
-
 
         if (
           player.addEventListener
         ) {
-
           player.addEventListener(
             Twitch.Player.READY,
             ready
           );
 
+          setTimeout(
+            ready,
+            2000
+          );
         } else {
-
           setTimeout(
             ready,
             1500
           );
-
         }
-
       }
     );
 
-
     startLocalTimeUpdate();
-
   }
 
 
@@ -6922,29 +5064,22 @@
   async function buildExternalPlayer(
     video
   ) {
-
     await destroyCurrentPlayer();
 
     hidePlayers();
 
-
     const notice =
       $("platformPlayerNotice");
 
-
     if (!notice) {
-
       throw new Error(
         "找不到外部平台提示"
       );
-
     }
-
 
     notice.classList.remove(
       "hidden"
     );
-
 
     const name =
       PLATFORMS[
@@ -6952,72 +5087,54 @@
       ]?.name ||
       video.platform;
 
-
     const url =
       video.url ||
       "";
 
-
     if (
       $("roomPlatformIcon")
     ) {
-
       $("roomPlatformIcon")
         .textContent =
         PLATFORMS[
           video.platform
         ]?.icon ||
         "🌐";
-
     }
-
 
     if (
       $("roomPlatformName")
     ) {
-
       $("roomPlatformName")
         .textContent =
         name;
-
     }
-
 
     if (
       $("roomPlatformDescription")
     ) {
-
       $("roomPlatformDescription")
         .textContent =
         "此平台請使用官方網站播放。";
-
     }
-
 
     const button =
       $("openPlatformBtn");
 
-
     if (button) {
-
       button.onclick =
         () => {
-
           if (!url) {
             return;
           }
-
 
           window.open(
             url,
             "_blank",
             "noopener,noreferrer"
           );
-
         };
-
     }
-
 
     state.playerType =
       "external";
@@ -7027,22 +5144,19 @@
 
     state.playerReady =
       false;
-
   }
 
 
   /*
    * =========================================================
-   * PLATFORM ROUTER
+   * PLAYER ROUTER
    * =========================================================
    */
 
   async function buildPlatformPlayer(
     video
   ) {
-
     if (!video) {
-
       hidePlayers();
 
       showPlayerElement(
@@ -7050,15 +5164,12 @@
       );
 
       return;
-
     }
-
 
     if (
       video.platform ===
       "youtube"
     ) {
-
       await buildYoutubePlayer(
         getYoutubeId(
           video.id
@@ -7068,70 +5179,55 @@
       );
 
       return;
-
     }
-
 
     if (
       video.platform ===
       "vimeo"
     ) {
-
       await buildVimeoPlayer(
         video
       );
 
       return;
-
     }
-
 
     if (
       video.platform ===
       "dailymotion"
     ) {
-
       await buildDailymotionPlayer(
         video
       );
 
       return;
-
     }
-
 
     if (
       video.platform ===
       "bilibili"
     ) {
-
       await buildBilibiliPlayer(
         video
       );
 
       return;
-
     }
-
 
     if (
       video.platform ===
       "twitch"
     ) {
-
       await buildTwitchPlayer(
         video
       );
 
       return;
-
     }
-
 
     await buildExternalPlayer(
       video
     );
-
   }
 
 
@@ -7142,17 +5238,14 @@
    */
 
   async function createRoom() {
-
     const roomName =
       $("roomNameInput")
         ?.value
         .trim() ||
       "一起看";
 
-
     let roomId =
       randomRoomCode();
-
 
     while (
       (
@@ -7160,20 +5253,14 @@
           .ref(
             `rooms/${roomId}`
           )
-          .once(
-            "value"
-          )
+          .once("value")
       ).exists()
     ) {
-
       roomId =
         randomRoomCode();
-
     }
 
-
     const room = {
-
       owner:
         state.uid,
 
@@ -7184,45 +5271,14 @@
         "youtube",
 
       video:
-        null,
-
-      /*
-       * 保留 room.state，
-       * 但是本版不再使用它做播放同步。
-       */
-
-      state: {
-
-        action:
-          "pause",
-
-        position:
-          0,
-
-        playing:
-          false,
-
-        updatedAt:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP,
-
-        updatedBy:
-          state.uid
-
-      }
-
+        null
     };
-
 
     await db
       .ref(
         `rooms/${roomId}`
       )
-      .set(
-        room
-      );
-
+      .set(room);
 
     state.roomId =
       roomId;
@@ -7233,7 +5289,6 @@
     state.isOwner =
       true;
 
-
     history.replaceState(
       {},
       "",
@@ -7242,9 +5297,7 @@
       )}`
     );
 
-
     await enterRoom();
-
   }
 
 
@@ -7254,10 +5307,7 @@
    * =========================================================
    */
 
-  async function joinRoom(
-    roomId
-  ) {
-
+  async function joinRoom(roomId) {
     roomId =
       String(
         roomId || ""
@@ -7265,40 +5315,30 @@
         .trim()
         .toUpperCase();
 
-
     if (
       !/^[A-Z0-9]{6}$/.test(
         roomId
       )
     ) {
-
       throw new Error(
         "房間碼必須是 6 碼"
       );
-
     }
-
 
     const snapshot =
       await db
         .ref(
           `rooms/${roomId}`
         )
-        .once(
-          "value"
-        );
-
+        .once("value");
 
     if (
       !snapshot.exists()
     ) {
-
       throw new Error(
         "找不到這個房間"
       );
-
     }
-
 
     state.roomId =
       roomId;
@@ -7310,6 +5350,11 @@
       state.room.owner ===
       state.uid;
 
+    state.kickedLocally =
+      false;
+
+    state.wasMemberInRoom =
+      false;
 
     history.replaceState(
       {},
@@ -7319,9 +5364,7 @@
       )}`
     );
 
-
     await enterRoom();
-
   }
 
 
@@ -7334,9 +5377,7 @@
   async function handleRoomVideo(
     video
   ) {
-
     if (!video) {
-
       state.youtubeRequestedId =
         null;
 
@@ -7345,45 +5386,31 @@
       state.youtubeLoading =
         false;
 
-
       await destroyCurrentPlayer();
 
-
       hidePlayers();
-
 
       showPlayerElement(
         "emptyPlayer"
       );
 
-
-      if (
-        $("syncStatus")
-      ) {
-
+      if ($("syncStatus")) {
         $("syncStatus")
           .textContent =
           "等待有人選擇影片";
-
       }
 
-
       return;
-
     }
 
-
     const normalized = {
-
       ...video,
 
       platform:
         video.platform ||
         state.room?.sourceType ||
         "youtube"
-
     };
-
 
     state.room.video =
       normalized;
@@ -7391,29 +5418,22 @@
     state.room.sourceType =
       normalized.platform;
 
-
     updateRoomOwnerUI();
-
 
     if (
       normalized.platform ===
       "youtube"
     ) {
-
       const videoId =
         getYoutubeId(
           normalized.id
         );
 
-
       if (!videoId) {
-
         throw new Error(
           "Firebase 中的 YouTube ID 無效"
         );
-
       }
-
 
       if (
         state.currentVideoId ===
@@ -7423,29 +5443,21 @@
         state.playerType ===
           "youtube"
       ) {
-
         forceYoutubeVisible();
-
         return;
-
       }
-
 
       await buildYoutubePlayer(
         videoId,
         true
       );
 
-
       return;
-
     }
-
 
     await buildPlatformPlayer(
       normalized
     );
-
   }
 
 
@@ -7456,52 +5468,41 @@
    */
 
   function updateRoomOwnerUI() {
-
     const element =
       $("roomOwnerStatus");
-
 
     if (!element) {
       return;
     }
 
-
     element.textContent =
       state.isOwner
         ? "👑 房主"
         : "👥 成員";
-
   }
 
 
   /*
    * =========================================================
-   * ONLINE
+   * MEMBERS
    * =========================================================
    */
 
   async function markMemberOnline() {
-
     if (
       !state.membersRef ||
       !state.uid
     ) {
-
       return;
-
     }
-
 
     const memberRef =
       state.membersRef.child(
         state.uid
       );
 
-
     try {
-
       await memberRef.set({
-
         name:
           state.memberName,
 
@@ -7517,14 +5518,14 @@
           firebase.database
             .ServerValue
             .TIMESTAMP
-
       });
 
+      state.wasMemberInRoom =
+        true;
 
       memberRef
         .onDisconnect()
         .update({
-
           online:
             false,
 
@@ -7532,46 +5533,30 @@
             firebase.database
               .ServerValue
               .TIMESTAMP
-
         });
-
     } catch (error) {
-
-      /*
-       * 成員狀態權限若暫時有問題，
-       * 不讓進房流程整個爆掉。
-       */
-
       console.warn(
         "成員狀態寫入失敗:",
         error
       );
-
     }
-
   }
 
 
   async function heartbeatMember() {
-
     if (
       !state.membersRef ||
       !state.uid
     ) {
-
       return;
-
     }
 
-
     try {
-
       await state.membersRef
         .child(
           state.uid
         )
         .update({
-
           online:
             true,
 
@@ -7579,11 +5564,148 @@
             firebase.database
               .ServerValue
               .TIMESTAMP
-
         });
-
     } catch (_) {}
+  }
 
+
+  /*
+   * 房主踢人。
+   *
+   * 做法：
+   * 1. 由房主刪除對方 members/uid
+   * 2. 對方自己的 member listener 發現自己消失
+   * 3. 對方自動離開房間
+   *
+   * 這樣不用碰播放同步 state。
+   */
+
+  async function kickMember(
+    targetUid,
+    targetName
+  ) {
+    if (
+      !state.isOwner
+    ) {
+      toast(
+        "只有房主可以踢人"
+      );
+
+      return;
+    }
+
+    if (
+      !targetUid ||
+      targetUid === state.uid
+    ) {
+      return;
+    }
+
+    if (!state.membersRef) {
+      toast(
+        "目前不在房間內"
+      );
+
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `確定要踢出「${
+          targetName ||
+          "這名成員"
+        }」嗎？`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await state.membersRef
+        .child(
+          targetUid
+        )
+        .remove();
+
+      toast(
+        `已踢出 ${
+          targetName ||
+          "成員"
+        }`
+      );
+    } catch (error) {
+      console.error(
+        "踢人失敗:",
+        error
+      );
+
+      toast(
+        error?.message ||
+        "踢人失敗，請檢查 Firebase Rules"
+      );
+    }
+  }
+
+
+  /*
+   * 被踢後立即離開。
+   */
+
+  async function leaveRoomLocally(
+    reason = ""
+  ) {
+    state.kickedLocally =
+      true;
+
+    clearInterval(
+      state.localTimer
+    );
+
+    clearInterval(
+      state.memberHeartbeatTimer
+    );
+
+    disconnectRoomListeners();
+
+    ++state.youtubeBuildToken;
+
+    state.youtubeRequestedId =
+      null;
+
+    state.youtubeLoading =
+      false;
+
+    await destroyCurrentPlayer();
+
+    state.roomId =
+      null;
+
+    state.room =
+      null;
+
+    state.isOwner =
+      false;
+
+    state.wasMemberInRoom =
+      false;
+
+    state.kickedLocally =
+      false;
+
+    history.replaceState(
+      {},
+      "",
+      location.pathname
+    );
+
+    showView(
+      "home"
+    );
+
+    if (reason) {
+      toast(reason);
+    }
   }
 
 
@@ -7594,69 +5716,50 @@
    */
 
   async function enterRoom() {
-
     showView(
       "room"
     );
 
-
-    if (
-      $("roomTitle")
-    ) {
-
+    if ($("roomTitle")) {
       $("roomTitle")
         .textContent =
         state.room?.name ||
         "一起看";
-
     }
 
-
-    if (
-      $("roomCodeLabel")
-    ) {
-
+    if ($("roomCodeLabel")) {
       $("roomCodeLabel")
         .textContent =
         state.roomId;
-
     }
 
-
     updateRoomOwnerUI();
-
 
     state.roomRef =
       db.ref(
         `rooms/${state.roomId}`
       );
 
-
     state.membersRef =
       db.ref(
         `members/${state.roomId}`
       );
-
 
     state.chatRef =
       db.ref(
         `rooms/${state.roomId}/chat`
       );
 
-
     state.queueRef =
       db.ref(
         `rooms/${state.roomId}/queue`
       );
 
-
     await markMemberOnline();
-
 
     clearInterval(
       state.memberHeartbeatTimer
     );
-
 
     state.memberHeartbeatTimer =
       setInterval(
@@ -7664,251 +5767,183 @@
         15000
       );
 
-
-    /*
-     * 不再建立 rooms/.../state listener。
-     * 這就是移除播放同步後的核心。
-     */
-
-
     if (
       !state.videoListenerAttached
     ) {
-
       state.roomRef
-        .child(
-          "video"
-        )
+        .child("video")
         .on(
           "value",
-          async (
-            snapshot
-          ) => {
-
+          async (snapshot) => {
             try {
-
               await handleRoomVideo(
                 snapshot.val()
               );
-
             } catch (error) {
-
               console.error(
                 "影片載入失敗:",
                 error
               );
 
-
               toast(
                 error.message ||
                 "影片載入失敗"
               );
-
             }
-
           }
         );
 
-
       state.videoListenerAttached =
         true;
-
     }
-
 
     if (
       !state.membersListenerAttached
     ) {
-
       state.membersRef.on(
         "value",
-        (
-          snapshot
-        ) => {
+        async (snapshot) => {
+          const members =
+            snapshot.val() ||
+            {};
+
+          /*
+           * 自己原本已經進來，
+           * 後來突然不存在，
+           * 視為被房主踢出。
+           */
+          if (
+            state.wasMemberInRoom &&
+            state.uid &&
+            !Object.prototype.hasOwnProperty.call(
+              members,
+              state.uid
+            ) &&
+            !state.isOwner &&
+            !state.kickedLocally
+          ) {
+            await leaveRoomLocally(
+              "你已被房主移出房間"
+            );
+
+            return;
+          }
 
           renderMembers(
-            snapshot.val() ||
-            {}
+            members
           );
-
         }
       );
 
-
       state.membersListenerAttached =
         true;
-
     }
-
 
     if (
       !state.chatListenerAttached
     ) {
-
       state.chatRef
-        .limitToLast(
-          100
-        )
+        .limitToLast(100)
         .on(
           "value",
-          (
-            snapshot
-          ) => {
-
+          (snapshot) => {
             renderChat(
               snapshot.val() ||
               {}
             );
-
           }
         );
 
-
       state.chatListenerAttached =
         true;
-
     }
-
 
     if (
       !state.queueListenerAttached
     ) {
-
       state.queueRef.on(
         "value",
-        (
-          snapshot
-        ) => {
-
+        (snapshot) => {
           state.queue =
             snapshot.val() ||
             {};
 
-
-          if (
-            state.room
-          ) {
-
+          if (state.room) {
             state.room.queue =
               state.queue;
-
           }
 
-
           renderQueue();
-
         }
       );
 
-
       state.queueListenerAttached =
         true;
-
     }
-
 
     const initialVideo =
       state.room?.video ||
       null;
 
-
     if (initialVideo) {
-
       await handleRoomVideo(
         initialVideo
       );
-
     } else {
-
       hidePlayers();
 
       showPlayerElement(
         "emptyPlayer"
       );
 
-
-      if (
-        $("syncStatus")
-      ) {
-
+      if ($("syncStatus")) {
         $("syncStatus")
           .textContent =
           "等待有人選擇影片";
-
       }
-
     }
 
-
     renderQueue();
-
   }
 
 
   /*
    * =========================================================
-   * MEMBERS
+   * MEMBERS UI
    * =========================================================
    */
 
   function renderMembers(
     members
   ) {
-
     const entries =
       Object.entries(
-        members ||
-        {}
+        members || {}
       );
 
-
     entries.sort(
-      (
-        a,
-        b
-      ) => {
-
-        return (
-          Number(
-            a[1]?.joinedAt ||
-            0
-          ) -
-          Number(
-            b[1]?.joinedAt ||
-            0
-          )
-        );
-
-      }
+      (a, b) =>
+        Number(
+          a[1]?.joinedAt || 0
+        ) -
+        Number(
+          b[1]?.joinedAt || 0
+        )
     );
 
-
-    if (
-      $("memberCount")
-    ) {
-
+    if ($("memberCount")) {
       $("memberCount")
         .textContent =
         String(
           entries.length
         );
-
     }
 
-
-    if (
-      !$("memberList")
-    ) {
-
+    if (!$("memberList")) {
       return;
-
     }
 
-
-    if (
-      !entries.length
-    ) {
-
+    if (!entries.length) {
       $("memberList")
         .innerHTML = `
           <div class="muted">
@@ -7917,9 +5952,7 @@
         `;
 
       return;
-
     }
-
 
     $("memberList")
       .innerHTML =
@@ -7928,21 +5961,46 @@
           (
             [uid, member]
           ) => {
-
             const name =
               member?.name ||
               "使用者";
-
 
             const owner =
               uid ===
               state.room?.owner;
 
-
             const online =
               member?.online !==
               false;
 
+            /*
+             * 房主可以踢其他人，
+             * 但不能踢自己。
+             */
+            const kickButton =
+              state.isOwner &&
+              !owner &&
+              uid !== state.uid
+                ? `
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-member-kick="${escapeHtml(
+                      uid
+                    )}"
+                    data-member-name="${escapeHtml(
+                      name
+                    )}"
+                    style="
+                      margin-left:6px;
+                      color:#fda4af;
+                      border-color:rgba(244,63,94,.2);
+                    "
+                  >
+                    踢出
+                  </button>
+                `
+                : "";
 
             return `
               <div
@@ -7960,9 +6018,12 @@
                   )}
                 </div>
 
-
                 <div
                   class="member-name"
+                  style="
+                    min-width:0;
+                    flex:1;
+                  "
                 >
 
                   <b>
@@ -7970,7 +6031,6 @@
                       name
                     )}
                   </b>
-
 
                   <span>
                     ${
@@ -7984,7 +6044,6 @@
 
                 </div>
 
-
                 <span
                   class="online"
                   style="
@@ -7996,13 +6055,33 @@
                   "
                 ></span>
 
+                ${kickButton}
+
               </div>
             `;
-
           }
         )
         .join("");
 
+    $("memberList")
+      .querySelectorAll(
+        "[data-member-kick]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              await kickMember(
+                button.dataset
+                  .memberKick,
+                button.dataset
+                  .memberName
+              );
+            }
+          );
+        }
+      );
   }
 
 
@@ -8015,31 +6094,22 @@
   async function sendChat(
     text
   ) {
-
     text =
       String(
         text || ""
       )
         .trim()
-        .slice(
-          0,
-          300
-        );
-
+        .slice(0, 300);
 
     if (
       !text ||
       !state.chatRef ||
       !state.uid
     ) {
-
       return;
-
     }
 
-
     await state.chatRef.push({
-
       uid:
         state.uid,
 
@@ -8052,52 +6122,29 @@
         firebase.database
           .ServerValue
           .TIMESTAMP
-
     });
-
   }
 
 
-  function renderChat(
-    messages
-  ) {
-
+  function renderChat(messages) {
     const list =
       Object.values(
-        messages ||
-        {}
+        messages || {}
       ).sort(
-        (
-          a,
-          b
-        ) => {
-
-          return (
-            Number(
-              a.createdAt ||
-              0
-            ) -
-            Number(
-              b.createdAt ||
-              0
-            )
-          );
-
-        }
+        (a, b) =>
+          Number(
+            a.createdAt || 0
+          ) -
+          Number(
+            b.createdAt || 0
+          )
       );
 
-
-    if (
-      !$("chatMessages")
-    ) {
-
+    if (!$("chatMessages")) {
       return;
-
     }
 
-
     if (!list.length) {
-
       $("chatMessages")
         .innerHTML = `
           <div
@@ -8111,52 +6158,41 @@
         `;
 
       return;
-
     }
-
 
     $("chatMessages")
       .innerHTML =
       list
         .map(
-          (
-            message
-          ) => {
+          (message) => `
+            <div
+              class="message"
+            >
 
-            return `
-              <div
-                class="message"
-              >
+              <b>
+                ${escapeHtml(
+                  message?.name ||
+                  "玩家"
+                )}
+              </b>
 
-                <b>
-                  ${escapeHtml(
-                    message?.name ||
-                    "玩家"
-                  )}
-                </b>
+              <p>
+                ${escapeHtml(
+                  message?.text ||
+                  ""
+                )}
+              </p>
 
-                <p>
-                  ${escapeHtml(
-                    message?.text ||
-                    ""
-                  )}
-                </p>
-
-              </div>
-            `;
-
-          }
+            </div>
+          `
         )
         .join("");
-
 
     const box =
       $("chatMessages");
 
-
     box.scrollTop =
       box.scrollHeight;
-
   }
 
 
@@ -8169,35 +6205,26 @@
   async function changeVideo(
     video
   ) {
-
     if (
       !video?.id &&
       !video?.url
     ) {
-
       throw new Error(
         "沒有選擇影片"
       );
-
     }
 
-
     if (!state.roomRef) {
-
       throw new Error(
         "尚未進入房間"
       );
-
     }
-
 
     const platform =
       video.platform ||
       "youtube";
 
-
     const roomVideo = {
-
       id:
         video.id ||
         null,
@@ -8221,44 +6248,29 @@
           platform
         ]?.name ||
         platform
-
     };
 
-
     if (video.url) {
-
       roomVideo.url =
-        String(
-          video.url
-        );
-
+        String(video.url);
     }
-
 
     if (video.twitchType) {
-
       roomVideo.twitchType =
         video.twitchType;
-
     }
 
-
     /*
-     * 只更新影片。
-     *
-     * 不再更新 rooms/.../state。
+     * 只同步「目前是哪部影片」。
+     * 絕對不寫 rooms/{room}/state。
      */
-
     await state.roomRef.update({
-
       sourceType:
         platform,
 
       video:
         roomVideo
-
     });
-
 
     state.room.sourceType =
       platform;
@@ -8266,9 +6278,7 @@
     state.room.video =
       roomVideo;
 
-
     closeSourceModal();
-
 
     toast(
       `已切換到${
@@ -8278,7 +6288,6 @@
         platform
       }`
     );
-
   }
 
 
@@ -8289,27 +6298,20 @@
    */
 
   function openSourceModal() {
-
     const modal =
       $("sourceModal");
 
-
     if (!modal) {
-
       toast(
         "找不到影片搜尋視窗"
       );
 
       return;
-
     }
-
 
     lockPageScroll();
 
-
     disconnectSearchObserver();
-
 
     state.modalSelectedVideo =
       null;
@@ -8329,38 +6331,29 @@
     state.searchLoadingMore =
       false;
 
-
     modal.classList.remove(
       "hidden"
     );
 
-
     if (
       $("sourceTypeModal")
     ) {
-
       $("sourceTypeModal")
         .value =
         "youtube";
-
     }
-
 
     if (
       $("modalVideoSearchInput")
     ) {
-
       $("modalVideoSearchInput")
         .value =
         "";
-
     }
-
 
     if (
       $("modalVideoSearchResults")
     ) {
-
       $("modalVideoSearchResults")
         .innerHTML =
         "";
@@ -8370,77 +6363,55 @@
         .selectedVideoId =
         "";
 
-
       configureSearchScroll();
-
 
       $("modalVideoSearchResults")
         .scrollTop =
         0;
-
     }
-
 
     if (
       $("modalSourceUrlInput")
     ) {
-
       $("modalSourceUrlInput")
         .value =
         "";
-
     }
-
 
     setError(
       $("modalError"),
       ""
     );
 
-
     updateModalPlatformUI();
-
 
     const saveButton =
       $("saveSourceBtn");
 
-
     if (saveButton) {
-
       saveButton.disabled =
         false;
 
       saveButton.textContent =
         "播放這部影片";
-
     }
 
+    setTimeout(() => {
+      configureSearchScroll();
 
-    setTimeout(
-      () => {
-
-        configureSearchScroll();
-
-        $("modalVideoSearchInput")
-          ?.focus();
-
-      },
-      50
-    );
-
+      $("modalVideoSearchInput")
+        ?.focus();
+    }, 50);
   }
 
 
   function closeSourceModal() {
-
     disconnectSearchObserver();
-
 
     $("sourceModal")
       ?.classList.add(
         "hidden"
       );
-
 
     state.modalSelectedVideo =
       null;
@@ -8460,65 +6431,48 @@
     state.searchLoadingMore =
       false;
 
-
     unlockPageScroll();
-
 
     setError(
       $("modalError"),
       ""
     );
-
   }
 
 
   function updateModalPlatformUI() {
-
     const platform =
       $("sourceTypeModal")
         ?.value ||
       "youtube";
 
-
     const searchArea =
       $("modalVideoSearchArea");
-
 
     const externalArea =
       $("modalExternalSourceArea");
 
-
     const searchable =
       PLATFORMS[
         platform
-      ]?.searchable ===
-      true;
-
+      ]?.searchable === true;
 
     if (searchArea) {
-
       searchArea.classList.toggle(
         "hidden",
         !searchable
       );
-
     }
 
-
     if (externalArea) {
-
       externalArea.classList.toggle(
         "hidden",
         searchable
       );
-
     }
 
-
     if (!searchable) {
-
       disconnectSearchObserver();
-
 
       state.modalSelectedVideo =
         null;
@@ -8526,11 +6480,9 @@
       state.modalSelectedVideoId =
         "";
 
-
       if (
         $("modalVideoSearchResults")
       ) {
-
         $("modalVideoSearchResults")
           .innerHTML =
           "";
@@ -8539,18 +6491,13 @@
           .dataset
           .selectedVideoId =
           "";
-
       }
-
     } else {
-
       setTimeout(
         configureSearchScroll,
         0
       );
-
     }
-
   }
 
 
@@ -8560,15 +6507,8 @@
    * =========================================================
    */
 
-  function detachRoomListeners() {
-
+  function disconnectRoomListeners() {
     try {
-
-      /*
-       * 重要：
-       * 這版沒有 stateRef。
-       */
-
       state.membersRef?.off();
 
       state.chatRef?.off();
@@ -8576,13 +6516,9 @@
       state.queueRef?.off();
 
       state.roomRef
-        ?.child(
-          "video"
-        )
+        ?.child("video")
         .off();
-
     } catch (_) {}
-
 
     state.videoListenerAttached =
       false;
@@ -8598,7 +6534,14 @@
 
     state.queue =
       {};
+  }
 
+
+  /*
+   * 保留舊名稱，避免其他地方呼叫時出問題。
+   */
+  function detachRoomListeners() {
+    disconnectRoomListeners();
   }
 
 
@@ -8618,32 +6561,24 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             setError(
               $("homeError"),
               ""
             );
 
-
             await createRoom();
-
           } catch (error) {
-
             console.error(
               error
             );
-
 
             setError(
               $("homeError"),
               error.message ||
                 "建立房間失敗"
             );
-
           }
-
         }
       );
 
@@ -8656,28 +6591,21 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             await joinRoom(
               $("joinCodeInput")
                 ?.value
             );
-
           } catch (error) {
-
             console.error(
               error
             );
-
 
             toast(
               error.message ||
               "加入房間失敗"
             );
-
           }
-
         }
       );
 
@@ -8685,10 +6613,7 @@
     $("joinCodeInput")
       ?.addEventListener(
         "input",
-        (
-          event
-        ) => {
-
+        (event) => {
           event.target.value =
             event.target.value
               .toUpperCase()
@@ -8696,7 +6621,6 @@
                 /[^A-Z0-9]/g,
                 ""
               );
-
         }
       );
 
@@ -8709,26 +6633,19 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             await googleLogin();
-
           } catch (error) {
-
             console.error(
               "Google 登入錯誤:",
               error
             );
 
-
             toast(
               error?.message ||
               "Google 登入失敗"
             );
-
           }
-
         }
       );
 
@@ -8752,36 +6669,27 @@
       ?.addEventListener(
         "click",
         async () => {
-
           const user =
             auth?.currentUser;
-
 
           if (
             !user ||
             user.isAnonymous
           ) {
-
+            updateAuthUI();
             return;
-
           }
-
 
           const confirmed =
             window.confirm(
               "確定要登出 Google 帳號嗎？"
             );
 
-
           if (!confirmed) {
-
             return;
-
           }
 
-
           await logout();
-
         }
       );
 
@@ -8796,49 +6704,36 @@
         closeNameModal
       );
 
-
     $("saveNameBtn")
       ?.addEventListener(
         "click",
         async () => {
-
           await saveName();
-
         }
       );
-
 
     $("nameInput")
       ?.addEventListener(
         "keydown",
-        (
-          event
-        ) => {
-
+        (event) => {
           if (
             event.key ===
             "Enter"
           ) {
-
             event.preventDefault();
 
             $("saveNameBtn")
               ?.click();
-
           }
-
 
           if (
             event.key ===
             "Escape"
           ) {
-
             event.preventDefault();
 
             closeNameModal();
-
           }
-
         }
       );
 
@@ -8851,28 +6746,21 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             await navigator.clipboard.writeText(
               getRoomLink(
                 state.roomId
               )
             );
 
-
             toast(
               "房間連結已複製"
             );
-
           } catch (_) {
-
             toast(
               "複製失敗"
             );
-
           }
-
         }
       );
 
@@ -8885,86 +6773,29 @@
       ?.addEventListener(
         "click",
         async () => {
-
           const confirmed =
             window.confirm(
               "確定要離開這個房間嗎？"
             );
 
-
           if (!confirmed) {
-
             return;
-
           }
 
-
           try {
-
             if (
               state.membersRef &&
               state.uid
             ) {
-
               await state.membersRef
                 .child(
                   state.uid
                 )
                 .remove();
-
             }
-
           } catch (_) {}
 
-
-          clearInterval(
-            state.syncTimer
-          );
-
-
-          clearInterval(
-            state.memberHeartbeatTimer
-          );
-
-
-          detachRoomListeners();
-
-
-          ++state.youtubeBuildToken;
-
-
-          state.youtubeRequestedId =
-            null;
-
-
-          state.youtubeLoading =
-            false;
-
-
-          await destroyCurrentPlayer();
-
-
-          state.roomId =
-            null;
-
-          state.room =
-            null;
-
-          state.isOwner =
-            false;
-
-
-          history.replaceState(
-            {},
-            "",
-            location.pathname
-          );
-
-
-          showView(
-            "home"
-          );
-
+          await leaveRoomLocally();
         }
       );
 
@@ -8977,20 +6808,16 @@
       ?.addEventListener(
         "click",
         async () => {
-
           if (
             !state.playerReady ||
             !state.player
           ) {
-
             toast(
               "請先選擇影片"
             );
 
             return;
-
           }
-
 
           if (
             state.playerType ===
@@ -8998,31 +6825,22 @@
             state.playerType ===
               "external"
           ) {
-
             toast(
               "此平台目前無法由本站控制播放"
             );
 
             return;
-
           }
-
 
           if (
             await asyncIsPlaying()
           ) {
-
             await pausePlayer();
-
           } else {
-
             await playPlayer();
-
           }
 
-
           updateTimeUI();
-
         }
       );
 
@@ -9035,31 +6853,24 @@
       ?.addEventListener(
         "click",
         async () => {
-
           if (
             !state.playerReady ||
             !state.player
           ) {
-
             return;
-
           }
-
 
           const target =
             Math.max(
               0,
               (
                 await asyncCurrentPosition()
-              ) -
-              10
+              ) - 10
             );
-
 
           await applyPlayerPosition(
             target
           );
-
         }
       );
 
@@ -9072,57 +6883,39 @@
       ?.addEventListener(
         "click",
         async () => {
-
           if (
             !state.playerReady ||
             !state.player
           ) {
-
             return;
-
           }
-
 
           const total =
             await asyncDuration();
 
-
           const target =
             Math.min(
-              total ||
-                Infinity,
-
+              total || Infinity,
               (
                 await asyncCurrentPosition()
-              ) +
-              10
+              ) + 10
             );
-
 
           await applyPlayerPosition(
             target
           );
-
         }
       );
 
 
     /*
-     * 原本的 sync 按鈕：
-     * 直接隱藏，不再做 Firebase 同步。
+     * 舊同步按鈕直接隱藏。
      */
 
-    const syncButton =
-      $("syncNowBtn");
-
-
-    if (syncButton) {
-
-      syncButton.classList.add(
+    $("syncNowBtn")
+      ?.classList.add(
         "hidden"
       );
-
-    }
 
 
     /*
@@ -9132,83 +6925,57 @@
     $("volumeInput")
       ?.addEventListener(
         "input",
-        (
-          event
-        ) => {
-
+        (event) => {
           const value =
             Number(
               event.target.value
             );
 
-
           try {
-
             if (
               state.playerType ===
               "youtube"
             ) {
-
               state.player?.setVolume(
                 value
               );
 
-
               if (
                 value > 0
               ) {
-
                 state.player?.unMute();
-
               } else {
-
                 state.player?.mute();
-
               }
-
             }
-
 
             if (
               state.playerType ===
               "vimeo"
             ) {
-
               state.player?.setVolume(
-                value /
-                100
+                value / 100
               );
-
             }
-
 
             if (
               state.playerType ===
               "twitch"
             ) {
-
               state.player?.setVolume(
-                value /
-                100
+                value / 100
               );
-
             }
-
 
             if (
               state.playerType ===
               "dailymotion"
             ) {
-
               state.player?.setVolume?.(
-                value /
-                100
+                value / 100
               );
-
             }
-
           } catch (_) {}
-
         }
       );
 
@@ -9221,25 +6988,18 @@
       ?.addEventListener(
         "click",
         () => {
-
           const playerWrap =
             $("playerWrap");
-
 
           if (
             document.fullscreenElement
           ) {
-
             document.exitFullscreen?.();
-
             return;
-
           }
-
 
           playerWrap
             ?.requestFullscreen?.();
-
         }
       );
 
@@ -9252,32 +7012,24 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             const time =
               formatTime(
                 currentPosition()
               );
 
-
             await navigator.clipboard.writeText(
               time
             );
 
-
             toast(
               `已複製 ${time}`
             );
-
           } catch (_) {
-
             toast(
               "複製失敗"
             );
-
           }
-
         }
       );
 
@@ -9289,49 +7041,35 @@
     $("chatForm")
       ?.addEventListener(
         "submit",
-        async (
-          event
-        ) => {
-
+        async (event) => {
           event.preventDefault();
-
 
           const input =
             $("chatInput");
 
-
           const text =
             input?.value.trim();
-
 
           if (!text) {
             return;
           }
 
-
           input.value =
             "";
 
-
           try {
-
             await sendChat(
               text
             );
-
           } catch (error) {
-
             console.error(
               error
             );
 
-
             toast(
               "訊息送出失敗"
             );
-
           }
-
         }
       );
 
@@ -9346,13 +7084,11 @@
         openSourceModal
       );
 
-
     $("cancelModalBtn")
       ?.addEventListener(
         "click",
         closeSourceModal
       );
-
 
     $("sourceTypeModal")
       ?.addEventListener(
@@ -9367,23 +7103,16 @@
 
     document.addEventListener(
       "keydown",
-      (
-        event
-      ) => {
-
+      (event) => {
         if (
           event.key !==
           "Escape"
         ) {
-
           return;
-
         }
-
 
         const sourceModal =
           $("sourceModal");
-
 
         if (
           sourceModal &&
@@ -9391,15 +7120,11 @@
             "hidden"
           )
         ) {
-
           closeSourceModal();
-
         }
-
 
         const nameModal =
           $("nameModal");
-
 
         if (
           nameModal &&
@@ -9407,11 +7132,8 @@
             "hidden"
           )
         ) {
-
           closeNameModal();
-
         }
-
       }
     );
 
@@ -9423,19 +7145,13 @@
     $("sourceModal")
       ?.addEventListener(
         "click",
-        (
-          event
-        ) => {
-
+        (event) => {
           if (
             event.target ===
             $("sourceModal")
           ) {
-
             closeSourceModal();
-
           }
-
         }
       );
 
@@ -9450,60 +7166,45 @@
       ?.addEventListener(
         "click",
         async () => {
-
           const platform =
             $("sourceTypeModal")
               ?.value ||
             "youtube";
 
-
           if (
             platform !==
             "youtube"
           ) {
-
             return;
-
           }
-
 
           if (
             state.searchBusy
           ) {
-
             return;
-
           }
-
 
           const query =
             $("modalVideoSearchInput")
               ?.value
               .trim();
 
-
           if (!query) {
-
             setError(
               $("modalError"),
               "請輸入影片名稱"
             );
 
             return;
-
           }
-
 
           state.searchBusy =
             true;
 
-
           state.searchLoadingMore =
             false;
 
-
           disconnectSearchObserver();
-
 
           state.searchResults =
             [];
@@ -9520,81 +7221,69 @@
           state.modalSelectedVideoId =
             "";
 
-
           const button =
             $("modalSearchVideoBtn");
 
-
           if (button) {
-
             button.disabled =
               true;
 
             button.textContent =
               "搜尋中…";
-
           }
-
 
           setError(
             $("modalError"),
             ""
           );
 
-
           try {
-
             await searchYoutube(
               query,
               false
             );
 
-
             const resultsContainer =
               $("modalVideoSearchResults");
 
-
-            if (resultsContainer) {
-
+            if (
+              resultsContainer
+            ) {
               resultsContainer.scrollTop =
                 0;
 
+              requestAnimationFrame(
+                () => {
+                  configureSearchScroll();
+                  resultsContainer.scrollTop =
+                    0;
+                }
+              );
             }
-
           } catch (error) {
-
             console.error(
               error
             );
-
 
             setError(
               $("modalError"),
               error.message ||
                 "搜尋失敗"
             );
-
           } finally {
-
             state.searchBusy =
               false;
 
-
             if (button) {
-
               button.disabled =
                 false;
 
               button.textContent =
                 "搜尋";
-
             }
 
-
             configureSearchScroll();
-
           }
-
         }
       );
 
@@ -9602,22 +7291,16 @@
     $("modalVideoSearchInput")
       ?.addEventListener(
         "keydown",
-        (
-          event
-        ) => {
-
+        (event) => {
           if (
             event.key ===
             "Enter"
           ) {
-
             event.preventDefault();
 
             $("modalSearchVideoBtn")
               ?.click();
-
           }
-
         }
       );
 
@@ -9630,60 +7313,46 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             setError(
               $("modalError"),
               ""
             );
-
 
             const platform =
               $("sourceTypeModal")
                 ?.value ||
               "youtube";
 
-
             if (
               platform ===
               "youtube"
             ) {
-
               const video =
                 getSelectedModalYoutubeVideo();
-
 
               if (
                 !video ||
                 !video.id
               ) {
-
                 throw new Error(
                   "請先點選搜尋結果中的影片"
                 );
-
               }
-
 
               await changeVideo(
                 video
               );
 
-
               return;
-
             }
-
 
             const raw =
               $("modalSourceUrlInput")
                 ?.value
                 ?.trim();
 
-
             if (!raw) {
-
               throw new Error(
                 `請輸入${
                   PLATFORMS[
@@ -9692,9 +7361,7 @@
                   platform
                 }影片網址或 ID`
               );
-
             }
-
 
             const video =
               createVideoObject(
@@ -9702,9 +7369,7 @@
                 raw
               );
 
-
             if (!video) {
-
               throw new Error(
                 `無法辨識${
                   PLATFORMS[
@@ -9713,29 +7378,22 @@
                   platform
                 }影片網址或 ID`
               );
-
             }
-
 
             await changeVideo(
               video
             );
-
           } catch (error) {
-
             console.error(
               error
             );
-
 
             setError(
               $("modalError"),
               error.message ||
                 "選擇影片失敗"
             );
-
           }
-
         }
       );
 
@@ -9748,50 +7406,38 @@
       ?.addEventListener(
         "click",
         async () => {
-
           try {
-
             const played =
               await playNextQueueItem();
 
-
             if (!played) {
-
               toast(
                 "待播放清單是空的"
               );
-
             }
-
           } catch (error) {
-
             console.error(
               error
             );
-
 
             toast(
               error.message ||
               "播放待播放清單失敗"
             );
-
           }
-
         }
       );
 
 
     /*
-     * Resize
+     * RESIZE
      */
 
     window.addEventListener(
       "resize",
       () => {
-
         const modal =
           $("sourceModal");
-
 
         if (
           modal &&
@@ -9799,27 +7445,21 @@
             "hidden"
           )
         ) {
-
           configureSearchScroll();
-
         }
-
       }
     );
 
 
     /*
-     * Visual viewport
-     * 手機鍵盤開關時重新計算。
+     * MOBILE VISUAL VIEWPORT
      */
 
     window.visualViewport?.addEventListener(
       "resize",
       () => {
-
         const modal =
           $("sourceModal");
-
 
         if (
           modal &&
@@ -9827,14 +7467,10 @@
             "hidden"
           )
         ) {
-
           configureSearchScroll();
-
         }
-
       }
     );
-
   }
 
 
@@ -9845,40 +7481,28 @@
    */
 
   async function start() {
-
     try {
-
       state.memberName =
         getMemberName();
 
-
       await initializeFirebase();
-
 
       await handleGoogleRedirectResult();
 
-
       setupEvents();
-
 
       const roomId =
         getRoomIdFromUrl();
 
-
       if (roomId) {
-
         try {
-
           await joinRoom(
             roomId
           );
-
         } catch (error) {
-
           console.error(
             error
           );
-
 
           history.replaceState(
             {},
@@ -9886,94 +7510,52 @@
             location.pathname
           );
 
-
           showView(
             "home"
           );
-
 
           toast(
             error.message ||
             "無法進入房間"
           );
-
         }
-
       } else {
-
         showView(
           "home"
         );
-
       }
-
     } catch (error) {
-
       console.error(
         error
       );
 
-
-      if (
-        $("authStatus")
-      ) {
-
+      if ($("authStatus")) {
         $("authStatus")
           .textContent =
           "連線失敗";
-
       }
-
 
       toast(
         error.message ||
         "網站初始化失敗"
       );
-
     }
-
   }
 
 
   /*
    * =========================================================
-   * YOUTUBE API CALLBACK
+   * YOUTUBE CALLBACK
    * =========================================================
    */
 
   window.onYouTubeIframeAPIReady =
     () => {
-
       state.youtubeReady =
         true;
 
-
-      if (
-        state.youtubeLoading
-      ) {
-
-        return;
-
-      }
-
-
-      if (
-        state.playerReady &&
-        state.player &&
-        state.playerType ===
-          "youtube"
-      ) {
-
-        forceYoutubeVisible();
-
-        return;
-
-      }
-
-
       const video =
         state.room?.video;
-
 
       if (
         video &&
@@ -9984,37 +7566,32 @@
         ) &&
         video.id
       ) {
-
         const id =
           getYoutubeId(
             video.id
           );
 
-
         if (id) {
-
           void buildYoutubePlayer(
             id,
             true
           );
-
         }
-
       }
-
     };
 
 
   /*
-   * 頁面關閉
+   * =========================================================
+   * PAGE UNLOAD
+   * =========================================================
    */
 
   window.addEventListener(
     "beforeunload",
     () => {
-
       clearInterval(
-        state.syncTimer
+        state.localTimer
       );
 
       clearInterval(
@@ -10022,16 +7599,16 @@
       );
 
       unlockPageScroll();
-
     }
   );
 
 
   /*
-   * 開始。
+   * =========================================================
+   * RUN
+   * =========================================================
    */
 
   start();
 
 })();
-```
