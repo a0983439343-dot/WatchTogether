@@ -135,7 +135,7 @@
     uid: null,
 
     memberName:
-      "看片玩家",
+      "使用者",
 
     roomId: null,
 
@@ -2319,7 +2319,7 @@
     ) {
 
       throw new Error(
-        "請先把 YouTube API Key 放到 app.js"
+        "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY"
       );
 
     }
@@ -7931,7 +7931,7 @@
 
             const name =
               member?.name ||
-              "看片玩家";
+              "使用者";
 
 
             const owner =
