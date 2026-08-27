@@ -2513,3 +2513,324 @@ select:focus {
   }
 
 }
+/* =========================================================
+   FIX - YOUTUBE SEARCH SCROLL
+   把搜尋視窗的滾動鎖定到真正的影片內容區
+========================================================= */
+
+/* 整個 YouTube 搜尋視窗固定，不讓外層亂滾 */
+#sourceModal {
+  position: fixed !important;
+  inset: 0 !important;
+
+  width: 100vw !important;
+  height: 100vh !important;
+
+  overflow: hidden !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 0 !important;
+}
+
+/* 搜尋視窗本體不要自己產生第二條捲軸 */
+#sourceModal .modal-card {
+  width: 100% !important;
+  height: 100% !important;
+
+  max-width: none !important;
+  max-height: none !important;
+
+  margin: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  overflow: hidden !important;
+
+  padding: 0 !important;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+#sourceModal .modal-card > div:first-child {
+  flex: 0 0 auto !important;
+
+  width: 100% !important;
+
+  height: 68px !important;
+
+  overflow: visible !important;
+}
+
+/* =========================================================
+   搜尋主體
+========================================================= */
+
+/*
+ * 你現在搜尋區的第二個 div 是：
+ *
+ *   sidebar
+ *   +
+ *   section
+ *
+ * 這一層才應該是垂直可伸縮區。
+ */
+#sourceModal .modal-card > div:nth-child(2) {
+  flex: 1 1 auto !important;
+
+  min-height: 0 !important;
+
+  width: 100% !important;
+  height: auto !important;
+
+  overflow: hidden !important;
+
+  display: grid !important;
+}
+
+/* =========================================================
+   右側真正內容區
+========================================================= */
+
+#sourceModal .modal-card > div:nth-child(2) > section {
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  height: 100% !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+
+  overscroll-behavior: contain !important;
+
+  -webkit-overflow-scrolling: touch !important;
+
+  scrollbar-width: thin !important;
+}
+
+/* Chrome / Edge / Brave */
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar {
+  width: 10px;
+}
+
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+
+  background: rgba(148, 163, 184, .42);
+}
+
+#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, .62);
+}
+
+/* =========================================================
+   YouTube 影片結果容器
+========================================================= */
+
+#sourceModal #modalVideoSearchResults {
+  display: grid !important;
+
+  grid-template-columns:
+    repeat(
+      auto-fill,
+      minmax(340px, 1fr)
+    ) !important;
+
+  gap: 14px !important;
+
+  width: 100% !important;
+
+  max-width: 100% !important;
+
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+
+  margin-top: 12px !important;
+
+  padding-bottom: 40px !important;
+
+  overflow: visible !important;
+}
+
+/* =========================================================
+   避免影片卡片把父層撐出奇怪的橫向滾輪
+========================================================= */
+
+#sourceModal .video-result-card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  overflow: hidden !important;
+}
+
+/* =========================================================
+   搜尋結果圖片不要超出卡片
+========================================================= */
+
+#sourceModal .video-result-main {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+#sourceModal .video-result-main img {
+  max-width: 100% !important;
+}
+
+/* =========================================================
+   側邊欄固定自己的滾動
+========================================================= */
+
+#sourceModal .modal-card > div:nth-child(2) > aside {
+  min-height: 0 !important;
+
+  height: 100% !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+
+  overscroll-behavior: contain !important;
+
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* =========================================================
+   載入更多區
+========================================================= */
+
+#sourceModal #youtubeLoadMore {
+  width: 100% !important;
+
+  grid-column: 1 / -1 !important;
+
+  min-height: 0 !important;
+}
+
+/* =========================================================
+   防止 HTML / BODY 因 Modal 開啟時搶滾動
+========================================================= */
+
+html:has(#sourceModal:not(.hidden)),
+body:has(#sourceModal:not(.hidden)) {
+  overflow: hidden !important;
+}
+
+/* =========================================================
+   桌面
+========================================================= */
+
+@media (min-width: 1001px) {
+
+  #sourceModal .modal-card > div:nth-child(2) {
+    grid-template-columns:
+      220px minmax(0, 1fr) !important;
+  }
+
+  #sourceModal .modal-card > div:nth-child(2) > aside {
+    border-right:
+      1px solid rgba(255,255,255,.08);
+
+    padding:
+      16px !important;
+  }
+
+  #sourceModal .modal-card > div:nth-child(2) > section {
+    padding:
+      18px 22px 40px !important;
+  }
+
+}
+
+/* =========================================================
+   平板
+========================================================= */
+
+@media (max-width: 1000px) {
+
+  #sourceModal .modal-card > div:nth-child(2) {
+    grid-template-columns:
+      72px minmax(0, 1fr) !important;
+  }
+
+  #sourceModal .modal-card > div:nth-child(2) > aside {
+    padding:
+      14px 7px !important;
+  }
+
+  #sourceModal .modal-card > div:nth-child(2) > section {
+    padding:
+      16px 14px 32px !important;
+  }
+
+  #sourceModal #modalVideoSearchResults {
+    grid-template-columns:
+      repeat(
+        auto-fill,
+        minmax(280px, 1fr)
+      ) !important;
+  }
+
+}
+
+/* =========================================================
+   手機
+========================================================= */
+
+@media (max-width: 600px) {
+
+  #sourceModal .modal-card > div:nth-child(2) {
+    grid-template-columns:
+      1fr !important;
+  }
+
+  #sourceModal .modal-card > div:nth-child(2) > aside {
+    display: none !important;
+  }
+
+  #sourceModal .modal-card > div:nth-child(2) > section {
+    width: 100% !important;
+
+    height: 100% !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    padding:
+      14px 12px 32px !important;
+  }
+
+  #sourceModal #modalVideoSearchResults {
+    grid-template-columns:
+      1fr !important;
+
+    gap:
+      12px !important;
+  }
+
+}
+
+/* =========================================================
+   超小螢幕
+========================================================= */
+
+@media (max-width: 480px) {
+
+  #sourceModal .modal-card > div:nth-child(2) > section {
+    padding:
+      12px 10px 28px !important;
+  }
+
+  #sourceModal #modalVideoSearchResults {
+    grid-template-columns:
+      1fr !important;
+  }
+
+}
