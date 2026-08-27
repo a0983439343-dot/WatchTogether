@@ -2940,3 +2940,78 @@ select:focus {
       10px;
   }
 }
+```css
+/* =========================================================
+   MOBILE YOUTUBE SEARCH SCROLL FIX
+========================================================= */
+
+#sourceModal {
+  overscroll-behavior: none;
+}
+
+#sourceModal .modal-card {
+  min-height: 0;
+}
+
+#sourceModal .modal-card > div:nth-child(2) {
+  min-height: 0;
+  overflow: hidden;
+}
+
+#sourceModal
+#modalVideoSearchArea {
+  min-height: 0;
+}
+
+#sourceModal
+#modalVideoSearchResults {
+  position: relative;
+
+  width: 100%;
+
+  height: calc(100vh - 150px);
+  max-height: calc(100vh - 150px);
+
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  -webkit-overflow-scrolling: touch;
+
+  overscroll-behavior-y: contain;
+
+  touch-action: pan-y;
+
+  scrollbar-width: thin;
+}
+
+@media (max-width: 760px) {
+
+  #sourceModal
+  #modalVideoSearchResults {
+    height: calc(100dvh - 60px) !important;
+    max-height: calc(100dvh - 60px) !important;
+
+    min-height: 0 !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    -webkit-overflow-scrolling: touch !important;
+
+    touch-action: pan-y !important;
+
+    overscroll-behavior-y: contain !important;
+
+    padding:
+      8px 10px 30px !important;
+  }
+
+  #sourceModal
+  .video-result-card {
+    width: 100%;
+  }
+
+}
+```
