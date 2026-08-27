@@ -68,7 +68,9 @@ select {
 .error-text {
   min-height: 20px;
   margin-top: 10px;
+
   color: #fb7185;
+
   font-size: 13px;
   line-height: 1.5;
 }
@@ -750,6 +752,10 @@ select:focus {
     rgba(96, 165, 250, .06) !important;
 }
 
+/* =========================================================
+   ROOM LAYOUT
+========================================================= */
+
 .room-layout {
   display: grid;
 
@@ -1186,6 +1192,10 @@ select:focus {
   max-height: 300px;
 
   overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  -webkit-overflow-scrolling: touch;
 }
 
 .member {
@@ -1303,6 +1313,10 @@ select:focus {
 
   overflow-y: auto;
 
+  overscroll-behavior: contain;
+
+  -webkit-overflow-scrolling: touch;
+
   padding-right: 2px;
 }
 
@@ -1404,6 +1418,10 @@ select:focus {
   max-height: 430px;
 
   overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  -webkit-overflow-scrolling: touch;
 
   padding-right: 3px;
 
@@ -1595,7 +1613,8 @@ select:focus {
 }
 
 .search-btn:hover {
-  filter: brightness(1.08);
+  filter:
+    brightness(1.08);
 }
 
 /* =========================================================
@@ -1614,160 +1633,100 @@ select:focus {
   align-items: stretch !important;
   justify-content: stretch !important;
 
-  width: 100vw !important;
-  height: 100vh !important;
-
   padding: 0 !important;
-
-  overflow: hidden !important;
 
   background:
     #0b0b0f !important;
 
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  backdrop-filter:
+    none !important;
+
+  -webkit-backdrop-filter:
+    none !important;
 }
 
 #sourceModal.hidden {
   display: none !important;
 }
 
-/* =========================================================
-   SEARCH CARD
-========================================================= */
-
 #sourceModal .modal-card {
-  display: flex !important;
+  width:
+    100% !important;
 
-  flex-direction: column !important;
+  max-width:
+    none !important;
 
-  width: 100% !important;
-  max-width: none !important;
+  height:
+    100% !important;
 
-  height: 100vh !important;
-  max-height: 100vh !important;
+  max-height:
+    none !important;
 
-  min-height: 0 !important;
+  min-width:
+    0 !important;
 
-  margin: 0 !important;
-  padding: 0 !important;
+  min-height:
+    0 !important;
 
-  overflow: hidden !important;
+  margin:
+    0 !important;
 
-  border: 0 !important;
+  padding:
+    0 !important;
 
-  border-radius: 0 !important;
+  display:
+    flex !important;
+
+  flex-direction:
+    column !important;
+
+  overflow:
+    hidden !important;
+
+  border:
+    0 !important;
+
+  border-radius:
+    0 !important;
 
   background:
     #0b0b0f !important;
 
-  box-shadow: none !important;
+  box-shadow:
+    none !important;
 }
 
 /* =========================================================
-   SEARCH HEADER
+   YOUTUBE SEARCH HEADER
 ========================================================= */
 
 #sourceModal .modal-card > div:first-child {
-  flex: 0 0 auto !important;
+  flex:
+    0 0 auto;
 
-  width: 100% !important;
-
-  height: 68px !important;
-  min-height: 68px !important;
-
-  overflow: hidden !important;
-}
-
-#sourceModal #modalVideoSearchInput {
-  min-height: 42px !important;
-  height: 42px !important;
-
-  margin: 0 !important;
-
-  border:
-    1px solid rgba(255,255,255,.12) !important;
-
-  border-right:
-    0 !important;
-
-  border-radius:
-    21px 0 0 21px !important;
-
-  background:
-    #18181c !important;
-
-  color:
-    #fff !important;
-}
-
-#sourceModal #modalVideoSearchInput:focus {
-  border-color:
-    rgba(255,255,255,.25) !important;
-
-  box-shadow:
-    none !important;
-
-  background:
-    #18181c !important;
-}
-
-#sourceModal #modalSearchVideoBtn {
-  min-width: 64px !important;
-
-  height: 42px !important;
-  min-height: 42px !important;
-
-  margin: 0 !important;
-
-  padding: 0 !important;
-
-  border:
-    1px solid rgba(255,255,255,.12) !important;
-
-  border-left:
-    0 !important;
-
-  border-radius:
-    0 21px 21px 0 !important;
-
-  background:
-    #27272b !important;
-
-  color:
-    #fff !important;
-}
-
-#sourceModal #modalSearchVideoBtn:hover {
-  background:
-    #333338 !important;
+  min-height:
+    68px;
 }
 
 /* =========================================================
    SEARCH BODY
 ========================================================= */
 
-/*
- * 這裡是這次修正的核心：
- *
- * 上層 body 不滾
- * 右側 section 才是唯一主要滾動容器。
- */
-
 #sourceModal .modal-card > div:nth-child(2) {
-  display: grid !important;
+  flex:
+    1 1 auto !important;
+
+  display:
+    grid !important;
 
   grid-template-columns:
     220px minmax(0, 1fr) !important;
-
-  flex:
-    1 1 auto !important;
 
   width:
     100% !important;
 
   height:
-    auto !important;
+    calc(100vh - 68px) !important;
 
   min-width:
     0 !important;
@@ -1784,36 +1743,26 @@ select:focus {
 ========================================================= */
 
 #sourceModal .modal-card > div:nth-child(2) > aside {
-  min-width: 0 !important;
-  min-height: 0 !important;
+  min-width:
+    0 !important;
 
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
+  min-height:
+    0 !important;
 
-  scrollbar-width: thin !important;
+  overflow-y:
+    auto !important;
+
+  overflow-x:
+    hidden !important;
 
   overscroll-behavior:
-    contain !important;
+    contain;
 
   -webkit-overflow-scrolling:
-    touch !important;
-}
+    touch;
 
-#sourceModal .modal-card > div:nth-child(2) > aside > div {
-  cursor:
-    pointer;
-
-  transition:
-    background .15s ease,
-    color .15s ease;
-}
-
-#sourceModal .modal-card > div:nth-child(2) > aside > div:hover {
-  background:
-    rgba(255,255,255,.06);
-
-  color:
-    #fff;
+  scrollbar-width:
+    thin;
 }
 
 /* =========================================================
@@ -1821,12 +1770,6 @@ select:focus {
 ========================================================= */
 
 #sourceModal .modal-card > div:nth-child(2) > section {
-  display:
-    block !important;
-
-  position:
-    relative !important;
-
   min-width:
     0 !important;
 
@@ -1839,34 +1782,28 @@ select:focus {
   height:
     100% !important;
 
-  overflow-x:
-    hidden !important;
-
   overflow-y:
     auto !important;
 
+  overflow-x:
+    hidden !important;
+
   overscroll-behavior:
-    contain !important;
+    contain;
 
   -webkit-overflow-scrolling:
-    touch !important;
+    touch;
 
   scrollbar-width:
-    thin !important;
-}
+    thin;
 
-/*
- * 避免 section 內部子元素
- * 把高度撐壞。
- */
-
-#sourceModal .modal-card > div:nth-child(2) > section > * {
-  max-width:
-    100% !important;
+  scrollbar-color:
+    rgba(148,163,184,.35)
+    transparent;
 }
 
 /* =========================================================
-   RESULT CONTAINER
+   SEARCH RESULT AREA
 ========================================================= */
 
 #sourceModal #modalVideoSearchResults {
@@ -1876,7 +1813,7 @@ select:focus {
   grid-template-columns:
     repeat(
       auto-fill,
-      minmax(320px, 1fr)
+      minmax(340px, 1fr)
     ) !important;
 
   gap:
@@ -1889,7 +1826,7 @@ select:focus {
     0 !important;
 
   min-height:
-    0 !important;
+    auto !important;
 
   height:
     auto !important;
@@ -1901,24 +1838,29 @@ select:focus {
     12px !important;
 
   padding:
-    0 0 60px !important;
+    0 0 40px !important;
 
   overflow:
     visible !important;
 }
 
 /*
- * 不讓任何搜尋結果卡片產生
- * 自己的巨大高度或獨立滾動條。
+ * 搜尋結果本身不建立第二條滾輪。
+ * 右側 section 才是真正的滾動區。
  */
 
-#sourceModal #modalVideoSearchResults > * {
-  min-width:
-    0 !important;
+#sourceModal
+#modalVideoSearchResults
+::-webkit-scrollbar {
+  width:
+    8px;
 }
 
-#sourceModal #modalVideoSearchResults
-> .video-result-card {
+/* =========================================================
+   SEARCH RESULT CARD
+========================================================= */
+
+#sourceModal .video-result-card {
   width:
     100% !important;
 
@@ -1927,28 +1869,24 @@ select:focus {
 
   height:
     auto !important;
-}
 
-/* =========================================================
-   SEARCH RESULT CARD
-========================================================= */
+  align-self:
+    start !important;
 
-#sourceModal .video-result-card {
-  width: 100%;
-
-  min-width: 0;
-
-  padding: 0;
+  padding:
+    0 !important;
 
   border:
     1px solid rgba(255,255,255,.06);
 
-  border-radius: 14px;
+  border-radius:
+    14px;
 
   background:
     #151518;
 
-  overflow: hidden;
+  overflow:
+    hidden;
 
   transition:
     transform .16s ease,
@@ -1988,34 +1926,31 @@ select:focus {
 
 #sourceModal .video-result-main {
   display:
-    flex;
+    flex !important;
 
   flex-direction:
-    column;
+    column !important;
 
   align-items:
-    stretch;
+    stretch !important;
 
   gap:
-    0;
+    0 !important;
 
   width:
-    100%;
-
-  min-width:
-    0;
+    100% !important;
 
   margin:
-    0;
+    0 !important;
 
   padding:
-    0;
+    0 !important;
 
   border:
-    0;
+    0 !important;
 
   background:
-    transparent;
+    transparent !important;
 
   color:
     inherit;
@@ -2143,11 +2078,11 @@ select:focus {
   gap:
     7px;
 
+  flex-wrap:
+    wrap;
+
   padding:
     0 12px 12px;
-
-  min-width:
-    0;
 }
 
 #sourceModal .video-result-card .tiny-btn {
@@ -2202,7 +2137,7 @@ select:focus {
 }
 
 /* =========================================================
-   EMPTY SEARCH
+   EMPTY / LOAD MORE
 ========================================================= */
 
 #sourceModal
@@ -2215,7 +2150,7 @@ select:focus {
     100%;
 
   min-height:
-    260px;
+    140px;
 
   display:
     flex;
@@ -2233,10 +2168,6 @@ select:focus {
     #71717a;
 }
 
-/* =========================================================
-   LOAD MORE
-========================================================= */
-
 #sourceModal #youtubeLoadMore {
   grid-column:
     1 / -1 !important;
@@ -2245,15 +2176,36 @@ select:focus {
     100% !important;
 
   min-height:
-    0 !important;
+    80px !important;
 
-  margin:
-    0 !important;
+  display:
+    flex !important;
+
+  flex-direction:
+    column !important;
+
+  align-items:
+    center !important;
+
+  justify-content:
+    center !important;
+
+  gap:
+    8px;
+
+  padding:
+    20px 8px !important;
 }
 
 #sourceModal #youtubeLoadMoreBtn {
+  display:
+    block !important;
+
   width:
-    100% !important;
+    min(520px, 100%) !important;
+
+  min-height:
+    44px !important;
 }
 
 /* =========================================================
@@ -2281,6 +2233,64 @@ select:focus {
 }
 
 /* =========================================================
+   SEARCH SCROLLBAR
+========================================================= */
+
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> aside::-webkit-scrollbar,
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> section::-webkit-scrollbar {
+  width:
+    8px;
+
+  height:
+    8px;
+}
+
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> aside::-webkit-scrollbar-track,
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> section::-webkit-scrollbar-track {
+  background:
+    transparent;
+}
+
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> aside::-webkit-scrollbar-thumb,
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> section::-webkit-scrollbar-thumb {
+  border-radius:
+    999px;
+
+  background:
+    rgba(148,163,184,.30);
+}
+
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> aside::-webkit-scrollbar-thumb:hover,
+#sourceModal
+.modal-card
+> div:nth-child(2)
+> section::-webkit-scrollbar-thumb:hover {
+  background:
+    rgba(148,163,184,.45);
+}
+
+/* =========================================================
    TOAST
 ========================================================= */
 
@@ -2302,7 +2312,8 @@ select:focus {
   border:
     1px solid rgba(255, 255, 255, .08);
 
-  border-radius: 12px;
+  border-radius:
+    12px;
 
   background:
     rgba(15, 23, 42, .94);
@@ -2310,9 +2321,11 @@ select:focus {
   color:
     #e2e8f0;
 
-  font-size: 13px;
+  font-size:
+    13px;
 
-  font-weight: 700;
+  font-weight:
+    700;
 
   box-shadow:
     0 18px 50px rgba(0, 0, 0, .35);
@@ -2320,7 +2333,8 @@ select:focus {
   transform:
     translate(-50%, 20px);
 
-  opacity: 0;
+  opacity:
+    0;
 
   pointer-events:
     none;
@@ -2331,18 +2345,20 @@ select:focus {
 }
 
 .toast.show {
-  opacity: 1;
+  opacity:
+    1;
 
   transform:
     translate(-50%, 0);
 }
 
 /* =========================================================
-   SCROLLBAR
+   GLOBAL SCROLLBAR
 ========================================================= */
 
 * {
-  scrollbar-width: thin;
+  scrollbar-width:
+    thin;
 
   scrollbar-color:
     rgba(148, 163, 184, .35)
@@ -2350,8 +2366,11 @@ select:focus {
 }
 
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width:
+    7px;
+
+  height:
+    7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -2360,35 +2379,11 @@ select:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-
-  background:
-    rgba(148, 163, 184, .3);
-}
-
-#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar {
-  width:
-    8px;
-}
-
-#sourceModal .modal-card > div:nth-child(2) > aside::-webkit-scrollbar {
-  width:
-    7px;
-}
-
-#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-track,
-#sourceModal .modal-card > div:nth-child(2) > aside::-webkit-scrollbar-track {
-  background:
-    transparent;
-}
-
-#sourceModal .modal-card > div:nth-child(2) > section::-webkit-scrollbar-thumb,
-#sourceModal .modal-card > div:nth-child(2) > aside::-webkit-scrollbar-thumb {
   border-radius:
     999px;
 
   background:
-    rgba(148, 163, 184, .32);
+    rgba(148, 163, 184, .3);
 }
 
 /* =========================================================
@@ -2397,12 +2392,20 @@ select:focus {
 
 @media (max-width: 1100px) {
 
-  #sourceModal #modalVideoSearchResults {
+  #sourceModal
+  .modal-card
+  > div:nth-child(2) {
+    grid-template-columns:
+      180px minmax(0, 1fr) !important;
+  }
+
+  #sourceModal
+  #modalVideoSearchResults {
     grid-template-columns:
       repeat(
         auto-fill,
         minmax(280px, 1fr)
-      );
+      ) !important;
   }
 
   .room-layout {
@@ -2410,7 +2413,6 @@ select:focus {
       minmax(0, 1fr)
       320px;
   }
-
 }
 
 @media (max-width: 1000px) {
@@ -2444,8 +2446,14 @@ select:focus {
   #sourceModal
   .modal-card
   > div:nth-child(2) {
+    height:
+      calc(100vh - 60px) !important;
+
     grid-template-columns:
       72px minmax(0, 1fr) !important;
+
+    overflow:
+      hidden !important;
   }
 
   #sourceModal
@@ -2454,6 +2462,12 @@ select:focus {
   > aside {
     padding:
       14px 7px !important;
+
+    overflow-y:
+      auto !important;
+
+    overflow-x:
+      hidden !important;
   }
 
   #sourceModal
@@ -2474,14 +2488,25 @@ select:focus {
   > section {
     padding:
       16px 14px 24px !important;
+
+    height:
+      100% !important;
+
+    min-height:
+      0 !important;
+
+    overflow-y:
+      auto !important;
+
+    overflow-x:
+      hidden !important;
   }
 
   #sourceModal
   #modalVideoSearchResults {
     grid-template-columns:
-      1fr;
+      1fr !important;
   }
-
 }
 
 @media (max-width: 760px) {
@@ -2573,7 +2598,9 @@ select:focus {
       11px;
   }
 
-  /* SEARCH HEADER */
+  /* =======================================================
+     SEARCH HEADER MOBILE
+  ======================================================= */
 
   #sourceModal
   .modal-card
@@ -2590,19 +2617,76 @@ select:focus {
 
   #sourceModal
   .modal-card
-  > div:first-child
   > div:nth-child(2) {
+    height:
+      calc(100vh - 60px) !important;
+
+    grid-template-columns:
+      1fr !important;
+
+    overflow:
+      hidden !important;
+  }
+
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > aside {
     display:
       none !important;
   }
 
   #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    display:
+      block !important;
+
+    width:
+      100% !important;
+
+    height:
+      100% !important;
+
+    min-height:
+      0 !important;
+
+    overflow-y:
+      auto !important;
+
+    overflow-x:
+      hidden !important;
+
+    padding:
+      14px 12px 30px !important;
+  }
+
+  #sourceModal
   #modalVideoSearchInput {
-    border-radius:
-      21px !important;
+    min-height:
+      42px !important;
+
+    height:
+      42px !important;
+
+    margin:
+      0 !important;
+
+    border:
+      1px solid rgba(255,255,255,.12) !important;
 
     border-right:
       1px solid rgba(255,255,255,.12) !important;
+
+    border-radius:
+      21px !important;
+
+    background:
+      #18181c !important;
+
+    color:
+      #fff !important;
   }
 
   #sourceModal
@@ -2611,6 +2695,12 @@ select:focus {
       42px !important;
 
     min-width:
+      42px !important;
+
+    height:
+      42px !important;
+
+    min-height:
       42px !important;
 
     margin-left:
@@ -2624,13 +2714,25 @@ select:focus {
   }
 
   #sourceModal
-  .modal-card
-  > div:nth-child(2)
-  > section {
-    padding:
-      14px 12px 24px !important;
+  #modalVideoSearchResults {
+    grid-template-columns:
+      1fr !important;
+
+    width:
+      100% !important;
+
+    min-height:
+      auto !important;
+
+    overflow:
+      visible !important;
   }
 
+  #sourceModal
+  .video-result-card {
+    width:
+      100% !important;
+  }
 }
 
 @media (max-width: 600px) {
@@ -2640,6 +2742,12 @@ select:focus {
   > div:nth-child(2) {
     grid-template-columns:
       1fr !important;
+
+    height:
+      calc(100vh - 60px) !important;
+
+    overflow:
+      hidden !important;
   }
 
   #sourceModal
@@ -2660,9 +2768,6 @@ select:focus {
     height:
       100% !important;
 
-    min-width:
-      0 !important;
-
     min-height:
       0 !important;
 
@@ -2671,6 +2776,9 @@ select:focus {
 
     overflow-x:
       hidden !important;
+
+    padding:
+      14px 12px 30px !important;
   }
 
   #sourceModal
@@ -2686,6 +2794,15 @@ select:focus {
       13px;
   }
 
+  #sourceModal
+  .video-result-main
+  img {
+    width:
+      100%;
+
+    aspect-ratio:
+      16 / 9;
+  }
 }
 
 @media (max-width: 480px) {
@@ -2787,4 +2904,39 @@ select:focus {
       11px;
   }
 
+  #sourceModal
+  .modal-card
+  > div:nth-child(2)
+  > section {
+    padding:
+      12px 10px 28px !important;
+  }
+
+  #sourceModal
+  .video-result-card {
+    border-radius:
+      12px;
+  }
+
+  #sourceModal
+  .video-result-info {
+    padding:
+      10px 10px 7px;
+  }
+
+  #sourceModal
+  .video-result-card > div {
+    padding:
+      0 10px 10px;
+  }
+
+  #sourceModal
+  .video-result-card
+  .tiny-btn {
+    min-height:
+      32px;
+
+    font-size:
+      10px;
+  }
 }
