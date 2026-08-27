@@ -8,9 +8,8 @@
    * =========================================================
    * CONFIG
    * =========================================================
-   *
-   * 把這裡換成你自己的 YouTube Data API v3 Key。
    */
+
   const YOUTUBE_API_KEY =
     "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
@@ -172,6 +171,8 @@
 
     googleRedirectHandled: false,
 
+    modalBodyScrollLocked: false,
+
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -267,14 +268,18 @@
       Number(seconds);
 
     if (
-      !Number.isFinite(seconds) ||
+      !Number.isFinite(
+        seconds
+      ) ||
       seconds < 0
     ) {
       return "00:00";
     }
 
     seconds =
-      Math.floor(seconds);
+      Math.floor(
+        seconds
+      );
 
     const hours =
       Math.floor(
@@ -283,8 +288,7 @@
 
     const minutes =
       Math.floor(
-        (seconds % 3600) /
-        60
+        (seconds % 3600) / 60
       );
 
     const secs =
@@ -317,7 +321,9 @@
       Number(value);
 
     if (
-      !Number.isFinite(number) ||
+      !Number.isFinite(
+        number
+      ) ||
       number <= 0
     ) {
       return "";
@@ -362,7 +368,9 @@
       Number(seconds);
 
     if (
-      !Number.isFinite(number) ||
+      !Number.isFinite(
+        number
+      ) ||
       number < 0
     ) {
       return "";
@@ -372,14 +380,11 @@
       Math.floor(number);
 
     const hours =
-      Math.floor(
-        total / 3600
-      );
+      Math.floor(total / 3600);
 
     const minutes =
       Math.floor(
-        (total % 3600) /
-        60
+        (total % 3600) / 60
       );
 
     const secs =
@@ -476,7 +481,9 @@
     );
   }
 
-  function getRoomLink(roomId) {
+  function getRoomLink(
+    roomId
+  ) {
     return (
       location.origin +
       location.pathname +
@@ -497,9 +504,7 @@
       name =
         "玩家" +
         Math.floor(
-          Math.random() *
-          900 +
-          100
+          Math.random() * 900 + 100
         );
 
       localStorage.setItem(
@@ -541,6 +546,172 @@
 
   /*
    * =========================================================
+   * SEARCH SCROLL CONTROL
+   * =========================================================
+   */
+
+  function lockPageScroll() {
+    if (
+      state.modalBodyScrollLocked
+    ) {
+      return;
+    }
+
+    state.modalBodyScrollLocked =
+      true;
+
+    document.documentElement.style.overflow =
+      "hidden";
+
+    document.body.style.overflow =
+      "hidden";
+
+    document.body.style.touchAction =
+      "none";
+  }
+
+  function unlockPageScroll() {
+    if (
+      !state.modalBodyScrollLocked
+    ) {
+      return;
+    }
+
+    state.modalBodyScrollLocked =
+      false;
+
+    document.documentElement.style.overflow =
+      "";
+
+    document.body.style.overflow =
+      "";
+
+    document.body.style.touchAction =
+      "";
+  }
+
+  function configureSearchScroll() {
+    const modal =
+      $("sourceModal");
+
+    const container =
+      $("modalVideoSearchResults");
+
+    if (!modal || !container) {
+      return;
+    }
+
+    /*
+     * 確保搜尋視窗自己佔滿畫面。
+     */
+    modal.style.position =
+      "fixed";
+
+    modal.style.inset =
+      "0";
+
+    modal.style.width =
+      "100vw";
+
+    modal.style.height =
+      "100vh";
+
+    modal.style.maxHeight =
+      "100vh";
+
+    modal.style.overflow =
+      "hidden";
+
+    /*
+     * 最重要的部分：
+     * 搜尋結果本身成為真正的 scroll host。
+     */
+    container.style.position =
+      "relative";
+
+    container.style.display =
+      "grid";
+
+    container.style.width =
+      "100%";
+
+    container.style.boxSizing =
+      "border-box";
+
+    container.style.maxHeight =
+      "calc(100vh - 150px)";
+
+    container.style.height =
+      "calc(100vh - 150px)";
+
+    container.style.minHeight =
+      "0";
+
+    container.style.overflowY =
+      "auto";
+
+    container.style.overflowX =
+      "hidden";
+
+    container.style.webkitOverflowScrolling =
+      "touch";
+
+    container.style.scrollBehavior =
+      "smooth";
+
+    container.style.paddingRight =
+      "10px";
+
+    /*
+     * wheel 事件。
+     *
+     * 不讓外層 body 把滾輪吃掉，
+     * 直接讓影片列表前進。
+     */
+    if (
+      !container.__wtWheelAttached
+    ) {
+      container.addEventListener(
+        "wheel",
+        (event) => {
+          const canScroll =
+            container.scrollHeight >
+            container.clientHeight;
+
+          if (!canScroll) {
+            return;
+          }
+
+          if (
+            Math.abs(event.deltaY) <
+            0.01
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+
+          container.scrollTop +=
+            event.deltaY;
+        },
+        {
+          passive: false
+        }
+      );
+
+      container.__wtWheelAttached =
+        true;
+    }
+
+    /*
+     * 確保觸控裝置也是列表滾動。
+     */
+    container.style.touchAction =
+      "pan-y";
+  }
+
+  /*
+   * =========================================================
    * AUTH UI
    * =========================================================
    */
@@ -564,8 +735,7 @@
 
     if (currentUser) {
       /*
-       * 登入後頂部永遠只顯示「已連線」，
-       * 不顯示 Google 名稱。
+       * 頂部永遠只顯示連線狀態。
        */
       if (authStatus) {
         authStatus.textContent =
@@ -643,10 +813,6 @@
           state.uid =
             user.uid;
 
-          /*
-           * Google 名稱只在尚未自訂過名稱時
-           * 當成初始名稱。
-           */
           if (
             !user.isAnonymous &&
             user.displayName &&
@@ -708,10 +874,6 @@
     const currentUser =
       auth.currentUser;
 
-    /*
-     * 優先嘗試把匿名帳號連到 Google，
-     * 保留原本 UID。
-     */
     if (
       currentUser &&
       currentUser.isAnonymous
@@ -722,9 +884,10 @@
           "1"
         );
 
-        await currentUser.linkWithRedirect(
-          provider
-        );
+        await currentUser
+          .linkWithRedirect(
+            provider
+          );
 
         return;
       } catch (error) {
@@ -767,40 +930,36 @@
       const result =
         await auth.getRedirectResult();
 
-      if (!result?.user) {
-        return;
-      }
+      if (result?.user) {
+        const user =
+          result.user;
 
-      const user =
-        result.user;
+        state.uid =
+          user.uid;
 
-      state.uid =
-        user.uid;
+        if (
+          user.displayName &&
+          !localStorage.getItem(
+            "wt_name"
+          )
+        ) {
+          setMemberName(
+            user.displayName
+          );
+        }
 
-      if (
-        user.displayName &&
-        !localStorage.getItem(
-          "wt_name"
-        )
-      ) {
-        setMemberName(
-          user.displayName
+        updateAuthUI();
+
+        if (
+          state.roomId
+        ) {
+          await updateCurrentMemberName();
+        }
+
+        toast(
+          "Google 登入成功"
         );
       }
-
-      updateAuthUI();
-
-      /*
-       * Google 登入後如果正在房間內，
-       * 確保 members/<uid> 存在。
-       */
-      if (state.roomId) {
-        await updateCurrentMemberName();
-      }
-
-      toast(
-        "Google 登入成功"
-      );
     } catch (error) {
       console.error(
         "Google 登入失敗:",
@@ -820,34 +979,8 @@
     }
 
     try {
-      /*
-       * 如果目前在房間，
-       * 先把目前 UID 標記為離線。
-       */
-      if (
-        state.membersRef &&
-        state.uid
-      ) {
-        try {
-          await state.membersRef
-            .child(state.uid)
-            .update({
-              online: false,
-              lastSeen:
-                firebase.database
-                  .ServerValue
-                  .TIMESTAMP
-            });
-        } catch (_) {}
-      }
-
       await auth.signOut();
 
-      /*
-       * 保持匿名登入，
-       * 讓網站的 Firebase Database
-       * 還能繼續使用。
-       */
       await auth.signInAnonymously();
 
       state.uid =
@@ -930,23 +1063,6 @@
     );
   }
 
-  /*
-   * =========================================================
-   * FIXED MEMBER NAME UPDATE
-   * =========================================================
-   *
-   * 這裡就是修正 PERMISSION_DENIED 的主要地方。
-   *
-   * 如果 members/<uid> 已存在：
-   *   update()
-   *
-   * 如果 members/<uid> 不存在：
-   *   set() 完整建立必要欄位
-   *
-   * 這樣會符合：
-   * newData.hasChildren(['name','joinedAt'])
-   */
-
   async function updateCurrentMemberName() {
     if (
       !state.membersRef ||
@@ -955,82 +1071,16 @@
       return;
     }
 
-    const memberRef =
-      state.membersRef.child(
+    await state.membersRef
+      .child(
         state.uid
-      );
-
-    const snapshot =
-      await memberRef.once(
-        "value"
-      );
-
-    const existing =
-      snapshot.val();
-
-    /*
-     * 成員已經存在：
-     * 只更新可修改欄位。
-     */
-    if (existing) {
-      await memberRef.update({
+      )
+      .update({
         name:
           state.memberName,
 
         online:
           true,
-
-        lastSeen:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP
-      });
-
-      /*
-       * 確保斷線時標記離線。
-       */
-      memberRef
-        .onDisconnect()
-        .update({
-          online:
-            false,
-
-          lastSeen:
-            firebase.database
-              .ServerValue
-              .TIMESTAMP
-        });
-
-      return;
-    }
-
-    /*
-     * UID 剛換掉 / 第一次加入：
-     * 必須包含 joinedAt。
-     */
-    await memberRef.set({
-      name:
-        state.memberName,
-
-      joinedAt:
-        firebase.database
-          .ServerValue
-          .TIMESTAMP,
-
-      online:
-        true,
-
-      lastSeen:
-        firebase.database
-          .ServerValue
-          .TIMESTAMP
-    });
-
-    memberRef
-      .onDisconnect()
-      .update({
-        online:
-          false,
 
         lastSeen:
           firebase.database
@@ -1065,7 +1115,8 @@
 
     const newName =
       String(
-        input?.value || ""
+        input?.value ||
+        ""
       )
         .trim()
         .slice(
@@ -1090,10 +1141,6 @@
       const user =
         auth?.currentUser;
 
-      /*
-       * Google 帳戶：
-       * 同步 Firebase Auth displayName。
-       */
       if (
         user &&
         !user.isAnonymous
@@ -1111,9 +1158,6 @@
         }
       }
 
-      /*
-       * 更新 Realtime Database 中自己的成員資料。
-       */
       await updateCurrentMemberName();
 
       updateAuthUI();
@@ -1135,7 +1179,7 @@
 
       setError(
         $("nameError"),
-        error?.message ||
+        error.message ||
           "修改名稱失敗"
       );
     }
@@ -1147,7 +1191,9 @@
    * =========================================================
    */
 
-  function getYoutubeId(value) {
+  function getYoutubeId(
+    value
+  ) {
     if (!value) {
       return null;
     }
@@ -1208,10 +1254,9 @@
           )
         ) {
           return (
-            url.pathname
-              .split(
-                "/"
-              )[2] ||
+            url.pathname.split(
+              "/"
+            )[2] ||
             null
           );
         }
@@ -1222,10 +1267,9 @@
           )
         ) {
           return (
-            url.pathname
-              .split(
-                "/"
-              )[2] ||
+            url.pathname.split(
+              "/"
+            )[2] ||
             null
           );
         }
@@ -1234,25 +1278,29 @@
       if (
         url.hostname.includes(
           "youtube-nocookie.com"
-        ) &&
-        url.pathname.startsWith(
-          "/embed/"
         )
       ) {
-        return (
-          url.pathname
-            .split(
+        if (
+          url.pathname.startsWith(
+            "/embed/"
+          )
+        ) {
+          return (
+            url.pathname.split(
               "/"
             )[2] ||
-          null
-        );
+            null
+          );
+        }
       }
     } catch (_) {}
 
     return null;
   }
 
-  function getVimeoId(value) {
+  function getVimeoId(
+    value
+  ) {
     if (!value) {
       return null;
     }
@@ -1260,7 +1308,9 @@
     const text =
       String(value).trim();
 
-    if (/^\d+$/.test(text)) {
+    if (
+      /^\d+$/.test(text)
+    ) {
       return text;
     }
 
@@ -1299,7 +1349,9 @@
     );
   }
 
-  function getDailymotionId(value) {
+  function getDailymotionId(
+    value
+  ) {
     if (!value) {
       return null;
     }
@@ -1358,7 +1410,9 @@
     return null;
   }
 
-  function getBilibiliId(value) {
+  function getBilibiliId(
+    value
+  ) {
     if (!value) {
       return null;
     }
@@ -1375,9 +1429,7 @@
     }
 
     if (
-      /^av\d+$/i.test(
-        text
-      )
+      /^av\d+$/i.test(text)
     ) {
       return text;
     }
@@ -1411,7 +1463,9 @@
     return null;
   }
 
-  function getTwitchValue(value) {
+  function getTwitchValue(
+    value
+  ) {
     if (!value) {
       return null;
     }
@@ -1446,8 +1500,7 @@
       }
 
       if (
-        parts[0] ===
-          "videos" &&
+        parts[0] === "videos" &&
         parts[1]
       ) {
         return {
@@ -1459,8 +1512,7 @@
       }
 
       if (
-        parts[0] ===
-          "clip" &&
+        parts[0] === "clip" &&
         parts[1]
       ) {
         return {
@@ -1529,14 +1581,13 @@
       )
     ) {
       throw new Error(
-        "請先把 YouTube API Key 放到 app.js"
+        "請先把 YouTube API Key 放到 app.js 的 YOUTUBE_API_KEY"
       );
     }
 
     if (
       append &&
-      state.searchQuery ===
-        query &&
+      state.searchQuery === query &&
       !state.searchNextPageToken
     ) {
       toast(
@@ -1635,7 +1686,9 @@
       await response.json();
 
     const items =
-      Array.isArray(data.items)
+      Array.isArray(
+        data.items
+      )
         ? data.items
         : [];
 
@@ -1647,9 +1700,6 @@
         )
         .filter(Boolean);
 
-    /*
-     * 取得影片長度 / 觀看數。
-     */
     let detailMap = {};
 
     if (ids.length) {
@@ -1679,7 +1729,9 @@
             detailUrl.toString()
           );
 
-        if (detailResponse.ok) {
+        if (
+          detailResponse.ok
+        ) {
           const detailData =
             await detailResponse.json();
 
@@ -1693,7 +1745,8 @@
           ) {
             detailMap[
               item.id
-            ] = item;
+            ] =
+              item;
           }
         }
       } catch (error) {
@@ -1730,6 +1783,11 @@
             const contentDetails =
               detail.contentDetails ||
               {};
+
+            const durationSeconds =
+              parseISO8601Duration(
+                contentDetails.duration
+              );
 
             return {
               id,
@@ -1776,10 +1834,7 @@
                 contentDetails.duration ||
                 "",
 
-              durationSeconds:
-                parseISO8601Duration(
-                  contentDetails.duration
-                ),
+              durationSeconds,
 
               live:
                 Boolean(
@@ -1804,21 +1859,16 @@
         new Set(
           state.searchResults.map(
             (item) =>
-              String(
-                item.id
-              )
+              String(item.id)
           )
         );
 
       for (
-        const item of
-        results
+        const item of results
       ) {
         if (
           !existingIds.has(
-            String(
-              item.id
-            )
+            String(item.id)
           )
         ) {
           state.searchResults.push(
@@ -1938,6 +1988,8 @@
             ? "載入更多 YouTube 影片"
             : "已載入全部結果";
       }
+
+      configureSearchScroll();
     }
   }
 
@@ -1961,18 +2013,13 @@
       return;
     }
 
-    if (
-      typeof IntersectionObserver ===
-      "undefined"
-    ) {
-      return;
-    }
-
+    /*
+     * 這裡 root 明確指定為影片列表，
+     * 不再監聽 body。
+     */
     const observer =
       new IntersectionObserver(
-        (
-          entries
-        ) => {
+        (entries) => {
           const entry =
             entries[0];
 
@@ -2001,7 +2048,7 @@
             container,
 
           rootMargin:
-            "600px 0px",
+            "800px 0px",
 
           threshold:
             0.01
@@ -2018,7 +2065,7 @@
 
   /*
    * =========================================================
-   * SEARCH RESULT RENDER
+   * SEARCH RESULTS RENDER
    * =========================================================
    */
 
@@ -2050,13 +2097,21 @@
         <div
           class="muted"
           style="
-            padding:20px 8px;
+            grid-column:1 / -1;
+            width:100%;
+            min-height:220px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
             text-align:center;
+            padding:20px;
           "
         >
           找不到符合的影片。
         </div>
       `;
+
+      configureSearchScroll();
 
       return;
     }
@@ -2064,17 +2119,13 @@
     container.innerHTML =
       state.searchResults
         .map(
-          (
-            video
-          ) => {
+          (video) => {
             const selected =
               String(
                 state.modalSelectedVideoId ||
                 ""
               ) ===
-              String(
-                video.id
-              );
+              String(video.id);
 
             const durationText =
               formatDuration(
@@ -2089,21 +2140,21 @@
             const liveBadge =
               video.live
                 ? `
-                  <span
-                    style="
-                      display:inline-flex;
-                      align-items:center;
-                      padding:2px 5px;
-                      border-radius:5px;
-                      background:#dc2626;
-                      color:#fff;
-                      font-size:9px;
-                      font-weight:800;
-                    "
-                  >
-                    LIVE
-                  </span>
-                `
+                    <span
+                      style="
+                        display:inline-flex;
+                        align-items:center;
+                        padding:2px 5px;
+                        border-radius:5px;
+                        background:#dc2626;
+                        color:#fff;
+                        font-size:9px;
+                        font-weight:800;
+                      "
+                    >
+                      LIVE
+                    </span>
+                  `
                 : "";
 
             return `
@@ -2129,6 +2180,7 @@
                   <div
                     style="
                       position:relative;
+                      width:100%;
                       flex:0 0 auto;
                     "
                   >
@@ -2147,11 +2199,11 @@
                           <span
                             style="
                               position:absolute;
-                              right:4px;
-                              bottom:4px;
-                              padding:2px 5px;
+                              right:5px;
+                              bottom:5px;
+                              padding:3px 6px;
                               border-radius:5px;
-                              background:rgba(0,0,0,.85);
+                              background:rgba(0,0,0,.88);
                               color:#fff;
                               font-size:10px;
                               font-weight:700;
@@ -2190,6 +2242,7 @@
                         gap:5px;
                       "
                     >
+
                       ${
                         viewsText
                           ? escapeHtml(
@@ -2199,6 +2252,7 @@
                       }
 
                       ${liveBadge}
+
                     </small>
 
                   </span>
@@ -2208,8 +2262,9 @@
                 <div
                   style="
                     display:flex;
-                    gap:6px;
-                    margin-top:8px;
+                    gap:7px;
+                    padding:
+                      0 12px 12px;
                     flex-wrap:wrap;
                   "
                 >
@@ -2242,9 +2297,6 @@
         )
         .join("");
 
-    /*
-     * 載入更多。
-     */
     if (
       state.searchNextPageToken
     ) {
@@ -2254,7 +2306,9 @@
           <div
             id="youtubeLoadMore"
             style="
-              padding:16px 4px 8px;
+              grid-column:1 / -1;
+              width:100%;
+              padding:18px 4px 24px;
             "
           >
 
@@ -2288,14 +2342,16 @@
         "beforeend",
         `
           <div
-            class="muted"
             style="
-              padding:18px 8px;
+              grid-column:1 / -1;
+              width:100%;
+              padding:20px 8px 28px;
               text-align:center;
+              color:#71717a;
               font-size:11px;
             "
           >
-            已經沒有更多搜尋結果
+            已經載入全部搜尋結果
           </div>
         `
       );
@@ -2306,9 +2362,7 @@
         "[data-video-select]"
       )
       .forEach(
-        (
-          button
-        ) => {
+        (button) => {
           button.addEventListener(
             "click",
             () => {
@@ -2326,22 +2380,17 @@
         "[data-video-play]"
       )
       .forEach(
-        (
-          button
-        ) => {
+        (button) => {
           button.addEventListener(
             "click",
-            async (
-              event
-            ) => {
+            async (event) => {
+              event.preventDefault();
               event.stopPropagation();
 
               const video =
                 state.searchResults.find(
                   (item) =>
-                    String(
-                      item.id
-                    ) ===
+                    String(item.id) ===
                     String(
                       button.dataset
                         .videoPlay
@@ -2379,22 +2428,17 @@
         "[data-video-queue]"
       )
       .forEach(
-        (
-          button
-        ) => {
+        (button) => {
           button.addEventListener(
             "click",
-            async (
-              event
-            ) => {
+            async (event) => {
+              event.preventDefault();
               event.stopPropagation();
 
               const video =
                 state.searchResults.find(
                   (item) =>
-                    String(
-                      item.id
-                    ) ===
+                    String(item.id) ===
                     String(
                       button.dataset
                         .videoQueue
@@ -2431,17 +2475,25 @@
         }
       );
 
-    $("youtubeLoadMoreBtn")
-      ?.addEventListener(
-        "click",
-        (
-          event
-        ) => {
-          event.preventDefault();
-          loadMoreYoutubeResults();
-        }
-      );
+    const moreButton =
+      $("youtubeLoadMoreBtn");
 
+    moreButton?.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        loadMoreYoutubeResults();
+      }
+    );
+
+    /*
+     * 重新確定 scroll host
+     */
+    configureSearchScroll();
+
+    /*
+     * 初始化自動載入
+     */
     setupYoutubeInfiniteScroll();
   }
 
@@ -2451,9 +2503,7 @@
     const video =
       state.searchResults.find(
         (item) =>
-          String(
-            item.id
-          ) ===
+          String(item.id) ===
           String(id)
       );
 
@@ -2486,10 +2536,9 @@
             item.classList.toggle(
               "selected",
               String(
-                item.dataset
-                  .videoId
+                item.dataset.videoId
               ) ===
-                String(id)
+              String(id)
             );
           }
         );
@@ -2535,9 +2584,7 @@
     const video =
       state.searchResults.find(
         (item) =>
-          String(
-            item.id
-          ) ===
+          String(item.id) ===
           storedId
       );
 
@@ -2582,14 +2629,18 @@
 
       return {
         id,
+
         platform,
+
         title:
           title ||
           "YouTube 影片",
+
         thumbnail:
           `https://i.ytimg.com/vi/${encodeURIComponent(
             id
           )}/hqdefault.jpg`,
+
         channel:
           "YouTube"
       };
@@ -2610,16 +2661,19 @@
 
       return {
         id,
+
         url:
-          String(
-            rawValue
-          ),
+          String(rawValue),
+
         platform,
+
         title:
           title ||
           "Vimeo 影片",
+
         thumbnail:
           "",
+
         channel:
           "Vimeo"
       };
@@ -2640,16 +2694,19 @@
 
       return {
         id,
+
         url:
-          String(
-            rawValue
-          ),
+          String(rawValue),
+
         platform,
+
         title:
           title ||
           "Dailymotion 影片",
+
         thumbnail:
           "",
+
         channel:
           "Dailymotion"
       };
@@ -2670,16 +2727,19 @@
 
       return {
         id,
+
         url:
-          String(
-            rawValue
-          ),
+          String(rawValue),
+
         platform,
+
         title:
           title ||
           "Bilibili 影片",
+
         thumbnail:
           "",
+
         channel:
           "Bilibili"
       };
@@ -2706,9 +2766,7 @@
           value.type,
 
         url:
-          String(
-            rawValue
-          ),
+          String(rawValue),
 
         platform,
 
@@ -2726,14 +2784,10 @@
 
     return {
       id:
-        String(
-          rawValue
-        ),
+        String(rawValue),
 
       url:
-        String(
-          rawValue
-        ),
+        String(rawValue),
 
       platform,
 
@@ -2781,23 +2835,23 @@
 
     const duplicate =
       Object.values(
-        state.queue || {}
+        state.queue ||
+        {}
       ).some(
         (item) =>
           String(
-            item?.id || ""
+            item?.id ||
+            ""
           ) ===
-            String(
-              video.id
-            ) &&
+          String(video.id) &&
           String(
             item?.platform ||
             "youtube"
           ) ===
-            String(
-              video.platform ||
-              "youtube"
-            )
+          String(
+            video.platform ||
+            "youtube"
+          )
       );
 
     if (duplicate) {
@@ -2808,9 +2862,7 @@
 
     const item = {
       id:
-        String(
-          video.id
-        ),
+        String(video.id),
 
       platform:
         video.platform ||
@@ -2842,9 +2894,7 @@
 
     if (video.url) {
       item.url =
-        String(
-          video.url
-        );
+        String(video.url);
     }
 
     if (video.twitchType) {
@@ -2868,9 +2918,7 @@
     }
 
     await state.queueRef
-      .child(
-        queueId
-      )
+      .child(queueId)
       .remove();
 
     toast(
@@ -2924,18 +2972,19 @@
       video
     );
 
-    if (state.queueRef) {
+    if (
+      state.queueRef
+    ) {
       await state.queueRef
-        .child(
-          queueId
-        )
+        .child(queueId)
         .remove();
     }
   }
 
   function getSortedQueue() {
     return Object.entries(
-      state.queue || {}
+      state.queue ||
+      {}
     )
       .map(
         ([id, item]) => ({
@@ -3119,9 +3168,7 @@
         "[data-queue-play]"
       )
       .forEach(
-        (
-          button
-        ) => {
+        (button) => {
           button.addEventListener(
             "click",
             async () => {
@@ -3150,9 +3197,7 @@
         "[data-queue-remove]"
       )
       .forEach(
-        (
-          button
-        ) => {
+        (button) => {
           button.addEventListener(
             "click",
             async () => {
@@ -3218,9 +3263,7 @@
       "emptyPlayer",
       "platformPlayerNotice"
     ].forEach(
-      (
-        id
-      ) => {
+      (id) => {
         $(id)?.classList.add(
           "hidden"
         );
@@ -3340,13 +3383,6 @@
       if (
         oldType ===
         "dailymotion"
-      ) {
-        old.destroy?.();
-      }
-
-      if (
-        oldType ===
-        "twitch"
       ) {
         old.destroy?.();
       }
@@ -3734,9 +3770,7 @@
         position:
           Math.max(
             0,
-            Number(
-              position
-            ) || 0
+            Number(position) || 0
           ),
 
         playing:
@@ -3926,7 +3960,7 @@
       const difference =
         Math.abs(
           local -
-            seconds
+          seconds
         );
 
       if (
@@ -4780,9 +4814,6 @@
 
                   updateTimeUI();
 
-                  /*
-                   * 先讀 Firebase。
-                   */
                   await syncLatestPlayback();
 
                   const roomPlaying =
@@ -4893,9 +4924,7 @@
                 },
 
               onError:
-                (
-                  event
-                ) => {
+                (event) => {
                   console.error(
                     "YouTube player error:",
                     event
@@ -4917,10 +4946,6 @@
           }
         );
 
-      /*
-       * 故意不在 onReady 前
-       * 設定 state.player。
-       */
       void player;
     } catch (error) {
       console.error(
@@ -5441,9 +5466,7 @@
       false;
 
     await new Promise(
-      (
-        resolve
-      ) => {
+      (resolve) => {
         const ready =
           () => {
             if (
@@ -5607,14 +5630,6 @@
 
     state.playerReady =
       false;
-
-    state.currentVideoId =
-      video.id ||
-      null;
-
-    state.currentVideoUrl =
-      url ||
-      null;
   }
 
   /*
@@ -5719,9 +5734,7 @@
           .ref(
             `rooms/${roomId}`
           )
-          .once(
-            "value"
-          )
+          .once("value")
       ).exists()
     ) {
       roomId =
@@ -5820,9 +5833,7 @@
         .ref(
           `rooms/${roomId}`
         )
-        .once(
-          "value"
-        );
+        .once("value");
 
     if (
       !snapshot.exists()
@@ -5987,9 +5998,6 @@
         state.uid
       );
 
-    /*
-     * 直接完整建立自己的成員資料。
-     */
     await memberRef.set({
       name:
         state.memberName,
@@ -6101,12 +6109,7 @@
         `rooms/${state.roomId}/queue`
       );
 
-    /*
-     * FIX：
-     * Google UID 改變後不再用不完整 update，
-     * 直接安全建立自己的 members 節點。
-     */
-    await updateCurrentMemberName();
+    await markMemberOnline();
 
     if (
       !state.memberHeartbeatTimer
@@ -6123,9 +6126,7 @@
     ) {
       state.stateRef.on(
         "value",
-        (
-          snapshot
-        ) => {
+        (snapshot) => {
           applyRemotePlayback(
             snapshot.val()
           );
@@ -6140,9 +6141,7 @@
       !state.videoListenerAttached
     ) {
       state.roomRef
-        .child(
-          "video"
-        )
+        .child("video")
         .on(
           "value",
           async (
@@ -6175,9 +6174,7 @@
     ) {
       state.membersRef.on(
         "value",
-        (
-          snapshot
-        ) => {
+        (snapshot) => {
           renderMembers(
             snapshot.val() ||
             {}
@@ -6193,14 +6190,10 @@
       !state.chatListenerAttached
     ) {
       state.chatRef
-        .limitToLast(
-          100
-        )
+        .limitToLast(100)
         .on(
           "value",
-          (
-            snapshot
-          ) => {
+          (snapshot) => {
             renderChat(
               snapshot.val() ||
               {}
@@ -6217,9 +6210,7 @@
     ) {
       state.queueRef.on(
         "value",
-        (
-          snapshot
-        ) => {
+        (snapshot) => {
           state.queue =
             snapshot.val() ||
             {};
@@ -6314,9 +6305,7 @@
       return;
     }
 
-    if (
-      !entries.length
-    ) {
+    if (!entries.length) {
       $("memberList")
         .innerHTML = `
           <div class="muted">
@@ -6473,9 +6462,7 @@
       return;
     }
 
-    if (
-      !list.length
-    ) {
+    if (!list.length) {
       $("chatMessages")
         .innerHTML = `
           <div
@@ -6546,9 +6533,7 @@
       );
     }
 
-    if (
-      !state.roomRef
-    ) {
+    if (!state.roomRef) {
       throw new Error(
         "尚未進入房間"
       );
@@ -6684,6 +6669,8 @@
       return;
     }
 
+    lockPageScroll();
+
     disconnectSearchObserver();
 
     state.modalSelectedVideo =
@@ -6735,6 +6722,12 @@
         .dataset
         .selectedVideoId =
         "";
+
+      configureSearchScroll();
+
+      $("modalVideoSearchResults")
+        .scrollTop =
+        0;
     }
 
     if (
@@ -6765,10 +6758,12 @@
 
     setTimeout(
       () => {
+        configureSearchScroll();
+
         $("modalVideoSearchInput")
           ?.focus();
       },
-      100
+      50
     );
   }
 
@@ -6785,6 +6780,20 @@
 
     state.modalSelectedVideoId =
       "";
+
+    state.searchResults =
+      [];
+
+    state.searchNextPageToken =
+      "";
+
+    state.searchQuery =
+      "";
+
+    state.searchLoadingMore =
+      false;
+
+    unlockPageScroll();
 
     setError(
       $("modalError"),
@@ -6849,6 +6858,11 @@
           .selectedVideoId =
           "";
       }
+    } else {
+      setTimeout(
+        configureSearchScroll,
+        0
+      );
     }
   }
 
@@ -6869,9 +6883,7 @@
       state.queueRef?.off();
 
       state.roomRef
-        ?.child(
-          "video"
-        )
+        ?.child("video")
         .off();
     } catch (_) {}
 
@@ -6902,9 +6914,6 @@
 
   function setupEvents() {
 
-    /*
-     * CREATE
-     */
     $("createRoomBtn")
       ?.addEventListener(
         "click",
@@ -6930,9 +6939,6 @@
         }
       );
 
-    /*
-     * JOIN
-     */
     $("joinRoomBtn")
       ?.addEventListener(
         "click",
@@ -6958,9 +6964,7 @@
     $("joinCodeInput")
       ?.addEventListener(
         "input",
-        (
-          event
-        ) => {
+        (event) => {
           event.target.value =
             event.target.value
               .toUpperCase()
@@ -7024,7 +7028,7 @@
       );
 
     /*
-     * NAME CANCEL
+     * NAME
      */
     $("cancelNameBtn")
       ?.addEventListener(
@@ -7032,9 +7036,6 @@
         closeNameModal
       );
 
-    /*
-     * NAME SAVE
-     */
     $("saveNameBtn")
       ?.addEventListener(
         "click",
@@ -7046,9 +7047,7 @@
     $("nameInput")
       ?.addEventListener(
         "keydown",
-        (
-          event
-        ) => {
+        (event) => {
           if (
             event.key ===
             "Enter"
@@ -7116,22 +7115,6 @@
               state.membersRef &&
               state.uid
             ) {
-              try {
-                await state.membersRef
-                  .child(
-                    state.uid
-                  )
-                  .update({
-                    online:
-                      false,
-
-                    lastSeen:
-                      firebase.database
-                        .ServerValue
-                        .TIMESTAMP
-                  });
-              } catch (_) {}
-
               await state.membersRef
                 .child(
                   state.uid
@@ -7165,21 +7148,6 @@
           state.isOwner =
             false;
 
-          state.roomRef =
-            null;
-
-          state.stateRef =
-            null;
-
-          state.membersRef =
-            null;
-
-          state.chatRef =
-            null;
-
-          state.queueRef =
-            null;
-
           history.replaceState(
             {},
             "",
@@ -7193,7 +7161,7 @@
       );
 
     /*
-     * PLAY PAUSE
+     * PLAY / PAUSE
      */
     $("playPauseBtn")
       ?.addEventListener(
@@ -7252,8 +7220,7 @@
               0,
               (
                 await asyncCurrentPosition()
-              ) -
-                10
+              ) - 10
             );
 
           await applyPlayerPosition(
@@ -7292,8 +7259,7 @@
                 Infinity,
               (
                 await asyncCurrentPosition()
-              ) +
-                10
+              ) + 10
             );
 
           await applyPlayerPosition(
@@ -7351,9 +7317,7 @@
     $("volumeInput")
       ?.addEventListener(
         "input",
-        (
-          event
-        ) => {
+        (event) => {
           const value =
             Number(
               event.target.value
@@ -7382,8 +7346,7 @@
               "vimeo"
             ) {
               state.player?.setVolume(
-                value /
-                  100
+                value / 100
               );
             }
 
@@ -7392,8 +7355,7 @@
               "twitch"
             ) {
               state.player?.setVolume(
-                value /
-                  100
+                value / 100
               );
             }
 
@@ -7402,8 +7364,7 @@
               "dailymotion"
             ) {
               state.player?.setVolume?.(
-                value /
-                  100
+                value / 100
               );
             }
           } catch (_) {}
@@ -7523,6 +7484,59 @@
       );
 
     /*
+     * 按 ESC 關閉搜尋視窗
+     */
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (
+          event.key ===
+          "Escape"
+        ) {
+          const modal =
+            $("sourceModal");
+
+          if (
+            modal &&
+            !modal.classList.contains(
+              "hidden"
+            )
+          ) {
+            closeSourceModal();
+          }
+
+          const nameModal =
+            $("nameModal");
+
+          if (
+            nameModal &&
+            !nameModal.classList.contains(
+              "hidden"
+            )
+          ) {
+            closeNameModal();
+          }
+        }
+      }
+    );
+
+    /*
+     * 點背景關閉搜尋視窗
+     */
+    $("sourceModal")
+      ?.addEventListener(
+        "click",
+        (event) => {
+          if (
+            event.target ===
+            $("sourceModal")
+          ) {
+            closeSourceModal();
+          }
+        }
+      );
+
+    /*
      * =====================================================
      * YOUTUBE SEARCH
      * =====================================================
@@ -7608,6 +7622,16 @@
               query,
               false
             );
+
+            const resultsContainer =
+              $("modalVideoSearchResults");
+
+            if (
+              resultsContainer
+            ) {
+              resultsContainer.scrollTop =
+                0;
+            }
           } catch (error) {
             console.error(
               error
@@ -7629,6 +7653,8 @@
               button.textContent =
                 "搜尋";
             }
+
+            configureSearchScroll();
           }
         }
       );
@@ -7636,9 +7662,7 @@
     $("modalVideoSearchInput")
       ?.addEventListener(
         "keydown",
-        (
-          event
-        ) => {
+        (event) => {
           if (
             event.key ===
             "Enter"
@@ -7772,63 +7796,21 @@
       );
 
     /*
-     * 點擊 Modal 外部關閉。
+     * 視窗尺寸變化時重新計算搜尋列表高度
      */
-    $("sourceModal")
-      ?.addEventListener(
-        "click",
-        (event) => {
-          if (
-            event.target ===
-            $("sourceModal")
-          ) {
-            closeSourceModal();
-          }
-        }
-      );
-
-    $("nameModal")
-      ?.addEventListener(
-        "click",
-        (event) => {
-          if (
-            event.target ===
-            $("nameModal")
-          ) {
-            closeNameModal();
-          }
-        }
-      );
-
-    /*
-     * ESC 關閉視窗。
-     */
-    document.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          event.key !==
-          "Escape"
-        ) {
-          return;
-        }
+    window.addEventListener(
+      "resize",
+      () => {
+        const modal =
+          $("sourceModal");
 
         if (
-          !$("sourceModal")
-            ?.classList.contains(
-              "hidden"
-            )
+          modal &&
+          !modal.classList.contains(
+            "hidden"
+          )
         ) {
-          closeSourceModal();
-        }
-
-        if (
-          !$("nameModal")
-            ?.classList.contains(
-              "hidden"
-            )
-        ) {
-          closeNameModal();
+          configureSearchScroll();
         }
       }
     );
@@ -7944,20 +7926,24 @@
         ) &&
         video.id
       ) {
-        const videoId =
+        buildYoutubePlayer(
           getYoutubeId(
             video.id
-          );
-
-        if (videoId) {
-          buildYoutubePlayer(
-            videoId,
-            true
-          );
-        }
+          ),
+          true
+        );
       }
     };
 
-  start();
+  /*
+   * 頁面關閉時恢復 body scroll
+   */
+  window.addEventListener(
+    "beforeunload",
+    () => {
+      unlockPageScroll();
+    }
+  );
 
+  start();
 })();
