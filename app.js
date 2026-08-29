@@ -586,27 +586,14 @@
 
 
   function configureSearchScroll() {
-    const modal =
-      $("sourceModal");
+    const modal = $("sourceModal");
+    const card = modal?.querySelector(".modal-card");
+    const searchArea = $("modalVideoSearchArea");
+    const container = $("modalVideoSearchResults");
+    const actions = card?.querySelector(".modal-actions");
+    const error = $("modalError");
 
-    const card =
-      modal?.querySelector(
-        ".modal-card"
-      );
-
-    const body =
-      card?.querySelector(
-        ":scope > div:nth-child(2)"
-      );
-
-    const container =
-      $("modalVideoSearchResults");
-
-    if (
-      !modal ||
-      !card ||
-      !container
-    ) {
+    if (!modal || !card || !searchArea || !container) {
       return;
     }
 
@@ -618,230 +605,346 @@
     const isMobile =
       window.innerWidth <= 760;
 
-    modal.style.position =
-      "fixed";
+    /* =====================================================
+       Modal 本身固定滿版
+       ===================================================== */
+    Object.assign(modal.style, {
+      position: "fixed",
+      inset: "0",
+      width: "100vw",
+      height: "100dvh",
+      maxHeight: "100dvh",
+      padding: "0",
+      overflow: "hidden",
+      boxSizing: "border-box",
+      overscrollBehavior: "none"
+    });
 
-    modal.style.inset =
-      "0";
+    /* =====================================================
+       真正的 modal-card 佈局
+       HTML 結構是：
 
-    modal.style.width =
-      "100vw";
+       modal-card
+       ├─ panel-title
+       ├─ label
+       ├─ select
+       ├─ modalVideoSearchArea
+       ├─ modal-actions
+       └─ modalError
 
-    modal.style.height =
-      "100vh";
+       所以不能再把 > div:nth-child(2) 當搜尋 body。
+       ===================================================== */
+    Object.assign(card.style, {
+      width: "100%",
+      maxWidth: "none",
+      height: "100%",
+      maxHeight: "100%",
+      margin: "0",
+      border: "0",
+      borderRadius: "0",
+      boxSizing: "border-box",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "0",
+      padding: isMobile ? "10px" : "22px"
+    });
 
-    modal.style.maxHeight =
-      "100vh";
+    /* =====================================================
+       頂部固定內容不要參與滾動
+       ===================================================== */
+    const title = card.querySelector(":scope > .panel-title");
+    const platformLabel = card.querySelector(
+      ":scope > label[for='sourceTypeModal']"
+    );
+    const platformSelect = $("sourceTypeModal");
 
-    modal.style.overflow =
-      "hidden";
+    [title, platformLabel, platformSelect].forEach((el) => {
+      if (!el) return;
+      el.style.flex = "0 0 auto";
+    });
 
-    modal.style.padding =
-      "0";
+    if (platformLabel) {
+      platformLabel.style.marginTop = isMobile ? "10px" : "15px";
+    }
 
-    card.style.width =
-      "100%";
+    /* =====================================================
+       搜尋區吃掉剩餘高度
+       ===================================================== */
+    Object.assign(searchArea.style, {
+      flex: "1 1 auto",
+      minHeight: "0",
+      minWidth: "0",
+      width: "100%",
+      height: "auto",
+      maxHeight: "none",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      boxSizing: "border-box",
+      marginTop: isMobile ? "10px" : "14px"
+    });
 
-    card.style.height =
-      "100%";
+    const searchLabel = searchArea.querySelector(
+      ":scope > label"
+    );
 
-    card.style.maxHeight =
-      "100%";
+    const searchRow = searchArea.querySelector(
+      ":scope > .search-row"
+    );
 
-    card.style.margin =
-      "0";
+    if (searchLabel) {
+      searchLabel.style.flex = "0 0 auto";
+      searchLabel.style.marginTop = "0";
+    }
 
-    card.style.padding =
-      "0";
+    if (searchRow) {
+      Object.assign(searchRow.style, {
+        flex: "0 0 auto",
+        minHeight: isMobile ? "44px" : "46px",
+        width: "100%",
+        boxSizing: "border-box"
+      });
+    }
 
-    card.style.overflow =
-      "hidden";
+    /* =====================================================
+       真正的搜尋滾動容器
+       ===================================================== */
+    Object.assign(container.style, {
+      position: "relative",
+      display: "grid",
+      gridTemplateColumns: isMobile
+        ? "1fr"
+        : "repeat(auto-fill, minmax(280px, 1fr))",
+      gridAutoRows: "max-content",
+      alignContent: "start",
+      gap: isMobile ? "10px" : "14px",
+      flex: "1 1 auto",
+      minHeight: "0",
+      minWidth: "0",
+      width: "100%",
+      height: "auto",
+      maxHeight: "none",
+      overflowY: "auto",
+      overflowX: "hidden",
+      boxSizing: "border-box",
+      WebkitOverflowScrolling: "touch",
+      touchAction: "pan-y",
+      overscrollBehaviorY: "contain",
+      scrollBehavior: "auto",
+      padding: isMobile
+        ? "8px 2px 30px"
+        : "12px 10px 30px"
+    });
 
-    card.style.display =
-      "flex";
-
-    card.style.flexDirection =
-      "column";
-
-    if (body) {
-      body.style.flex =
-        "1 1 auto";
-
-      body.style.minHeight =
-        "0";
-
-      body.style.height =
-        `${Math.max(
-          200,
-          viewportHeight - 68
-        )}px`;
-
-      body.style.overflow =
-        "hidden";
-
-      body.style.display =
-        "grid";
+    /* =====================================================
+       搜尋結果卡片：桌面維持原本橫向縮圖式樣；
+       手機改成單欄、固定可預期高度，避免擠在一起。
+       ===================================================== */
+    container.querySelectorAll(".video-result-card").forEach((cardEl) => {
+      Object.assign(cardEl.style, {
+        width: "100%",
+        minWidth: "0",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        minHeight: isMobile ? "92px" : "0",
+        height: "auto",
+        flex: "0 0 auto",
+        overflow: "hidden"
+      });
 
       if (isMobile) {
-        body.style.gridTemplateColumns =
-          "1fr";
+        cardEl.style.display = "grid";
+        cardEl.style.gridTemplateColumns = "112px minmax(0, 1fr)";
+        cardEl.style.gridTemplateRows = "auto auto";
+        cardEl.style.columnGap = "10px";
+        cardEl.style.rowGap = "6px";
+        cardEl.style.padding = "8px";
+
+        const main = cardEl.querySelector(".video-result-main");
+        const thumbWrap = main?.querySelector(":scope > div");
+        const info = main?.querySelector(".video-result-info");
+        const actionRow = cardEl.querySelector(":scope > div:last-child");
+        const img = main?.querySelector("img");
+
+        if (main) {
+          Object.assign(main.style, {
+            gridColumn: "1 / -1",
+            gridRow: "1",
+            width: "100%",
+            minWidth: "0",
+            minHeight: "0",
+            display: "grid",
+            gridTemplateColumns: "112px minmax(0, 1fr)",
+            alignItems: "center",
+            gap: "10px",
+            margin: "0",
+            padding: "0",
+            boxSizing: "border-box"
+          });
+        }
+
+        if (thumbWrap) {
+          Object.assign(thumbWrap.style, {
+            width: "112px",
+            minWidth: "112px",
+            height: "63px",
+            minHeight: "63px",
+            overflow: "hidden",
+            borderRadius: "7px",
+            boxSizing: "border-box"
+          });
+        }
+
+        if (img) {
+          Object.assign(img.style, {
+            width: "112px",
+            minWidth: "112px",
+            maxWidth: "112px",
+            height: "63px",
+            minHeight: "63px",
+            maxHeight: "63px",
+            display: "block",
+            objectFit: "cover",
+            borderRadius: "7px"
+          });
+        }
+
+        if (info) {
+          Object.assign(info.style, {
+            minWidth: "0",
+            width: "100%",
+            padding: "0",
+            margin: "0",
+            overflow: "hidden",
+            display: "grid",
+            gap: "3px",
+            alignContent: "center",
+            boxSizing: "border-box"
+          });
+
+          const strong = info.querySelector("strong");
+          if (strong) {
+            Object.assign(strong.style, {
+              display: "-webkit-box",
+              overflow: "hidden",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: "2",
+              whiteSpace: "normal",
+              textOverflow: "ellipsis",
+              wordBreak: "break-word",
+              fontSize: "13px",
+              lineHeight: "1.35"
+            });
+          }
+        }
+
+        if (actionRow) {
+          Object.assign(actionRow.style, {
+            gridColumn: "1 / -1",
+            gridRow: "2",
+            width: "100%",
+            minWidth: "0",
+            margin: "0",
+            padding: "0",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "6px",
+            boxSizing: "border-box"
+          });
+        }
       } else {
-        body.style.gridTemplateColumns =
-          "72px minmax(0, 1fr)";
+        cardEl.style.display = "block";
       }
+    });
+
+    /* =====================================================
+       底部按鈕與錯誤訊息固定，不搶走搜尋滾動空間
+       ===================================================== */
+    if (actions) {
+      Object.assign(actions.style, {
+        flex: "0 0 auto",
+        width: "100%",
+        boxSizing: "border-box",
+        marginTop: isMobile ? "8px" : "18px"
+      });
     }
 
-    const section =
-      body?.querySelector(
-        "section"
-      );
-
-    if (section) {
-      section.style.minWidth =
-        "0";
-
-      section.style.minHeight =
-        "0";
-
-      section.style.height =
-        "100%";
-
-      section.style.overflow =
-        "hidden";
-
-      section.style.display =
-        "flex";
-
-      section.style.flexDirection =
-        "column";
+    if (error) {
+      Object.assign(error.style, {
+        flex: "0 0 auto",
+        minHeight: "20px",
+        boxSizing: "border-box"
+      });
     }
 
-    const searchArea =
-      $("modalVideoSearchArea");
-
-    if (searchArea) {
-      searchArea.style.minHeight =
-        "0";
-    }
-
-    container.style.position =
-      "relative";
-
-    container.style.display =
-      "grid";
-
-    container.style.gridTemplateColumns =
-      isMobile
-        ? "1fr"
-        : "repeat(auto-fill, minmax(280px, 1fr))";
-
-    container.style.alignContent =
-      "start";
-
-    container.style.width =
-      "100%";
-
-    container.style.maxWidth =
-      "100%";
-
-    container.style.boxSizing =
-      "border-box";
-
-    container.style.minWidth =
-      "0";
-
-    container.style.minHeight =
-      "0";
-
-    container.style.flex =
-      "1 1 auto";
-
-    container.style.overflowX =
-      "hidden";
-
-    container.style.overflowY =
-      "auto";
-
-    container.style.webkitOverflowScrolling =
-      "touch";
-
-    container.style.touchAction =
-      "pan-y";
-
-    container.style.overscrollBehaviorY =
-      "contain";
-
-    container.style.scrollBehavior =
-      "auto";
-
-    container.style.padding =
-      isMobile
-        ? "8px 10px 32px"
-        : "12px 14px 32px";
-
-    container.style.maxHeight =
-      "none";
-
-    container.style.height =
-      "100%";
-
-    if (
-      !container.__wtWheelAttached
-    ) {
+    /* =====================================================
+       滑鼠滾輪：只有真正有 scroll range 時才攔截。
+       ===================================================== */
+    if (!container.__wtWheelAttached) {
       container.addEventListener(
         "wheel",
         (event) => {
-          if (
-            container.scrollHeight <=
-            container.clientHeight
-          ) {
+          if (Math.abs(event.deltaY) < 0.01) {
             return;
           }
 
-          if (
-            Math.abs(
-              event.deltaY
-            ) < 0.01
-          ) {
+          const maxScroll =
+            container.scrollHeight -
+            container.clientHeight;
+
+          if (maxScroll <= 0) {
             return;
           }
 
           event.preventDefault();
-
-          container.scrollTop +=
-            event.deltaY;
+          container.scrollTop = Math.max(
+            0,
+            Math.min(
+              maxScroll,
+              container.scrollTop + event.deltaY
+            )
+          );
         },
-        {
-          passive: false
-        }
+        { passive: false }
       );
 
-      container.__wtWheelAttached =
-        true;
+      container.__wtWheelAttached = true;
     }
 
-    if (
-      !container.__wtTouchConfigured
-    ) {
+    /* =====================================================
+       手機觸控：完全交給瀏覽器原生 pan-y。
+       ===================================================== */
+    if (!container.__wtTouchConfigured) {
       container.addEventListener(
         "touchstart",
         () => {},
-        {
-          passive: true
-        }
+        { passive: true }
       );
 
       container.addEventListener(
         "touchmove",
         () => {},
-        {
-          passive: true
-        }
+        { passive: true }
       );
 
-      container.__wtTouchConfigured =
-        true;
+      container.__wtTouchConfigured = true;
     }
+
+    /* 強制重新計算一次 layout，避免動態插入結果後高度還沒更新。 */
+    requestAnimationFrame(() => {
+      if (!document.body.contains(container)) {
+        return;
+      }
+
+      container.style.overflowY = "auto";
+      container.style.height = "auto";
+      container.style.maxHeight = "none";
+
+      if (container.scrollHeight > container.clientHeight) {
+        container.style.overflowY = "auto";
+      }
+    });
   }
 
 
