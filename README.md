@@ -1,4 +1,4 @@
-# WatchTogether｜同步觀看網站
+# WatchTogether｜一起同步觀看
 
 這是一個可以直接放 GitHub Pages 的靜態網站 MVP。
 
