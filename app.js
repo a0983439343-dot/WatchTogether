@@ -10,7 +10,8 @@
    */
 
   const YOUTUBE_API_KEY =
-    "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
+    window.YOUTUBE_API_KEY ||
+    "";
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 50;
 
@@ -141,6 +142,8 @@
 
     queueRef: null,
 
+    stateRef: null,
+
     player: null,
 
     playerReady: false,
@@ -194,6 +197,20 @@
     wasMemberInRoom: false,
 
     kickedLocally: false,
+
+    applyingRemoteState: false,
+
+    syncWriteTimer: null,
+
+    lastSyncWriteAt: 0,
+
+    lastRemoteState: null,
+
+    stateListenerAttached: false,
+
+    lastLocalActionAt: 0,
+
+    chatLastSentAt: 0,
 
     sdk: {
       vimeo: false,
@@ -1138,6 +1155,16 @@
           error?.code ===
           "auth/credential-already-in-use"
         ) {
+          try {
+            localStorage.setItem(
+              "wt_pending_google_room",
+              state.roomId || ""
+            );
+            if (state.membersRef && currentUser?.uid) {
+              await state.membersRef.child(currentUser.uid).remove();
+            }
+          } catch (_) {}
+
           await auth.signInWithRedirect(
             provider
           );
@@ -1192,6 +1219,7 @@
 
         updateAuthUI();
 
+        localStorage.removeItem("wt_pending_google_room");
         toast(
           "Google 登入成功"
         );
@@ -2788,6 +2816,73 @@
   }
 
 
+  const PLATFORM_HOSTS = {
+    vimeo: ["vimeo.com", "www.vimeo.com", "player.vimeo.com"],
+    dailymotion: ["dailymotion.com", "www.dailymotion.com"],
+    twitch: ["twitch.tv", "www.twitch.tv", "clips.twitch.tv"],
+    bilibili: ["bilibili.com", "www.bilibili.com", "b23.tv"],
+    netflix: ["netflix.com", "www.netflix.com"],
+    crunchyroll: ["crunchyroll.com", "www.crunchyroll.com"],
+    disneyplus: ["disneyplus.com", "www.disneyplus.com"],
+    primevideo: ["primevideo.com", "www.primevideo.com", "amazon.com", "www.amazon.com"],
+    appletv: ["tv.apple.com"],
+    max: ["max.com", "www.max.com"],
+    hulu: ["hulu.com", "www.hulu.com"],
+    paramount: ["paramountplus.com", "www.paramountplus.com"],
+    peacock: ["peacocktv.com", "www.peacocktv.com"]
+  };
+
+
+  function isAllowedHostname(hostname, allowedHosts) {
+    const host = String(hostname || "").toLowerCase();
+    return allowedHosts.some((allowed) =>
+      host === allowed || host.endsWith(`.${allowed}`)
+    );
+  }
+
+
+  function validateExternalPlatformUrl(platform, rawValue) {
+    try {
+      const url = new URL(String(rawValue).trim());
+      if (url.protocol !== "https:") {
+        return null;
+      }
+
+      const hosts = PLATFORM_HOSTS[platform];
+      if (!hosts || !isAllowedHostname(url.hostname, hosts)) {
+        return null;
+      }
+
+      url.username = "";
+      url.password = "";
+      return url;
+    } catch (_) {
+      return null;
+    }
+  }
+
+
+  function validateKnownPlatformInput(platform, rawValue) {
+    const value = String(rawValue || "").trim();
+    if (!value) return null;
+
+    if (!value.includes("://")) {
+      return value;
+    }
+
+    try {
+      const url = new URL(value);
+      const hosts = PLATFORM_HOSTS[platform];
+      if (url.protocol !== "https:" || !hosts || !isAllowedHostname(url.hostname, hosts)) {
+        return null;
+      }
+      return url.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+
   /*
    * =========================================================
    * VIDEO OBJECT
@@ -2827,8 +2922,10 @@
     }
 
     if (platform === "vimeo") {
+      const safeInput = validateKnownPlatformInput(platform, rawValue);
+      if (!safeInput) return null;
       const id =
-        getVimeoId(rawValue);
+        getVimeoId(safeInput);
 
       if (!id) {
         return null;
@@ -2837,7 +2934,8 @@
       return {
         id,
         url:
-          String(rawValue),
+          safeInput.includes("://") ? safeInput :
+            `https://vimeo.com/${encodeURIComponent(id)}`,
         platform,
         title:
           title ||
@@ -2921,12 +3019,17 @@
       };
     }
 
+    const external = validateExternalPlatformUrl(platform, rawValue);
+    if (!external) {
+      return null;
+    }
+
     return {
       id:
-        String(rawValue),
+        external.toString(),
 
       url:
-        String(rawValue),
+        external.toString(),
 
       platform,
 
@@ -3487,6 +3590,9 @@
     state.currentVideoUrl =
       null;
 
+    clearTimeout(state.syncWriteTimer);
+    state.syncWriteTimer = null;
+
     if (!old) {
       return;
     }
@@ -3518,12 +3624,169 @@
 
   /*
    * =========================================================
-   * LOCAL PLAYER STATE
+   * PLAYER STATE SYNC
    * =========================================================
-   *
-   * 完全不使用 rooms/{room}/state。
-   * 每個人自己控制自己的播放。
    */
+
+  function canSyncPlayer() {
+    return Boolean(
+      state.stateRef &&
+      state.uid &&
+      state.playerReady &&
+      state.player &&
+      ["youtube", "vimeo", "dailymotion", "twitch"].includes(state.playerType)
+    );
+  }
+
+
+  function setSyncStatus(message) {
+    if ($("syncStatus")) {
+      $("syncStatus").textContent = message || "";
+    }
+  }
+
+
+  async function publishPlayerState(action, position = null, playing = null, options = {}) {
+    if (!canSyncPlayer() || state.applyingRemoteState) {
+      return;
+    }
+
+    const now = Date.now();
+    const minInterval = options.immediate ? 0 : 350;
+    if (!options.force && now - state.lastSyncWriteAt < minInterval) {
+      return;
+    }
+
+    let nextPosition = position;
+    if (nextPosition == null) {
+      nextPosition = await asyncCurrentPosition();
+    }
+
+    let nextPlaying = playing;
+    if (nextPlaying == null) {
+      nextPlaying = await asyncIsPlaying();
+    }
+
+    nextPosition = Math.max(0, Number(nextPosition) || 0);
+    const payload = {
+      action: String(action || "sync"),
+      position: nextPosition,
+      playing: Boolean(nextPlaying),
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedBy: state.uid
+    };
+
+    state.lastSyncWriteAt = now;
+    state.lastLocalActionAt = now;
+
+    try {
+      await state.stateRef.set(payload);
+      state.lastRemoteState = {
+        action: payload.action,
+        position: nextPosition,
+        playing: Boolean(nextPlaying),
+        updatedBy: state.uid
+      };
+      setSyncStatus(`已同步 · ${formatTime(nextPosition)}`);
+    } catch (error) {
+      console.warn("播放狀態同步失敗:", error);
+      setSyncStatus("同步失敗，將保持本機播放");
+    }
+  }
+
+
+  function schedulePlayingPositionSync() {
+    clearTimeout(state.syncWriteTimer);
+    if (!canSyncPlayer() || state.applyingRemoteState) {
+      return;
+    }
+
+    state.syncWriteTimer = setTimeout(async () => {
+      state.syncWriteTimer = null;
+      if (await asyncIsPlaying()) {
+        await publishPlayerState("sync", null, true, { force: true });
+        if (canSyncPlayer()) schedulePlayingPositionSync();
+      }
+    }, 4000);
+  }
+
+
+  async function applyRemotePlayerState(remoteState) {
+    if (!remoteState || !canSyncPlayer()) {
+      return;
+    }
+
+    if (remoteState.updatedBy === state.uid) {
+      return;
+    }
+
+    const updatedAt = Number(remoteState.updatedAt || 0);
+    const position = Math.max(0, Number(remoteState.position) || 0);
+    const playing = Boolean(remoteState.playing);
+
+    state.lastRemoteState = {
+      action: remoteState.action || "sync",
+      position,
+      playing,
+      updatedBy: remoteState.updatedBy || ""
+    };
+
+    state.applyingRemoteState = true;
+    try {
+      await applyPlayerPosition(position);
+      if (playing) {
+        await playPlayer();
+      } else {
+        await pausePlayer();
+      }
+      setSyncStatus(`同步完成 · ${formatTime(position)}${updatedAt ? "" : ""}`);
+    } catch (error) {
+      console.warn("套用遠端播放狀態失敗:", error);
+    } finally {
+      state.applyingRemoteState = false;
+    }
+  }
+
+
+  async function handleRemoteStateSnapshot(snapshot) {
+    const remoteState = snapshot.val();
+    if (!remoteState || !state.playerReady) {
+      return;
+    }
+
+    if (remoteState.updatedBy === state.uid) {
+      return;
+    }
+
+    await applyRemotePlayerState(remoteState);
+  }
+
+
+  function attachStateListener() {
+    if (!state.stateRef || state.stateListenerAttached) {
+      return;
+    }
+
+    state.stateRef.on("value", (snapshot) => {
+      void handleRemoteStateSnapshot(snapshot);
+    });
+    state.stateListenerAttached = true;
+  }
+
+
+  async function syncFromFirebaseOnce() {
+    if (!state.stateRef || !state.playerReady) {
+      return;
+    }
+
+    try {
+      const snapshot = await state.stateRef.once("value");
+      await handleRemoteStateSnapshot(snapshot);
+    } catch (error) {
+      console.warn("讀取播放同步狀態失敗:", error);
+    }
+  }
+
 
   function currentPosition() {
     const player =
@@ -3880,6 +4143,9 @@
     }
 
     updateTimeUI();
+    if (!state.applyingRemoteState) {
+      void publishPlayerState("seek", target, null, { immediate: true });
+    }
   }
 
 
@@ -3896,7 +4162,6 @@
         state.playerType ===
         "youtube"
       ) {
-        state.player.mute();
         state.player.playVideo();
       }
 
@@ -4343,7 +4608,6 @@
 
       if (autoplay) {
         try {
-          state.player.mute();
           state.player.playVideo();
         } catch (_) {}
       }
@@ -4599,7 +4863,6 @@
                       event.target
                   ) {
                     try {
-                      event.target.mute();
                       event.target.playVideo();
                     } catch (_) {}
                   }
@@ -4656,9 +4919,16 @@
                         300
                       );
                     }
+                  } else if (!state.applyingRemoteState) {
+                    if (event.data === YT.PlayerState.PLAYING) {
+                      void publishPlayerState("play", null, true, { immediate: true });
+                    } else if (event.data === YT.PlayerState.PAUSED) {
+                      void publishPlayerState("pause", null, false, { immediate: true });
+                    }
                   }
 
                   updateTimeUI();
+                  schedulePlayingPositionSync();
                 },
 
               onError:
@@ -4809,6 +5079,15 @@
       "timeupdate",
       updateTimeUI
     );
+    player.on("play", () => {
+      if (!state.applyingRemoteState) void publishPlayerState("play", null, true, { immediate: true });
+    });
+    player.on("pause", () => {
+      if (!state.applyingRemoteState) void publishPlayerState("pause", null, false, { immediate: true });
+    });
+    player.on("seeked", () => {
+      if (!state.applyingRemoteState) void publishPlayerState("seek", null, null, { immediate: true });
+    });
   }
 
 
@@ -4898,6 +5177,18 @@
 
     state.playerReady =
       true;
+
+    if (typeof player.on === "function") {
+      player.on("play", () => {
+        if (!state.applyingRemoteState) void publishPlayerState("play", null, true, { immediate: true });
+      });
+      player.on("pause", () => {
+        if (!state.applyingRemoteState) void publishPlayerState("pause", null, false, { immediate: true });
+      });
+      player.on("seeked", () => {
+        if (!state.applyingRemoteState) void publishPlayerState("seek", null, null, { immediate: true });
+      });
+    }
 
     startLocalTimeUpdate();
   }
@@ -5167,6 +5458,11 @@
   async function buildExternalPlayer(
     video
   ) {
+    const safeUrl = validateExternalPlatformUrl(video?.platform, video?.url);
+    if (!safeUrl) {
+      throw new Error("影片網址不屬於允許的官方平台");
+    }
+
     await destroyCurrentPlayer();
 
     hidePlayers();
@@ -5191,8 +5487,7 @@
       video.platform;
 
     const url =
-      video.url ||
-      "";
+      safeUrl.toString();
 
     if (
       $("roomPlatformIcon")
@@ -5299,9 +5594,22 @@
       video.platform ===
       "dailymotion"
     ) {
-      await buildDailymotionPlayer(
-        video
-      );
+      try {
+        await buildDailymotionPlayer(
+          video
+        );
+      } catch (error) {
+        console.warn(
+          "Dailymotion SDK unavailable, using official-site fallback:",
+          error
+        );
+
+        await buildExternalPlayer({
+          ...video,
+          url:
+            `https://www.dailymotion.com/video/${encodeURIComponent(video.id)}`
+        });
+      }
 
       return;
     }
@@ -5371,6 +5679,7 @@
         roomName,
 
       sourceType:
+        $("sourceTypeInput")?.value ||
         "youtube",
 
       video:
@@ -5795,6 +6104,9 @@
 
     state.kickedLocally =
       false;
+    state.applyingRemoteState = false;
+    state.lastRemoteState = null;
+    state.lastSyncWriteAt = 0;
 
     history.replaceState(
       {},
@@ -5858,6 +6170,11 @@
         `rooms/${state.roomId}/queue`
       );
 
+    state.stateRef =
+      db.ref(
+        `rooms/${state.roomId}/state`
+      );
+
     await markMemberOnline();
 
     clearInterval(
@@ -5869,6 +6186,8 @@
         heartbeatMember,
         15000
       );
+
+    attachStateListener();
 
     if (
       !state.videoListenerAttached
@@ -5992,6 +6311,7 @@
       await handleRoomVideo(
         initialVideo
       );
+      await syncFromFirebaseOnce();
     } else {
       hidePlayers();
 
@@ -6212,6 +6532,12 @@
       return;
     }
 
+    const now = Date.now();
+    if (now - state.chatLastSentAt < 1200) {
+      throw new Error("訊息送太快了，請稍候");
+    }
+    state.chatLastSentAt = now;
+
     await state.chatRef.push({
       uid:
         state.uid,
@@ -6363,16 +6689,21 @@
         video.twitchType;
     }
 
-    /*
-     * 只同步「目前是哪部影片」。
-     * 絕對不寫 rooms/{room}/state。
-     */
-    await state.roomRef.update({
-      sourceType:
-        platform,
+    const shouldAutoplaySync =
+      ["youtube", "vimeo", "dailymotion", "twitch", "bilibili"].includes(platform);
 
-      video:
-        roomVideo
+    const syncState = {
+      action: "sync",
+      position: 0,
+      playing: shouldAutoplaySync,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedBy: state.uid
+    };
+
+    await db.ref().update({
+      [`rooms/${state.roomId}/sourceType`]: platform,
+      [`rooms/${state.roomId}/video`]: roomVideo,
+      [`rooms/${state.roomId}/state`]: syncState
     });
 
     state.room.sourceType =
@@ -6621,6 +6952,7 @@
       state.roomRef
         ?.child("video")
         .off();
+      state.stateRef?.off();
     } catch (_) {}
 
     state.videoListenerAttached =
@@ -6634,6 +6966,11 @@
 
     state.queueListenerAttached =
       false;
+    state.stateListenerAttached =
+      false;
+    state.stateRef = null;
+    clearTimeout(state.syncWriteTimer);
+    state.syncWriteTimer = null;
 
     state.queue =
       {};
@@ -7011,13 +7348,22 @@
       );
 
 
-    /*
-     * 舊同步按鈕直接隱藏。
-     */
+    $("syncNowBtn")
+      ?.classList.remove(
+        "hidden"
+      );
 
     $("syncNowBtn")
-      ?.classList.add(
-        "hidden"
+      ?.addEventListener(
+        "click",
+        async () => {
+          try {
+            await syncFromFirebaseOnce();
+            toast("已套用房間播放進度");
+          } catch (_) {
+            toast("同步失敗");
+          }
+        }
       );
 
 
