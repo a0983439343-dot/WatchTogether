@@ -993,31 +993,27 @@
     if (currentUser) {
       if (authStatus) {
         authStatus.textContent =
-          "已連線";
+          "";
       }
 
-      /*
-       * Google 登入後隱藏登入按鈕。
-       */
       loginButton?.classList.toggle(
         "hidden",
         !currentUser.isAnonymous
       );
 
-      /*
-       * 帳號功能。
-       */
       accountButton?.classList.remove(
         "hidden"
       );
 
-      /*
-       * 訪客模式不顯示登出。
-       */
-      logoutButton?.classList.toggle(
-        "hidden",
-        currentUser.isAnonymous
-      );
+      if (currentUser.isAnonymous) {
+        logoutButton?.classList.add(
+          "hidden"
+        );
+      } else {
+        logoutButton?.classList.remove(
+          "hidden"
+        );
+      }
 
       return;
     }
@@ -1039,8 +1035,6 @@
       "hidden"
     );
   }
-
-
   /*
    * =========================================================
    * FIREBASE
@@ -7244,19 +7238,17 @@
             return;
           }
 
-          const confirmed =
-            window.confirm(
-              "確定要登出 Google 帳號嗎？"
-            );
-
-          if (!confirmed) {
+          if (
+            !window.confirm(
+              "確定要登出嗎？"
+            )
+          ) {
             return;
           }
 
           await logout();
         }
       );
-
 
     /*
      * NAME
