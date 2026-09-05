@@ -200,6 +200,8 @@
 
     applyingRemoteState: false,
 
+    ignoreEventsUntil: 0,
+
     syncWriteTimer: null,
 
     lastSyncWriteAt: 0,
@@ -3651,23 +3653,31 @@
       return;
     }
 
+    if (Date.now() < Number(state.ignoreEventsUntil || 0)) {
+      return;
+    }
+
     const now = Date.now();
     const minInterval = options.immediate ? 0 : 350;
+
     if (!options.force && now - state.lastSyncWriteAt < minInterval) {
       return;
     }
 
     let nextPosition = position;
+
     if (nextPosition == null) {
       nextPosition = await asyncCurrentPosition();
     }
 
     let nextPlaying = playing;
+
     if (nextPlaying == null) {
       nextPlaying = await asyncIsPlaying();
     }
 
     nextPosition = Math.max(0, Number(nextPosition) || 0);
+
     const payload = {
       action: String(action || "sync"),
       position: nextPosition,
@@ -3681,12 +3691,14 @@
 
     try {
       await state.stateRef.set(payload);
+
       state.lastRemoteState = {
         action: payload.action,
         position: nextPosition,
         playing: Boolean(nextPlaying),
         updatedBy: state.uid
       };
+
       setSyncStatus(`已同步 · ${formatTime(nextPosition)}`);
     } catch (error) {
       console.warn("播放狀態同步失敗:", error);
@@ -3697,15 +3709,39 @@
 
   function schedulePlayingPositionSync() {
     clearTimeout(state.syncWriteTimer);
-    if (!canSyncPlayer() || state.applyingRemoteState) {
+    state.syncWriteTimer = null;
+
+    if (
+      !state.isOwner ||
+      !canSyncPlayer() ||
+      state.applyingRemoteState ||
+      Date.now() < Number(state.ignoreEventsUntil || 0)
+    ) {
       return;
     }
 
     state.syncWriteTimer = setTimeout(async () => {
       state.syncWriteTimer = null;
+
+      if (
+        !state.isOwner ||
+        !canSyncPlayer() ||
+        state.applyingRemoteState ||
+        Date.now() < Number(state.ignoreEventsUntil || 0)
+      ) {
+        return;
+      }
+
       if (await asyncIsPlaying()) {
         await publishPlayerState("sync", null, true, { force: true });
-        if (canSyncPlayer()) schedulePlayingPositionSync();
+
+        if (
+          state.isOwner &&
+          canSyncPlayer() &&
+          !state.applyingRemoteState
+        ) {
+          schedulePlayingPositionSync();
+        }
       }
     }, 4000);
   }
@@ -3732,13 +3768,22 @@
     };
 
     state.applyingRemoteState = true;
+    state.ignoreEventsUntil = Date.now() + 2000;
+
     try {
-      await applyPlayerPosition(position);
+      const localPosition = await asyncCurrentPosition();
+      const positionDifference = Math.abs(localPosition - position);
+
+      if (positionDifference > 2.5) {
+        await applyPlayerPosition(position);
+      }
+
       if (playing) {
         await playPlayer();
       } else {
         await pausePlayer();
       }
+
       setSyncStatus(`同步完成 · ${formatTime(position)}${updatedAt ? "" : ""}`);
     } catch (error) {
       console.warn("套用遠端播放狀態失敗:", error);
@@ -3746,7 +3791,6 @@
       state.applyingRemoteState = false;
     }
   }
-
 
   async function handleRemoteStateSnapshot(snapshot) {
     const remoteState = snapshot.val();
@@ -4906,6 +4950,17 @@
                   forceYoutubeVisible();
 
                   if (
+                    Date.now() <
+                    Number(
+                      state.ignoreEventsUntil ||
+                      0
+                    )
+                  ) {
+                    updateTimeUI();
+                    return;
+                  }
+
+                  if (
                     event.data ===
                     YT.PlayerState.ENDED
                   ) {
@@ -4914,21 +4969,59 @@
                     ) {
                       setTimeout(
                         async () => {
+                          if (
+                            Date.now() <
+                            Number(
+                              state.ignoreEventsUntil ||
+                              0
+                            )
+                          ) {
+                            return;
+                          }
+
                           await playNextQueueItem();
                         },
                         300
                       );
                     }
-                  } else if (!state.applyingRemoteState) {
-                    if (event.data === YT.PlayerState.PLAYING) {
-                      void publishPlayerState("play", null, true, { immediate: true });
-                    } else if (event.data === YT.PlayerState.PAUSED) {
-                      void publishPlayerState("pause", null, false, { immediate: true });
+                  } else if (
+                    !state.applyingRemoteState
+                  ) {
+                    if (
+                      event.data ===
+                      YT.PlayerState.PLAYING
+                    ) {
+                      void publishPlayerState(
+                        "play",
+                        null,
+                        true,
+                        {
+                          immediate: true
+                        }
+                      );
+                    } else if (
+                      event.data ===
+                      YT.PlayerState.PAUSED
+                    ) {
+                      void publishPlayerState(
+                        "pause",
+                        null,
+                        false,
+                        {
+                          immediate: true
+                        }
+                      );
                     }
                   }
 
                   updateTimeUI();
-                  schedulePlayingPositionSync();
+
+                  if (
+                    state.isOwner &&
+                    !state.applyingRemoteState
+                  ) {
+                    schedulePlayingPositionSync();
+                  }
                 },
 
               onError:
@@ -5080,13 +5173,28 @@
       updateTimeUI
     );
     player.on("play", () => {
-      if (!state.applyingRemoteState) void publishPlayerState("play", null, true, { immediate: true });
+      if (
+        !state.applyingRemoteState &&
+        Date.now() >= Number(state.ignoreEventsUntil || 0)
+      ) {
+        void publishPlayerState("play", null, true, { immediate: true });
+      }
     });
     player.on("pause", () => {
-      if (!state.applyingRemoteState) void publishPlayerState("pause", null, false, { immediate: true });
+      if (
+        !state.applyingRemoteState &&
+        Date.now() >= Number(state.ignoreEventsUntil || 0)
+      ) {
+        void publishPlayerState("pause", null, false, { immediate: true });
+      }
     });
     player.on("seeked", () => {
-      if (!state.applyingRemoteState) void publishPlayerState("seek", null, null, { immediate: true });
+      if (
+        !state.applyingRemoteState &&
+        Date.now() >= Number(state.ignoreEventsUntil || 0)
+      ) {
+        void publishPlayerState("seek", null, null, { immediate: true });
+      }
     });
   }
 
@@ -5180,13 +5288,28 @@
 
     if (typeof player.on === "function") {
       player.on("play", () => {
-        if (!state.applyingRemoteState) void publishPlayerState("play", null, true, { immediate: true });
+        if (
+          !state.applyingRemoteState &&
+          Date.now() >= Number(state.ignoreEventsUntil || 0)
+        ) {
+          void publishPlayerState("play", null, true, { immediate: true });
+        }
       });
       player.on("pause", () => {
-        if (!state.applyingRemoteState) void publishPlayerState("pause", null, false, { immediate: true });
+        if (
+          !state.applyingRemoteState &&
+          Date.now() >= Number(state.ignoreEventsUntil || 0)
+        ) {
+          void publishPlayerState("pause", null, false, { immediate: true });
+        }
       });
       player.on("seeked", () => {
-        if (!state.applyingRemoteState) void publishPlayerState("seek", null, null, { immediate: true });
+        if (
+          !state.applyingRemoteState &&
+          Date.now() >= Number(state.ignoreEventsUntil || 0)
+        ) {
+          void publishPlayerState("seek", null, null, { immediate: true });
+        }
       });
     }
 
@@ -6105,6 +6228,7 @@
     state.kickedLocally =
       false;
     state.applyingRemoteState = false;
+    state.ignoreEventsUntil = 0;
     state.lastRemoteState = null;
     state.lastSyncWriteAt = 0;
 
