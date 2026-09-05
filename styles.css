@@ -1259,12 +1259,11 @@ select:focus {
 
 .member-name {
   min-width: 0;
-
-  display: grid;
-
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   gap: 2px;
 }
-
 .member-name b {
   overflow: hidden;
 
