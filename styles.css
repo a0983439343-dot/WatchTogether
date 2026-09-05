@@ -1184,38 +1184,71 @@ select:focus {
   font-size: 11px;
 }
 
-.member-list {
-  display: grid;
+/*
+ * 成員列表
+ * 固定單欄，避免成員卡片被其他 grid/flex 規則拉歪
+ */
 
-  gap: 9px;
+.member-list {
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr) !important;
+
+  gap: 9px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
 
   max-height: 300px;
 
   overflow-y: auto;
+
+  overflow-x: hidden;
 
   overscroll-behavior: contain;
 
   -webkit-overflow-scrolling: touch;
 }
 
+/*
+ * 成員卡片
+ */
+
 .member {
-  display: flex;
+  position: relative !important;
 
-  align-items: center;
+  display: flex !important;
 
-  gap: 10px;
+  flex-direction: row !important;
 
-  min-width: 0;
+  align-items: center !important;
 
-  padding: 9px;
+  justify-content: flex-start !important;
+
+  gap: 10px !important;
+
+  width: 100% !important;
+
+  min-width: 0 !important;
+
+  min-height: 52px !important;
+
+  height: auto !important;
+
+  margin: 0 !important;
+
+  padding: 9px 10px !important;
 
   border:
-    1px solid rgba(255, 255, 255, .05);
+    1px solid rgba(255, 255, 255, .05) !important;
 
-  border-radius: 12px;
+  border-radius: 12px !important;
 
   background:
-    rgba(255, 255, 255, .025);
+    rgba(255, 255, 255, .025) !important;
+
+  box-sizing: border-box !important;
 
   transition:
     background .16s ease,
@@ -1230,16 +1263,28 @@ select:focus {
     rgba(96, 165, 250, .14);
 }
 
-.avatar {
-  display: flex;
+/*
+ * 頭像
+ */
 
-  align-items: center;
-  justify-content: center;
+.member .avatar {
+  position: static !important;
 
-  width: 34px;
-  height: 34px;
+  display: flex !important;
 
-  flex: 0 0 auto;
+  align-items: center !important;
+  justify-content: center !important;
+
+  width: 34px !important;
+  height: 34px !important;
+
+  min-width: 34px !important;
+  min-height: 34px !important;
+
+  flex:
+    0 0 34px !important;
+
+  margin: 0 !important;
 
   border-radius: 10px;
 
@@ -1257,15 +1302,41 @@ select:focus {
   font-weight: 850;
 }
 
+/*
+ * 名稱區
+ */
+
 .member-name {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  gap: 2px;
-}
-.member-name b {
+  position: static !important;
+
+  display: flex !important;
+
+  flex-direction: column !important;
+
+  align-items: flex-start !important;
+
+  justify-content: center !important;
+
+  flex:
+    1 1 auto !important;
+
+  width: auto !important;
+
+  min-width: 0 !important;
+
+  gap: 2px !important;
+
+  margin: 0 !important;
+
   overflow: hidden;
+}
+
+.member-name b {
+  display: block !important;
+
+  width: 100% !important;
+
+  overflow: hidden !important;
 
   color: #e2e8f0;
 
@@ -1277,18 +1348,43 @@ select:focus {
 }
 
 .member-name span {
+  display: block !important;
+
+  width: 100% !important;
+
+  margin: 0 !important;
+
+  overflow: hidden;
+
   color: #64748b;
 
   font-size: 10px;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
 }
 
-.online {
-  width: 7px;
-  height: 7px;
+/*
+ * 在線綠點
+ */
 
-  margin-left: auto;
+.member .online {
+  position: static !important;
 
-  flex: 0 0 auto;
+  display: block !important;
+
+  width: 7px !important;
+  height: 7px !important;
+
+  min-width: 7px !important;
+  min-height: 7px !important;
+
+  flex:
+    0 0 7px !important;
+
+  margin:
+    0 2px 0 auto !important;
 
   border-radius: 50%;
 
@@ -1642,6 +1738,8 @@ select:focus {
 
   -webkit-backdrop-filter:
     none !important;
+
+  overscroll-behavior: none;
 }
 
 #sourceModal.hidden {
@@ -1799,6 +1897,9 @@ select:focus {
   scrollbar-color:
     rgba(148,163,184,.35)
     transparent;
+
+  box-sizing:
+    border-box !important;
 }
 
 /* =========================================================
@@ -1841,18 +1942,9 @@ select:focus {
 
   overflow:
     visible !important;
-}
 
-/*
- * 搜尋結果本身不建立第二條滾輪。
- * 右側 section 才是真正的滾動區。
- */
-
-#sourceModal
-#modalVideoSearchResults
-::-webkit-scrollbar {
-  width:
-    8px;
+  position:
+    relative !important;
 }
 
 /* =========================================================
@@ -1868,6 +1960,9 @@ select:focus {
 
   height:
     auto !important;
+
+  max-height:
+    none !important;
 
   align-self:
     start !important;
@@ -2505,6 +2600,15 @@ select:focus {
   #modalVideoSearchResults {
     grid-template-columns:
       1fr !important;
+
+    height:
+      auto !important;
+
+    max-height:
+      none !important;
+
+    overflow:
+      visible !important;
   }
 }
 
@@ -2598,6 +2702,77 @@ select:focus {
   }
 
   /* =======================================================
+     MEMBER MOBILE FIX
+  ======================================================= */
+
+  .member-list {
+    width:
+      100% !important;
+
+    grid-template-columns:
+      1fr !important;
+  }
+
+  .member {
+    display:
+      flex !important;
+
+    flex-direction:
+      row !important;
+
+    align-items:
+      center !important;
+
+    width:
+      100% !important;
+
+    min-height:
+      52px !important;
+
+    padding:
+      8px 9px !important;
+  }
+
+  .member .avatar {
+    width:
+      32px !important;
+
+    height:
+      32px !important;
+
+    min-width:
+      32px !important;
+
+    min-height:
+      32px !important;
+
+    flex-basis:
+      32px !important;
+  }
+
+  .member .member-name {
+    flex:
+      1 1 auto !important;
+
+    min-width:
+      0 !important;
+  }
+
+  .member .online {
+    flex:
+      0 0 7px !important;
+
+    width:
+      7px !important;
+
+    height:
+      7px !important;
+
+    margin:
+      0 2px 0 auto !important;
+  }
+
+  /* =======================================================
      SEARCH HEADER MOBILE
   ======================================================= */
 
@@ -2618,7 +2793,7 @@ select:focus {
   .modal-card
   > div:nth-child(2) {
     height:
-      calc(100vh - 60px) !important;
+      calc(100dvh - 60px) !important;
 
     grid-template-columns:
       1fr !important;
@@ -2714,6 +2889,9 @@ select:focus {
 
   #sourceModal
   #modalVideoSearchResults {
+    display:
+      grid !important;
+
     grid-template-columns:
       1fr !important;
 
@@ -2723,14 +2901,32 @@ select:focus {
     min-height:
       auto !important;
 
+    height:
+      auto !important;
+
+    max-height:
+      none !important;
+
     overflow:
       visible !important;
+
+    padding:
+      8px 0 30px !important;
+
+    margin-top:
+      12px !important;
   }
 
   #sourceModal
   .video-result-card {
     width:
       100% !important;
+
+    max-width:
+      100% !important;
+
+    height:
+      auto !important;
   }
 }
 
@@ -2743,7 +2939,7 @@ select:focus {
       1fr !important;
 
     height:
-      calc(100vh - 60px) !important;
+      calc(100dvh - 60px) !important;
 
     overflow:
       hidden !important;
@@ -2784,6 +2980,15 @@ select:focus {
   #modalVideoSearchResults {
     grid-template-columns:
       1fr !important;
+
+    height:
+      auto !important;
+
+    max-height:
+      none !important;
+
+    overflow:
+      visible !important;
   }
 
   #sourceModal
@@ -2938,77 +3143,4 @@ select:focus {
     font-size:
       10px;
   }
-}
-/* =========================================================
-   MOBILE YOUTUBE SEARCH SCROLL FIX
-========================================================= */
-
-#sourceModal {
-  overscroll-behavior: none;
-}
-
-#sourceModal .modal-card {
-  min-height: 0;
-}
-
-#sourceModal .modal-card > div:nth-child(2) {
-  min-height: 0;
-  overflow: hidden;
-}
-
-#sourceModal
-#modalVideoSearchArea {
-  min-height: 0;
-}
-
-#sourceModal
-#modalVideoSearchResults {
-  position: relative;
-
-  width: 100%;
-
-  height: calc(100vh - 150px);
-  max-height: calc(100vh - 150px);
-
-  min-height: 0;
-
-  overflow-y: auto;
-  overflow-x: hidden;
-
-  -webkit-overflow-scrolling: touch;
-
-  overscroll-behavior-y: contain;
-
-  touch-action: pan-y;
-
-  scrollbar-width: thin;
-}
-
-@media (max-width: 760px) {
-
-  #sourceModal
-  #modalVideoSearchResults {
-    height: calc(100dvh - 60px) !important;
-    max-height: calc(100dvh - 60px) !important;
-
-    min-height: 0 !important;
-
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-
-    -webkit-overflow-scrolling: touch !important;
-
-    touch-action: pan-y !important;
-
-    overscroll-behavior-y: contain !important;
-
-    padding:
-      8px 10px 30px !important;
-  }
-
-  #sourceModal
-  .video-result-card {
-    width: 100%;
-  }
-
 }
