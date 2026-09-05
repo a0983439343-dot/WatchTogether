@@ -1009,10 +1009,18 @@
         logoutButton?.classList.add(
           "hidden"
         );
+
+        if (logoutButton) {
+          logoutButton.hidden = true;
+        }
       } else {
         logoutButton?.classList.remove(
           "hidden"
         );
+
+        if (logoutButton) {
+          logoutButton.hidden = false;
+        }
       }
 
       return;
@@ -1034,6 +1042,10 @@
     logoutButton?.classList.add(
       "hidden"
     );
+
+    if (logoutButton) {
+      logoutButton.hidden = true;
+    }
   }
   /*
    * =========================================================
