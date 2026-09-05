@@ -81,10 +81,6 @@ select {
   margin: 0 auto;
 }
 
-/* =========================================================
-   TOPBAR
-========================================================= */
-
 .topbar {
   position: sticky;
   top: 0;
@@ -152,10 +148,6 @@ select {
     0 0 12px rgba(34, 197, 94, .7);
 }
 
-/* =========================================================
-   MAIN
-========================================================= */
-
 main {
   width: 100%;
   padding: 32px 24px 60px;
@@ -164,10 +156,6 @@ main {
 .view {
   width: 100%;
 }
-
-/* =========================================================
-   HERO
-========================================================= */
 
 .hero {
   max-width: 860px;
@@ -227,10 +215,6 @@ main {
   line-height: 1.75;
 }
 
-/* =========================================================
-   PANELS
-========================================================= */
-
 .panel {
   border:
     1px solid rgba(255, 255, 255, .07);
@@ -277,10 +261,6 @@ main {
 
   margin: 0 auto;
 }
-
-/* =========================================================
-   FORM
-========================================================= */
 
 label {
   display: block;
@@ -337,10 +317,6 @@ select:focus {
   box-shadow:
     0 0 0 4px rgba(96, 165, 250, .10);
 }
-
-/* =========================================================
-   PLATFORM NOTICE
-========================================================= */
 
 .platform-notice {
   display: flex;
@@ -401,10 +377,6 @@ select:focus {
 .platform-input-area {
   width: 100%;
 }
-
-/* =========================================================
-   BUTTONS
-========================================================= */
 
 .primary-btn,
 .secondary-btn,
@@ -539,10 +511,6 @@ select:focus {
   font-weight: 800;
 }
 
-/* =========================================================
-   DIVIDER
-========================================================= */
-
 .divider {
   display: flex;
   align-items: center;
@@ -568,10 +536,6 @@ select:focus {
   background:
     rgba(255, 255, 255, .07);
 }
-
-/* =========================================================
-   PLATFORM GRID
-========================================================= */
 
 .platform-grid {
   display: grid;
@@ -667,10 +631,6 @@ select:focus {
     0 0 0 1px rgba(96, 165, 250, .08);
 }
 
-/* =========================================================
-   ROOM HEADER
-========================================================= */
-
 .room-toolbar {
   display: flex;
 
@@ -752,10 +712,6 @@ select:focus {
     rgba(96, 165, 250, .06) !important;
 }
 
-/* =========================================================
-   ROOM LAYOUT
-========================================================= */
-
 .room-layout {
   display: grid;
 
@@ -784,10 +740,6 @@ select:focus {
 .chat-panel {
   padding: 16px;
 }
-
-/* =========================================================
-   PLAYER
-========================================================= */
 
 .player-wrap {
   position: relative;
@@ -882,10 +834,6 @@ select:focus {
   object-fit: contain;
 }
 
-/* =========================================================
-   EMPTY PLAYER
-========================================================= */
-
 .empty-player {
   position: absolute;
 
@@ -933,10 +881,6 @@ select:focus {
   font-size: 13px;
   line-height: 1.65;
 }
-
-/* =========================================================
-   EXTERNAL PLAYER NOTICE
-========================================================= */
 
 .platform-player-notice {
   position: absolute;
@@ -1014,10 +958,6 @@ select:focus {
   font-size: 14px;
 }
 
-/* =========================================================
-   SYNC BAR
-========================================================= */
-
 .sync-bar {
   display: flex;
 
@@ -1060,10 +1000,6 @@ select:focus {
   box-shadow:
     0 0 12px rgba(34, 197, 94, .7);
 }
-
-/* =========================================================
-   CONTROLS
-========================================================= */
 
 .room-controls {
   display: flex;
@@ -1151,10 +1087,6 @@ select:focus {
 
   margin-top: 12px;
 }
-
-/* =========================================================
-   MEMBERS
-========================================================= */
 
 .row-title {
   display: flex;
@@ -1290,62 +1222,28 @@ select:focus {
 }
 
 .member-name {
-  position: static !important;
-
   display: flex !important;
-
-  flex-direction: column !important;
-
-  align-items: flex-start !important;
-
-  justify-content: center !important;
-
-  flex:
-    1 1 auto !important;
-
-  width: auto !important;
-
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 1 1 auto !important;
   min-width: 0 !important;
-
-  gap: 2px !important;
-
   margin: 0 !important;
-
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
 .member-name b {
-  display: block !important;
-
-  width: 100% !important;
-
+  font-size: 13px !important;
+  color: #e2e8f0 !important;
+  white-space: nowrap !important;
   overflow: hidden !important;
-
-  color: #e2e8f0;
-
-  font-size: 13px;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
+  text-overflow: ellipsis !important;
 }
 
 .member-name span {
-  display: block !important;
-
-  width: 100% !important;
-
-  margin: 0 !important;
-
-  overflow: hidden;
-
-  color: #64748b;
-
-  font-size: 10px;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
+  font-size: 11px !important;
+  color: #64748b !important;
+  white-space: nowrap !important;
 }
 
 .member .online {
@@ -1373,10 +1271,6 @@ select:focus {
   box-shadow:
     0 0 9px rgba(34, 197, 94, .7);
 }
-
-/* =========================================================
-   QUEUE
-========================================================= */
 
 .queue-list {
   display: grid;
@@ -1467,10 +1361,6 @@ select:focus {
 .queue-item img {
   flex: 0 0 auto;
 }
-
-/* =========================================================
-   CHAT
-========================================================= */
 
 .chat-panel {
   display: flex;
@@ -1576,10 +1466,6 @@ select:focus {
   font-weight: 850;
 }
 
-/* =========================================================
-   MODAL BASE
-========================================================= */
-
 .modal {
   position: fixed;
 
@@ -1646,10 +1532,6 @@ select:focus {
   margin-top: 0;
 }
 
-/* =========================================================
-   SEARCH
-========================================================= */
-
 .search-row {
   display: grid;
 
@@ -1690,10 +1572,6 @@ select:focus {
   filter:
     brightness(1.08);
 }
-
-/* =========================================================
-   YOUTUBE FULL SEARCH UI
-========================================================= */
 
 #sourceModal {
   position: fixed !important;
@@ -1772,10 +1650,6 @@ select:focus {
     none !important;
 }
 
-/* =========================================================
-   YOUTUBE SEARCH HEADER
-========================================================= */
-
 #sourceModal .modal-card > div:first-child {
   flex:
     0 0 auto;
@@ -1783,10 +1657,6 @@ select:focus {
   min-height:
     68px;
 }
-
-/* =========================================================
-   SEARCH BODY
-========================================================= */
 
 #sourceModal .modal-card > div:nth-child(2) {
   flex:
@@ -1814,10 +1684,6 @@ select:focus {
     hidden !important;
 }
 
-/* =========================================================
-   SEARCH SIDEBAR
-========================================================= */
-
 #sourceModal .modal-card > div:nth-child(2) > aside {
   min-width:
     0 !important;
@@ -1840,10 +1706,6 @@ select:focus {
   scrollbar-width:
     thin;
 }
-
-/* =========================================================
-   RIGHT SEARCH SECTION
-========================================================= */
 
 #sourceModal .modal-card > div:nth-child(2) > section {
   min-width:
@@ -1880,10 +1742,6 @@ select:focus {
   box-sizing:
     border-box !important;
 }
-
-/* =========================================================
-   SEARCH RESULT AREA
-========================================================= */
 
 #sourceModal #modalVideoSearchResults {
   display:
@@ -1925,10 +1783,6 @@ select:focus {
   position:
     relative !important;
 }
-
-/* =========================================================
-   SEARCH RESULT CARD
-========================================================= */
 
 #sourceModal .video-result-card {
   width:
@@ -1993,10 +1847,6 @@ select:focus {
     0 0 0 1px rgba(255,255,255,.08);
 }
 
-/* =========================================================
-   RESULT MAIN
-========================================================= */
-
 #sourceModal .video-result-main {
   display:
     flex !important;
@@ -2037,10 +1887,6 @@ select:focus {
     transparent;
 }
 
-/* =========================================================
-   RESULT THUMBNAIL
-========================================================= */
-
 #sourceModal .video-result-main img {
   display:
     block;
@@ -2066,10 +1912,6 @@ select:focus {
   background:
     #050505;
 }
-
-/* =========================================================
-   RESULT INFO
-========================================================= */
 
 #sourceModal .video-result-info {
   display:
@@ -2140,10 +1982,6 @@ select:focus {
     nowrap;
 }
 
-/* =========================================================
-   RESULT ACTIONS
-========================================================= */
-
 #sourceModal .video-result-card > div {
   display:
     flex;
@@ -2208,10 +2046,6 @@ select:focus {
   background:
     rgba(255,255,255,.08);
 }
-
-/* =========================================================
-   EMPTY / LOAD MORE
-========================================================= */
 
 #sourceModal
 #modalVideoSearchResults
@@ -2281,10 +2115,6 @@ select:focus {
     44px !important;
 }
 
-/* =========================================================
-   EXTERNAL SOURCE
-========================================================= */
-
 #sourceModal #modalExternalSourceArea {
   max-width:
     760px;
@@ -2304,10 +2134,6 @@ select:focus {
   background:
     #151518;
 }
-
-/* =========================================================
-   SEARCH SCROLLBAR
-========================================================= */
 
 #sourceModal
 .modal-card
@@ -2362,10 +2188,6 @@ select:focus {
   background:
     rgba(148,163,184,.45);
 }
-
-/* =========================================================
-   TOAST
-========================================================= */
 
 .toast {
   position: fixed;
@@ -2425,10 +2247,6 @@ select:focus {
     translate(-50%, 0);
 }
 
-/* =========================================================
-   GLOBAL SCROLLBAR
-========================================================= */
-
 * {
   scrollbar-width:
     thin;
@@ -2458,10 +2276,6 @@ select:focus {
   background:
     rgba(148, 163, 184, .3);
 }
-
-/* =========================================================
-   RESPONSIVE
-========================================================= */
 
 @media (max-width: 1100px) {
 
