@@ -1184,11 +1184,6 @@ select:focus {
   font-size: 11px;
 }
 
-/*
- * 成員列表
- * 固定單欄，避免成員卡片被其他 grid/flex 規則拉歪
- */
-
 .member-list {
   display: grid !important;
 
@@ -1210,10 +1205,6 @@ select:focus {
 
   -webkit-overflow-scrolling: touch;
 }
-
-/*
- * 成員卡片
- */
 
 .member {
   position: relative !important;
@@ -1263,10 +1254,6 @@ select:focus {
     rgba(96, 165, 250, .14);
 }
 
-/*
- * 頭像
- */
-
 .member .avatar {
   position: static !important;
 
@@ -1301,10 +1288,6 @@ select:focus {
 
   font-weight: 850;
 }
-
-/*
- * 名稱區
- */
 
 .member-name {
   position: static !important;
@@ -1364,10 +1347,6 @@ select:focus {
 
   white-space: nowrap;
 }
-
-/*
- * 在線綠點
- */
 
 .member .online {
   position: static !important;
@@ -2701,10 +2680,6 @@ select:focus {
       11px;
   }
 
-  /* =======================================================
-     MEMBER MOBILE FIX
-  ======================================================= */
-
   .member-list {
     width:
       100% !important;
@@ -2771,10 +2746,6 @@ select:focus {
     margin:
       0 2px 0 auto !important;
   }
-
-  /* =======================================================
-     SEARCH HEADER MOBILE
-  ======================================================= */
 
   #sourceModal
   .modal-card
@@ -3143,4 +3114,74 @@ select:focus {
     font-size:
       10px;
   }
+}
+
+#sourceModal {
+  overscroll-behavior: none;
+}
+
+#sourceModal .modal-card {
+  min-height: 0;
+}
+
+#sourceModal .modal-card > div:nth-child(2) {
+  min-height: 0;
+  overflow: hidden;
+}
+
+#sourceModal
+#modalVideoSearchArea {
+  min-height: 0;
+}
+
+#sourceModal
+#modalVideoSearchResults {
+  position: relative;
+
+  width: 100%;
+
+  height: calc(100vh - 150px);
+  max-height: calc(100vh - 150px);
+
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  -webkit-overflow-scrolling: touch;
+
+  overscroll-behavior-y: contain;
+
+  touch-action: pan-y;
+
+  scrollbar-width: thin;
+}
+
+@media (max-width: 760px) {
+
+  #sourceModal
+  #modalVideoSearchResults {
+    height: calc(100dvh - 60px) !important;
+    max-height: calc(100dvh - 60px) !important;
+
+    min-height: 0 !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    -webkit-overflow-scrolling: touch !important;
+
+    touch-action: pan-y !important;
+
+    overscroll-behavior-y: contain !important;
+
+    padding:
+      8px 10px 30px !important;
+  }
+
+  #sourceModal
+  .video-result-card {
+    width: 100%;
+  }
+
 }
