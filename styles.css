@@ -795,109 +795,12 @@ select:focus {
 .row-title > span:last-child {
   min-width: 26px;
   padding: 3px 7px;
-
   border-radius: 999px;
-
   background: rgba(255, 255, 255, .06);
-
   color: #94a3b8;
-
   text-align: center;
-
   font-size: 11px;
 }
-
-.member-list {
-  display: grid;
-  gap: 9px;
-
-  max-height: 300px;
-
-  overflow-y: auto;
-}
-
-.member {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-
-  min-width: 0;
-
-  padding: 9px;
-
-  border: 1px solid rgba(255, 255, 255, .05);
-  border-radius: 12px;
-
-  background: rgba(255, 255, 255, .025);
-}
-
-.avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 34px;
-  height: 34px;
-
-  flex: 0 0 auto;
-
-  border-radius: 10px;
-
-  background:
-    linear-gradient(
-      135deg,
-      rgba(96, 165, 250, .25),
-      rgba(139, 92, 246, .23)
-    );
-
-  color: #dbeafe;
-
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.member-name {
-  min-width: 0;
-
-  display: grid;
-  gap: 2px;
-}
-
-.member-name b {
-  overflow: hidden;
-
-  color: #e2e8f0;
-
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.member-name span {
-  color: #64748b;
-
-  font-size: 10px;
-}
-
-.online {
-  width: 7px;
-  height: 7px;
-
-  margin-left: auto;
-
-  flex: 0 0 auto;
-
-  border-radius: 50%;
-
-  background: #22c55e;
-
-  box-shadow:
-    0 0 9px rgba(34, 197, 94, .7);
-}
-
-/* =========================
-   MEMBERS LAYOUT FIX
-========================= */
 
 .member-list {
   display: flex;
@@ -905,56 +808,84 @@ select:focus {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  max-width: 100%;
+  max-height: 300px;
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .member {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 8px auto;
+  display: flex;
   align-items: center;
-  column-gap: 9px;
   width: 100%;
   min-width: 0;
   min-height: 52px;
   padding: 8px 10px;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, .05);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
   overflow: hidden;
 }
 
 .member .avatar {
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
-  min-width: 34px;
-  min-height: 34px;
-  margin: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(96, 165, 250, .25), rgba(139, 92, 246, .23));
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .member .member-name {
+  flex: 1 1 auto;
   min-width: 0;
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: 2px;
   overflow: hidden;
 }
 
-.member .member-name b,
-.member .member-name span {
+.member .member-name b {
+  display: block;
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member .member-name span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .member .online {
-  width: 7px;
-  height: 7px;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
   margin: 0;
-  justify-self: center;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 9px rgba(34, 197, 94, .7);
 }
 
 .member [data-member-kick] {
+  flex: 0 0 auto;
   width: auto;
   min-width: 48px;
   min-height: 30px;
@@ -967,20 +898,20 @@ select:focus {
   .members-panel {
     min-width: 0;
     width: 100%;
-    overflow: hidden;
   }
 
   .member-list {
-    max-height: 300px;
-    overflow-x: hidden;
-    overflow-y: auto;
+    max-height: 280px;
   }
 
   .member {
-    grid-template-columns: 34px minmax(0, 1fr) 8px auto;
-    column-gap: 8px;
+    gap: 8px;
     min-height: 50px;
     padding: 8px;
+  }
+
+  .member .avatar {
+    flex-basis: 34px;
   }
 
   .member [data-member-kick] {
