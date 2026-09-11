@@ -195,6 +195,18 @@
 
     kickedLocally: false,
 
+    playbackListenerAttached: false,
+
+    playbackApplyingRemote: false,
+
+    playbackReadyAt: 0,
+
+    playbackLastPosition: null,
+
+    playbackLastPlaying: null,
+
+    playbackSeekTimer: null,
+
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -5481,6 +5493,8 @@
     video
   ) {
     if (!video) {
+      stopPlaybackSeekDetector();
+
       state.youtubeRequestedId =
         null;
 
@@ -5555,11 +5569,290 @@
         true
       );
 
+      startPlaybackSeekDetector();
+
       return;
     }
 
     await buildPlatformPlayer(
       normalized
+    );
+
+    startPlaybackSeekDetector();
+  }
+
+
+  /*
+   * =========================================================
+   * EVENT-BASED PLAYBACK SYNC
+   * =========================================================
+   * 同步：播放、暫停、拖曳跳轉。
+   * 不做每秒 Firebase 播放進度寫入。
+   */
+
+  function playbackSyncRef() {
+    if (!db || !state.roomId) {
+      return null;
+    }
+
+    return db.ref(
+      `rooms/${state.roomId}/playbackEvent`
+    );
+  }
+
+
+  async function publishPlaybackEvent(
+    action,
+    position = null
+  ) {
+    if (
+      !state.uid ||
+      !state.roomId ||
+      !state.playerReady ||
+      !state.player ||
+      state.playbackApplyingRemote ||
+      Date.now() < Number(state.playbackReadyAt || 0)
+    ) {
+      return;
+    }
+
+    if (
+      state.playerType === "bilibili" ||
+      state.playerType === "external"
+    ) {
+      return;
+    }
+
+    const ref = playbackSyncRef();
+
+    if (!ref || !state.currentVideoId) {
+      return;
+    }
+
+    let finalPosition = Number(position);
+
+    if (!Number.isFinite(finalPosition)) {
+      finalPosition = await asyncCurrentPosition();
+    }
+
+    finalPosition = Math.max(
+      0,
+      Number(finalPosition) || 0
+    );
+
+    try {
+      await ref.set({
+        action:
+          action === "pause"
+            ? "pause"
+            : action === "seek"
+              ? "seek"
+              : "play",
+
+        position: finalPosition,
+
+        videoId:
+          String(state.currentVideoId),
+
+        updatedAt:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP,
+
+        updatedBy:
+          state.uid,
+
+        eventId:
+          `${state.uid}_${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`
+      });
+    } catch (error) {
+      console.warn(
+        "播放同步寫入失敗:",
+        error
+      );
+    }
+  }
+
+
+  async function applyRemotePlaybackEvent(
+    event
+  ) {
+    if (
+      !event ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
+      return;
+    }
+
+    if (
+      String(event.videoId || "") !==
+      String(state.currentVideoId || "")
+    ) {
+      return;
+    }
+
+    if (
+      event.action !== "play" &&
+      event.action !== "pause" &&
+      event.action !== "seek"
+    ) {
+      return;
+    }
+
+    if (
+      state.playerType === "bilibili" ||
+      state.playerType === "external"
+    ) {
+      return;
+    }
+
+    state.playbackApplyingRemote = true;
+    state.playbackReadyAt = Date.now() + 1400;
+
+    try {
+      const position = Math.max(
+        0,
+        Number(event.position) || 0
+      );
+
+      await applyPlayerPosition(position);
+
+      if (event.action === "play") {
+        await playPlayer();
+      } else if (event.action === "pause") {
+        await pausePlayer();
+      }
+    } catch (error) {
+      console.warn(
+        "套用遠端播放狀態失敗:",
+        error
+      );
+    } finally {
+      state.playbackApplyingRemote = false;
+
+      state.playbackLastPosition =
+        await asyncCurrentPosition();
+
+      state.playbackLastPlaying =
+        await asyncIsPlaying();
+    }
+  }
+
+
+  async function handleRemotePlaybackSnapshot(
+    snapshot
+  ) {
+    const event = snapshot?.val?.() || null;
+
+    if (!event) {
+      return;
+    }
+
+    if (
+      !event.eventId ||
+      event.updatedBy === state.uid
+    ) {
+      return;
+    }
+
+    await applyRemotePlaybackEvent(event);
+  }
+
+
+  function attachPlaybackSyncListener() {
+    if (
+      !state.roomRef ||
+      state.playbackListenerAttached
+    ) {
+      return;
+    }
+
+    const ref = playbackSyncRef();
+
+    if (!ref) {
+      return;
+    }
+
+    ref.on(
+      "value",
+      (snapshot) => {
+        void handleRemotePlaybackSnapshot(snapshot);
+      }
+    );
+
+    state.playbackListenerAttached = true;
+  }
+
+
+  function stopPlaybackSeekDetector() {
+    clearInterval(state.playbackSeekTimer);
+    state.playbackSeekTimer = null;
+    state.playbackLastPosition = null;
+    state.playbackLastPlaying = null;
+  }
+
+
+  function startPlaybackSeekDetector() {
+    stopPlaybackSeekDetector();
+
+    state.playbackReadyAt = Date.now() + 1500;
+
+    state.playbackSeekTimer = setInterval(
+      async () => {
+        if (
+          !state.playerReady ||
+          !state.player ||
+          state.playbackApplyingRemote
+        ) {
+          return;
+        }
+
+        const position = await asyncCurrentPosition();
+        const playing = await asyncIsPlaying();
+
+        if (
+          Date.now() <
+          Number(state.playbackReadyAt || 0)
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          return;
+        }
+
+        if (
+          state.playbackLastPosition === null ||
+          state.playbackLastPlaying === null
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          return;
+        }
+
+        const delta =
+          position - Number(state.playbackLastPosition);
+
+        if (Math.abs(delta) >= 1.35) {
+          void publishPlaybackEvent(
+            "seek",
+            position
+          );
+        }
+
+        if (playing !== state.playbackLastPlaying) {
+          void publishPlaybackEvent(
+            playing ? "play" : "pause",
+            position
+          );
+        }
+
+        state.playbackLastPosition = position;
+        state.playbackLastPlaying = playing;
+      },
+      300
     );
   }
 
@@ -5838,6 +6131,8 @@
 
     updateRoomOwnerUI();
 
+    stopPlaybackSeekDetector();
+
     state.roomRef =
       db.ref(
         `rooms/${state.roomId}`
@@ -5941,6 +6236,8 @@
       state.membersListenerAttached =
         true;
     }
+
+    attachPlaybackSyncListener();
 
     if (
       !state.chatListenerAttached
@@ -6621,9 +6918,19 @@
       state.roomRef
         ?.child("video")
         .off();
+
+      playbackSyncRef()?.off();
+
+      stopPlaybackSeekDetector();
     } catch (_) {}
 
     state.videoListenerAttached =
+      false;
+
+    state.playbackListenerAttached =
+      false;
+
+    state.playbackApplyingRemote =
       false;
 
     state.membersListenerAttached =
@@ -7694,6 +8001,8 @@
       clearInterval(
         state.memberHeartbeatTimer
       );
+
+      stopPlaybackSeekDetector();
 
       unlockPageScroll();
     }
