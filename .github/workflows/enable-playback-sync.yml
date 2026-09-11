@@ -1,4 +1,4 @@
-name: Enable WatchTogether Playback Sync
+name: Repair WatchTogether Playback Sync
 
 on:
   push:
@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  patch:
-    if: ${{ !contains(github.event.head_commit.message, 'Enable event playback sync') }}
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, 'Restore and fix playback sync') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,17 +18,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch app.js
+      - name: Restore known-good app.js
+        run: git show b4db178f131b543a41354ccbf10a20e2b4bb4296:app.js > app.js
+
+      - name: Apply playback sync patch
         run: python3 .github/scripts/patch_playback_sync.py
 
-      - name: Commit patch
+      - name: Verify
+        run: |
+          test -s app.js
+          grep -q "function attachPlaybackSyncListener()" app.js
+          grep -q "publishPlaybackEvent" app.js
+          ! grep -q "schedulePlayingPositionSync" app.js
+          node --check app.js
+          wc -l app.js
+
+      - name: Commit repaired app.js
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- app.js; then
-            echo "No app.js changes needed"
-            exit 0
-          fi
           git add app.js
-          git commit -m "Enable event playback sync"
+          git commit -m "Restore and fix playback sync"
           git push
