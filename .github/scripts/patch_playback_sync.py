@@ -3,22 +3,26 @@ from pathlib import Path
 path = Path("app.js")
 text = path.read_text(encoding="utf-8")
 
-if "function attachPlaybackSyncListener()" in text:
-    print("Playback sync already patched")
-    raise SystemExit(0)
 
-state_marker = "    kickedLocally: false,\n"
-state_insert = """    kickedLocally: false,\n\n    playbackListenerAttached: false,\n\n    playbackApplyingRemote: false,\n\n    playbackReadyAt: 0,\n\n    playbackLastPosition: null,\n\n    playbackLastPlaying: null,\n\n    playbackSeekTimer: null,\n"""
-if state_marker not in text:
-    raise SystemExit("STATE marker not found")
-text = text.replace(state_marker, state_insert, 1)
+def replace_once(old, new, name):
+    global text
+    if old not in text:
+        raise SystemExit(f"{name} marker not found")
+    text = text.replace(old, new, 1)
+
+
+replace_once(
+    "    kickedLocally: false,\n",
+    """    kickedLocally: false,\n\n    playbackListenerAttached: false,\n\n    playbackApplyingRemote: false,\n\n    playbackReadyAt: 0,\n\n    playbackLastPosition: null,\n\n    playbackLastPlaying: null,\n\n    playbackLastSampleAt: 0,\n\n    playbackSeekTimer: null,\n""",
+    "state"
+)
 
 sync_code = r'''  /*
    * =========================================================
    * EVENT-BASED PLAYBACK SYNC
    * =========================================================
    * 同步：播放、暫停、拖曳跳轉。
-   * 不做每秒 Firebase 播放進度寫入。
+   * 不做持續性的播放進度同步。
    */
 
   function playbackSyncRef() {
@@ -150,11 +154,17 @@ sync_code = r'''  /*
         Number(event.position) || 0
       );
 
-      await applyPlayerPosition(position);
+      if (event.action === "seek") {
+        await applyPlayerPosition(position);
+      }
 
       if (event.action === "play") {
+        await applyPlayerPosition(position);
         await playPlayer();
-      } else if (event.action === "pause") {
+      }
+
+      if (event.action === "pause") {
+        await applyPlayerPosition(position);
         await pausePlayer();
       }
     } catch (error) {
@@ -170,6 +180,9 @@ sync_code = r'''  /*
 
       state.playbackLastPlaying =
         await asyncIsPlaying();
+
+      state.playbackLastSampleAt =
+        Date.now();
     }
   }
 
@@ -224,6 +237,7 @@ sync_code = r'''  /*
     state.playbackSeekTimer = null;
     state.playbackLastPosition = null;
     state.playbackLastPlaying = null;
+    state.playbackLastSampleAt = 0;
   }
 
 
@@ -231,6 +245,7 @@ sync_code = r'''  /*
     stopPlaybackSeekDetector();
 
     state.playbackReadyAt = Date.now() + 1500;
+    state.playbackLastSampleAt = Date.now();
 
     state.playbackSeekTimer = setInterval(
       async () => {
@@ -242,111 +257,301 @@ sync_code = r'''  /*
           return;
         }
 
+        const now = Date.now();
         const position = await asyncCurrentPosition();
         const playing = await asyncIsPlaying();
 
-        if (
-          Date.now() <
-          Number(state.playbackReadyAt || 0)
-        ) {
+        if (now < Number(state.playbackReadyAt || 0)) {
           state.playbackLastPosition = position;
           state.playbackLastPlaying = playing;
+          state.playbackLastSampleAt = now;
           return;
         }
 
         if (
           state.playbackLastPosition === null ||
-          state.playbackLastPlaying === null
+          state.playbackLastPlaying === null ||
+          !state.playbackLastSampleAt
         ) {
           state.playbackLastPosition = position;
           state.playbackLastPlaying = playing;
+          state.playbackLastSampleAt = now;
           return;
         }
+
+        const elapsed = Math.max(
+          0.05,
+          (now - state.playbackLastSampleAt) / 1000
+        );
 
         const delta =
           position - Number(state.playbackLastPosition);
 
-        if (Math.abs(delta) >= 1.35) {
+        const expectedDelta =
+          playing ? elapsed : 0;
+
+        const seekError =
+          Math.abs(delta - expectedDelta);
+
+        if (seekError >= 1.5) {
           void publishPlaybackEvent(
             "seek",
             position
           );
-        }
 
-        if (playing !== state.playbackLastPlaying) {
-          void publishPlaybackEvent(
-            playing ? "play" : "pause",
-            position
-          );
+          state.playbackReadyAt = now + 600;
         }
 
         state.playbackLastPosition = position;
         state.playbackLastPlaying = playing;
+        state.playbackLastSampleAt = now;
       },
-      300
+      350
     );
   }
 
 
 '''
 
-room_ui_marker = '''  /*
+replace_once(
+    '''  /*
    * =========================================================
    * ROOM UI
    * =========================================================
    */
-'''
-if room_ui_marker not in text:
-    raise SystemExit("ROOM UI marker not found")
-text = text.replace(room_ui_marker, sync_code + room_ui_marker, 1)
+''',
+    sync_code + '''  /*
+   * =========================================================
+   * ROOM UI
+   * =========================================================
+   */
+''',
+    "sync insertion"
+)
 
-no_video_old = """    if (!video) {\n      state.youtubeRequestedId =\n        null;\n"""
-no_video_new = """    if (!video) {\n      stopPlaybackSeekDetector();\n\n      state.youtubeRequestedId =\n        null;\n"""
-if no_video_old not in text:
-    raise SystemExit("handleRoomVideo marker not found")
-text = text.replace(no_video_old, no_video_new, 1)
+replace_once(
+    '''                  forceYoutubeVisible();
 
-yt_build_old = """      await buildYoutubePlayer(\n        videoId,\n        true\n      );\n\n      return;\n"""
-yt_build_new = """      await buildYoutubePlayer(\n        videoId,\n        true\n      );\n\n      startPlaybackSeekDetector();\n\n      return;\n"""
-if yt_build_old not in text:
-    raise SystemExit("YouTube build marker not found")
-text = text.replace(yt_build_old, yt_build_new, 1)
+                  if (
+                    event.data ===
+                    YT.PlayerState.ENDED
+                  ) {''',
+    '''                  forceYoutubeVisible();
 
-other_build_old = """    await buildPlatformPlayer(\n      normalized\n    );\n  }\n"""
-other_build_new = """    await buildPlatformPlayer(\n      normalized\n    );\n\n    startPlaybackSeekDetector();\n  }\n"""
-if other_build_old not in text:
-    raise SystemExit("other build marker not found")
-text = text.replace(other_build_old, other_build_new, 1)
+                  if (
+                    event.data ===
+                    YT.PlayerState.PLAYING
+                  ) {
+                    if (!state.playbackApplyingRemote) {
+                      void publishPlaybackEvent(
+                        "play"
+                      );
+                    }
+                  }
 
-enter_old = """    updateRoomOwnerUI();\n\n    state.roomRef =\n"""
-enter_new = """    updateRoomOwnerUI();\n\n    stopPlaybackSeekDetector();\n\n    state.roomRef =\n"""
-if enter_old not in text:
-    raise SystemExit("enterRoom marker not found")
-text = text.replace(enter_old, enter_new, 1)
+                  if (
+                    event.data ===
+                    YT.PlayerState.PAUSED
+                  ) {
+                    if (!state.playbackApplyingRemote) {
+                      void publishPlaybackEvent(
+                        "pause"
+                      );
+                    }
+                  }
 
-chat_marker = """    if (\n      !state.chatListenerAttached\n    ) {\n"""
-chat_replacement = """    attachPlaybackSyncListener();\n\n    if (\n      !state.chatListenerAttached\n    ) {\n"""
-if chat_marker not in text:
-    raise SystemExit("chat listener marker not found")
-text = text.replace(chat_marker, chat_replacement, 1)
+                  if (
+                    event.data ===
+                    YT.PlayerState.ENDED
+                  ) {''',
+    "youtube events"
+)
 
-cleanup_old = """      state.roomRef\n        ?.child("video")\n        .off();\n"""
-cleanup_new = """      state.roomRef\n        ?.child("video")\n        .off();\n\n      playbackSyncRef()?.off();\n\n      stopPlaybackSeekDetector();\n"""
-if cleanup_old not in text:
-    raise SystemExit("cleanup marker not found")
-text = text.replace(cleanup_old, cleanup_new, 1)
+replace_once(
+    '''          if (
+            await asyncIsPlaying()
+          ) {
+            await pausePlayer();
+          } else {
+            await playPlayer();
+          }
 
-cleanup_state_old = """    state.videoListenerAttached =\n      false;\n"""
-cleanup_state_new = """    state.videoListenerAttached =\n      false;\n\n    state.playbackListenerAttached =\n      false;\n\n    state.playbackApplyingRemote =\n      false;\n"""
-if cleanup_state_old not in text:
-    raise SystemExit("cleanup state marker not found")
-text = text.replace(cleanup_state_old, cleanup_state_new, 1)
+          updateTimeUI();''',
+    '''          const position =
+            await asyncCurrentPosition();
 
-unload_old = """      clearInterval(\n        state.memberHeartbeatTimer\n      );\n\n      unlockPageScroll();\n"""
-unload_new = """      clearInterval(\n        state.memberHeartbeatTimer\n      );\n\n      stopPlaybackSeekDetector();\n\n      unlockPageScroll();\n"""
-if unload_old not in text:
-    raise SystemExit("unload marker not found")
-text = text.replace(unload_old, unload_new, 1)
+          if (
+            await asyncIsPlaying()
+          ) {
+            await pausePlayer();
+            void publishPlaybackEvent(
+              "pause",
+              position
+            );
+          } else {
+            await playPlayer();
+            void publishPlaybackEvent(
+              "play",
+              position
+            );
+          }
+
+          updateTimeUI();''',
+    "play pause button"
+)
+
+seek_block = '''          await applyPlayerPosition(
+            target
+          );
+        }
+      );'''
+if text.count(seek_block) != 2:
+    raise SystemExit(
+        f"expected 2 seek blocks, got {text.count(seek_block)}"
+    )
+text = text.replace(
+    seek_block,
+    '''          await applyPlayerPosition(
+            target
+          );
+
+          void publishPlaybackEvent(
+            "seek",
+            target
+          );
+        }
+      );''',
+    2
+)
+
+replace_once(
+    '''    if (!video) {
+      state.youtubeRequestedId =
+        null;
+''',
+    '''    if (!video) {
+      stopPlaybackSeekDetector();
+
+      state.youtubeRequestedId =
+        null;
+''',
+    "empty video"
+)
+
+replace_once(
+    '''      await buildYoutubePlayer(
+        videoId,
+        true
+      );
+
+      return;
+''',
+    '''      await buildYoutubePlayer(
+        videoId,
+        true
+      );
+
+      startPlaybackSeekDetector();
+
+      return;
+''',
+    "youtube build"
+)
+
+replace_once(
+    '''    await buildPlatformPlayer(
+      normalized
+    );
+  }
+''',
+    '''    await buildPlatformPlayer(
+      normalized
+    );
+
+    startPlaybackSeekDetector();
+  }
+''',
+    "other platform build"
+)
+
+replace_once(
+    '''    updateRoomOwnerUI();
+
+    state.roomRef =
+''',
+    '''    updateRoomOwnerUI();
+
+    stopPlaybackSeekDetector();
+    state.playbackLastSampleAt = 0;
+
+    state.roomRef =
+''',
+    "enter room"
+)
+
+replace_once(
+    '''    if (
+      !state.chatListenerAttached
+    ) {
+''',
+    '''    attachPlaybackSyncListener();
+
+    if (
+      !state.chatListenerAttached
+    ) {
+''',
+    "attach listener"
+)
+
+replace_once(
+    '''      state.roomRef
+        ?.child("video")
+        .off();
+''',
+    '''      state.roomRef
+        ?.child("video")
+        .off();
+
+      playbackSyncRef()?.off();
+
+      stopPlaybackSeekDetector();
+''',
+    "cleanup ref"
+)
+
+replace_once(
+    '''    state.videoListenerAttached =
+      false;
+''',
+    '''    state.videoListenerAttached =
+      false;
+
+    state.playbackListenerAttached =
+      false;
+
+    state.playbackApplyingRemote =
+      false;
+''',
+    "cleanup state"
+)
+
+replace_once(
+    '''      clearInterval(
+        state.memberHeartbeatTimer
+      );
+
+      unlockPageScroll();
+''',
+    '''      clearInterval(
+        state.memberHeartbeatTimer
+      );
+
+      stopPlaybackSeekDetector();
+
+      unlockPageScroll();
+''',
+    "unload"
+)
 
 path.write_text(text, encoding="utf-8")
-print("app.js patched successfully")
+print("app.js patch generated successfully")
