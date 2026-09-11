@@ -6873,35 +6873,36 @@
      */
 
     $("leaveRoomBtn")
-      ?.addEventListener(
-        "click",
-        async () => {
-          const confirmed =
-            window.confirm(
-              "確定要離開這個房間嗎？"
-            );
+  ?.addEventListener(
+    "click",
+    async () => {
+      const confirmed =
+        window.confirm(
+          "確定要離開這個房間嗎？"
+        );
 
-          if (!confirmed) {
-            return;
-          }
+      if (!confirmed) {
+        return;
+      }
 
-          try {
-            if (
-              state.membersRef &&
+      state.kickedLocally = true;
+
+      try {
+        if (
+          state.membersRef &&
+          state.uid
+        ) {
+          await state.membersRef
+            .child(
               state.uid
-            ) {
-              await state.membersRef
-                .child(
-                  state.uid
-                )
-                .remove();
-            }
-          } catch (_) {}
-
-          await leaveRoomLocally();
+            )
+            .remove();
         }
-      );
+      } catch (_) {}
 
+      await leaveRoomLocally();
+    }
+  );
 
     /*
      * PLAY / PAUSE
