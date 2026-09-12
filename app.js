@@ -4637,6 +4637,30 @@
 
                   startLocalTimeUpdate();
 
+                  if (
+                    state.isOwner &&
+                    autoplay &&
+                    state.player === event.target
+                  ) {
+                    setTimeout(async () => {
+                      try {
+                        if (
+                          state.playerReady &&
+                          state.player === event.target &&
+                          state.currentVideoId === videoId
+                        ) {
+                          await publishPlaybackEvent(
+                            "play",
+                            await asyncCurrentPosition(),
+                            true
+                          );
+                        }
+                      } catch (error) {
+                        console.warn("新影片播放狀態建立失敗:", error);
+                      }
+                    }, 450);
+                  }
+
                   setTimeout(async () => {
                     try {
                       await applyLatestRoomPlaybackState(true);
@@ -5640,7 +5664,7 @@
   /*
    * =========================================================
    * SHARED ROOM TIMELINE PLAYBACK SYNC
-   * WATCHTOGETHER_UNIFIED_SYNC_V4
+   * WATCHTOGETHER_UNIFIED_SYNC_V4_1
    * =========================================================
    *
    * 房間本身是唯一的同步來源，不指定任何成員為主機。
@@ -7427,10 +7451,6 @@
           const playing = await asyncIsPlaying();
           const position = await asyncCurrentPosition();
 
-          state.playbackApplyingRemote = true;
-          state.playbackIgnoreStateChanges = 8;
-          state.playbackIgnoreStateUntil = Date.now() + 2500;
-
           try {
             if (playing) {
               await pausePlayer();
@@ -7439,8 +7459,9 @@
               await publishPlaybackEvent("play", position, true);
               await playPlayer();
             }
-          } finally {
-            state.playbackApplyingRemote = false;
+          } catch (error) {
+            console.warn("播放控制同步失敗:", error);
+            toast(error?.message || "播放同步失敗");
           }
 
           updateTimeUI();
