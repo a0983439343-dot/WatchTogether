@@ -15,8 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply sync repair
+      - name: Apply sync repair V4
         run: python3 .github/scripts/repair_sync_final.py
+
+      - name: Apply sync repair V4.1
+        run: python3 .github/scripts/repair_sync_v41.py
 
       - name: Verify
         run: node --check app.js
