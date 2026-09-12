@@ -22,6 +22,23 @@ jobs:
       - name: Apply playback repair
         run: python3 .github/scripts/repair_playback_v2.py
 
+      - name: Ensure late joiner timeline recovery
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("app.js")
+          text = path.read_text(encoding="utf-8")
+          old = '''                  startLocalTimeUpdate();\n\n\n                  setTimeout(\n                    forceYoutubeVisible,\n                    100\n                  );'''
+          new = '''                  startLocalTimeUpdate();\n\n                  await applyLatestRoomPlaybackState(true);\n                  await reconcileRoomTimeline();\n\n                  setTimeout(\n                    forceYoutubeVisible,\n                    100\n                  );'''
+          if "await applyLatestRoomPlaybackState(true);\n                  await reconcileRoomTimeline();" not in text:
+              if old not in text:
+                  raise SystemExit("YouTube onReady late-joiner marker not found")
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
+          print("Late-joiner room timeline safeguard verified.")
+          PY
+
       - name: Verify JavaScript and Firebase rules
         run: |
           test -s app.js
@@ -34,6 +51,8 @@ jobs:
           grep -q "function applyLatestRoomPlaybackState" app.js
           grep -q "function attachPlaybackSyncListener" app.js
           grep -q "playbackEvent" database.rules.json
+          grep -q "await applyLatestRoomPlaybackState(true)" app.js
+          grep -q "await reconcileRoomTimeline()" app.js
           ! grep -q '\\n  /\\*' app.js
           git diff --check
           echo "Playback sync repair verification passed."
