@@ -1,0 +1,104 @@
+name: Fix server clock sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Repair app.js
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("app.js")
+          text = path.read_text(encoding="utf-8")
+
+          marker = '  function playbackSyncRef() {'
+
+          server_clock = '''  function serverNow() {
+            return Date.now() + Number(state.playbackServerTimeOffset || 0);
+          }
+
+
+          function attachServerClockSync() {
+            if (!db) {
+              return;
+            }
+
+            const ref = db.ref(".info/serverTimeOffset");
+
+            if (state.playbackServerClockHandler) {
+              try {
+                ref.off("value", state.playbackServerClockHandler);
+              } catch (_) {}
+            }
+
+            state.playbackServerClockHandler = (snapshot) => {
+              const offset = Number(snapshot?.val());
+              state.playbackServerTimeOffset = Number.isFinite(offset) ? offset : 0;
+            };
+
+            ref.on("value", state.playbackServerClockHandler);
+          }
+
+
+'''
+
+          if "function attachServerClockSync()" not in text:
+              if marker not in text:
+                  raise SystemExit("playbackSyncRef marker not found")
+              text = text.replace(marker, server_clock + marker, 1)
+
+          replacements = {
+              '    const updatedAt = Number(event?.updatedAt);': '    const updatedAt = Number(event?.updatedAt);',
+              '      base + Math.min(\n      Math.max(0, (now - updatedAt) / 1000),': '      base + Math.min(\n      Math.max(0, (now - updatedAt) / 1000),',
+          }
+
+          text = text.replace(
+              '    const now = Date.now();\n    const key =\n      `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;',
+              '    const now = serverNow();\n    const key =\n      `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;',
+              1,
+          )
+
+          text = text.replace(
+              '    const now = Date.now();\n    const position = await asyncCurrentPosition();\n    const playing = await asyncIsPlaying();\n    const expected = getTimelinePosition(timeline, now);',
+              '    const now = serverNow();\n    const position = await asyncCurrentPosition();\n    const playing = await asyncIsPlaying();\n    const expected = getTimelinePosition(timeline, now);',
+              1,
+          )
+
+          text = text.replace(
+              '        const now = Date.now();\n        const position = await asyncCurrentPosition();\n        const playing = await asyncIsPlaying();',
+              '        const now = serverNow();\n        const position = await asyncCurrentPosition();\n        const playing = await asyncIsPlaying();',
+              1,
+          )
+
+          path.write_text(text, encoding="utf-8")
+      - name: Verify
+        run: |
+          node --check app.js
+          grep -q "function attachServerClockSync()" app.js
+          grep -q "function serverNow()" app.js
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Fix missing server clock sync"
+          git push
