@@ -65,7 +65,7 @@ new_apply = '''  async function applyRemotePlaybackEvent(event) {
 s = s[:start] + new_apply + s[end:]
 
 snap_start = s.find("  function handleRemotePlaybackSnapshot(snapshot) {")
-snap_end = s.find("\n  function attachPlaybackSyncListener()", snap_start)
+snap_end = s.find("\n  function ", snap_start + 10)
 if snap_start < 0 or snap_end < 0:
     raise SystemExit("remote snapshot boundaries not found")
 
@@ -78,19 +78,17 @@ new_snapshot = '''  function handleRemotePlaybackSnapshot(snapshot) {
 '''
 s = s[:snap_start] + new_snapshot + s[snap_end:]
 
-s = s.replace(
-    '    state.playbackRemoteEvent = null;\n\n    try {\n      await ref.set({',
-    '    try {\n      await ref.set({',
-    1,
-)
+publish_marker = '    state.playbackRemoteEvent = null;\n\n    try {\n      await ref.set({'
+s = s.replace(publish_marker, '    try {\n      await ref.set({', 1)
 
-cleanup_marker = "    state.playbackRemoteEvent = null;"
-if cleanup_marker in s and "state.playbackLastRemoteEventId = null;" not in s:
-    s = s.replace(
-        cleanup_marker,
-        cleanup_marker + "\n    state.playbackLastRemoteEventId = null;\n    state.playbackApplyingRemoteEventId = null;",
-        1,
-    )
+if "state.playbackLastRemoteEventId = null;" not in s:
+    cleanup_marker = "    state.playbackRemoteEvent = null;"
+    if cleanup_marker in s:
+        s = s.replace(
+            cleanup_marker,
+            cleanup_marker + "\n    state.playbackLastRemoteEventId = null;\n    state.playbackApplyingRemoteEventId = null;",
+            1,
+        )
 
 APP.write_text(s, encoding="utf-8")
 
