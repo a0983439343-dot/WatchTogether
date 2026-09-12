@@ -21,6 +21,9 @@ jobs:
       - name: Apply sync repair V4.1
         run: python3 .github/scripts/repair_sync_v41.py
 
+      - name: Apply final playback pause ordering repair
+        run: python3 .github/scripts/repair_playback_v2.py
+
       - name: Verify
         run: node --check app.js
 
@@ -28,10 +31,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.js
+          git add app.js database.rules.json
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Automated WatchTogether sync repair"
+            git commit -m "Automated WatchTogether final playback repair"
             git push origin HEAD:main
           fi
