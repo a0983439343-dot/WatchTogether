@@ -1,48 +1,35 @@
 from pathlib import Path
 import json
-import re
 
 APP = Path("app.js")
 RULES = Path("database.rules.json")
 
 s = APP.read_text(encoding="utf-8")
 
-
-def ensure_once(text, needle, replacement, label):
-    if needle in text:
-        return text
-    if label not in text:
-        raise SystemExit(f"{label}: marker not found")
-    return text.replace(label, label + replacement, 1)
-
-
-# ---------------------------------------------------------
-# Shared room timeline state
-# ---------------------------------------------------------
+# Shared playback state used by the single room timeline.
 state_marker = '    playbackRecoveryTimer: null,\n'
-state_add = '''\n    playbackTimeline: null,\n    playbackAdGuardUntil: 0,\n    playbackTransientStateUntil: 0,\n    playbackLastPlayerState: null,\n    playbackLastObservedPosition: null,\n'''
+state_add = '''
+    playbackTimeline: null,
+    playbackAdGuardUntil: 0,
+    playbackTransientStateUntil: 0,
+    playbackLastPlayerState: null,
+    playbackLastObservedPosition: null,
+    playbackPendingRecovery: false,
+    playbackLocalIntentAt: 0,
+'''
 if "playbackTimeline: null" not in s:
     if state_marker not in s:
         raise SystemExit("shared playback state marker not found")
     s = s.replace(state_marker, state_marker + state_add, 1)
 
-
-# ---------------------------------------------------------
-# The YouTube ready callback must not apply the same room event
-# twice. The single playback sync engine below performs recovery.
-# ---------------------------------------------------------
+# The room timeline engine owns initial recovery. Do not run a second
+# copy from the YouTube ready callback.
 s = s.replace(
     '                  void applyLatestRoomPlaybackState();\n',
     '',
     1
 )
 
-
-# ---------------------------------------------------------
-# Replace the old event sync engine with a shared-room timeline.
-# No participant is a playback master. The latest room command is
-# the timeline anchor and its timestamp advances while playing.
-# ---------------------------------------------------------
 start_marker = '  /*\n   * =========================================================\n   * EVENT-BASED PLAYBACK SYNC\n   * =========================================================\n   */\n'
 end_marker = '  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */\n'
 
@@ -56,14 +43,15 @@ new_sync = r'''  /*
    * SHARED ROOM TIMELINE PLAYBACK SYNC
    * =========================================================
    *
-   * 不指定任何人的播放器當主機。
-   * Firebase 裡最後一個房間播放命令就是共享時間軸：
-   *   position + updatedAt + playing + videoId
+   * 沒有任何「主播放器」。Firebase 中最後一個 room command
+   * 就是所有人的共同時間軸：position + updatedAt + playing。
    *
-   * playing=true  時：position 會依 updatedAt 自動向前推進。
-   * playing=false 時：position 固定在最後暫停位置。
+   * playing=true  : position 依 updatedAt 向前推進。
+   * playing=false : position 固定。
+   * 新加入的成員直接套用最新 command。
    *
-   * 新成員加入時直接讀這個時間軸，因此不需要跟某個人對齊。
+   * 非常重要：先偵測本機真正產生的狀態變化，再做房間校正。
+   * 這避免「使用者按暫停 -> 校正先把它播起來 -> 舊暫停又被寫回」的循環。
    */
 
   function playbackSyncRef() {
@@ -80,6 +68,7 @@ new_sync = r'''  /*
     }
 
     const updatedAt = Number(event?.updatedAt);
+
     if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
       return base;
     }
@@ -94,19 +83,35 @@ new_sync = r'''  /*
       return;
     }
 
+    const incomingUpdatedAt = Number(event.updatedAt || 0);
+    const currentUpdatedAt = Number(
+      state.playbackTimeline?.updatedAt || 0
+    );
+
+    if (
+      incomingUpdatedAt > 0 &&
+      currentUpdatedAt > 0 &&
+      incomingUpdatedAt < currentUpdatedAt
+    ) {
+      return;
+    }
+
     state.playbackRemoteEvent = event;
+
     state.playbackTimeline = {
       videoId: String(event.videoId || ""),
       position: Math.max(0, Number(event.position) || 0),
       playing: event.playing === true,
-      updatedAt: Number(event.updatedAt) || Date.now(),
+      updatedAt: incomingUpdatedAt || Date.now(),
       eventId: String(event.eventId)
     };
   }
 
 
   function shouldIgnoreTransientYoutubeState() {
-    return Date.now() < Number(state.playbackTransientStateUntil || 0);
+    return Date.now() < Number(
+      state.playbackTransientStateUntil || 0
+    );
   }
 
 
@@ -116,7 +121,8 @@ new_sync = r'''  /*
       !state.roomId ||
       !state.playerReady ||
       !state.player ||
-      state.playbackApplyingRemote
+      state.playbackApplyingRemote ||
+      state.playbackPendingRecovery
     ) {
       return;
     }
@@ -133,7 +139,10 @@ new_sync = r'''  /*
     }
 
     const ref = playbackSyncRef();
-    if (!ref || !state.currentVideoId) return;
+
+    if (!ref || !state.currentVideoId) {
+      return;
+    }
 
     const normalizedAction =
       action === "pause"
@@ -160,7 +169,7 @@ new_sync = r'''  /*
 
     const now = Date.now();
     const localActionKey =
-      `${normalizedAction}:${Math.round(finalPosition * 2) / 2}:${playing ? 1 : 0}`;
+      `${normalizedAction}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;
 
     if (
       localActionKey === state.playbackLastLocalActionKey &&
@@ -183,6 +192,8 @@ new_sync = r'''  /*
       state.playbackLastLocalSeekWriteAt = now;
     }
 
+    state.playbackLocalIntentAt = now;
+
     const event = {
       action: normalizedAction,
       position: finalPosition,
@@ -193,28 +204,31 @@ new_sync = r'''  /*
       playing
     };
 
+    // Update the local room timeline immediately. This is the shared room
+    // state; it is not based on any participant being a master.
+    state.playbackRemoteEvent = {
+      ...event,
+      updatedAt: now
+    };
+
+    state.playbackTimeline = {
+      videoId: String(state.currentVideoId),
+      position: finalPosition,
+      playing,
+      updatedAt: now,
+      eventId: String(event.eventId)
+    };
+
+    state.playbackLastRemoteEventId = String(event.eventId);
+    state.playbackLastRemoteUpdatedAt = now;
+    state.playbackLastPosition = finalPosition;
+    state.playbackLastPlaying = playing;
+
     try {
       await ref.set(event);
-
-      state.playbackRemoteEvent = {
-        ...event,
-        updatedAt: now
-      };
-
-      state.playbackTimeline = {
-        videoId: String(state.currentVideoId),
-        position: finalPosition,
-        playing,
-        updatedAt: now,
-        eventId: String(event.eventId)
-      };
-
-      state.playbackLastRemoteEventId = String(event.eventId);
-      state.playbackLastRemoteUpdatedAt = now;
-      state.playbackLastPosition = finalPosition;
-      state.playbackLastPlaying = playing;
     } catch (error) {
       console.warn("播放同步寫入失敗:", error);
+      return;
     }
   }
 
@@ -256,7 +270,10 @@ new_sync = r'''  /*
     }
 
     const eventId = String(event.eventId || "");
-    if (!eventId) return;
+
+    if (!eventId) {
+      return;
+    }
 
     if (
       !force &&
@@ -267,8 +284,9 @@ new_sync = r'''  /*
     }
 
     const remoteUpdatedAt = Number(event.updatedAt || 0);
-    const lastRemoteUpdatedAt =
-      Number(state.playbackLastRemoteUpdatedAt || 0);
+    const lastRemoteUpdatedAt = Number(
+      state.playbackLastRemoteUpdatedAt || 0
+    );
 
     if (
       !force &&
@@ -294,9 +312,10 @@ new_sync = r'''  /*
     state.playbackLastRemoteEventId = eventId;
     state.playbackApplyingRemoteEventId = eventId;
     state.playbackApplyingRemote = true;
-    state.playbackIgnoreStateChanges = 4;
-    state.playbackIgnoreStateUntil = Date.now() + 4500;
-    state.playbackReadyAt = Date.now() + 1600;
+    state.playbackPendingRecovery = true;
+    state.playbackIgnoreStateChanges = 6;
+    state.playbackIgnoreStateUntil = Date.now() + 8000;
+    state.playbackReadyAt = Date.now() + 1200;
 
     try {
       const position = getTimelinePosition(event);
@@ -332,7 +351,10 @@ new_sync = r'''  /*
       console.warn("套用房間播放時間軸失敗:", error);
     } finally {
       state.playbackApplyingRemote = false;
+      state.playbackPendingRecovery = false;
       state.playbackApplyingRemoteEventId = null;
+      state.playbackLastPosition = await asyncCurrentPosition().catch(() => null);
+      state.playbackLastPlaying = await asyncIsPlaying().catch(() => null);
     }
   }
 
@@ -362,8 +384,10 @@ new_sync = r'''  /*
         return;
       }
 
+      state.playbackPendingRecovery = true;
       await applyRemotePlaybackEvent(event, force);
     } catch (error) {
+      state.playbackPendingRecovery = false;
       console.warn("讀取最新房間播放時間軸失敗:", error);
     }
   }
@@ -378,7 +402,10 @@ new_sync = r'''  /*
     }
 
     const ref = playbackSyncRef();
-    if (!ref) return;
+
+    if (!ref) {
+      return;
+    }
 
     ref.on("value", handleRemotePlaybackSnapshot);
     state.playbackListenerAttached = true;
@@ -405,6 +432,7 @@ new_sync = r'''  /*
       return;
     }
 
+    state.playbackPendingRecovery = true;
     void applyRemotePlaybackEvent(event);
   }
 
@@ -424,7 +452,8 @@ new_sync = r'''  /*
       !state.playerReady ||
       !state.player ||
       !state.currentVideoId ||
-      state.playbackApplyingRemote
+      state.playbackApplyingRemote ||
+      state.playbackPendingRecovery
     ) {
       return;
     }
@@ -450,8 +479,6 @@ new_sync = r'''  /*
       state.playerType === "youtube" &&
       now < Number(state.playbackAdGuardUntil || 0)
     ) {
-      state.playbackLastPosition = position;
-      state.playbackLastPlaying = playing;
       return;
     }
 
@@ -459,8 +486,6 @@ new_sync = r'''  /*
       now < Number(state.playbackReadyAt || 0) ||
       now < Number(state.playbackIgnoreStateUntil || 0)
     ) {
-      state.playbackLastPosition = position;
-      state.playbackLastPlaying = playing;
       return;
     }
 
@@ -468,15 +493,17 @@ new_sync = r'''  /*
 
     if (drift > 1.75) {
       state.playbackApplyingRemote = true;
-      state.playbackIgnoreStateChanges = 2;
-      state.playbackIgnoreStateUntil = Date.now() + 2200;
+      state.playbackPendingRecovery = true;
+      state.playbackIgnoreStateChanges = 3;
+      state.playbackIgnoreStateUntil = Date.now() + 3000;
 
       try {
         await applyPlayerPosition(expected);
       } finally {
         state.playbackApplyingRemote = false;
-        state.playbackLastPosition = await asyncCurrentPosition();
-        state.playbackLastPlaying = await asyncIsPlaying();
+        state.playbackPendingRecovery = false;
+        state.playbackLastPosition = await asyncCurrentPosition().catch(() => null);
+        state.playbackLastPlaying = await asyncIsPlaying().catch(() => null);
       }
 
       if ($("syncStatus")) {
@@ -491,8 +518,9 @@ new_sync = r'''  /*
 
     if (wantPlaying !== playing) {
       state.playbackApplyingRemote = true;
-      state.playbackIgnoreStateChanges = 2;
-      state.playbackIgnoreStateUntil = Date.now() + 2200;
+      state.playbackPendingRecovery = true;
+      state.playbackIgnoreStateChanges = 3;
+      state.playbackIgnoreStateUntil = Date.now() + 3000;
 
       try {
         if (wantPlaying) {
@@ -502,123 +530,130 @@ new_sync = r'''  /*
         }
       } finally {
         state.playbackApplyingRemote = false;
-        state.playbackLastPosition = await asyncCurrentPosition();
-        state.playbackLastPlaying = await asyncIsPlaying();
+        state.playbackPendingRecovery = false;
+        state.playbackLastPosition = await asyncCurrentPosition().catch(() => null);
+        state.playbackLastPlaying = await asyncIsPlaying().catch(() => null);
       }
-
-      return;
     }
-
-    state.playbackLastPosition = position;
-    state.playbackLastPlaying = playing;
   }
 
 
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
-    state.playbackReadyAt = Date.now() + 1000;
+    state.playbackReadyAt = Date.now() + 700;
 
     state.playbackSeekTimer = setInterval(async () => {
       try {
         if (
           !state.playerReady ||
-          !state.player
-        ) {
-          return;
-        }
-
-        if (state.playerType === "youtube") {
-          if (Date.now() < Number(state.playbackAdGuardUntil || 0)) {
-            return;
-          }
-        }
-
-        await reconcileRoomTimeline();
-
-        if (
-          state.playbackApplyingRemote ||
+          !state.player ||
           !state.currentVideoId
         ) {
           return;
         }
 
+        const now = Date.now();
         const position = await asyncCurrentPosition();
         const playing = await asyncIsPlaying();
-        const now = Date.now();
-
-        if (
-          now < Number(state.playbackIgnoreStateUntil || 0) ||
-          now < Number(state.playbackReadyAt || 0)
-        ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastPlayerState = playing ? "playing" : "paused";
-          state.playbackLastObservedPosition = position;
-          return;
-        }
-
-        if (
-          state.playbackLastPosition === null ||
-          state.playbackLastPlaying === null
-        ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastPlayerState = playing ? "playing" : "paused";
-          state.playbackLastObservedPosition = position;
-          return;
-        }
-
-        const positionDelta = Math.abs(
-          position - Number(state.playbackLastPosition)
-        );
-
-        const playingChanged =
-          playing !== state.playbackLastPlaying;
-
         const timeline = state.playbackTimeline;
-        const roomPlaying =
+
+        if (
+          state.playerType === "youtube" &&
+          now < Number(state.playbackAdGuardUntil || 0)
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastPlayerState = playing ? "playing" : "paused";
+          return;
+        }
+
+        if (
+          state.playbackPendingRecovery ||
+          state.playbackApplyingRemote
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastPlayerState = playing ? "playing" : "paused";
+          state.playbackLastObservedPosition = position;
+          return;
+        }
+
+        const roomMatchesVideo =
           timeline &&
           String(timeline.videoId || "") ===
-            String(state.currentVideoId || "")
+            String(state.currentVideoId || "");
+
+        const roomPlaying =
+          roomMatchesVideo
             ? timeline.playing === true
             : null;
 
         if (
-          state.playerType === "youtube" &&
-          shouldIgnoreTransientYoutubeState()
+          now >= Number(state.playbackIgnoreStateUntil || 0) &&
+          now >= Number(state.playbackReadyAt || 0) &&
+          !shouldIgnoreTransientYoutubeState()
         ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastPlayerState = playing ? "playing" : "paused";
-          state.playbackLastObservedPosition = position;
-          return;
-        }
+          // 先判斷真正的本機操作，再做任何房間校正。
+          // 遠端套用後即使 YouTube 晚一點才回 callback，房間狀態已經與播放器一致，
+          // 因此不會再把 callback 當成新的 pause/play command。
+          if (
+            state.playbackLastPlaying !== null &&
+            playing !== state.playbackLastPlaying &&
+            roomPlaying !== null &&
+            playing !== roomPlaying
+          ) {
+            state.playbackLocalIntentAt = now;
+            void publishPlaybackEvent(
+              playing ? "play" : "pause",
+              position
+            );
 
-        if (
-          playingChanged &&
-          (roomPlaying === null || playing !== roomPlaying)
-        ) {
-          void publishPlaybackEvent(
-            playing ? "play" : "pause",
-            position
-          );
-        }
+            state.playbackLastPosition = position;
+            state.playbackLastPlaying = playing;
+            state.playbackLastPlayerState = playing ? "playing" : "paused";
+            state.playbackLastObservedPosition = position;
+            return;
+          }
 
-        if (
-          positionDelta >= 1.35 &&
-          !playingChanged
-        ) {
-          void publishPlaybackEvent("seek", position);
+          const positionDelta =
+            state.playbackLastPosition === null
+              ? 0
+              : Math.abs(
+                  position - Number(state.playbackLastPosition)
+                );
+
+          if (
+            state.playbackLastPlaying === playing &&
+            positionDelta >= 1.35 &&
+            roomPlaying !== null
+          ) {
+            const expected = getTimelinePosition(timeline, now);
+            const localJumpDiff = Math.abs(position - expected);
+
+            if (localJumpDiff > 1.35) {
+              state.playbackLocalIntentAt = now;
+              void publishPlaybackEvent("seek", position);
+
+              state.playbackLastPosition = position;
+              state.playbackLastPlaying = playing;
+              state.playbackLastPlayerState = playing ? "playing" : "paused";
+              state.playbackLastObservedPosition = position;
+              return;
+            }
+          }
         }
 
         state.playbackLastPosition = position;
         state.playbackLastPlaying = playing;
         state.playbackLastPlayerState = playing ? "playing" : "paused";
         state.playbackLastObservedPosition = position;
+
+        // 最後才做房間校正，這樣本機按暫停/播放一定先有機會成為新的 room command。
+        await reconcileRoomTimeline();
       } catch (error) {
         console.warn("播放時間軸校正失敗:", error);
       }
-    }, 650);
+    }, 350);
   }
 
 
@@ -649,10 +684,13 @@ new_sync = r'''  /*
       }
 
       try {
+        state.playbackPendingRecovery = true;
         await applyLatestRoomPlaybackState(true);
+        state.playbackPendingRecovery = false;
         await reconcileRoomTimeline();
         startPlaybackSeekDetector();
       } catch (error) {
+        state.playbackPendingRecovery = false;
         console.warn("頁面恢復後播放同步失敗:", error);
       }
     }, 350);
@@ -663,12 +701,9 @@ new_sync = r'''  /*
 
 s = s[:start] + new_sync + s[end:]
 
-
-# ---------------------------------------------------------
-# Replace YouTube state handling so player-generated transient
-# buffering/ad state never becomes a room-wide play/pause command.
-# The room timeline still force-corrects genuine divergence.
-# ---------------------------------------------------------
+# YouTube player state callbacks must never publish room-wide play/pause by
+# themselves. They are player feedback and can be caused by remote commands,
+# buffering and YouTube's own playback transitions.
 state_start = s.find('              onStateChange:\n                async (event) => {')
 error_marker = '\n              onError:\n'
 state_end = s.find(error_marker, state_start)
@@ -692,13 +727,13 @@ new_handler = r'''              onStateChange:
                   if (
                     data === YT.PlayerState.BUFFERING
                   ) {
-                    state.playbackTransientStateUntil = now + 2200;
+                    state.playbackTransientStateUntil = now + 2600;
 
                     if (
                       state.playbackTimeline &&
                       state.playbackTimeline.playing
                     ) {
-                      state.playbackAdGuardUntil = now + 3200;
+                      state.playbackAdGuardUntil = now + 3500;
                     }
 
                     state.playbackLastPlayerState = "buffering";
@@ -712,50 +747,11 @@ new_handler = r'''              onStateChange:
                     const isPlaying =
                       data === YT.PlayerState.PLAYING;
 
-                    const expectedPlaying =
-                      state.playbackTimeline &&
-                      String(state.playbackTimeline.videoId || "") ===
-                        String(state.currentVideoId || "")
-                        ? Boolean(state.playbackTimeline.playing)
-                        : null;
-
-                    const ignoredByRemote =
-                      state.playbackApplyingRemote ||
-                      (
-                        state.playbackIgnoreStateChanges > 0 &&
-                        now < Number(state.playbackIgnoreStateUntil || 0) &&
-                        (
-                          expectedPlaying === null ||
-                          isPlaying === expectedPlaying
-                        )
-                      );
-
-                    if (ignoredByRemote) {
-                      if (!state.playbackApplyingRemote) {
-                        state.playbackIgnoreStateChanges -= 1;
-                      }
-                    } else if (
-                      now >= Number(state.playbackIgnoreStateUntil || 0) &&
-                      !shouldIgnoreTransientYoutubeState()
-                    ) {
-                      const position = await asyncCurrentPosition();
-
-                      const roomStateMatches =
-                        expectedPlaying !== null &&
-                        isPlaying === expectedPlaying;
-
-                      if (!roomStateMatches) {
-                        await publishPlaybackEvent(
-                          isPlaying ? "play" : "pause",
-                          position
-                        );
-                      }
-                    }
-
                     state.playbackLastPlayerState =
                       isPlaying ? "playing" : "paused";
+
                     state.playbackLastObservedPosition =
-                      await asyncCurrentPosition();
+                      await asyncCurrentPosition().catch(() => null);
                   }
 
                   if (
@@ -777,24 +773,23 @@ new_handler = r'''              onStateChange:
 
 s = s[:state_start] + new_handler + s[state_end:]
 
-
-# ---------------------------------------------------------
-# Reset shared timeline state whenever a completely new YouTube
-# video is loaded, so an old event can never control the new video.
-# ---------------------------------------------------------
+# Reset shared timeline state for a newly loaded video.
 reset_marker = '      state.playbackLastLocalSeekWriteAt = 0;\n'
-reset_add = '''      state.playbackTimeline = null;\n      state.playbackAdGuardUntil = 0;\n      state.playbackTransientStateUntil = 0;\n      state.playbackLastPlayerState = null;\n      state.playbackLastObservedPosition = null;\n'''
+reset_add = '''      state.playbackTimeline = null;
+      state.playbackAdGuardUntil = 0;
+      state.playbackTransientStateUntil = 0;
+      state.playbackLastPlayerState = null;
+      state.playbackLastObservedPosition = null;
+      state.playbackPendingRecovery = false;
+      state.playbackLocalIntentAt = 0;
+'''
 if "      state.playbackTimeline = null;" not in s:
     if reset_marker not in s:
         raise SystemExit("new video playback reset marker not found")
     s = s.replace(reset_marker, reset_marker + reset_add, 1)
 
-
-# ---------------------------------------------------------
-# Keep Firebase rules explicit: every current room member may
-# publish a room-wide playback command. The room event itself is
-# the shared timeline, not a privileged user's playback stream.
-# ---------------------------------------------------------
+# Preserve the current rules, including the kick protection, while keeping
+# room playback writable by every current member.
 rules = json.loads(RULES.read_text(encoding="utf-8"))
 member_uid = rules["rules"]["members"]["$roomId"]["$uid"]
 member_uid[".write"] = (
@@ -823,4 +818,4 @@ RULES.write_text(
 )
 
 APP.write_text(s, encoding="utf-8")
-print("WatchTogether shared room timeline, forced play/pause, late-join sync and YouTube transient-state protection applied")
+print("WatchTogether shared timeline playback ordering repaired")
