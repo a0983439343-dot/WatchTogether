@@ -11,28 +11,18 @@ def replace_once(old, new, name):
     text = text.replace(old, new, 1)
 
 replace_once(
-'''  function playbackWriteRef() {
-    if (
-      !db ||
-      !state.membersRef ||
-      !state.roomId ||
-      !state.uid
-    ) {
+'''  function playbackSyncRef() {
+    if (!db || !state.roomId) {
       return null;
     }
 
-    return state.membersRef
-      .child(state.uid)
-      .child("playback");
+    return db.ref(
+      `rooms/${state.roomId}/playbackEvent`
+    );
   }
 ''',
-'''  function playbackWriteRef() {
-    if (
-      !db ||
-      !state.roomRef ||
-      !state.roomId ||
-      !state.uid
-    ) {
+'''  function playbackSyncRef() {
+    if (!db || !state.roomRef || !state.roomId) {
       return null;
     }
 
@@ -41,7 +31,7 @@ replace_once(
       .child("playback");
   }
 ''',
-"playback write ref"
+"playback ref"
 )
 
 start_marker = "  async function handleRemotePlaybackSnapshot(\n"
@@ -49,9 +39,9 @@ end_marker = "  function stopPlaybackSeekDetector() {\n"
 start = text.find(start_marker)
 end = text.find(end_marker, start)
 if start < 0 or end < 0:
-    raise SystemExit("remote playback handler markers not found")
+    raise SystemExit("remote handler markers not found")
 
-remote_code = r'''  async function handleRemotePlaybackSnapshot(
+replacement = r'''  async function handleRemotePlaybackSnapshot(
     snapshot
   ) {
     const event =
@@ -89,55 +79,27 @@ remote_code = r'''  async function handleRemotePlaybackSnapshot(
       return;
     }
 
-    state.playbackMembersHandler =
+    const ref = playbackSyncRef();
+
+    if (!ref) {
+      return;
+    }
+
+    ref.on(
+      "value",
       (snapshot) => {
         void handleRemotePlaybackSnapshot(
           snapshot
         );
-      };
-
-    state.roomRef
-      .child("video")
-      .child("playback")
-      .on(
-        "value",
-        state.playbackMembersHandler
-      );
+      }
+    );
 
     state.playbackListenerAttached = true;
   }
 
 
 '''
-
-text = text[:start] + remote_code + text[end:]
-
-replace_once(
-'''      if (
-        state.membersRef &&
-        state.playbackMembersHandler
-      ) {
-        state.membersRef.off(
-          "value",
-          state.playbackMembersHandler
-        );
-      }
-''',
-'''      if (
-        state.roomRef &&
-        state.playbackMembersHandler
-      ) {
-        state.roomRef
-          .child("video")
-          .child("playback")
-          .off(
-            "value",
-            state.playbackMembersHandler
-          );
-      }
-''',
-"cleanup playback listener"
-)
+text = text[:start] + replacement + text[end:]
 
 path.write_text(text, encoding="utf-8")
 print("room video playback sync patch generated successfully")
