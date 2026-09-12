@@ -195,20 +195,6 @@
 
     kickedLocally: false,
 
-    playbackListenerAttached: false,
-
-    playbackApplyingRemote: false,
-
-    playbackReadyAt: 0,
-
-    playbackLastPosition: null,
-
-    playbackLastPlaying: null,
-
-    playbackLastSampleAt: 0,
-
-    playbackSeekTimer: null,
-
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -4658,28 +4644,6 @@
 
                   if (
                     event.data ===
-                    YT.PlayerState.PLAYING
-                  ) {
-                    if (!state.playbackApplyingRemote) {
-                      void publishPlaybackEvent(
-                        "play"
-                      );
-                    }
-                  }
-
-                  if (
-                    event.data ===
-                    YT.PlayerState.PAUSED
-                  ) {
-                    if (!state.playbackApplyingRemote) {
-                      void publishPlaybackEvent(
-                        "pause"
-                      );
-                    }
-                  }
-
-                  if (
-                    event.data ===
                     YT.PlayerState.ENDED
                   ) {
                     if (
@@ -5517,8 +5481,6 @@
     video
   ) {
     if (!video) {
-      stopPlaybackSeekDetector();
-
       state.youtubeRequestedId =
         null;
 
@@ -5593,321 +5555,11 @@
         true
       );
 
-      startPlaybackSeekDetector();
-
       return;
     }
 
     await buildPlatformPlayer(
       normalized
-    );
-
-    startPlaybackSeekDetector();
-  }
-
-
-  /*
-   * =========================================================
-   * EVENT-BASED PLAYBACK SYNC
-   * =========================================================
-   * 同步：播放、暫停、拖曳跳轉。
-   * 不做持續性的播放進度同步。
-   */
-
-  function playbackSyncRef() {
-    if (!db || !state.roomRef || !state.roomId) {
-      return null;
-    }
-
-    return state.roomRef
-      .child("video")
-      .child("playback");
-  }
-
-
-  async function publishPlaybackEvent(
-    action,
-    position = null
-  ) {
-    if (
-      !state.uid ||
-      !state.roomId ||
-      !state.playerReady ||
-      !state.player ||
-      state.playbackApplyingRemote ||
-      Date.now() < Number(state.playbackReadyAt || 0)
-    ) {
-      return;
-    }
-
-    if (
-      state.playerType === "bilibili" ||
-      state.playerType === "external"
-    ) {
-      return;
-    }
-
-    const ref = playbackSyncRef();
-
-    if (!ref || !state.currentVideoId) {
-      return;
-    }
-
-    let finalPosition = Number(position);
-
-    if (!Number.isFinite(finalPosition)) {
-      finalPosition = await asyncCurrentPosition();
-    }
-
-    finalPosition = Math.max(
-      0,
-      Number(finalPosition) || 0
-    );
-
-    try {
-      await ref.set({
-        action:
-          action === "pause"
-            ? "pause"
-            : action === "seek"
-              ? "seek"
-              : "play",
-
-        position: finalPosition,
-
-        videoId:
-          String(state.currentVideoId),
-
-        updatedAt:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP,
-
-        updatedBy:
-          state.uid,
-
-        eventId:
-          `${state.uid}_${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`
-      });
-    } catch (error) {
-      console.warn(
-        "播放同步寫入失敗:",
-        error
-      );
-    }
-  }
-
-
-  async function applyRemotePlaybackEvent(
-    event
-  ) {
-    if (
-      !event ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId
-    ) {
-      return;
-    }
-
-    if (
-      String(event.videoId || "") !==
-      String(state.currentVideoId || "")
-    ) {
-      return;
-    }
-
-    if (
-      event.action !== "play" &&
-      event.action !== "pause" &&
-      event.action !== "seek"
-    ) {
-      return;
-    }
-
-    if (
-      state.playerType === "bilibili" ||
-      state.playerType === "external"
-    ) {
-      return;
-    }
-
-    state.playbackApplyingRemote = true;
-    state.playbackReadyAt = Date.now() + 1400;
-
-    try {
-      const position = Math.max(
-        0,
-        Number(event.position) || 0
-      );
-
-      if (event.action === "seek") {
-        await applyPlayerPosition(position);
-      }
-
-      if (event.action === "play") {
-        await applyPlayerPosition(position);
-        await playPlayer();
-      }
-
-      if (event.action === "pause") {
-        await applyPlayerPosition(position);
-        await pausePlayer();
-      }
-    } catch (error) {
-      console.warn(
-        "套用遠端播放狀態失敗:",
-        error
-      );
-    } finally {
-      state.playbackApplyingRemote = false;
-
-      state.playbackLastPosition =
-        await asyncCurrentPosition();
-
-      state.playbackLastPlaying =
-        await asyncIsPlaying();
-
-      state.playbackLastSampleAt =
-        Date.now();
-    }
-  }
-
-
-  async function handleRemotePlaybackSnapshot(
-    snapshot
-  ) {
-    const event =
-      snapshot?.val?.() ||
-      null;
-
-    if (!event || !event.eventId) {
-      return;
-    }
-
-    if (
-      event.updatedBy === state.uid
-    ) {
-      return;
-    }
-
-    if (
-      event.eventId ===
-      state.lastPlaybackEventId
-    ) {
-      return;
-    }
-
-    await applyRemotePlaybackEvent(
-      event
-    );
-  }
-
-
-  function attachPlaybackSyncListener() {
-    if (
-      !state.roomRef ||
-      state.playbackListenerAttached
-    ) {
-      return;
-    }
-
-    const ref = playbackSyncRef();
-
-    if (!ref) {
-      return;
-    }
-
-    ref.on(
-      "value",
-      (snapshot) => {
-        void handleRemotePlaybackSnapshot(
-          snapshot
-        );
-      }
-    );
-
-    state.playbackListenerAttached = true;
-  }
-
-
-  function stopPlaybackSeekDetector() {
-    clearInterval(state.playbackSeekTimer);
-    state.playbackSeekTimer = null;
-    state.playbackLastPosition = null;
-    state.playbackLastPlaying = null;
-    state.playbackLastSampleAt = 0;
-  }
-
-
-  function startPlaybackSeekDetector() {
-    stopPlaybackSeekDetector();
-
-    state.playbackReadyAt = Date.now() + 1500;
-    state.playbackLastSampleAt = Date.now();
-
-    state.playbackSeekTimer = setInterval(
-      async () => {
-        if (
-          !state.playerReady ||
-          !state.player ||
-          state.playbackApplyingRemote
-        ) {
-          return;
-        }
-
-        const now = Date.now();
-        const position = await asyncCurrentPosition();
-        const playing = await asyncIsPlaying();
-
-        if (now < Number(state.playbackReadyAt || 0)) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
-
-        if (
-          state.playbackLastPosition === null ||
-          state.playbackLastPlaying === null ||
-          !state.playbackLastSampleAt
-        ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
-
-        const elapsed = Math.max(
-          0.05,
-          (now - state.playbackLastSampleAt) / 1000
-        );
-
-        const delta =
-          position - Number(state.playbackLastPosition);
-
-        const expectedDelta =
-          playing ? elapsed : 0;
-
-        const seekError =
-          Math.abs(delta - expectedDelta);
-
-        if (seekError >= 1.5) {
-          void publishPlaybackEvent(
-            "seek",
-            position
-          );
-
-          state.playbackReadyAt = now + 600;
-        }
-
-        state.playbackLastPosition = position;
-        state.playbackLastPlaying = playing;
-        state.playbackLastSampleAt = now;
-      },
-      350
     );
   }
 
@@ -6186,9 +5838,6 @@
 
     updateRoomOwnerUI();
 
-    stopPlaybackSeekDetector();
-    state.playbackLastSampleAt = 0;
-
     state.roomRef =
       db.ref(
         `rooms/${state.roomId}`
@@ -6292,8 +5941,6 @@
       state.membersListenerAttached =
         true;
     }
-
-    attachPlaybackSyncListener();
 
     if (
       !state.chatListenerAttached
@@ -6975,18 +6622,11 @@
         ?.child("video")
         .off();
 
-      playbackSyncRef()?.off();
-
+      detachPlaybackSyncListener();
       stopPlaybackSeekDetector();
     } catch (_) {}
 
     state.videoListenerAttached =
-      false;
-
-    state.playbackListenerAttached =
-      false;
-
-    state.playbackApplyingRemote =
       false;
 
     state.membersListenerAttached =
@@ -6998,14 +6638,20 @@
     state.queueListenerAttached =
       false;
 
+    state.playbackApplyingRemote =
+      false;
+
+    state.playbackRoomEvent =
+      null;
+
+    state.lastPlaybackEventId =
+      null;
+
     state.queue =
       {};
   }
 
 
-  /*
-   * 保留舊名稱，避免其他地方呼叫時出問題。
-   */
   function detachRoomListeners() {
     disconnectRoomListeners();
   }
@@ -7299,23 +6945,12 @@
             return;
           }
 
-          const position =
-            await asyncCurrentPosition();
-
           if (
             await asyncIsPlaying()
           ) {
             await pausePlayer();
-            void publishPlaybackEvent(
-              "pause",
-              position
-            );
           } else {
             await playPlayer();
-            void publishPlaybackEvent(
-              "play",
-              position
-            );
           }
 
           updateTimeUI();
@@ -7349,11 +6984,6 @@
           await applyPlayerPosition(
             target
           );
-
-          void publishPlaybackEvent(
-            "seek",
-            target
-          );
         }
       );
 
@@ -7385,11 +7015,6 @@
             );
 
           await applyPlayerPosition(
-            target
-          );
-
-          void publishPlaybackEvent(
-            "seek",
             target
           );
         }
@@ -8078,8 +7703,6 @@
       clearInterval(
         state.memberHeartbeatTimer
       );
-
-      stopPlaybackSeekDetector();
 
       unlockPageScroll();
     }
