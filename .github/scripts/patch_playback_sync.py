@@ -1,7 +1,12 @@
 from pathlib import Path
+import json
 
-path = Path("app.js")
-text = path.read_text(encoding="utf-8")
+APP = Path("app.js")
+INDEX = Path("index.html")
+RULES = Path("database.rules.json")
+README = Path("README.md")
+
+text = APP.read_text(encoding="utf-8")
 
 
 def replace_once(old, new, name):
@@ -13,26 +18,115 @@ def replace_once(old, new, name):
 
 replace_once(
     "    kickedLocally: false,\n",
-    """    kickedLocally: false,\n\n    playbackListenerAttached: false,\n\n    playbackApplyingRemote: false,\n\n    playbackReadyAt: 0,\n\n    playbackLastPosition: null,\n\n    playbackLastPlaying: null,\n\n    playbackLastSampleAt: 0,\n\n    playbackSeekTimer: null,\n""",
+    """    kickedLocally: false,\n
+    playbackListenerAttached: false,\n
+    playbackApplyingRemote: false,\n
+    playbackReadyAt: 0,\n
+    playbackRoomEvent: null,\n
+    playbackLastPosition: null,\n
+    playbackLastPlaying: null,\n
+    playbackLastSampleAt: 0,\n
+    playbackSeekTimer: null,\n""",
     "state"
 )
 
-sync_code = r'''  /*
+base_sync = r'''  /*
    * =========================================================
-   * EVENT-BASED PLAYBACK SYNC
+   * ROOM PLAYBACK SYNC
    * =========================================================
-   * 同步：播放、暫停、拖曳跳轉。
-   * 不做持續性的播放進度同步。
+   * Firebase members/{roomId}/{uid}/playback 是每位成員自己的
+   * 同步狀態。房間內所有人讀取 members/{roomId}，使用最新狀態
+   * 作為房間播放狀態，並在播放中持續做小幅 drift correction。
    */
 
   function playbackSyncRef() {
-    if (!db || !state.roomId) {
+    if (!state.membersRef || !state.roomId) {
       return null;
     }
 
-    return db.ref(
-      `rooms/${state.roomId}/playbackEvent`
+    return state.membersRef;
+  }
+
+
+  function isPlaybackEventValid(event) {
+    if (!event) {
+      return false;
+    }
+
+    if (
+      event.action !== "play" &&
+      event.action !== "pause" &&
+      event.action !== "seek"
+    ) {
+      return false;
+    }
+
+    if (
+      typeof event.videoId !== "string" ||
+      !event.videoId
+    ) {
+      return false;
+    }
+
+    if (!Number.isFinite(Number(event.position))) {
+      return false;
+    }
+
+    if (!Number.isFinite(Number(event.updatedAt))) {
+      return false;
+    }
+
+    if (
+      typeof event.eventId !== "string" ||
+      !event.eventId
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+
+  function getPlaybackEventTime(event) {
+    const time = Number(event?.updatedAt);
+    return Number.isFinite(time) ? time : 0;
+  }
+
+
+  function eventShouldBePlaying(event) {
+    if (!event) {
+      return false;
+    }
+
+    if (event.action === "play") {
+      return true;
+    }
+
+    if (event.action === "pause") {
+      return false;
+    }
+
+    return event.playing !== false;
+  }
+
+
+  function getExpectedPlaybackPosition(event, now = Date.now()) {
+    const base = Math.max(
+      0,
+      Number(event?.position) || 0
     );
+
+    if (!eventShouldBePlaying(event)) {
+      return base;
+    }
+
+    const updatedAt = getPlaybackEventTime(event);
+    const elapsed = Math.max(
+      0,
+      now - updatedAt
+    ) / 1000;
+
+    return base + elapsed;
   }
 
 
@@ -45,8 +139,7 @@ sync_code = r'''  /*
       !state.roomId ||
       !state.playerReady ||
       !state.player ||
-      state.playbackApplyingRemote ||
-      Date.now() < Number(state.playbackReadyAt || 0)
+      state.playbackApplyingRemote
     ) {
       return;
     }
@@ -58,11 +151,13 @@ sync_code = r'''  /*
       return;
     }
 
-    const ref = playbackSyncRef();
-
-    if (!ref || !state.currentVideoId) {
+    if (!state.membersRef) {
       return;
     }
+
+    const playbackRef = state.membersRef
+      .child(state.uid)
+      .child("playback");
 
     let finalPosition = Number(position);
 
@@ -75,35 +170,42 @@ sync_code = r'''  /*
       Number(finalPosition) || 0
     );
 
+    let playing = false;
+
     try {
-      await ref.set({
-        action:
-          action === "pause"
-            ? "pause"
-            : action === "seek"
-              ? "seek"
-              : "play",
+      playing = await asyncIsPlaying();
+    } catch (_) {}
 
+    const normalizedAction =
+      action === "pause"
+        ? "pause"
+        : action === "seek"
+          ? "seek"
+          : "play";
+
+    if (normalizedAction === "play") {
+      playing = true;
+    }
+
+    if (normalizedAction === "pause") {
+      playing = false;
+    }
+
+    try {
+      await playbackRef.set({
+        action: normalizedAction,
         position: finalPosition,
-
-        videoId:
-          String(state.currentVideoId),
-
-        updatedAt:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP,
-
-        updatedBy:
-          state.uid,
-
+        videoId: String(state.currentVideoId || ""),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedBy: state.uid,
         eventId:
           `${state.uid}_${Date.now()}_${Math.random()
             .toString(36)
-            .slice(2)}`
+            .slice(2)}`,
+        playing
       });
     } catch (error) {
-      console.warn(
+      console.error(
         "播放同步寫入失敗:",
         error
       );
@@ -112,10 +214,11 @@ sync_code = r'''  /*
 
 
   async function applyRemotePlaybackEvent(
-    event
+    event,
+    force = false
   ) {
     if (
-      !event ||
+      !isPlaybackEventValid(event) ||
       !state.playerReady ||
       !state.player ||
       !state.currentVideoId
@@ -124,56 +227,51 @@ sync_code = r'''  /*
     }
 
     if (
-      String(event.videoId || "") !==
-      String(state.currentVideoId || "")
+      String(event.videoId) !==
+      String(state.currentVideoId)
     ) {
       return;
     }
 
     if (
-      event.action !== "play" &&
-      event.action !== "pause" &&
-      event.action !== "seek"
+      !force &&
+      event.updatedBy === state.uid
     ) {
       return;
     }
 
     if (
-      state.playerType === "bilibili" ||
-      state.playerType === "external"
+      event.eventId ===
+      state.lastPlaybackEventId
     ) {
       return;
     }
 
     state.playbackApplyingRemote = true;
-    state.playbackReadyAt = Date.now() + 1400;
+    state.playbackReadyAt = Date.now() + 300;
 
     try {
-      const position = Math.max(
-        0,
-        Number(event.position) || 0
-      );
+      const position =
+        getExpectedPlaybackPosition(event);
 
-      if (event.action === "seek") {
-        await applyPlayerPosition(position);
-      }
+      const shouldPlay =
+        eventShouldBePlaying(event);
 
-      if (event.action === "play") {
-        await applyPlayerPosition(position);
+      await applyPlayerPosition(position);
+
+      if (shouldPlay) {
         await playPlayer();
-      }
-
-      if (event.action === "pause") {
-        await applyPlayerPosition(position);
+      } else {
         await pausePlayer();
       }
     } catch (error) {
-      console.warn(
+      console.error(
         "套用遠端播放狀態失敗:",
         error
       );
     } finally {
-      state.playbackApplyingRemote = false;
+      state.lastPlaybackEventId =
+        event.eventId;
 
       state.playbackLastPosition =
         await asyncCurrentPosition();
@@ -183,33 +281,111 @@ sync_code = r'''  /*
 
       state.playbackLastSampleAt =
         Date.now();
+
+      state.playbackApplyingRemote = false;
     }
+  }
+
+
+  function findLatestPlaybackEvent(
+    members
+  ) {
+    let latest = null;
+    let latestTime = -1;
+    let latestId = "";
+
+    for (const member of Object.values(members || {})) {
+      const event = member?.playback;
+
+      if (!isPlaybackEventValid(event)) {
+        continue;
+      }
+
+      const time = getPlaybackEventTime(event);
+      const id = String(event.eventId || "");
+
+      if (
+        time > latestTime ||
+        (time === latestTime && id > latestId)
+      ) {
+        latest = event;
+        latestTime = time;
+        latestId = id;
+      }
+    }
+
+    return latest;
   }
 
 
   async function handleRemotePlaybackSnapshot(
     snapshot
   ) {
-    const event = snapshot?.val?.() || null;
+    const members =
+      snapshot?.val?.() ||
+      {};
+
+    const latest =
+      findLatestPlaybackEvent(members);
+
+    if (!latest) {
+      return;
+    }
+
+    const latestTime =
+      getPlaybackEventTime(latest);
+
+    const previousTime =
+      getPlaybackEventTime(
+        state.playbackRoomEvent
+      );
+
+    if (
+      state.playbackRoomEvent &&
+      latestTime < previousTime
+    ) {
+      return;
+    }
+
+    if (
+      state.playbackRoomEvent &&
+      latestTime === previousTime &&
+      String(latest.eventId || "") ===
+        String(state.playbackRoomEvent.eventId || "")
+    ) {
+      return;
+    }
+
+    state.playbackRoomEvent = latest;
+
+    if (latest.updatedBy === state.uid) {
+      state.lastPlaybackEventId =
+        latest.eventId;
+      return;
+    }
+
+    await applyRemotePlaybackEvent(latest);
+  }
+
+
+  async function applyLatestRoomPlaybackState() {
+    const event =
+      state.playbackRoomEvent;
 
     if (!event) {
       return;
     }
 
-    if (
-      !event.eventId ||
-      event.updatedBy === state.uid
-    ) {
-      return;
-    }
-
-    await applyRemotePlaybackEvent(event);
+    await applyRemotePlaybackEvent(
+      event,
+      true
+    );
   }
 
 
   function attachPlaybackSyncListener() {
     if (
-      !state.roomRef ||
+      !state.membersRef ||
       state.playbackListenerAttached
     ) {
       return;
@@ -223,17 +399,36 @@ sync_code = r'''  /*
 
     ref.on(
       "value",
-      (snapshot) => {
-        void handleRemotePlaybackSnapshot(snapshot);
-      }
+      handleRemotePlaybackSnapshot
     );
 
     state.playbackListenerAttached = true;
   }
 
 
+  function detachPlaybackSyncListener() {
+    if (!state.playbackListenerAttached) {
+      return;
+    }
+
+    const ref = playbackSyncRef();
+
+    if (ref) {
+      ref.off(
+        "value",
+        handleRemotePlaybackSnapshot
+      );
+    }
+
+    state.playbackListenerAttached = false;
+  }
+
+
   function stopPlaybackSeekDetector() {
-    clearInterval(state.playbackSeekTimer);
+    clearInterval(
+      state.playbackSeekTimer
+    );
+
     state.playbackSeekTimer = null;
     state.playbackLastPosition = null;
     state.playbackLastPlaying = null;
@@ -244,314 +439,264 @@ sync_code = r'''  /*
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
 
-    state.playbackReadyAt = Date.now() + 1500;
-    state.playbackLastSampleAt = Date.now();
+    state.playbackReadyAt =
+      Date.now() + 500;
 
-    state.playbackSeekTimer = setInterval(
-      async () => {
-        if (
-          !state.playerReady ||
-          !state.player ||
-          state.playbackApplyingRemote
-        ) {
-          return;
-        }
+    state.playbackLastSampleAt =
+      Date.now();
 
-        const now = Date.now();
-        const position = await asyncCurrentPosition();
-        const playing = await asyncIsPlaying();
+    state.playbackSeekTimer =
+      setInterval(
+        async () => {
+          if (
+            !state.playerReady ||
+            !state.player ||
+            state.playbackApplyingRemote
+          ) {
+            return;
+          }
 
-        if (now < Number(state.playbackReadyAt || 0)) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
+          const event =
+            state.playbackRoomEvent;
 
-        if (
-          state.playbackLastPosition === null ||
-          state.playbackLastPlaying === null ||
-          !state.playbackLastSampleAt
-        ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
+          if (
+            !isPlaybackEventValid(event) ||
+            String(event.videoId || "") !==
+              String(state.currentVideoId || "")
+          ) {
+            return;
+          }
 
-        const elapsed = Math.max(
-          0.05,
-          (now - state.playbackLastSampleAt) / 1000
-        );
+          const now = Date.now();
+          const expected =
+            getExpectedPlaybackPosition(
+              event,
+              now
+            );
 
-        const delta =
-          position - Number(state.playbackLastPosition);
+          let current = 0;
+          let playing = false;
 
-        const expectedDelta =
-          playing ? elapsed : 0;
+          try {
+            current = await asyncCurrentPosition();
+            playing = await asyncIsPlaying();
+          } catch (_) {
+            return;
+          }
 
-        const seekError =
-          Math.abs(delta - expectedDelta);
+          const shouldPlay =
+            eventShouldBePlaying(event);
 
-        if (seekError >= 1.5) {
-          void publishPlaybackEvent(
-            "seek",
-            position
-          );
+          if (
+            shouldPlay &&
+            !playing
+          ) {
+            state.playbackApplyingRemote = true;
 
-          state.playbackReadyAt = now + 600;
-        }
+            try {
+              await playPlayer();
+            } catch (_) {
+            } finally {
+              state.playbackApplyingRemote = false;
+            }
 
-        state.playbackLastPosition = position;
-        state.playbackLastPlaying = playing;
-        state.playbackLastSampleAt = now;
-      },
-      350
-    );
+            return;
+          }
+
+          if (
+            !shouldPlay &&
+            playing
+          ) {
+            state.playbackApplyingRemote = true;
+
+            try {
+              await pausePlayer();
+            } catch (_) {
+            } finally {
+              state.playbackApplyingRemote = false;
+            }
+
+            return;
+          }
+
+          const drift =
+            Math.abs(
+              current - expected
+            );
+
+          if (drift >= 0.85) {
+            state.playbackApplyingRemote = true;
+
+            try {
+              await applyPlayerPosition(
+                expected
+              );
+            } catch (_) {
+            } finally {
+              state.playbackApplyingRemote = false;
+            }
+          }
+
+          state.playbackLastPosition =
+            current;
+
+          state.playbackLastPlaying =
+            playing;
+
+          state.playbackLastSampleAt =
+            now;
+        },
+        750
+      );
   }
 
 
 '''
 
-replace_once(
-    '''  /*
-   * =========================================================
-   * ROOM UI
-   * =========================================================
-   */
-''',
-    sync_code + '''  /*
-   * =========================================================
-   * ROOM UI
-   * =========================================================
-   */
-''',
-    "sync insertion"
-)
+start_marker = "  /*\n   * =========================================================\n   * EVENT-BASED PLAYBACK SYNC"
+end_marker = "  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */"
+start = text.find(start_marker)
+end = text.find(end_marker, start)
+if start < 0 or end < 0:
+    raise SystemExit("sync block markers not found")
+text = text[:start] + base_sync + text[end:]
 
 replace_once(
-    '''                  forceYoutubeVisible();
-
-                  if (
-                    event.data ===
-                    YT.PlayerState.ENDED
-                  ) {''',
-    '''                  forceYoutubeVisible();
-
-                  if (
-                    event.data ===
-                    YT.PlayerState.PLAYING
-                  ) {
-                    if (!state.playbackApplyingRemote) {
-                      void publishPlaybackEvent(
-                        "play"
-                      );
-                    }
-                  }
-
-                  if (
-                    event.data ===
-                    YT.PlayerState.PAUSED
-                  ) {
-                    if (!state.playbackApplyingRemote) {
-                      void publishPlaybackEvent(
-                        "pause"
-                      );
-                    }
-                  }
-
-                  if (
-                    event.data ===
-                    YT.PlayerState.ENDED
-                  ) {''',
-    "youtube events"
-)
-
-replace_once(
-    '''          if (
-            await asyncIsPlaying()
-          ) {
-            await pausePlayer();
-          } else {
-            await playPlayer();
-          }
-
-          updateTimeUI();''',
-    '''          const position =
-            await asyncCurrentPosition();
-
-          if (
-            await asyncIsPlaying()
-          ) {
-            await pausePlayer();
-            void publishPlaybackEvent(
-              "pause",
-              position
-            );
-          } else {
-            await playPlayer();
-            void publishPlaybackEvent(
-              "play",
-              position
-            );
-          }
-
-          updateTimeUI();''',
-    "play pause button"
-)
-
-seek_block = '''          await applyPlayerPosition(
-            target
-          );
-        }
-      );'''
-if text.count(seek_block) != 2:
-    raise SystemExit(
-        f"expected 2 seek blocks, got {text.count(seek_block)}"
-    )
-text = text.replace(
-    seek_block,
-    '''          await applyPlayerPosition(
-            target
-          );
-
-          void publishPlaybackEvent(
-            "seek",
-            target
-          );
-        }
-      );''',
-    2
-)
-
-replace_once(
-    '''    if (!video) {
-      state.youtubeRequestedId =
-        null;
-''',
-    '''    if (!video) {
-      stopPlaybackSeekDetector();
-
-      state.youtubeRequestedId =
-        null;
-''',
-    "empty video"
-)
-
-replace_once(
-    '''      await buildYoutubePlayer(
-        videoId,
-        true
-      );
-
-      return;
-''',
     '''      await buildYoutubePlayer(
         videoId,
         true
       );
 
       startPlaybackSeekDetector();
-
-      return;
 ''',
-    "youtube build"
+    '''      await buildYoutubePlayer(
+        videoId,
+        state.isOwner
+      );
+
+      void applyLatestRoomPlaybackState();
+      startPlaybackSeekDetector();
+''',
+    "youtube autoplay"
 )
 
 replace_once(
-    '''    await buildPlatformPlayer(
-      normalized
-    );
-  }
-''',
     '''    await buildPlatformPlayer(
       normalized
     );
 
     startPlaybackSeekDetector();
-  }
 ''',
-    "other platform build"
+    '''    await buildPlatformPlayer(
+      normalized
+    );
+
+    void applyLatestRoomPlaybackState();
+    startPlaybackSeekDetector();
+''',
+    "platform sync"
 )
 
 replace_once(
-    '''    updateRoomOwnerUI();
-
-    state.roomRef =
-''',
-    '''    updateRoomOwnerUI();
-
-    stopPlaybackSeekDetector();
-    state.playbackLastSampleAt = 0;
-
-    state.roomRef =
-''',
-    "enter room"
-)
-
-replace_once(
-    '''    if (
-      !state.chatListenerAttached
-    ) {
-''',
-    '''    attachPlaybackSyncListener();
-
-    if (
-      !state.chatListenerAttached
-    ) {
-''',
-    "attach listener"
-)
-
-replace_once(
-    '''      state.roomRef
-        ?.child("video")
-        .off();
-''',
-    '''      state.roomRef
-        ?.child("video")
-        .off();
-
-      playbackSyncRef()?.off();
+    '''      playbackSyncRef()?.off();
 
       stopPlaybackSeekDetector();
 ''',
-    "cleanup ref"
-)
-
-replace_once(
-    '''    state.videoListenerAttached =
-      false;
-''',
-    '''    state.videoListenerAttached =
-      false;
-
-    state.playbackListenerAttached =
-      false;
-
-    state.playbackApplyingRemote =
-      false;
-''',
-    "cleanup state"
-)
-
-replace_once(
-    '''      clearInterval(
-        state.memberHeartbeatTimer
-      );
-
-      unlockPageScroll();
-''',
-    '''      clearInterval(
-        state.memberHeartbeatTimer
-      );
+    '''      detachPlaybackSyncListener();
 
       stopPlaybackSeekDetector();
-
-      unlockPageScroll();
 ''',
-    "unload"
+    "playback cleanup"
 )
 
-path.write_text(text, encoding="utf-8")
-print("app.js patch generated successfully")
+replace_once(
+    '''    state.playbackApplyingRemote =
+      false;
+''',
+    '''    state.playbackApplyingRemote =
+      false;
+
+    state.playbackRoomEvent =
+      null;
+
+    state.lastPlaybackEventId =
+      null;
+''',
+    "playback state cleanup"
+)
+
+if "allowfullscreen" in INDEX.read_text(encoding="utf-8"):
+    index_text = INDEX.read_text(encoding="utf-8")
+    index_text = index_text.replace("\n              allowfullscreen", "")
+    INDEX.write_text(index_text, encoding="utf-8")
+
+rules = json.loads(RULES.read_text(encoding="utf-8"))
+rooms = rules["rules"]["rooms"]
+
+def room_member_expr(room_id_expr='"$roomId"'):
+    return (
+        "root.child('members').child(" + room_id_expr + ").child(auth.uid).exists()"
+    )
+
+rooms["$roomId"]["sourceType"][".write"] = (
+    "auth != null && " + room_member_expr()
+)
+rooms["$roomId"]["video"][".write"] = (
+    "auth != null && " + room_member_expr()
+)
+rooms["$roomId"].pop("playbackEvent", None)
+
+members_uid = rules["rules"]["members"]["$roomId"]["$uid"]
+members_uid["playback"] = {
+    ".validate": (
+        "!newData.exists() || ("
+        "newData.hasChildren(['action','position','videoId','updatedAt','updatedBy','eventId','playing']) && "
+        "newData.child('action').isString() && "
+        "(newData.child('action').val() === 'play' || "
+        "newData.child('action').val() === 'pause' || "
+        "newData.child('action').val() === 'seek') && "
+        "newData.child('position').isNumber() && "
+        "newData.child('position').val() >= 0 && "
+        "newData.child('videoId').isString() && "
+        "newData.child('videoId').val().length > 0 && "
+        "newData.child('videoId').val().length <= 200 && "
+        "newData.child('updatedAt').isNumber() && "
+        "newData.child('updatedBy').val() === $uid && "
+        "newData.child('eventId').isString() && "
+        "newData.child('eventId').val().length > 0 && "
+        "newData.child('eventId').val().length <= 200 && "
+        "newData.child('playing').isBoolean()"
+        ")"
+    )
+}
+
+RULES.write_text(
+    json.dumps(
+        rules,
+        ensure_ascii=False,
+        indent=2
+    ) + "\n",
+    encoding="utf-8"
+)
+
+README.write_text(
+    """# WatchTogether
+
+WatchTogether 是一個 Firebase + GitHub Pages 的多人同步觀看網站。
+
+目前包含：
+- YouTube 搜尋與播放
+- Vimeo、Dailymotion、Bilibili、Twitch 與外部平台入口
+- 房間、成員、踢人、聊天室、待播放清單
+- Firebase Realtime Database 房間播放同步
+- 播放、暫停、跳轉、晚加入追趕與播放中 drift correction
+- 每位成員的播放狀態寫在 `members/{roomId}/{uid}/playback`，避免共用寫入權限衝突
+- Firebase Storage 房間媒體檔案權限限制
+
+Firebase Web App 設定位於 `firebase-config.js`。
+""",
+    encoding="utf-8"
+)
+
+APP.write_text(text, encoding="utf-8")
+print("WatchTogether complete repair generated successfully")
