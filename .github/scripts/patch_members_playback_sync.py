@@ -131,7 +131,8 @@ replacement = r'''  async function applyRemotePlaybackEvent(
       Number(event.position) || 0
     );
 
-    let targetPosition = basePosition;
+    let targetPosition =
+      basePosition;
 
     if (event.action === "play") {
       const updatedAt =
@@ -191,15 +192,11 @@ replacement = r'''  async function applyRemotePlaybackEvent(
         );
       }
 
-      if (
-        event.action === "play"
-      ) {
+      if (event.action === "play") {
         await playPlayer();
       }
 
-      if (
-        event.action === "pause"
-      ) {
+      if (event.action === "pause") {
         await pausePlayer();
       }
     } catch (error) {
@@ -287,6 +284,38 @@ replacement = r'''  async function applyRemotePlaybackEvent(
 
     await applyRemotePlaybackEvent(
       latest
+    );
+  }
+
+
+  async function synchronizePlaybackFromRoom() {
+    const event =
+      state.playbackState;
+
+    if (
+      !event ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
+      return;
+    }
+
+    if (
+      event.updatedBy === state.uid
+    ) {
+      return;
+    }
+
+    if (
+      String(event.videoId || "") !==
+      String(state.currentVideoId || "")
+    ) {
+      return;
+    }
+
+    await applyRemotePlaybackEvent(
+      event
     );
   }
 
