@@ -16,8 +16,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Patch playback sync
-        shell: python
+        shell: bash
         run: |
+          python3 <<'PY'
           from pathlib import Path
           import re
 
@@ -63,30 +64,18 @@ jobs:
         : Infinity;
 
       state.playbackRemoteEvent = event;
-
-      if (Number.isFinite(target) && (event.action === "seek" || drift > 0.85)) {
-        if (typeof state.player.seekTo === "function") {
-          state.player.seekTo(target, true);
-        }
-      }
-
       state.playbackApplyingRemote = true;
 
+      if (Number.isFinite(target) && (event.action === "seek" || drift > 0.85)) {
+        await applyPlayerPosition(target);
+      }
+
       if (event.action === "pause") {
-        if (typeof state.player.pauseVideo === "function") {
-          state.player.pauseVideo();
-        }
+        await pausePlayer();
       } else if (event.action === "play" || event.playing === true) {
-        if (typeof state.player.playVideo === "function") {
-          const result = state.player.playVideo();
-          if (result && typeof result.catch === "function") {
-            result.catch(() => {});
-          }
-        }
+        await playPlayer();
       } else if (event.action === "seek" && event.playing === false) {
-        if (typeof state.player.pauseVideo === "function") {
-          state.player.pauseVideo();
-        }
+        await pausePlayer();
       }
 
       state.playbackLastRemoteEventId = eventId;
@@ -116,7 +105,7 @@ jobs:
           )
 
           path.write_text(text, encoding="utf-8")
-''
+          PY
 
       - name: Verify JavaScript
         run: node --check app.js
