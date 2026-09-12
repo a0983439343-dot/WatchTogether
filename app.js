@@ -5610,8 +5610,6 @@
       state.playbackApplyingRemoteEventId = null;
       state.playbackIgnoreStateChanges = 0;
       state.playbackIgnoreStateUntil = 0;
-    state.playbackLastRemoteEventId = null;
-    state.playbackApplyingRemoteEventId = null;
       await buildYoutubePlayer(videoId, state.isOwner);
       await applyLatestRoomPlaybackState();
       startPlaybackSeekDetector();
