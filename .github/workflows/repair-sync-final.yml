@@ -15,16 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply sync repair V4
-        run: python3 .github/scripts/repair_sync_final.py
+      - name: Apply final shared playback repair
+        run: python3 .github/scripts/repair_playback_v3.py
 
-      - name: Apply sync repair V4.1
-        run: python3 .github/scripts/repair_sync_v41.py
-
-      - name: Apply final playback pause ordering repair
-        run: python3 .github/scripts/repair_playback_v2.py
-
-      - name: Verify
+      - name: Verify JavaScript
         run: node --check app.js
 
       - name: Commit repaired app
@@ -35,6 +29,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Automated WatchTogether final playback repair"
+            git commit -m "Automated final shared playback repair"
             git push origin HEAD:main
           fi
