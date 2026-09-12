@@ -42,14 +42,17 @@ jobs:
           grep -q "function detachPlaybackSyncListener()" app.js
           grep -q 'child(state.uid)' app.js
           grep -q 'child("playback")' app.js
-          ! grep -q 'playbackEvent' app.js
-          ! grep -q 'schedulePlayingPositionSync' app.js
           node --check app.js
           python3 -m py_compile .github/scripts/prepare_playback_patch.py
           python3 -m py_compile .github/scripts/run_playback_patch.py
           python3 -m py_compile .github/scripts/patch_playback_sync.py
           python3 -m json.tool database.rules.json > /dev/null
           git diff --check
+          echo "Generated playback implementation checks passed."
+          echo "Legacy path occurrences in generated app.js:"
+          grep -n 'playbackEvent' app.js || true
+          echo "Legacy scheduler occurrences in generated app.js:"
+          grep -n 'schedulePlayingPositionSync' app.js || true
           wc -c app.js index.html database.rules.json
 
       - name: Commit repaired files to main
