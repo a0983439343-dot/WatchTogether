@@ -12,6 +12,14 @@ def require_replace(text, old, new, label, count=1):
     return text.replace(old, new, count)
 
 
+# Remove duplicate reset lines left by an earlier repair pass.
+duplicate_reset = """      state.playbackIgnoreStateUntil = 0;\n    state.playbackLastRemoteEventId = null;\n    state.playbackApplyingRemoteEventId = null;"""
+s = s.replace(
+    duplicate_reset,
+    "      state.playbackIgnoreStateUntil = 0;",
+    1,
+)
+
 if "playbackIgnoreStateChanges" not in s:
     marker = "    playbackApplyingRemote: false,"
     s = require_replace(
@@ -53,30 +61,27 @@ if det_start < 0 or det_end < 0:
 new_detector = '''  function startPlaybackSeekDetector() {\n    stopPlaybackSeekDetector();\n    state.playbackReadyAt = Date.now() + 1800;\n\n    state.playbackSeekTimer = setInterval(async () => {\n      if (!state.playerReady || !state.player || state.playbackApplyingRemote) return;\n\n      const position = await asyncCurrentPosition();\n      const playing = await asyncIsPlaying();\n      const remote = state.playbackRemoteEvent;\n      const now = Date.now();\n\n      if (\n        remote &&\n        remote.updatedBy !== state.uid &&\n        String(remote.videoId || "") === String(state.currentVideoId || "")\n      ) {\n        const expected = getExpectedPlaybackPosition(remote);\n\n        if (now >= Number(state.playbackReadyAt || 0)) {\n          const drift = Math.abs(position - expected);\n\n          if (drift > 1.25) {\n            state.playbackApplyingRemote = true;\n            state.playbackIgnoreStateChanges = 2;\n            state.playbackIgnoreStateUntil = Date.now() + 1800;\n\n            try {\n              await applyPlayerPosition(expected);\n            } finally {\n              state.playbackApplyingRemote = false;\n              state.playbackLastPosition = await asyncCurrentPosition();\n              state.playbackLastPlaying = await asyncIsPlaying();\n            }\n            return;\n          }\n\n          if (playing !== Boolean(remote.playing)) {\n            state.playbackApplyingRemote = true;\n            state.playbackIgnoreStateChanges = 2;\n            state.playbackIgnoreStateUntil = Date.now() + 1800;\n\n            try {\n              if (remote.playing) {\n                await playPlayer();\n              } else {\n                await pausePlayer();\n              }\n            } finally {\n              state.playbackApplyingRemote = false;\n              state.playbackLastPosition = await asyncCurrentPosition();\n              state.playbackLastPlaying = await asyncIsPlaying();\n            }\n            return;\n          }\n        }\n      }\n\n      if (now < Number(state.playbackIgnoreStateUntil || 0)) {\n        state.playbackLastPosition = position;\n        state.playbackLastPlaying = playing;\n        return;\n      }\n\n      if (now < Number(state.playbackReadyAt || 0)) {\n        state.playbackLastPosition = position;\n        state.playbackLastPlaying = playing;\n        return;\n      }\n\n      if (state.playbackLastPosition === null || state.playbackLastPlaying === null) {\n        state.playbackLastPosition = position;\n        state.playbackLastPlaying = playing;\n        return;\n      }\n\n      const positionDelta = Math.abs(\n        position - Number(state.playbackLastPosition)\n      );\n      const playingChanged =\n        playing !== state.playbackLastPlaying;\n\n      if (positionDelta >= 1.35) {\n        void publishPlaybackEvent("seek", position);\n      } else if (playingChanged) {\n        void publishPlaybackEvent(\n          playing ? "play" : "pause",\n          position\n        );\n      }\n\n      state.playbackLastPosition = position;\n      state.playbackLastPlaying = playing;\n    }, 750);\n  }\n'''
 s = s[:det_start] + new_detector + s[det_end:]
 
-# New-video reset: use the actual formatting in the current app.js.
+# Reset shields for a new room video.
 room_video_start = s.find("  async function handleRoomVideo(")
 room_video_end = s.find("\n  /*\n   * =========================================================\n   * EVENT-BASED PLAYBACK SYNC", room_video_start)
 anchor = s.find("      state.playbackRemoteEvent = null;", room_video_start, room_video_end)
 if anchor < 0:
     raise SystemExit("new-video playback reset anchor not found")
 line_end = s.find("\n", anchor)
-after = s[anchor:line_end + 350]
+after = s[anchor:line_end + 250]
 if "playbackIgnoreStateChanges" not in after:
     s = s[:line_end] + "\n      state.playbackLastRemoteEventId = null;\n      state.playbackApplyingRemoteEventId = null;\n      state.playbackIgnoreStateChanges = 0;\n      state.playbackIgnoreStateUntil = 0;" + s[line_end:]
 
-# Cleanup: current file keeps the remote-event reset split over lines.
+# Reset playback shields during cleanup.
 cleanup_start = s.find("  function disconnectRoomListeners() {")
 cleanup_end = s.find("\n  /*\n   * 保留舊名稱", cleanup_start)
 anchor = s.find("    state.playbackRemoteEvent =\n      null;", cleanup_start, cleanup_end)
 if anchor < 0:
     raise SystemExit("cleanup playback reset anchor not found")
-line_end = s.find("\n", anchor + len("    state.playbackRemoteEvent ="))
-after = s[anchor:anchor + 350]
+line_end = s.find("\n", s.find("      null;", anchor) + len("      null;"))
+after = s[anchor:anchor + 320]
 if "playbackIgnoreStateChanges" not in after:
-    insert_at = s.find("\n", s.find("      null;", anchor) + len("      null;"))
-    if insert_at < 0:
-        raise SystemExit("cleanup insertion point not found")
-    s = s[:insert_at] + "\n    state.playbackLastRemoteEventId =\n      null;\n    state.playbackApplyingRemoteEventId =\n      null;\n    state.playbackIgnoreStateChanges =\n      0;\n    state.playbackIgnoreStateUntil =\n      0;" + s[insert_at:]
+    s = s[:line_end] + "\n    state.playbackLastRemoteEventId =\n      null;\n    state.playbackApplyingRemoteEventId =\n      null;\n    state.playbackIgnoreStateChanges =\n      0;\n    state.playbackIgnoreStateUntil =\n      0;" + s[line_end:]
 
 APP.write_text(s, encoding="utf-8")
 
