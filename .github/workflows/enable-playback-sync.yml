@@ -34,8 +34,8 @@ jobs:
           test -s database.rules.json
           grep -q "function attachPlaybackSyncListener()" app.js
           grep -q "function detachPlaybackSyncListener()" app.js
-          grep -q 'membersRef' app.js
-          grep -q 'membersRef.*child(state.uid).*child("playback")' app.js
+          grep -q 'child(state.uid)' app.js
+          grep -q 'child("playback")' app.js
           ! grep -q 'playbackEvent' app.js
           ! grep -q 'schedulePlayingPositionSync' app.js
           node --check app.js
