@@ -18,30 +18,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore known-good app.js
+      - name: Restore known-good app.js base
         run: git show b4db178f131b543a41354ccbf10a20e2b4bb4296:app.js > app.js
 
-      - name: Apply playback sync patch
+      - name: Apply complete WatchTogether repair
         run: python3 .github/scripts/patch_playback_sync.py
 
-      - name: Apply room playback state patch
-        run: python3 .github/scripts/patch_members_playback_sync.py
-
-      - name: Verify
+      - name: Verify source files
         run: |
           test -s app.js
+          test -s index.html
+          test -s database.rules.json
           grep -q "function attachPlaybackSyncListener()" app.js
-          grep -q "function playbackSyncRef()" app.js
-          grep -q 'child("playback")' app.js
+          grep -q "function detachPlaybackSyncListener()" app.js
+          grep -q 'membersRef' app.js
           ! grep -q 'playbackEvent' app.js
-          ! grep -q "schedulePlayingPositionSync" app.js
+          ! grep -q 'rooms/.*/playback' app.js
           node --check app.js
-          wc -l app.js
+          python3 -m py_compile .github/scripts/patch_playback_sync.py
+          python3 -m json.tool database.rules.json > /dev/null
+          git diff --check
+          wc -c app.js index.html database.rules.json
 
-      - name: Commit repaired app.js
+      - name: Commit repaired files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.js
+          git add app.js index.html database.rules.json README.md
+          if git diff --cached --quiet; then
+            echo "No repair changes to commit."
+            exit 0
+          fi
           git commit -m "Restore and fix playback sync"
           git push
