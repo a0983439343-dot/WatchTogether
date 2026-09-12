@@ -18,8 +18,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Repair app.js
-        shell: python
         run: |
+          python3 - <<'PY'
           from pathlib import Path
 
           path = Path("app.js")
@@ -61,11 +61,6 @@ jobs:
                   raise SystemExit("playbackSyncRef marker not found")
               text = text.replace(marker, server_clock + marker, 1)
 
-          replacements = {
-              '    const updatedAt = Number(event?.updatedAt);': '    const updatedAt = Number(event?.updatedAt);',
-              '      base + Math.min(\n      Math.max(0, (now - updatedAt) / 1000),': '      base + Math.min(\n      Math.max(0, (now - updatedAt) / 1000),',
-          }
-
           text = text.replace(
               '    const now = Date.now();\n    const key =\n      `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;',
               '    const now = serverNow();\n    const key =\n      `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;',
@@ -85,6 +80,8 @@ jobs:
           )
 
           path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Verify
         run: |
           node --check app.js
