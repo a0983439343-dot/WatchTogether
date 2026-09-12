@@ -192,6 +192,8 @@
     playbackLastPlaying: null,
     playbackSeekTimer: null,
     playbackRemoteEvent: null,
+    playbackLastRemoteEventId: null,
+    playbackApplyingRemoteEventId: null,
 
     queue: {},
 
@@ -5567,6 +5569,8 @@
       }
 
       state.playbackRemoteEvent = null;
+    state.playbackLastRemoteEventId = null;
+    state.playbackApplyingRemoteEventId = null;
       await buildYoutubePlayer(videoId, state.isOwner);
       await applyLatestRoomPlaybackState();
       startPlaybackSeekDetector();
@@ -5616,8 +5620,6 @@
     if (normalizedAction === "pause") playing = false;
     if (normalizedAction === "seek") playing = await asyncIsPlaying();
 
-    state.playbackRemoteEvent = null;
-
     try {
       await ref.set({
         action: normalizedAction,
@@ -5642,21 +5644,38 @@
     if (event.updatedBy === state.uid) return;
     if (state.playerType === "bilibili" || state.playerType === "external") return;
 
+    const eventId = String(event.eventId || "");
+    if (!eventId) return;
+    if (state.playbackLastRemoteEventId === eventId) return;
+    if (state.playbackApplyingRemoteEventId === eventId) return;
+
+    state.playbackLastRemoteEventId = eventId;
+    state.playbackApplyingRemoteEventId = eventId;
     state.playbackRemoteEvent = event;
     state.playbackApplyingRemote = true;
     state.playbackReadyAt = Date.now() + 1200;
+
     try {
       const position = getExpectedPlaybackPosition(event);
       await applyPlayerPosition(position);
-      if (event.playing === true) await playPlayer();
-      else await pausePlayer();
-      if ($("syncStatus")) $("syncStatus").textContent = `已同步 ${formatTime(position)}`;
+
+      if (event.playing === true) {
+        await playPlayer();
+      } else {
+        await pausePlayer();
+      }
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent = `已同步 ${formatTime(position)}`;
+      }
+
+      state.playbackLastPosition = await asyncCurrentPosition();
+      state.playbackLastPlaying = await asyncIsPlaying();
     } catch (error) {
       console.warn("套用遠端播放狀態失敗:", error);
     } finally {
       state.playbackApplyingRemote = false;
-      state.playbackLastPosition = await asyncCurrentPosition();
-      state.playbackLastPlaying = await asyncIsPlaying();
+      state.playbackApplyingRemoteEventId = null;
     }
   }
 
@@ -5682,6 +5701,7 @@
   function handleRemotePlaybackSnapshot(snapshot) {
     const event = snapshot?.val?.() || null;
     if (!event || !event.eventId || event.updatedBy === state.uid) return;
+    if (state.playbackLastRemoteEventId === String(event.eventId || "")) return;
     void applyRemotePlaybackEvent(event);
   }
 
