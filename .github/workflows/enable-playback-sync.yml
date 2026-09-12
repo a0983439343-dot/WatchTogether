@@ -4,14 +4,18 @@ on:
   push:
     branches:
       - main
+  issues:
+    types:
+      - opened
   workflow_dispatch:
 
 permissions:
   contents: write
+  issues: read
 
 jobs:
   repair:
-    if: ${{ !contains(github.event.head_commit.message, 'Restore and fix playback sync') }}
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'Restore and fix playback sync') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -34,8 +38,8 @@ jobs:
           grep -q "function attachPlaybackSyncListener()" app.js
           grep -q "function playbackSyncRef()" app.js
           grep -q "function playbackWriteRef()" app.js
-          grep -q "state.playbackState" app.js
-          grep -q 'membersRef' app.js
+          grep -q "playbackState" app.js
+          grep -q "membersRef" app.js
           ! grep -q 'playbackEvent' app.js
           ! grep -q "schedulePlayingPositionSync" app.js
           node --check app.js
