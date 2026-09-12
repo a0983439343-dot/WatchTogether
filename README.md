@@ -13,3 +13,5 @@ WatchTogether 是一個 Firebase + GitHub Pages 的多人同步觀看網站。
 - Firebase Storage 房間媒體檔案權限限制
 
 Firebase Web App 設定位於 `firebase-config.js`，部署設定位於 `firebase.json`。
+
+Automated playback repair trigger.
