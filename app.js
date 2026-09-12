@@ -137,6 +137,8 @@
 
     membersRef: null,
 
+    kickedRef: null,
+
     chatRef: null,
 
     queueRef: null,
@@ -200,6 +202,7 @@
     playbackLastLocalActionKey: "",
     playbackLastLocalActionAt: 0,
     playbackLastLocalSeekWriteAt: 0,
+    playbackRecoveryTimer: null,
 
     queue: {},
 
@@ -5649,7 +5652,7 @@
     const updatedAt = Number(event?.updatedAt);
     if (!Number.isFinite(updatedAt) || updatedAt <= 0) return base;
     const elapsed = Math.max(0, (Date.now() - updatedAt) / 1000);
-    return base + Math.min(elapsed, 30);
+    return base + Math.min(elapsed, 7200);
   }
 
   async function publishPlaybackEvent(action, position = null) {
@@ -5707,7 +5710,7 @@
     }
   }
 
-  async function applyRemotePlaybackEvent(event) {
+  async function applyRemotePlaybackEvent(event, force = false) {
     if (!event || !state.playerReady || !state.player || !state.currentVideoId) return;
     if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
     if (!["play", "pause", "seek"].includes(event.action)) return;
@@ -5716,7 +5719,7 @@
 
     const eventId = String(event.eventId || "");
     if (!eventId) return;
-    if (state.playbackLastRemoteEventId === eventId) return;
+    if (!force && state.playbackLastRemoteEventId === eventId) return;
 
     const remoteUpdatedAt = Number(event.updatedAt || 0);
     const lastRemoteUpdatedAt = Number(state.playbackLastRemoteUpdatedAt || 0);
@@ -5778,12 +5781,12 @@
     }
   }
 
-  async function applyLatestRoomPlaybackState() {
+  async function applyLatestRoomPlaybackState(force = false) {
     const ref = playbackSyncRef();
     if (!ref || !state.playerReady || !state.player || !state.currentVideoId) return;
     try {
       const event = (await ref.once("value")).val();
-      if (event && event.eventId && event.updatedBy !== state.uid) await applyRemotePlaybackEvent(event);
+      if (event && event.eventId && event.updatedBy !== state.uid) await applyRemotePlaybackEvent(event, force);
     } catch (error) {
       console.warn("讀取最新播放狀態失敗:", error);
     }
@@ -5907,6 +5910,42 @@
     }, 750);
   }
 
+  function recoverPlaybackAfterPageResume() {
+    if (
+      document.visibilityState === "hidden" ||
+      !state.roomId ||
+      !state.uid ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
+      return;
+    }
+
+    clearTimeout(state.playbackRecoveryTimer);
+
+    state.playbackRecoveryTimer = setTimeout(async () => {
+      state.playbackRecoveryTimer = null;
+
+      if (
+        document.visibilityState === "hidden" ||
+        !state.roomId ||
+        !state.playerReady ||
+        !state.player
+      ) {
+        return;
+      }
+
+      try {
+        await applyLatestRoomPlaybackState(true);
+        startPlaybackSeekDetector();
+      } catch (error) {
+        console.warn("頁面恢復後播放同步失敗:", error);
+      }
+    }, 350);
+  }
+
+
   /*
    * =========================================================
    * ROOM UI
@@ -5934,6 +5973,49 @@
    * =========================================================
    */
 
+  async function isMemberKicked() {
+    if (!state.kickedRef) {
+      return false;
+    }
+
+    try {
+      const snapshot = await state.kickedRef.once("value");
+      return snapshot.val() === true;
+    } catch (error) {
+      console.warn("讀取踢出狀態失敗:", error);
+      return false;
+    }
+  }
+
+
+  async function handleKickState() {
+    if (!state.kickedRef || !state.roomId || !state.uid) {
+      return false;
+    }
+
+    if (!(await isMemberKicked())) {
+      return false;
+    }
+
+    await leaveRoomLocally("你已被房主移出房間");
+    return true;
+  }
+
+
+  function attachKickListener() {
+    if (!state.kickedRef) {
+      return;
+    }
+
+    state.kickedRef.off();
+    state.kickedRef.on("value", (snapshot) => {
+      if (snapshot.val() === true && state.roomId && state.uid) {
+        void leaveRoomLocally("你已被房主移出房間");
+      }
+    });
+  }
+
+
   async function markMemberOnline() {
     if (
       !state.membersRef ||
@@ -5946,6 +6028,11 @@
       state.membersRef.child(
         state.uid
       );
+
+    if (await isMemberKicked()) {
+      await leaveRoomLocally("你已被房主移出房間");
+      return;
+    }
 
     try {
       await memberRef.set({
@@ -6030,66 +6117,38 @@
     targetUid,
     targetName
   ) {
-    if (
-      !state.isOwner
-    ) {
-      toast(
-        "只有房主可以踢人"
-      );
-
+    if (!state.isOwner) {
+      toast("只有房主可以踢人");
       return;
     }
 
-    if (
-      !targetUid ||
-      targetUid === state.uid
-    ) {
+    if (!targetUid || targetUid === state.uid) {
       return;
     }
 
-    if (!state.membersRef) {
-      toast(
-        "目前不在房間內"
-      );
-
+    if (!state.membersRef || !db || !state.roomId) {
+      toast("目前不在房間內");
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `確定要踢出「${
-          targetName ||
-          "這名成員"
-        }」嗎？`
-      );
+    const confirmed = window.confirm(
+      `確定要踢出「${targetName || "這名成員"}」嗎？`
+    );
 
     if (!confirmed) {
       return;
     }
 
     try {
-      await state.membersRef
-        .child(
-          targetUid
-        )
-        .remove();
+      const updates = {};
+      updates[`kicked/${state.roomId}/${targetUid}`] = true;
+      updates[`members/${state.roomId}/${targetUid}`] = null;
+      await db.ref().update(updates);
 
-      toast(
-        `已踢出 ${
-          targetName ||
-          "成員"
-        }`
-      );
+      toast(`已踢出 ${targetName || "成員"}`);
     } catch (error) {
-      console.error(
-        "踢人失敗:",
-        error
-      );
-
-      toast(
-        error?.message ||
-        "踢人失敗，請檢查 Firebase Rules"
-      );
+      console.error("踢人失敗:", error);
+      toast(error?.message || "踢人失敗，請檢查 Firebase Rules");
     }
   }
 
@@ -6112,6 +6171,13 @@
       state.memberHeartbeatTimer
     );
 
+    clearTimeout(
+      state.playbackRecoveryTimer
+    );
+
+    state.playbackRecoveryTimer =
+      null;
+
     disconnectRoomListeners();
 
     ++state.youtubeBuildToken;
@@ -6125,6 +6191,9 @@
     await destroyCurrentPlayer();
 
     state.roomId =
+      null;
+
+    state.kickedRef =
       null;
 
     state.room =
@@ -6190,6 +6259,17 @@
       db.ref(
         `members/${state.roomId}`
       );
+
+    state.kickedRef =
+      db.ref(
+        `kicked/${state.roomId}/${state.uid}`
+      );
+
+    if (await handleKickState()) {
+      return;
+    }
+
+    attachKickListener();
 
     state.chatRef =
       db.ref(
@@ -6960,6 +7040,7 @@
   function disconnectRoomListeners() {
     try {
       state.membersRef?.off();
+      state.kickedRef?.off();
 
       state.chatRef?.off();
 
@@ -7026,6 +7107,23 @@
    */
 
   function setupEvents() {
+
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "visible") {
+          recoverPlaybackAfterPageResume();
+        }
+      }
+    );
+
+    window.addEventListener(
+      "pageshow",
+      () => {
+        recoverPlaybackAfterPageResume();
+      }
+    );
+
 
     /*
      * CREATE
