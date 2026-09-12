@@ -1,236 +1,236 @@
 from pathlib import Path
+import json
 
 APP = Path("app.js")
 STYLES = Path("styles.css")
+RULES = Path("database.rules.json")
+
 s = APP.read_text(encoding="utf-8")
 
 
-def require_replace(text, old, new, label, count=1):
+def replace_once(text, old, new, label):
     if old not in text:
         raise SystemExit(f"{label} not found")
-    return text.replace(old, new, count)
+    return text.replace(old, new, 1)
 
 
-# Add local event de-duplication and remote timestamp tracking.
-state_marker = "    playbackApplyingRemoteEventId: null,"
-state_add = """    playbackApplyingRemoteEventId: null,
-    playbackLastRemoteUpdatedAt: 0,
-    playbackLastLocalActionKey: \"\",
-    playbackLastLocalActionAt: 0,
-    playbackLastLocalSeekWriteAt: 0,"""
-if "playbackLastRemoteUpdatedAt" not in s:
-    s = require_replace(s, state_marker, state_add, "playback conflict state")
+# ---------------------------------------------------------
+# Playback recovery state
+# ---------------------------------------------------------
+if "kickedRef: null" not in s:
+    s = replace_once(s, "    membersRef: null,\n", "    membersRef: null,\n\n    kickedRef: null,\n", "kickedRef state")
 
-# De-duplicate local state changes before writing to Firebase.
-publish_marker = '''    if (normalizedAction === "seek") playing = await asyncIsPlaying();
+if "playbackRecoveryTimer: null" not in s:
+    s = replace_once(s, "    playbackLastLocalSeekWriteAt: 0,\n", "    playbackLastLocalSeekWriteAt: 0,\n    playbackRecoveryTimer: null,\n", "playback recovery state")
 
-    try {'''
-publish_new = '''    if (normalizedAction === "seek") playing = await asyncIsPlaying();
+s = replace_once(
+    s,
+    "    return base + Math.min(elapsed, 30);\n",
+    "    return base + Math.min(elapsed, 7200);\n",
+    "late playback recovery cap"
+)
 
-    const now = Date.now();
-    const localActionKey = `${normalizedAction}:${Math.round(finalPosition * 2) / 2}:${playing ? 1 : 0}`;
+s = replace_once(
+    s,
+    "  async function applyRemotePlaybackEvent(event) {\n",
+    "  async function applyRemotePlaybackEvent(event, force = false) {\n",
+    "remote playback signature"
+)
 
+s = replace_once(
+    s,
+    "    if (state.playbackLastRemoteEventId === eventId) return;\n",
+    "    if (!force && state.playbackLastRemoteEventId === eventId) return;\n",
+    "remote playback force guard"
+)
+
+s = replace_once(
+    s,
+    "  async function applyLatestRoomPlaybackState() {\n",
+    "  async function applyLatestRoomPlaybackState(force = false) {\n",
+    "latest playback signature"
+)
+
+s = replace_once(
+    s,
+    '      if (event && event.eventId && event.updatedBy !== state.uid) await applyRemotePlaybackEvent(event);\n',
+    '      if (event && event.eventId && event.updatedBy !== state.uid) await applyRemotePlaybackEvent(event, force);\n',
+    "latest playback force call"
+)
+
+# Prevent unnecessary YouTube rebuilds and recover from background suspension.
+resume_marker = "  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */\n"
+resume_block = "  function recoverPlaybackAfterPageResume() {\n    if (\n      document.visibilityState === \"hidden\" ||\n      !state.roomId ||\n      !state.uid ||\n      !state.playerReady ||\n      !state.player ||\n      !state.currentVideoId\n    ) {\n      return;\n    }\n\n    clearTimeout(state.playbackRecoveryTimer);\n\n    state.playbackRecoveryTimer = setTimeout(async () => {\n      state.playbackRecoveryTimer = null;\n\n      if (\n        document.visibilityState === \"hidden\" ||\n        !state.roomId ||\n        !state.playerReady ||\n        !state.player\n      ) {\n        return;\n      }\n\n      try {\n        await applyLatestRoomPlaybackState(true);\n        startPlaybackSeekDetector();\n      } catch (error) {\n        console.warn(\"頁面恢復後播放同步失敗:\", error);\n      }\n    }, 350);\n  }\n\n\n"
+if "function recoverPlaybackAfterPageResume()" not in s:
+    s = replace_once(s, resume_marker, resume_block + resume_marker, "resume recovery insertion")
+
+setup_marker = "  function setupEvents() {\n"
+setup_block = "  function setupEvents() {\n\n    document.addEventListener(\n      \"visibilitychange\",\n      () => {\n        if (document.visibilityState === \"visible\") {\n          recoverPlaybackAfterPageResume();\n        }\n      }\n    );\n\n    window.addEventListener(\n      \"pageshow\",\n      () => {\n        recoverPlaybackAfterPageResume();\n      }\n    );\n\n"
+if 'document.addEventListener(\n      "visibilitychange"' not in s:
+    s = replace_once(s, setup_marker, setup_block, "visibility recovery handlers")
+
+# ---------------------------------------------------------
+# Kick protection
+# ---------------------------------------------------------
+member_marker = "  /*\n   * =========================================================\n   * MEMBERS\n   * =========================================================\n   */\n\n  async function markMemberOnline() {\n"
+member_block = "  /*\n   * =========================================================\n   * MEMBERS\n   * =========================================================\n   */\n\n  async function isMemberKicked() {\n    if (!state.kickedRef) {\n      return false;\n    }\n\n    try {\n      const snapshot = await state.kickedRef.once(\"value\");\n      return snapshot.val() === true;\n    } catch (error) {\n      console.warn(\"讀取踢出狀態失敗:\", error);\n      return false;\n    }\n  }\n\n\n  async function handleKickState() {\n    if (!state.kickedRef || !state.roomId || !state.uid) {\n      return false;\n    }\n\n    if (!(await isMemberKicked())) {\n      return false;\n    }\n\n    await leaveRoomLocally(\"你已被房主移出房間\");\n    return true;\n  }\n\n\n  function attachKickListener() {\n    if (!state.kickedRef) {\n      return;\n    }\n\n    state.kickedRef.off();\n    state.kickedRef.on(\"value\", (snapshot) => {\n      if (snapshot.val() === true && state.roomId && state.uid) {\n        void leaveRoomLocally(\"你已被房主移出房間\");\n      }\n    });\n  }\n\n\n  async function markMemberOnline() {\n"
+if "async function isMemberKicked()" not in s:
+    s = replace_once(s, member_marker, member_block, "kick protection functions")
+
+mark_marker = "    const memberRef =\n      state.membersRef.child(\n        state.uid\n      );\n\n    try {\n"
+mark_block = "    const memberRef =\n      state.membersRef.child(\n        state.uid\n      );\n\n    if (await isMemberKicked()) {\n      await leaveRoomLocally(\"你已被房主移出房間\");\n      return;\n    }\n\n    try {\n"
+s = replace_once(s, mark_marker, mark_block, "markMemberOnline kick guard")
+
+old_kick = """  async function kickMember(
+    targetUid,
+    targetName
+  ) {
     if (
-      localActionKey === state.playbackLastLocalActionKey &&
-      now - Number(state.playbackLastLocalActionAt || 0) < 900
+      !state.isOwner
     ) {
+      toast(
+        "只有房主可以踢人"
+      );
+
       return;
     }
 
     if (
-      normalizedAction === "seek" &&
-      now - Number(state.playbackLastLocalSeekWriteAt || 0) < 650
+      !targetUid ||
+      targetUid === state.uid
     ) {
       return;
     }
 
-    state.playbackLastLocalActionKey = localActionKey;
-    state.playbackLastLocalActionAt = now;
-    if (normalizedAction === "seek") {
-      state.playbackLastLocalSeekWriteAt = now;
-    }
+    if (!state.membersRef) {
+      toast(
+        "目前不在房間內"
+      );
 
-    try {'''
-s = require_replace(s, publish_marker, publish_new, "local playback event de-duplication")
-
-# Reject an older remote event even when it has a different eventId.
-remote_marker = '''    const eventId = String(event.eventId || "");
-    if (!eventId) return;
-    if (state.playbackLastRemoteEventId === eventId) return;'''
-remote_new = '''    const eventId = String(event.eventId || "");
-    if (!eventId) return;
-    if (state.playbackLastRemoteEventId === eventId) return;
-
-    const remoteUpdatedAt = Number(event.updatedAt || 0);
-    const lastRemoteUpdatedAt = Number(state.playbackLastRemoteUpdatedAt || 0);
-    if (
-      remoteUpdatedAt > 0 &&
-      lastRemoteUpdatedAt > 0 &&
-      remoteUpdatedAt < lastRemoteUpdatedAt
-    ) {
       return;
     }
 
-    if (remoteUpdatedAt > 0) {
-      state.playbackLastRemoteUpdatedAt = remoteUpdatedAt;
-    }'''
-s = require_replace(s, remote_marker, remote_new, "remote playback timestamp guard")
+    const confirmed =
+      window.confirm(
+        `確定要踢出「${
+          targetName ||
+          "這名成員"
+        }」嗎？`
+      );
 
-# Clear conflict state when switching videos.
-video_reset = '''      state.playbackIgnoreStateChanges = 0;
-      state.playbackIgnoreStateUntil = 0;'''
-video_reset_new = '''      state.playbackIgnoreStateChanges = 0;
-      state.playbackIgnoreStateUntil = 0;
-      state.playbackLastRemoteUpdatedAt = 0;
-      state.playbackLastLocalActionKey = "";
-      state.playbackLastLocalActionAt = 0;
-      state.playbackLastLocalSeekWriteAt = 0;'''
-s = require_replace(s, video_reset, video_reset_new, "video playback reset")
+    if (!confirmed) {
+      return;
+    }
 
-# Clear conflict state during room cleanup as well, without touching Firebase Rules.
-cleanup_marker = '''    state.playbackIgnoreStateUntil =
-      0;'''
-cleanup_new = '''    state.playbackIgnoreStateUntil =
-      0;
-    state.playbackLastRemoteUpdatedAt =
-      0;
-    state.playbackLastLocalActionKey =
-      "";
-    state.playbackLastLocalActionAt =
-      0;
-    state.playbackLastLocalSeekWriteAt =
-      0;'''
-if "state.playbackLastRemoteUpdatedAt =\n      0;" not in s[s.find(cleanup_marker):s.find(cleanup_marker) + 500]:
-    s = require_replace(s, cleanup_marker, cleanup_new, "cleanup playback reset")
+    try {
+      await state.membersRef
+        .child(
+          targetUid
+        )
+        .remove();
+
+      toast(
+        `已踢出 ${
+          targetName ||
+          "成員"
+        }`
+      );
+    } catch (error) {
+      console.error(
+        "踢人失敗:",
+        error
+      );
+
+      toast(
+        error?.message ||
+        "踢人失敗，請檢查 Firebase Rules"
+      );
+    }
+  }
+"""
+new_kick = """  async function kickMember(
+    targetUid,
+    targetName
+  ) {
+    if (!state.isOwner) {
+      toast("只有房主可以踢人");
+      return;
+    }
+
+    if (!targetUid || targetUid === state.uid) {
+      return;
+    }
+
+    if (!state.membersRef || !db || !state.roomId) {
+      toast("目前不在房間內");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `確定要踢出「${targetName || "這名成員"}」嗎？`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const updates = {};
+      updates[`kicked/${state.roomId}/${targetUid}`] = true;
+      updates[`members/${state.roomId}/${targetUid}`] = null;
+      await db.ref().update(updates);
+
+      toast(`已踢出 ${targetName || "成員"}`);
+    } catch (error) {
+      console.error("踢人失敗:", error);
+      toast(error?.message || "踢人失敗，請檢查 Firebase Rules");
+    }
+  }
+"""
+s = replace_once(s, old_kick, new_kick, "atomic kick function")
+
+room_ref_marker = "    state.membersRef =\n      db.ref(\n        `members/${state.roomId}`\n      );\n\n    state.chatRef =\n"
+room_ref_block = "    state.membersRef =\n      db.ref(\n        `members/${state.roomId}`\n      );\n\n    state.kickedRef =\n      db.ref(\n        `kicked/${state.roomId}/${state.uid}`\n      );\n\n    if (await handleKickState()) {\n      return;\n    }\n\n    attachKickListener();\n\n    state.chatRef =\n"
+s = replace_once(s, room_ref_marker, room_ref_block, "kick reference setup")
+
+cleanup_listener_marker = "      state.membersRef?.off();\n\n      state.chatRef?.off();\n"
+cleanup_listener_block = "      state.membersRef?.off();\n      state.kickedRef?.off();\n\n      state.chatRef?.off();\n"
+s = replace_once(s, cleanup_listener_marker, cleanup_listener_block, "kick listener cleanup")
+
+cleanup_timer_marker = "    clearInterval(\n      state.memberHeartbeatTimer\n    );\n\n    disconnectRoomListeners();\n"
+cleanup_timer_block = "    clearInterval(\n      state.memberHeartbeatTimer\n    );\n\n    clearTimeout(\n      state.playbackRecoveryTimer\n    );\n\n    state.playbackRecoveryTimer =\n      null;\n\n    disconnectRoomListeners();\n"
+s = replace_once(s, cleanup_timer_marker, cleanup_timer_block, "playback recovery cleanup")
+
+cleanup_ref_marker = "    state.roomId =\n      null;\n\n    state.room =\n"
+cleanup_ref_block = "    state.roomId =\n      null;\n\n    state.kickedRef =\n      null;\n\n    state.room =\n"
+s = replace_once(s, cleanup_ref_marker, cleanup_ref_block, "kick reference reset")
+
+# ---------------------------------------------------------
+# Firebase Rules: permanent kick record blocks rejoin.
+# ---------------------------------------------------------
+rules = json.loads(RULES.read_text(encoding="utf-8"))
+member_uid = rules["rules"]["members"]["$roomId"]["$uid"]
+member_uid[".write"] = (
+    "auth != null && root.child('rooms').child($roomId).exists() && "
+    "((auth.uid === $uid && !root.child('kicked').child($roomId).child(auth.uid).exists()) || "
+    "(auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))"
+)
+rules["rules"]["kicked"] = {
+    "$roomId": {
+        "$uid": {
+            ".read": (
+                "auth != null && (auth.uid === $uid || "
+                "auth.uid === root.child('rooms').child($roomId).child('owner').val())"
+            ),
+            ".write": (
+                "auth != null && "
+                "auth.uid === root.child('rooms').child($roomId).child('owner').val()"
+            ),
+            ".validate": "!newData.exists() || (newData.isBoolean() && newData.val() === true)"
+        }
+    }
+}
+RULES.write_text(json.dumps(rules, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 APP.write_text(s, encoding="utf-8")
-
-# Mobile member list: prevent flex shrinking/clipping from hiding the kick button.
-css = STYLES.read_text(encoding="utf-8")
-css_marker = "/* =========================================================\n   WatchTogether mobile search final layout fix\n   ========================================================= */"
-mobile_fix = r'''/* =========================================================
-   WatchTogether mobile member action layout fix
-   ========================================================= */
-
-.member-list {
-  min-width: 0;
-  width: 100%;
-}
-
-.member {
-  min-width: 0;
-}
-
-.member .member-name {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.member [data-member-kick] {
-  flex: 0 0 auto !important;
-  width: auto !important;
-  min-width: 52px !important;
-  min-height: 32px !important;
-  margin: 0 !important;
-  padding: 0 9px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  white-space: nowrap !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  position: relative;
-  z-index: 2;
-}
-
-@media (max-width: 760px) {
-  .members-panel {
-    min-width: 0 !important;
-    width: 100% !important;
-    overflow: visible !important;
-  }
-
-  .member-list {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: visible !important;
-    overflow-y: auto !important;
-    padding-right: 1px;
-  }
-
-  .member {
-    width: 100% !important;
-    min-width: 0 !important;
-    min-height: 50px !important;
-    padding: 8px !important;
-    gap: 8px !important;
-    display: grid !important;
-    grid-template-columns: 34px minmax(0, 1fr) auto !important;
-    align-items: center !important;
-    overflow: visible !important;
-  }
-
-  .member .avatar {
-    width: 34px !important;
-    height: 34px !important;
-    min-width: 34px !important;
-  }
-
-  .member .member-name {
-    min-width: 0 !important;
-    width: 100% !important;
-    overflow: hidden !important;
-  }
-
-  .member .member-name b,
-  .member .member-name span {
-    max-width: 100% !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-
-  .member .online {
-    width: 8px !important;
-    min-width: 8px !important;
-  }
-
-  .member [data-member-kick] {
-    min-width: 58px !important;
-    min-height: 36px !important;
-    padding: 0 10px !important;
-    font-size: 11px !important;
-    justify-self: end !important;
-  }
-}
-
-@media (max-width: 390px) {
-  .member {
-    grid-template-columns: 32px minmax(0, 1fr) auto !important;
-    gap: 6px !important;
-    padding: 7px !important;
-  }
-
-  .member .avatar {
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-  }
-
-  .member [data-member-kick] {
-    min-width: 54px !important;
-    min-height: 34px !important;
-    padding: 0 8px !important;
-    font-size: 10px !important;
-  }
-}
-
-'''
-if "WatchTogether mobile member action layout fix" not in css:
-    if css_marker not in css:
-        raise SystemExit("styles insertion marker not found")
-    css = css.replace(css_marker, mobile_fix + css_marker, 1)
-
-STYLES.write_text(css, encoding="utf-8")
-print("Playback conflict handling and mobile member layout repair applied")
+print("WatchTogether playback recovery and permanent kick protection applied")
