@@ -24,6 +24,9 @@ jobs:
       - name: Apply complete WatchTogether repair
         run: python3 .github/scripts/patch_playback_sync.py
 
+      - name: Apply generated app verification pass
+        run: python3 .github/scripts/verify_and_fix_generated_app.py
+
       - name: Verify source files
         run: |
           test -s app.js
@@ -32,10 +35,12 @@ jobs:
           grep -q "function attachPlaybackSyncListener()" app.js
           grep -q "function detachPlaybackSyncListener()" app.js
           grep -q 'membersRef' app.js
+          grep -q 'membersRef.*child(state.uid).*child("playback")' app.js
           ! grep -q 'playbackEvent' app.js
-          ! grep -q 'rooms/.*/playback' app.js
+          ! grep -q 'schedulePlayingPositionSync' app.js
           node --check app.js
           python3 -m py_compile .github/scripts/patch_playback_sync.py
+          python3 -m py_compile .github/scripts/verify_and_fix_generated_app.py
           python3 -m json.tool database.rules.json > /dev/null
           git diff --check
           wc -c app.js index.html database.rules.json
