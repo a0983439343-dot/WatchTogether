@@ -1,212 +1,799 @@
 from pathlib import Path
 import json
+import re
 
 APP = Path("app.js")
-STYLES = Path("styles.css")
 RULES = Path("database.rules.json")
 
 s = APP.read_text(encoding="utf-8")
 
 
-def replace_once(text, old, new, label):
-    if old not in text:
-        raise SystemExit(f"{label} not found")
-    return text.replace(old, new, 1)
+def ensure_once(text, needle, replacement, label):
+    if needle in text:
+        return text
+    if label not in text:
+        raise SystemExit(f"{label}: marker not found")
+    return text.replace(label, label + replacement, 1)
 
 
 # ---------------------------------------------------------
-# Playback recovery state
+# Shared room timeline state
 # ---------------------------------------------------------
-if "kickedRef: null" not in s:
-    s = replace_once(s, "    membersRef: null,\n", "    membersRef: null,\n\n    kickedRef: null,\n", "kickedRef state")
+state_marker = '    playbackRecoveryTimer: null,\n'
+state_add = '''\n    playbackTimeline: null,\n    playbackAdGuardUntil: 0,\n    playbackTransientStateUntil: 0,\n    playbackLastPlayerState: null,\n    playbackLastObservedPosition: null,\n'''
+if "playbackTimeline: null" not in s:
+    if state_marker not in s:
+        raise SystemExit("shared playback state marker not found")
+    s = s.replace(state_marker, state_marker + state_add, 1)
 
-if "playbackRecoveryTimer: null" not in s:
-    s = replace_once(s, "    playbackLastLocalSeekWriteAt: 0,\n", "    playbackLastLocalSeekWriteAt: 0,\n    playbackRecoveryTimer: null,\n", "playback recovery state")
-
-s = replace_once(
-    s,
-    "    return base + Math.min(elapsed, 30);\n",
-    "    return base + Math.min(elapsed, 7200);\n",
-    "late playback recovery cap"
-)
-
-s = replace_once(
-    s,
-    "  async function applyRemotePlaybackEvent(event) {\n",
-    "  async function applyRemotePlaybackEvent(event, force = false) {\n",
-    "remote playback signature"
-)
-
-s = replace_once(
-    s,
-    "    if (state.playbackLastRemoteEventId === eventId) return;\n",
-    "    if (!force && state.playbackLastRemoteEventId === eventId) return;\n",
-    "remote playback force guard"
-)
-
-s = replace_once(
-    s,
-    "  async function applyLatestRoomPlaybackState() {\n",
-    "  async function applyLatestRoomPlaybackState(force = false) {\n",
-    "latest playback signature"
-)
-
-s = replace_once(
-    s,
-    '      if (event && event.eventId && event.updatedBy !== state.uid) await applyRemotePlaybackEvent(event);\n',
-    '      if (event && event.eventId && event.updatedBy !== state.uid) await applyRemotePlaybackEvent(event, force);\n',
-    "latest playback force call"
-)
-
-# Prevent unnecessary YouTube rebuilds and recover from background suspension.
-resume_marker = "  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */\n"
-resume_block = "  function recoverPlaybackAfterPageResume() {\n    if (\n      document.visibilityState === \"hidden\" ||\n      !state.roomId ||\n      !state.uid ||\n      !state.playerReady ||\n      !state.player ||\n      !state.currentVideoId\n    ) {\n      return;\n    }\n\n    clearTimeout(state.playbackRecoveryTimer);\n\n    state.playbackRecoveryTimer = setTimeout(async () => {\n      state.playbackRecoveryTimer = null;\n\n      if (\n        document.visibilityState === \"hidden\" ||\n        !state.roomId ||\n        !state.playerReady ||\n        !state.player\n      ) {\n        return;\n      }\n\n      try {\n        await applyLatestRoomPlaybackState(true);\n        startPlaybackSeekDetector();\n      } catch (error) {\n        console.warn(\"頁面恢復後播放同步失敗:\", error);\n      }\n    }, 350);\n  }\n\n\n"
-if "function recoverPlaybackAfterPageResume()" not in s:
-    s = replace_once(s, resume_marker, resume_block + resume_marker, "resume recovery insertion")
-
-setup_marker = "  function setupEvents() {\n"
-setup_block = "  function setupEvents() {\n\n    document.addEventListener(\n      \"visibilitychange\",\n      () => {\n        if (document.visibilityState === \"visible\") {\n          recoverPlaybackAfterPageResume();\n        }\n      }\n    );\n\n    window.addEventListener(\n      \"pageshow\",\n      () => {\n        recoverPlaybackAfterPageResume();\n      }\n    );\n\n"
-if 'document.addEventListener(\n      "visibilitychange"' not in s:
-    s = replace_once(s, setup_marker, setup_block, "visibility recovery handlers")
 
 # ---------------------------------------------------------
-# Kick protection
+# The YouTube ready callback must not apply the same room event
+# twice. The single playback sync engine below performs recovery.
 # ---------------------------------------------------------
-member_marker = "  /*\n   * =========================================================\n   * MEMBERS\n   * =========================================================\n   */\n\n  async function markMemberOnline() {\n"
-member_block = "  /*\n   * =========================================================\n   * MEMBERS\n   * =========================================================\n   */\n\n  async function isMemberKicked() {\n    if (!state.kickedRef) {\n      return false;\n    }\n\n    try {\n      const snapshot = await state.kickedRef.once(\"value\");\n      return snapshot.val() === true;\n    } catch (error) {\n      console.warn(\"讀取踢出狀態失敗:\", error);\n      return false;\n    }\n  }\n\n\n  async function handleKickState() {\n    if (!state.kickedRef || !state.roomId || !state.uid) {\n      return false;\n    }\n\n    if (!(await isMemberKicked())) {\n      return false;\n    }\n\n    await leaveRoomLocally(\"你已被房主移出房間\");\n    return true;\n  }\n\n\n  function attachKickListener() {\n    if (!state.kickedRef) {\n      return;\n    }\n\n    state.kickedRef.off();\n    state.kickedRef.on(\"value\", (snapshot) => {\n      if (snapshot.val() === true && state.roomId && state.uid) {\n        void leaveRoomLocally(\"你已被房主移出房間\");\n      }\n    });\n  }\n\n\n  async function markMemberOnline() {\n"
-if "async function isMemberKicked()" not in s:
-    s = replace_once(s, member_marker, member_block, "kick protection functions")
+s = s.replace(
+    '                  void applyLatestRoomPlaybackState();\n',
+    '',
+    1
+)
 
-mark_marker = "    const memberRef =\n      state.membersRef.child(\n        state.uid\n      );\n\n    try {\n"
-mark_block = "    const memberRef =\n      state.membersRef.child(\n        state.uid\n      );\n\n    if (await isMemberKicked()) {\n      await leaveRoomLocally(\"你已被房主移出房間\");\n      return;\n    }\n\n    try {\n"
-s = replace_once(s, mark_marker, mark_block, "markMemberOnline kick guard")
 
-old_kick = """  async function kickMember(
-    targetUid,
-    targetName
-  ) {
+# ---------------------------------------------------------
+# Replace the old event sync engine with a shared-room timeline.
+# No participant is a playback master. The latest room command is
+# the timeline anchor and its timestamp advances while playing.
+# ---------------------------------------------------------
+start_marker = '  /*\n   * =========================================================\n   * EVENT-BASED PLAYBACK SYNC\n   * =========================================================\n   */\n'
+end_marker = '  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */\n'
+
+start = s.find(start_marker)
+end = s.find(end_marker, start + len(start_marker))
+if start < 0 or end < 0:
+    raise SystemExit("playback sync section markers not found")
+
+new_sync = r'''  /*
+   * =========================================================
+   * SHARED ROOM TIMELINE PLAYBACK SYNC
+   * =========================================================
+   *
+   * 不指定任何人的播放器當主機。
+   * Firebase 裡最後一個房間播放命令就是共享時間軸：
+   *   position + updatedAt + playing + videoId
+   *
+   * playing=true  時：position 會依 updatedAt 自動向前推進。
+   * playing=false 時：position 固定在最後暫停位置。
+   *
+   * 新成員加入時直接讀這個時間軸，因此不需要跟某個人對齊。
+   */
+
+  function playbackSyncRef() {
+    if (!db || !state.roomId) return null;
+    return db.ref(`rooms/${state.roomId}/playbackEvent`);
+  }
+
+
+  function getTimelinePosition(event, now = Date.now()) {
+    const base = Math.max(0, Number(event?.position) || 0);
+
+    if (!event?.playing) {
+      return base;
+    }
+
+    const updatedAt = Number(event?.updatedAt);
+    if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+      return base;
+    }
+
+    const elapsed = Math.max(0, (now - updatedAt) / 1000);
+    return base + Math.min(elapsed, 7200);
+  }
+
+
+  function rememberRoomTimeline(event) {
+    if (!event || !event.eventId) {
+      return;
+    }
+
+    state.playbackRemoteEvent = event;
+    state.playbackTimeline = {
+      videoId: String(event.videoId || ""),
+      position: Math.max(0, Number(event.position) || 0),
+      playing: event.playing === true,
+      updatedAt: Number(event.updatedAt) || Date.now(),
+      eventId: String(event.eventId)
+    };
+  }
+
+
+  function shouldIgnoreTransientYoutubeState() {
+    return Date.now() < Number(state.playbackTransientStateUntil || 0);
+  }
+
+
+  async function publishPlaybackEvent(action, position = null) {
     if (
-      !state.isOwner
+      !state.uid ||
+      !state.roomId ||
+      !state.playerReady ||
+      !state.player ||
+      state.playbackApplyingRemote
     ) {
-      toast(
-        "只有房主可以踢人"
-      );
-
       return;
     }
 
     if (
-      !targetUid ||
-      targetUid === state.uid
+      state.playerType === "bilibili" ||
+      state.playerType === "external"
     ) {
       return;
     }
 
-    if (!state.membersRef) {
-      toast(
-        "目前不在房間內"
-      );
-
+    if (shouldIgnoreTransientYoutubeState()) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `確定要踢出「${
-          targetName ||
-          "這名成員"
-        }」嗎？`
-      );
+    const ref = playbackSyncRef();
+    if (!ref || !state.currentVideoId) return;
 
-    if (!confirmed) {
+    const normalizedAction =
+      action === "pause"
+        ? "pause"
+        : action === "seek"
+          ? "seek"
+          : "play";
+
+    let finalPosition = Number(position);
+
+    if (!Number.isFinite(finalPosition)) {
+      finalPosition = await asyncCurrentPosition();
+    }
+
+    finalPosition = Math.max(0, Number(finalPosition) || 0);
+
+    let playing = true;
+
+    if (normalizedAction === "pause") {
+      playing = false;
+    } else if (normalizedAction === "seek") {
+      playing = await asyncIsPlaying();
+    }
+
+    const now = Date.now();
+    const localActionKey =
+      `${normalizedAction}:${Math.round(finalPosition * 2) / 2}:${playing ? 1 : 0}`;
+
+    if (
+      localActionKey === state.playbackLastLocalActionKey &&
+      now - Number(state.playbackLastLocalActionAt || 0) < 900
+    ) {
+      return;
+    }
+
+    if (
+      normalizedAction === "seek" &&
+      now - Number(state.playbackLastLocalSeekWriteAt || 0) < 650
+    ) {
+      return;
+    }
+
+    state.playbackLastLocalActionKey = localActionKey;
+    state.playbackLastLocalActionAt = now;
+
+    if (normalizedAction === "seek") {
+      state.playbackLastLocalSeekWriteAt = now;
+    }
+
+    const event = {
+      action: normalizedAction,
+      position: finalPosition,
+      videoId: String(state.currentVideoId),
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedBy: state.uid,
+      eventId: `${state.uid}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      playing
+    };
+
+    try {
+      await ref.set(event);
+
+      state.playbackRemoteEvent = {
+        ...event,
+        updatedAt: now
+      };
+
+      state.playbackTimeline = {
+        videoId: String(state.currentVideoId),
+        position: finalPosition,
+        playing,
+        updatedAt: now,
+        eventId: String(event.eventId)
+      };
+
+      state.playbackLastRemoteEventId = String(event.eventId);
+      state.playbackLastRemoteUpdatedAt = now;
+      state.playbackLastPosition = finalPosition;
+      state.playbackLastPlaying = playing;
+    } catch (error) {
+      console.warn("播放同步寫入失敗:", error);
+    }
+  }
+
+
+  async function applyRemotePlaybackEvent(event, force = false) {
+    if (
+      !event ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
+      return;
+    }
+
+    if (
+      String(event.videoId || "") !==
+      String(state.currentVideoId || "")
+    ) {
+      return;
+    }
+
+    if (!["play", "pause", "seek"].includes(event.action)) {
+      return;
+    }
+
+    if (
+      event.updatedBy === state.uid &&
+      !force
+    ) {
+      rememberRoomTimeline(event);
+      return;
+    }
+
+    if (
+      state.playerType === "bilibili" ||
+      state.playerType === "external"
+    ) {
+      return;
+    }
+
+    const eventId = String(event.eventId || "");
+    if (!eventId) return;
+
+    if (
+      !force &&
+      state.playbackLastRemoteEventId === eventId
+    ) {
+      rememberRoomTimeline(event);
+      return;
+    }
+
+    const remoteUpdatedAt = Number(event.updatedAt || 0);
+    const lastRemoteUpdatedAt =
+      Number(state.playbackLastRemoteUpdatedAt || 0);
+
+    if (
+      !force &&
+      remoteUpdatedAt > 0 &&
+      lastRemoteUpdatedAt > 0 &&
+      remoteUpdatedAt < lastRemoteUpdatedAt
+    ) {
+      return;
+    }
+
+    rememberRoomTimeline(event);
+
+    if (remoteUpdatedAt > 0) {
+      state.playbackLastRemoteUpdatedAt = remoteUpdatedAt;
+    }
+
+    if (
+      state.playbackApplyingRemoteEventId === eventId
+    ) {
+      return;
+    }
+
+    state.playbackLastRemoteEventId = eventId;
+    state.playbackApplyingRemoteEventId = eventId;
+    state.playbackApplyingRemote = true;
+    state.playbackIgnoreStateChanges = 4;
+    state.playbackIgnoreStateUntil = Date.now() + 4500;
+    state.playbackReadyAt = Date.now() + 1600;
+
+    try {
+      const position = getTimelinePosition(event);
+      const current = await asyncCurrentPosition();
+      const difference = Math.abs(current - position);
+
+      if (difference > 0.35) {
+        await applyPlayerPosition(position);
+      }
+
+      const wantPlaying =
+        event.playing === true ||
+        (event.playing === undefined && event.action === "play");
+
+      const currentlyPlaying = await asyncIsPlaying();
+
+      if (wantPlaying !== currentlyPlaying) {
+        if (wantPlaying) {
+          await playPlayer();
+        } else {
+          await pausePlayer();
+        }
+      }
+
+      state.playbackLastPosition = await asyncCurrentPosition();
+      state.playbackLastPlaying = await asyncIsPlaying();
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          `已同步 ${formatTime(position)}`;
+      }
+    } catch (error) {
+      console.warn("套用房間播放時間軸失敗:", error);
+    } finally {
+      state.playbackApplyingRemote = false;
+      state.playbackApplyingRemoteEventId = null;
+    }
+  }
+
+
+  async function applyLatestRoomPlaybackState(force = false) {
+    const ref = playbackSyncRef();
+
+    if (
+      !ref ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
       return;
     }
 
     try {
-      await state.membersRef
-        .child(
-          targetUid
-        )
-        .remove();
+      const event = (await ref.once("value")).val();
 
-      toast(
-        `已踢出 ${
-          targetName ||
-          "成員"
-        }`
-      );
+      if (!event || !event.eventId) {
+        return;
+      }
+
+      rememberRoomTimeline(event);
+
+      if (event.updatedBy === state.uid && !force) {
+        return;
+      }
+
+      await applyRemotePlaybackEvent(event, force);
     } catch (error) {
-      console.error(
-        "踢人失敗:",
-        error
-      );
-
-      toast(
-        error?.message ||
-        "踢人失敗，請檢查 Firebase Rules"
-      );
+      console.warn("讀取最新房間播放時間軸失敗:", error);
     }
   }
-"""
-new_kick = """  async function kickMember(
-    targetUid,
-    targetName
-  ) {
-    if (!state.isOwner) {
-      toast("只有房主可以踢人");
+
+
+  function attachPlaybackSyncListener() {
+    if (
+      !state.roomRef ||
+      state.playbackListenerAttached
+    ) {
       return;
     }
 
-    if (!targetUid || targetUid === state.uid) {
-      return;
-    }
+    const ref = playbackSyncRef();
+    if (!ref) return;
 
-    if (!state.membersRef || !db || !state.roomId) {
-      toast("目前不在房間內");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `確定要踢出「${targetName || "這名成員"}」嗎？`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const updates = {};
-      updates[`kicked/${state.roomId}/${targetUid}`] = true;
-      updates[`members/${state.roomId}/${targetUid}`] = null;
-      await db.ref().update(updates);
-
-      toast(`已踢出 ${targetName || "成員"}`);
-    } catch (error) {
-      console.error("踢人失敗:", error);
-      toast(error?.message || "踢人失敗，請檢查 Firebase Rules");
-    }
+    ref.on("value", handleRemotePlaybackSnapshot);
+    state.playbackListenerAttached = true;
   }
-"""
-s = replace_once(s, old_kick, new_kick, "atomic kick function")
 
-room_ref_marker = "    state.membersRef =\n      db.ref(\n        `members/${state.roomId}`\n      );\n\n    state.chatRef =\n"
-room_ref_block = "    state.membersRef =\n      db.ref(\n        `members/${state.roomId}`\n      );\n\n    state.kickedRef =\n      db.ref(\n        `kicked/${state.roomId}/${state.uid}`\n      );\n\n    if (await handleKickState()) {\n      return;\n    }\n\n    attachKickListener();\n\n    state.chatRef =\n"
-s = replace_once(s, room_ref_marker, room_ref_block, "kick reference setup")
 
-cleanup_listener_marker = "      state.membersRef?.off();\n\n      state.chatRef?.off();\n"
-cleanup_listener_block = "      state.membersRef?.off();\n      state.kickedRef?.off();\n\n      state.chatRef?.off();\n"
-s = replace_once(s, cleanup_listener_marker, cleanup_listener_block, "kick listener cleanup")
+  function handleRemotePlaybackSnapshot(snapshot) {
+    const event = snapshot?.val?.() || null;
 
-cleanup_timer_marker = "    clearInterval(\n      state.memberHeartbeatTimer\n    );\n\n    disconnectRoomListeners();\n"
-cleanup_timer_block = "    clearInterval(\n      state.memberHeartbeatTimer\n    );\n\n    clearTimeout(\n      state.playbackRecoveryTimer\n    );\n\n    state.playbackRecoveryTimer =\n      null;\n\n    disconnectRoomListeners();\n"
-s = replace_once(s, cleanup_timer_marker, cleanup_timer_block, "playback recovery cleanup")
+    if (!event || !event.eventId) {
+      return;
+    }
 
-cleanup_ref_marker = "    state.roomId =\n      null;\n\n    state.room =\n"
-cleanup_ref_block = "    state.roomId =\n      null;\n\n    state.kickedRef =\n      null;\n\n    state.room =\n"
-s = replace_once(s, cleanup_ref_marker, cleanup_ref_block, "kick reference reset")
+    rememberRoomTimeline(event);
+
+    if (event.updatedBy === state.uid) {
+      return;
+    }
+
+    if (
+      state.playbackLastRemoteEventId ===
+      String(event.eventId)
+    ) {
+      return;
+    }
+
+    void applyRemotePlaybackEvent(event);
+  }
+
+
+  function stopPlaybackSeekDetector() {
+    clearInterval(state.playbackSeekTimer);
+    state.playbackSeekTimer = null;
+    state.playbackLastPosition = null;
+    state.playbackLastPlaying = null;
+    state.playbackLastPlayerState = null;
+    state.playbackLastObservedPosition = null;
+  }
+
+
+  async function reconcileRoomTimeline() {
+    if (
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId ||
+      state.playbackApplyingRemote
+    ) {
+      return;
+    }
+
+    const timeline = state.playbackTimeline;
+
+    if (
+      !timeline ||
+      String(timeline.videoId || "") !==
+      String(state.currentVideoId || "")
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    const position = await asyncCurrentPosition();
+    const playing = await asyncIsPlaying();
+    const expected = getTimelinePosition(timeline, now);
+
+    state.playbackLastObservedPosition = position;
+
+    if (
+      state.playerType === "youtube" &&
+      now < Number(state.playbackAdGuardUntil || 0)
+    ) {
+      state.playbackLastPosition = position;
+      state.playbackLastPlaying = playing;
+      return;
+    }
+
+    if (
+      now < Number(state.playbackReadyAt || 0) ||
+      now < Number(state.playbackIgnoreStateUntil || 0)
+    ) {
+      state.playbackLastPosition = position;
+      state.playbackLastPlaying = playing;
+      return;
+    }
+
+    const drift = Math.abs(position - expected);
+
+    if (drift > 1.75) {
+      state.playbackApplyingRemote = true;
+      state.playbackIgnoreStateChanges = 2;
+      state.playbackIgnoreStateUntil = Date.now() + 2200;
+
+      try {
+        await applyPlayerPosition(expected);
+      } finally {
+        state.playbackApplyingRemote = false;
+        state.playbackLastPosition = await asyncCurrentPosition();
+        state.playbackLastPlaying = await asyncIsPlaying();
+      }
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          `已校正 ${formatTime(expected)}`;
+      }
+
+      return;
+    }
+
+    const wantPlaying = timeline.playing === true;
+
+    if (wantPlaying !== playing) {
+      state.playbackApplyingRemote = true;
+      state.playbackIgnoreStateChanges = 2;
+      state.playbackIgnoreStateUntil = Date.now() + 2200;
+
+      try {
+        if (wantPlaying) {
+          await playPlayer();
+        } else {
+          await pausePlayer();
+        }
+      } finally {
+        state.playbackApplyingRemote = false;
+        state.playbackLastPosition = await asyncCurrentPosition();
+        state.playbackLastPlaying = await asyncIsPlaying();
+      }
+
+      return;
+    }
+
+    state.playbackLastPosition = position;
+    state.playbackLastPlaying = playing;
+  }
+
+
+  function startPlaybackSeekDetector() {
+    stopPlaybackSeekDetector();
+    state.playbackReadyAt = Date.now() + 1000;
+
+    state.playbackSeekTimer = setInterval(async () => {
+      try {
+        if (
+          !state.playerReady ||
+          !state.player
+        ) {
+          return;
+        }
+
+        if (state.playerType === "youtube") {
+          if (Date.now() < Number(state.playbackAdGuardUntil || 0)) {
+            return;
+          }
+        }
+
+        await reconcileRoomTimeline();
+
+        if (
+          state.playbackApplyingRemote ||
+          !state.currentVideoId
+        ) {
+          return;
+        }
+
+        const position = await asyncCurrentPosition();
+        const playing = await asyncIsPlaying();
+        const now = Date.now();
+
+        if (
+          now < Number(state.playbackIgnoreStateUntil || 0) ||
+          now < Number(state.playbackReadyAt || 0)
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastPlayerState = playing ? "playing" : "paused";
+          state.playbackLastObservedPosition = position;
+          return;
+        }
+
+        if (
+          state.playbackLastPosition === null ||
+          state.playbackLastPlaying === null
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastPlayerState = playing ? "playing" : "paused";
+          state.playbackLastObservedPosition = position;
+          return;
+        }
+
+        const positionDelta = Math.abs(
+          position - Number(state.playbackLastPosition)
+        );
+
+        const playingChanged =
+          playing !== state.playbackLastPlaying;
+
+        const timeline = state.playbackTimeline;
+        const roomPlaying =
+          timeline &&
+          String(timeline.videoId || "") ===
+            String(state.currentVideoId || "")
+            ? timeline.playing === true
+            : null;
+
+        if (
+          state.playerType === "youtube" &&
+          shouldIgnoreTransientYoutubeState()
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastPlayerState = playing ? "playing" : "paused";
+          state.playbackLastObservedPosition = position;
+          return;
+        }
+
+        if (
+          playingChanged &&
+          (roomPlaying === null || playing !== roomPlaying)
+        ) {
+          void publishPlaybackEvent(
+            playing ? "play" : "pause",
+            position
+          );
+        }
+
+        if (
+          positionDelta >= 1.35 &&
+          !playingChanged
+        ) {
+          void publishPlaybackEvent("seek", position);
+        }
+
+        state.playbackLastPosition = position;
+        state.playbackLastPlaying = playing;
+        state.playbackLastPlayerState = playing ? "playing" : "paused";
+        state.playbackLastObservedPosition = position;
+      } catch (error) {
+        console.warn("播放時間軸校正失敗:", error);
+      }
+    }, 650);
+  }
+
+
+  function recoverPlaybackAfterPageResume() {
+    if (
+      document.visibilityState === "hidden" ||
+      !state.roomId ||
+      !state.uid ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
+      return;
+    }
+
+    clearTimeout(state.playbackRecoveryTimer);
+
+    state.playbackRecoveryTimer = setTimeout(async () => {
+      state.playbackRecoveryTimer = null;
+
+      if (
+        document.visibilityState === "hidden" ||
+        !state.roomId ||
+        !state.playerReady ||
+        !state.player
+      ) {
+        return;
+      }
+
+      try {
+        await applyLatestRoomPlaybackState(true);
+        await reconcileRoomTimeline();
+        startPlaybackSeekDetector();
+      } catch (error) {
+        console.warn("頁面恢復後播放同步失敗:", error);
+      }
+    }, 350);
+  }
+
+
+'''
+
+s = s[:start] + new_sync + s[end:]
+
 
 # ---------------------------------------------------------
-# Firebase Rules: permanent kick record blocks rejoin.
+# Replace YouTube state handling so player-generated transient
+# buffering/ad state never becomes a room-wide play/pause command.
+# The room timeline still force-corrects genuine divergence.
+# ---------------------------------------------------------
+state_start = s.find('              onStateChange:\n                async (event) => {')
+error_marker = '\n              onError:\n'
+state_end = s.find(error_marker, state_start)
+if state_start < 0 or state_end < 0:
+    raise SystemExit("YouTube onStateChange block not found")
+
+new_handler = r'''              onStateChange:
+                async (event) => {
+                  if (
+                    state.youtubeBuildToken !== token ||
+                    state.player !== event.target
+                  ) {
+                    return;
+                  }
+
+                  forceYoutubeVisible();
+
+                  const now = Date.now();
+                  const data = event.data;
+
+                  if (
+                    data === YT.PlayerState.BUFFERING
+                  ) {
+                    state.playbackTransientStateUntil = now + 2200;
+
+                    if (
+                      state.playbackTimeline &&
+                      state.playbackTimeline.playing
+                    ) {
+                      state.playbackAdGuardUntil = now + 3200;
+                    }
+
+                    state.playbackLastPlayerState = "buffering";
+                    return;
+                  }
+
+                  if (
+                    data === YT.PlayerState.PLAYING ||
+                    data === YT.PlayerState.PAUSED
+                  ) {
+                    const isPlaying =
+                      data === YT.PlayerState.PLAYING;
+
+                    const expectedPlaying =
+                      state.playbackTimeline &&
+                      String(state.playbackTimeline.videoId || "") ===
+                        String(state.currentVideoId || "")
+                        ? Boolean(state.playbackTimeline.playing)
+                        : null;
+
+                    const ignoredByRemote =
+                      state.playbackApplyingRemote ||
+                      (
+                        state.playbackIgnoreStateChanges > 0 &&
+                        now < Number(state.playbackIgnoreStateUntil || 0) &&
+                        (
+                          expectedPlaying === null ||
+                          isPlaying === expectedPlaying
+                        )
+                      );
+
+                    if (ignoredByRemote) {
+                      if (!state.playbackApplyingRemote) {
+                        state.playbackIgnoreStateChanges -= 1;
+                      }
+                    } else if (
+                      now >= Number(state.playbackIgnoreStateUntil || 0) &&
+                      !shouldIgnoreTransientYoutubeState()
+                    ) {
+                      const position = await asyncCurrentPosition();
+
+                      const roomStateMatches =
+                        expectedPlaying !== null &&
+                        isPlaying === expectedPlaying;
+
+                      if (!roomStateMatches) {
+                        await publishPlaybackEvent(
+                          isPlaying ? "play" : "pause",
+                          position
+                        );
+                      }
+                    }
+
+                    state.playbackLastPlayerState =
+                      isPlaying ? "playing" : "paused";
+                    state.playbackLastObservedPosition =
+                      await asyncCurrentPosition();
+                  }
+
+                  if (
+                    data === YT.PlayerState.ENDED
+                  ) {
+                    if (state.isOwner) {
+                      setTimeout(
+                        async () => {
+                          await playNextQueueItem();
+                        },
+                        300
+                      );
+                    }
+                  }
+
+                  updateTimeUI();
+                },
+'''
+
+s = s[:state_start] + new_handler + s[state_end:]
+
+
+# ---------------------------------------------------------
+# Reset shared timeline state whenever a completely new YouTube
+# video is loaded, so an old event can never control the new video.
+# ---------------------------------------------------------
+reset_marker = '      state.playbackLastLocalSeekWriteAt = 0;\n'
+reset_add = '''      state.playbackTimeline = null;\n      state.playbackAdGuardUntil = 0;\n      state.playbackTransientStateUntil = 0;\n      state.playbackLastPlayerState = null;\n      state.playbackLastObservedPosition = null;\n'''
+if "      state.playbackTimeline = null;" not in s:
+    if reset_marker not in s:
+        raise SystemExit("new video playback reset marker not found")
+    s = s.replace(reset_marker, reset_marker + reset_add, 1)
+
+
+# ---------------------------------------------------------
+# Keep Firebase rules explicit: every current room member may
+# publish a room-wide playback command. The room event itself is
+# the shared timeline, not a privileged user's playback stream.
 # ---------------------------------------------------------
 rules = json.loads(RULES.read_text(encoding="utf-8"))
 member_uid = rules["rules"]["members"]["$roomId"]["$uid"]
@@ -230,7 +817,10 @@ rules["rules"]["kicked"] = {
         }
     }
 }
-RULES.write_text(json.dumps(rules, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+RULES.write_text(
+    json.dumps(rules, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8"
+)
 
 APP.write_text(s, encoding="utf-8")
-print("WatchTogether playback recovery and permanent kick protection applied")
+print("WatchTogether shared room timeline, forced play/pause, late-join sync and YouTube transient-state protection applied")
