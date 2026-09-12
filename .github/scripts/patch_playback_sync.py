@@ -30,13 +30,13 @@ replace_once(
     "state"
 )
 
-base_sync = r'''  /*
+sync_code = r'''  /*
    * =========================================================
    * ROOM PLAYBACK SYNC
    * =========================================================
-   * Firebase members/{roomId}/{uid}/playback 是每位成員自己的
-   * 同步狀態。房間內所有人讀取 members/{roomId}，使用最新狀態
-   * 作為房間播放狀態，並在播放中持續做小幅 drift correction。
+   * 每位成員只寫自己的 members/{roomId}/{uid}/playback。
+   * 房間內讀取 members/{roomId} 後取最新播放狀態，避免共用
+   * playbackEvent 寫入權限造成競爭或 PERMISSION_DENIED。
    */
 
   function playbackSyncRef() {
@@ -73,6 +73,13 @@ base_sync = r'''  /*
     }
 
     if (!Number.isFinite(Number(event.updatedAt))) {
+      return false;
+    }
+
+    if (
+      typeof event.updatedBy !== "string" ||
+      !event.updatedBy
+    ) {
       return false;
     }
 
@@ -139,6 +146,7 @@ base_sync = r'''  /*
       !state.roomId ||
       !state.playerReady ||
       !state.player ||
+      !state.currentVideoId ||
       state.playbackApplyingRemote
     ) {
       return;
@@ -191,19 +199,21 @@ base_sync = r'''  /*
       playing = false;
     }
 
+    const event = {
+      action: normalizedAction,
+      position: finalPosition,
+      videoId: String(state.currentVideoId),
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedBy: state.uid,
+      eventId:
+        `${state.uid}_${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`,
+      playing
+    };
+
     try {
-      await playbackRef.set({
-        action: normalizedAction,
-        position: finalPosition,
-        videoId: String(state.currentVideoId || ""),
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        updatedBy: state.uid,
-        eventId:
-          `${state.uid}_${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`,
-        playing
-      });
+      await playbackRef.set(event);
     } catch (error) {
       console.error(
         "播放同步寫入失敗:",
@@ -241,8 +251,9 @@ base_sync = r'''  /*
     }
 
     if (
+      !force &&
       event.eventId ===
-      state.lastPlaybackEventId
+        state.lastPlaybackEventId
     ) {
       return;
     }
@@ -336,9 +347,7 @@ base_sync = r'''  /*
       getPlaybackEventTime(latest);
 
     const previousTime =
-      getPlaybackEventTime(
-        state.playbackRoomEvent
-      );
+      getPlaybackEventTime(state.playbackRoomEvent);
 
     if (
       state.playbackRoomEvent &&
@@ -369,15 +378,12 @@ base_sync = r'''  /*
 
 
   async function applyLatestRoomPlaybackState() {
-    const event =
-      state.playbackRoomEvent;
-
-    if (!event) {
+    if (!state.playbackRoomEvent) {
       return;
     }
 
     await applyRemotePlaybackEvent(
-      event,
+      state.playbackRoomEvent,
       true
     );
   }
@@ -553,13 +559,16 @@ base_sync = r'''  /*
 
 '''
 
-start_marker = "  /*\n   * =========================================================\n   * EVENT-BASED PLAYBACK SYNC"
-end_marker = "  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */"
-start = text.find(start_marker)
-end = text.find(end_marker, start)
-if start < 0 or end < 0:
-    raise SystemExit("sync block markers not found")
-text = text[:start] + base_sync + text[end:]
+start_marker = "  /*\n   * =========================================================\n   * ROOM VIDEO"
+insert_before = text.find(start_marker)
+if insert_before < 0:
+    raise SystemExit("ROOM VIDEO marker not found")
+room_video_start = insert_before
+room_ui_marker = "  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */"
+room_ui_pos = text.find(room_ui_marker, room_video_start)
+if room_ui_pos < 0:
+    raise SystemExit("ROOM UI marker not found")
+text = text[:room_ui_pos] + sync_code + text[room_ui_pos:]
 
 replace_once(
     '''      await buildYoutubePlayer(
@@ -567,7 +576,7 @@ replace_once(
         true
       );
 
-      startPlaybackSeekDetector();
+      return;
 ''',
     '''      await buildYoutubePlayer(
         videoId,
@@ -576,16 +585,17 @@ replace_once(
 
       void applyLatestRoomPlaybackState();
       startPlaybackSeekDetector();
+
+      return;
 ''',
-    "youtube autoplay"
+    "youtube room playback"
 )
 
 replace_once(
     '''    await buildPlatformPlayer(
       normalized
     );
-
-    startPlaybackSeekDetector();
+  }
 ''',
     '''    await buildPlatformPlayer(
       normalized
@@ -593,25 +603,157 @@ replace_once(
 
     void applyLatestRoomPlaybackState();
     startPlaybackSeekDetector();
+  }
 ''',
-    "platform sync"
+    "platform room playback"
 )
 
 replace_once(
-    '''      playbackSyncRef()?.off();
+    '''    if (
+      !state.chatListenerAttached
+    ) {
+''',
+    '''    attachPlaybackSyncListener();
+
+    if (
+      !state.chatListenerAttached
+    ) {
+''',
+    "playback listener attach"
+)
+
+replace_once(
+    '''          if (
+            await asyncIsPlaying()
+          ) {
+            await pausePlayer();
+          } else {
+            await playPlayer();
+          }
+
+          updateTimeUI();
+''',
+    '''          const position =
+            await asyncCurrentPosition();
+
+          if (
+            await asyncIsPlaying()
+          ) {
+            await pausePlayer();
+            void publishPlaybackEvent(
+              "pause",
+              position
+            );
+          } else {
+            await playPlayer();
+            void publishPlaybackEvent(
+              "play",
+              position
+            );
+          }
+
+          updateTimeUI();
+''',
+    "play pause control"
+)
+
+replace_once(
+    '''          await applyPlayerPosition(
+            target
+          );
+        }
+      );''',
+    '''          await applyPlayerPosition(
+            target
+          );
+
+          void publishPlaybackEvent(
+            "seek",
+            target
+          );
+        }
+      );''',
+    "back control"
+)
+
+replace_once(
+    '''          await applyPlayerPosition(
+            target
+          );
+        }
+      );''',
+    '''          await applyPlayerPosition(
+            target
+          );
+
+          void publishPlaybackEvent(
+            "seek",
+            target
+          );
+        }
+      );''',
+    "forward control"
+)
+
+replace_once(
+    '''                  forceYoutubeVisible();
+
+                  if (
+                    event.data ===
+                    YT.PlayerState.ENDED
+                  ) {''',
+    '''                  forceYoutubeVisible();
+
+                  if (
+                    event.data ===
+                    YT.PlayerState.PLAYING
+                  ) {
+                    void publishPlaybackEvent(
+                      "play"
+                    );
+                  }
+
+                  if (
+                    event.data ===
+                    YT.PlayerState.PAUSED
+                  ) {
+                    void publishPlaybackEvent(
+                      "pause"
+                    );
+                  }
+
+                  if (
+                    event.data ===
+                    YT.PlayerState.ENDED
+                  ) {''',
+    "youtube playback events"
+)
+
+replace_once(
+    '''    state.roomRef
+        ?.child("video")
+        .off();
+
+    } catch (_) {}
+''',
+    '''    state.roomRef
+        ?.child("video")
+        .off();
+
+      detachPlaybackSyncListener();
 
       stopPlaybackSeekDetector();
-''',
-    '''      detachPlaybackSyncListener();
 
-      stopPlaybackSeekDetector();
+    } catch (_) {}
 ''',
-    "playback cleanup"
+    "cleanup listeners"
 )
 
 replace_once(
     '''    state.playbackApplyingRemote =
       false;
+
+    state.membersListenerAttached =
 ''',
     '''    state.playbackApplyingRemote =
       false;
@@ -621,30 +763,45 @@ replace_once(
 
     state.lastPlaybackEventId =
       null;
+
+    state.membersListenerAttached =
 ''',
-    "playback state cleanup"
+    "cleanup playback state"
 )
 
-if "allowfullscreen" in INDEX.read_text(encoding="utf-8"):
-    index_text = INDEX.read_text(encoding="utf-8")
-    index_text = index_text.replace("\n              allowfullscreen", "")
-    INDEX.write_text(index_text, encoding="utf-8")
+replace_once(
+    '''      clearInterval(
+        state.memberHeartbeatTimer
+      );
+
+      unlockPageScroll();
+''',
+    '''      clearInterval(
+        state.memberHeartbeatTimer
+      );
+
+      stopPlaybackSeekDetector();
+
+      unlockPageScroll();
+''',
+    "unload playback detector"
+)
+
+index_text = INDEX.read_text(encoding="utf-8")
+index_text = index_text.replace("\n              allowfullscreen", "")
+INDEX.write_text(index_text, encoding="utf-8")
 
 rules = json.loads(RULES.read_text(encoding="utf-8"))
 rooms = rules["rules"]["rooms"]
+room = rooms["$roomId"]
 
-def room_member_expr(room_id_expr='"$roomId"'):
-    return (
-        "root.child('members').child(" + room_id_expr + ").child(auth.uid).exists()"
-    )
-
-rooms["$roomId"]["sourceType"][".write"] = (
-    "auth != null && " + room_member_expr()
+room["sourceType"][".write"] = (
+    "auth != null && root.child('members').child($roomId).child(auth.uid).exists()"
 )
-rooms["$roomId"]["video"][".write"] = (
-    "auth != null && " + room_member_expr()
+room["video"][".write"] = (
+    "auth != null && root.child('members').child($roomId).child(auth.uid).exists()"
 )
-rooms["$roomId"].pop("playbackEvent", None)
+room.pop("playbackEvent", None)
 
 members_uid = rules["rules"]["members"]["$roomId"]["$uid"]
 members_uid["playback"] = {
@@ -688,9 +845,9 @@ WatchTogether 是一個 Firebase + GitHub Pages 的多人同步觀看網站。
 - YouTube 搜尋與播放
 - Vimeo、Dailymotion、Bilibili、Twitch 與外部平台入口
 - 房間、成員、踢人、聊天室、待播放清單
-- Firebase Realtime Database 房間播放同步
-- 播放、暫停、跳轉、晚加入追趕與播放中 drift correction
-- 每位成員的播放狀態寫在 `members/{roomId}/{uid}/playback`，避免共用寫入權限衝突
+- Firebase Realtime Database 播放、暫停、跳轉同步
+- 晚加入追趕與播放中 drift correction
+- 每位成員只寫入自己的 `members/{roomId}/{uid}/playback`
 - Firebase Storage 房間媒體檔案權限限制
 
 Firebase Web App 設定位於 `firebase-config.js`。
