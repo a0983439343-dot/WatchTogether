@@ -1,0 +1,437 @@
+name: Repair latency-aware shared playback sync
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply latency-aware playback repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('app.js')
+          s = p.read_text(encoding='utf-8')
+
+          if 'playbackServerTimeOffset: 0' not in s:
+              s = s.replace(
+                  '    playbackRecoveryTimer: null,\n',
+                  '    playbackRecoveryTimer: null,\n    playbackServerTimeOffset: 0,\n    playbackStateCheckToken: 0,\n',
+                  1
+              )
+
+          # Add server-clock helpers immediately before the shared timeline function.
+          marker = '  function playbackSyncRef() {\n'
+          helpers = r'''  function getServerNow() {
+            return Date.now() + Number(state.playbackServerTimeOffset || 0);
+          }
+
+
+  function attachServerClockSync() {
+    if (!db) {
+      return;
+    }
+
+    db.ref(".info/serverTimeOffset").off("value", state.playbackServerClockHandler || undefined);
+
+    const handler = (snapshot) => {
+      const value = Number(snapshot.val());
+      if (Number.isFinite(value)) {
+        state.playbackServerTimeOffset = value;
+      }
+    };
+
+    state.playbackServerClockHandler = handler;
+    db.ref(".info/serverTimeOffset").on("value", handler);
+  }
+
+
+'''
+          if 'function getServerNow()' not in s:
+              if marker not in s:
+                  raise SystemExit('playbackSyncRef marker not found')
+              s = s.replace(marker, helpers + marker, 1)
+
+          # Replace timeline position calculation so every client uses the same server clock.
+          pattern = r'  function getTimelinePosition\(event, now = Date\.now\(\)\) \{.*?\n  \}\n\n\n  function rememberRoomTimeline'
+          repl = '''  function getTimelinePosition(event, now = getServerNow()) {
+    const base = Math.max(0, Number(event?.position) || 0);
+
+    if (!event?.playing) {
+      return base;
+    }
+
+    const updatedAt = Number(event?.updatedAt);
+    if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+      return base;
+    }
+
+    const elapsed = Math.max(0, (now - updatedAt) / 1000);
+    return base + Math.min(elapsed, 7200);
+  }
+
+
+  function rememberRoomTimeline'''
+          s2, n = re.subn(pattern, repl, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('getTimelinePosition block not found')
+          s = s2
+
+          # Replace the writer: the timestamp is an estimated Firebase server time at the user's action,
+          # so propagation latency is naturally included when receivers calculate the current position.
+          pattern = r'  async function publishPlaybackEvent\(action, position = null\) \{.*?\n  \}\n\n\n  async function applyRemotePlaybackEvent'
+          repl = r'''  async function publishPlaybackEvent(action, position = null) {
+    if (
+      !state.uid ||
+      !state.roomId ||
+      !state.playerReady ||
+      !state.player ||
+      state.playbackApplyingRemote
+    ) {
+      return;
+    }
+
+    if (
+      state.playerType === "bilibili" ||
+      state.playerType === "external"
+    ) {
+      return;
+    }
+
+    const ref = playbackSyncRef();
+    if (!ref || !state.currentVideoId) {
+      return;
+    }
+
+    const normalizedAction =
+      action === "pause"
+        ? "pause"
+        : action === "seek"
+          ? "seek"
+          : "play";
+
+    let finalPosition = Number(position);
+
+    if (!Number.isFinite(finalPosition)) {
+      finalPosition = await asyncCurrentPosition();
+    }
+
+    finalPosition = Math.max(0, Number(finalPosition) || 0);
+
+    let playing = true;
+
+    if (normalizedAction === "pause") {
+      playing = false;
+    } else if (normalizedAction === "seek") {
+      playing = await asyncIsPlaying();
+    }
+
+    const actionAt = getServerNow();
+    const localActionKey =
+      `${normalizedAction}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;
+
+    if (
+      localActionKey === state.playbackLastLocalActionKey &&
+      actionAt - Number(state.playbackLastLocalActionAt || 0) < 700
+    ) {
+      return;
+    }
+
+    state.playbackLastLocalActionKey = localActionKey;
+    state.playbackLastLocalActionAt = actionAt;
+
+    const event = {
+      action: normalizedAction,
+      position: finalPosition,
+      videoId: String(state.currentVideoId),
+      updatedAt: actionAt,
+      updatedBy: state.uid,
+      eventId: `${state.uid}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      playing
+    };
+
+    try {
+      await ref.set(event);
+
+      state.playbackRemoteEvent = event;
+      state.playbackTimeline = {
+        videoId: String(state.currentVideoId),
+        position: finalPosition,
+        playing,
+        updatedAt: actionAt,
+        eventId: String(event.eventId)
+      };
+
+      state.playbackLastRemoteEventId = String(event.eventId);
+      state.playbackLastRemoteUpdatedAt = actionAt;
+      state.playbackLastPosition = finalPosition;
+      state.playbackLastPlaying = playing;
+    } catch (error) {
+      console.warn("播放同步寫入失敗:", error);
+    }
+  }
+
+
+  async function applyRemotePlaybackEvent'''
+          s2, n = re.subn(pattern, repl, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('publishPlaybackEvent block not found')
+          s = s2
+
+          # Replace the polling engine. It never publishes play/pause from incidental player state changes;
+          # it only corrects drift against the shared timeline and reports genuine user seek changes.
+          pattern = r'  function startPlaybackSeekDetector\(\) \{.*?\n  \}\n\n\n  function recoverPlaybackAfterPageResume'
+          repl = r'''  function startPlaybackSeekDetector() {
+    stopPlaybackSeekDetector();
+    state.playbackReadyAt = Date.now() + 900;
+
+    state.playbackSeekTimer = setInterval(async () => {
+      try {
+        if (
+          !state.playerReady ||
+          !state.player ||
+          !state.currentVideoId
+        ) {
+          return;
+        }
+
+        await reconcileRoomTimeline();
+
+        if (
+          state.playbackApplyingRemote ||
+          Date.now() < Number(state.playbackIgnoreStateUntil || 0)
+        ) {
+          return;
+        }
+
+        const position = await asyncCurrentPosition();
+        const playing = await asyncIsPlaying();
+        const now = Date.now();
+
+        if (now < Number(state.playbackReadyAt || 0)) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastObservedPosition = position;
+          return;
+        }
+
+        if (
+          state.playbackLastPosition === null ||
+          state.playbackLastPlaying === null
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastObservedPosition = position;
+          return;
+        }
+
+        const positionDelta = Math.abs(
+          position - Number(state.playbackLastPosition)
+        );
+
+        const timeline = state.playbackTimeline;
+        const roomPlaying =
+          timeline &&
+          String(timeline.videoId || "") === String(state.currentVideoId || "")
+            ? timeline.playing === true
+            : null;
+
+        # Seek is the only incidental player change that can be identified by a large position jump
+        # while the intended room play state stays unchanged.
+        if (
+          positionDelta >= 1.35 &&
+          roomPlaying !== null &&
+          playing === roomPlaying
+        ) {
+          const expected = getTimelinePosition(timeline, getServerNow());
+          const localJumpFromTimeline = Math.abs(position - expected);
+
+          if (localJumpFromTimeline >= 1.35) {
+            await publishPlaybackEvent("seek", position);
+          }
+        }
+
+        state.playbackLastPosition = position;
+        state.playbackLastPlaying = playing;
+        state.playbackLastObservedPosition = position;
+      } catch (error) {
+        console.warn("播放時間軸偵測失敗:", error);
+      }
+    }, 650);
+  }
+
+
+  function recoverPlaybackAfterPageResume'''
+          # Python comments cannot use //; fix the embedded replacement after creation.
+          repl = repl.replace('        # Seek is the only incidental player change that can be identified by a large position jump\n        # while the intended room play state stays unchanged.\n', '        // Seek is the only incidental player change that can be identified by a large position jump\n        // while the intended room play state stays unchanged.\n')
+          s2, n = re.subn(pattern, repl, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('startPlaybackSeekDetector block not found')
+          s = s2
+
+          # Tighten remote application: calculate position from server time at the moment of application,
+          # then force the requested room play state. This makes pause/play authoritative at room level.
+          s = s.replace(
+              '      const position = getTimelinePosition(event);\n',
+              '      const position = getTimelinePosition(event, getServerNow());\n',
+              1
+          )
+
+          # Replace YouTube state handler so playback callbacks are confirmation-based and cannot immediately
+          # echo transient ad/buffer states into Firebase. A state change must remain opposite to the room state
+          # after a short confirmation window before it becomes a room command.
+          state_pattern = r'              onStateChange:\n                async \(event\) => \{.*?\n                \},\n\n              onError:'
+          state_repl = r'''              onStateChange:
+                async (event) => {
+                  if (
+                    state.youtubeBuildToken !== token ||
+                    state.player !== event.target
+                  ) {
+                    return;
+                  }
+
+                  forceYoutubeVisible();
+
+                  const now = Date.now();
+                  const data = event.data;
+
+                  if (data === YT.PlayerState.BUFFERING) {
+                    state.playbackTransientStateUntil = now + 1800;
+                    if (
+                      state.playbackTimeline &&
+                      state.playbackTimeline.playing === true
+                    ) {
+                      state.playbackAdGuardUntil = now + 5000;
+                    }
+                    state.playbackLastPlayerState = "buffering";
+                    updateTimeUI();
+                    return;
+                  }
+
+                  if (
+                    data === YT.PlayerState.PLAYING ||
+                    data === YT.PlayerState.PAUSED
+                  ) {
+                    const isPlaying =
+                      data === YT.PlayerState.PLAYING;
+
+                    if (
+                      state.playbackApplyingRemote ||
+                      now < Number(state.playbackIgnoreStateUntil || 0) ||
+                      now < Number(state.playbackTransientStateUntil || 0)
+                    ) {
+                      state.playbackLastPlayerState =
+                        isPlaying ? "playing" : "paused";
+                      state.playbackLastObservedPosition =
+                        await asyncCurrentPosition();
+                      updateTimeUI();
+                      return;
+                    }
+
+                    const timeline = state.playbackTimeline;
+                    const expectedPlaying =
+                      timeline &&
+                      String(timeline.videoId || "") === String(state.currentVideoId || "")
+                        ? timeline.playing === true
+                        : null;
+
+                    if (
+                      expectedPlaying !== null &&
+                      isPlaying !== expectedPlaying
+                    ) {
+                      const checkToken = ++state.playbackStateCheckToken;
+
+                      setTimeout(async () => {
+                        if (
+                          checkToken !== state.playbackStateCheckToken ||
+                          state.playbackApplyingRemote ||
+                          !state.playerReady ||
+                          !state.player ||
+                          !state.currentVideoId
+                        ) {
+                          return;
+                        }
+
+                        try {
+                          const stillPlaying = await asyncIsPlaying();
+
+                          if (stillPlaying !== isPlaying) {
+                            return;
+                          }
+
+                          const currentTimeline = state.playbackTimeline;
+                          const currentExpected =
+                            currentTimeline &&
+                            String(currentTimeline.videoId || "") === String(state.currentVideoId || "")
+                              ? currentTimeline.playing === true
+                              : null;
+
+                          if (
+                            currentExpected !== null &&
+                            stillPlaying !== currentExpected &&
+                            Date.now() >= Number(state.playbackTransientStateUntil || 0)
+                          ) {
+                            await publishPlaybackEvent(
+                              stillPlaying ? "play" : "pause",
+                              await asyncCurrentPosition()
+                            );
+                          }
+                        } catch (error) {
+                          console.warn("播放狀態確認失敗:", error);
+                        }
+                      }, 900);
+                    }
+
+                    state.playbackLastPlayerState =
+                      isPlaying ? "playing" : "paused";
+                    state.playbackLastObservedPosition =
+                      await asyncCurrentPosition();
+                  }
+
+                  if (data === YT.PlayerState.ENDED) {
+                    state.playbackStateCheckToken++;
+                    if (state.isOwner) {
+                      setTimeout(async () => {
+                        await playNextQueueItem();
+                      }, 300);
+                    }
+                  }
+
+                  updateTimeUI();
+                },
+
+              onError:'''
+          s2, n = re.subn(state_pattern, state_repl, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('YouTube onStateChange block not found')
+          s = s2
+
+          # Start server clock synchronization when entering the room. Safe to call repeatedly.
+          enter_marker = '  async function enterRoom() {\n'
+          if 'attachServerClockSync();' not in s:
+              # place after the function opening brace
+              if enter_marker not in s:
+                  raise SystemExit('enterRoom marker not found')
+              s = s.replace(enter_marker, enter_marker + '    attachServerClockSync();\n', 1)
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Verify JavaScript
+        run: node --check app.js
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js .github/workflows/repair-sync-v3.yml
+          git diff --cached --quiet || git commit -m "Fix shared timeline latency and playback state sync"
+          git push
