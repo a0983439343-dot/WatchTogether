@@ -1,0 +1,134 @@
+name: Fix Playback Loop
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  fix-playback-loop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch playback sync
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("app.js")
+          text = path.read_text(encoding="utf-8")
+
+          if "playbackLastRemoteEventId:" not in text:
+              marker = "    playbackRemoteEvent: null,"
+              if marker not in text:
+                  raise SystemExit("state playback marker not found")
+              text = text.replace(
+                  marker,
+                  marker + "\n    playbackLastRemoteEventId: null,\n    playbackApplyingRemoteEventId: null,",
+                  1,
+              )
+
+          start = text.find("  async function applyRemotePlaybackEvent(event) {")
+          end = text.find("\n  async function applyLatestRoomPlaybackState()", start)
+          if start < 0 or end < 0:
+              raise SystemExit("applyRemotePlaybackEvent boundaries not found")
+
+          replacement = '''  async function applyRemotePlaybackEvent(event) {
+    if (!event || !state.playerReady || !state.player || !state.currentVideoId) return;
+    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
+    if (!["play", "pause", "seek"].includes(event.action)) return;
+    if (event.updatedBy === state.uid) return;
+    if (state.playerType === "bilibili" || state.playerType === "external") return;
+
+    const eventId = String(event.eventId || "");
+    if (!eventId) return;
+
+    if (state.playbackLastRemoteEventId === eventId || state.playbackApplyingRemoteEventId === eventId) {
+      return;
+    }
+
+    state.playbackApplyingRemoteEventId = eventId;
+
+    try {
+      const target = getExpectedPlaybackPosition(event);
+      const current = await asyncCurrentPosition();
+      const drift = Number.isFinite(current) && Number.isFinite(target)
+        ? Math.abs(current - target)
+        : Infinity;
+
+      state.playbackRemoteEvent = event;
+
+      if (Number.isFinite(target) && (event.action === "seek" || drift > 0.85)) {
+        if (typeof state.player.seekTo === "function") {
+          state.player.seekTo(target, true);
+        }
+      }
+
+      state.playbackApplyingRemote = true;
+
+      if (event.action === "pause") {
+        if (typeof state.player.pauseVideo === "function") {
+          state.player.pauseVideo();
+        }
+      } else if (event.action === "play" || event.playing === true) {
+        if (typeof state.player.playVideo === "function") {
+          const result = state.player.playVideo();
+          if (result && typeof result.catch === "function") {
+            result.catch(() => {});
+          }
+        }
+      } else if (event.action === "seek" && event.playing === false) {
+        if (typeof state.player.pauseVideo === "function") {
+          state.player.pauseVideo();
+        }
+      }
+
+      state.playbackLastRemoteEventId = eventId;
+      state.playbackLastPosition = Number.isFinite(target) ? target : current;
+      state.playbackLastPlaying = event.playing === true;
+    } catch (error) {
+      console.warn("套用遠端播放狀態失敗:", error);
+    } finally {
+      state.playbackApplyingRemote = false;
+      state.playbackApplyingRemoteEventId = null;
+    }
+  }
+'''
+
+          text = text[:start] + replacement + text[end:]
+
+          text = re.sub(
+              r'(function handleRemotePlaybackSnapshot\(snapshot\) \{\n\s*const event = snapshot\?\.val\?\.\(\) \|\| null;\n\s*if \(!event \|\| !event\.eventId \|\| event\.updatedBy === state\.uid\) return;\n)(\s*void applyRemotePlaybackEvent\(event\);\n)',
+              r'\1    if (state.playbackLastRemoteEventId === String(event.eventId || "")) return;\n\2',
+              text,
+              count=1,
+          )
+
+          text = text.replace(
+              'state.playbackRemoteEvent = null;\n',
+              'state.playbackRemoteEvent = null;\n    state.playbackLastRemoteEventId = null;\n    state.playbackApplyingRemoteEventId = null;\n',
+          )
+
+          path.write_text(text, encoding="utf-8")
+''
+
+      - name: Verify JavaScript
+        run: node --check app.js
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "fix: stop repeated remote playback event application"
+          git push
