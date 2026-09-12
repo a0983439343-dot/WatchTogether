@@ -1,8 +1,7 @@
 from pathlib import Path
-import json
 
 APP = Path("app.js")
-RULES = Path("database.rules.json")
+STYLES = Path("styles.css")
 s = APP.read_text(encoding="utf-8")
 
 
@@ -12,85 +11,226 @@ def require_replace(text, old, new, label, count=1):
     return text.replace(old, new, count)
 
 
-# Remove duplicate reset lines left by an earlier repair pass.
-duplicate_reset = """      state.playbackIgnoreStateUntil = 0;\n    state.playbackLastRemoteEventId = null;\n    state.playbackApplyingRemoteEventId = null;"""
-s = s.replace(
-    duplicate_reset,
-    "      state.playbackIgnoreStateUntil = 0;",
-    1,
-)
+# Add local event de-duplication and remote timestamp tracking.
+state_marker = "    playbackApplyingRemoteEventId: null,"
+state_add = """    playbackApplyingRemoteEventId: null,
+    playbackLastRemoteUpdatedAt: 0,
+    playbackLastLocalActionKey: \"\",
+    playbackLastLocalActionAt: 0,
+    playbackLastLocalSeekWriteAt: 0,"""
+if "playbackLastRemoteUpdatedAt" not in s:
+    s = require_replace(s, state_marker, state_add, "playback conflict state")
 
-if "playbackIgnoreStateChanges" not in s:
-    marker = "    playbackApplyingRemote: false,"
-    s = require_replace(
-        s,
-        marker,
-        marker + "\n    playbackIgnoreStateChanges: 0,\n    playbackIgnoreStateUntil: 0,",
-        "remote callback shield state",
-    )
+# De-duplicate local state changes before writing to Firebase.
+publish_marker = '''    if (normalizedAction === "seek") playing = await asyncIsPlaying();
 
-on_state_start = s.find("              onStateChange:\n                async (event) => {")
-on_error_start = s.find("\n\n              onError:", on_state_start)
-if on_state_start < 0 or on_error_start < 0:
-    raise SystemExit("YouTube onStateChange boundaries not found")
+    try {'''
+publish_new = '''    if (normalizedAction === "seek") playing = await asyncIsPlaying();
 
-new_on_state = '''              onStateChange:\n                async (event) => {\n                  if (\n                    state.youtubeBuildToken !==\n                      token\n                  ) {\n                    return;\n                  }\n\n                  if (\n                    state.player !==\n                    event.target\n                  ) {\n                    return;\n                  }\n\n                  forceYoutubeVisible();\n\n                  if (\n                    event.data === YT.PlayerState.PLAYING ||\n                    event.data === YT.PlayerState.PAUSED\n                  ) {\n                    const expectedPlaying =\n                      state.playbackRemoteEvent &&\n                      String(state.playbackRemoteEvent.videoId || "") ===\n                        String(state.currentVideoId || "")\n                        ? Boolean(state.playbackRemoteEvent.playing)\n                        : null;\n\n                    const now = Date.now();\n                    const isExpectedRemoteState =\n                      expectedPlaying !== null &&\n                      Boolean(event.data === YT.PlayerState.PLAYING) ===\n                        expectedPlaying;\n\n                    if (\n                      state.playbackApplyingRemote ||\n                      (isExpectedRemoteState &&\n                        state.playbackIgnoreStateChanges > 0 &&\n                        now < Number(state.playbackIgnoreStateUntil || 0))\n                    ) {\n                      if (\n                        !state.playbackApplyingRemote &&\n                        isExpectedRemoteState &&\n                        state.playbackIgnoreStateChanges > 0\n                      ) {\n                        state.playbackIgnoreStateChanges -= 1;\n                      }\n                    } else if (now >= Number(state.playbackIgnoreStateUntil || 0)) {\n                      state.playbackIgnoreStateChanges = 0;\n                      void publishPlaybackEvent(\n                        event.data === YT.PlayerState.PLAYING\n                          ? "play"\n                          : "pause"\n                      );\n                    }\n                  }\n\n                  if (\n                    event.data ===\n                    YT.PlayerState.ENDED\n                  ) {\n                    if (\n                      state.isOwner\n                    ) {\n                      setTimeout(\n                        async () => {\n                          await playNextQueueItem();\n                        },\n                        300\n                      );\n                    }\n                  }\n\n                  updateTimeUI();\n                },'''
-s = s[:on_state_start] + new_on_state + s[on_error_start:]
+    const now = Date.now();
+    const localActionKey = `${normalizedAction}:${Math.round(finalPosition * 2) / 2}:${playing ? 1 : 0}`;
 
-start = s.find("  async function applyRemotePlaybackEvent(event) {")
-end = s.find("\n  async function applyLatestRoomPlaybackState()", start)
-if start < 0 or end < 0:
-    raise SystemExit("remote playback function boundaries not found")
+    if (
+      localActionKey === state.playbackLastLocalActionKey &&
+      now - Number(state.playbackLastLocalActionAt || 0) < 900
+    ) {
+      return;
+    }
 
-new_apply = '''  async function applyRemotePlaybackEvent(event) {\n    if (!event || !state.playerReady || !state.player || !state.currentVideoId) return;\n    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;\n    if (!["play", "pause", "seek"].includes(event.action)) return;\n    if (event.updatedBy === state.uid) return;\n    if (state.playerType === "bilibili" || state.playerType === "external") return;\n\n    const eventId = String(event.eventId || "");\n    if (!eventId) return;\n    if (state.playbackLastRemoteEventId === eventId) return;\n    if (state.playbackApplyingRemoteEventId === eventId) return;\n\n    state.playbackLastRemoteEventId = eventId;\n    state.playbackApplyingRemoteEventId = eventId;\n    state.playbackRemoteEvent = event;\n    state.playbackApplyingRemote = true;\n    state.playbackIgnoreStateChanges = 4;\n    state.playbackIgnoreStateUntil = Date.now() + 3500;\n    state.playbackReadyAt = Date.now() + 1800;\n\n    try {\n      const position = getExpectedPlaybackPosition(event);\n      const current = await asyncCurrentPosition();\n      const difference = Math.abs(current - position);\n\n      if (difference > 0.35) {\n        await applyPlayerPosition(position);\n      }\n\n      const wantPlaying =\n        event.playing === true ||\n        (event.playing === undefined && event.action === "play");\n\n      const currentlyPlaying = await asyncIsPlaying();\n\n      if (wantPlaying !== currentlyPlaying) {\n        if (wantPlaying) {\n          await playPlayer();\n        } else {\n          await pausePlayer();\n        }\n      }\n\n      if ($("syncStatus")) {\n        $("syncStatus").textContent = `已同步 ${formatTime(position)}`;\n      }\n\n      state.playbackLastPosition = await asyncCurrentPosition();\n      state.playbackLastPlaying = await asyncIsPlaying();\n    } catch (error) {\n      console.warn("套用遠端播放狀態失敗:", error);\n    } finally {\n      state.playbackApplyingRemote = false;\n      state.playbackApplyingRemoteEventId = null;\n    }\n  }\n'''
-s = s[:start] + new_apply + s[end:]
+    if (
+      normalizedAction === "seek" &&
+      now - Number(state.playbackLastLocalSeekWriteAt || 0) < 650
+    ) {
+      return;
+    }
 
-snap_start = s.find("  function handleRemotePlaybackSnapshot(snapshot) {")
-snap_end = s.find("\n  function stopPlaybackSeekDetector()", snap_start)
-if snap_start < 0 or snap_end < 0:
-    raise SystemExit("remote snapshot boundaries not found")
+    state.playbackLastLocalActionKey = localActionKey;
+    state.playbackLastLocalActionAt = now;
+    if (normalizedAction === "seek") {
+      state.playbackLastLocalSeekWriteAt = now;
+    }
 
-new_snapshot = '''  function handleRemotePlaybackSnapshot(snapshot) {\n    const event = snapshot?.val?.() || null;\n    if (!event || !event.eventId || event.updatedBy === state.uid) return;\n    if (state.playbackLastRemoteEventId === String(event.eventId || "")) return;\n    void applyRemotePlaybackEvent(event);\n  }\n'''
-s = s[:snap_start] + new_snapshot + s[snap_end:]
+    try {'''
+s = require_replace(s, publish_marker, publish_new, "local playback event de-duplication")
 
-det_start = s.find("  function startPlaybackSeekDetector() {")
-det_end = s.find("\n  /*\n   * =========================================================\n   * ROOM UI", det_start)
-if det_start < 0 or det_end < 0:
-    raise SystemExit("seek detector boundaries not found")
+# Reject an older remote event even when it has a different eventId.
+remote_marker = '''    const eventId = String(event.eventId || "");
+    if (!eventId) return;
+    if (state.playbackLastRemoteEventId === eventId) return;'''
+remote_new = '''    const eventId = String(event.eventId || "");
+    if (!eventId) return;
+    if (state.playbackLastRemoteEventId === eventId) return;
 
-new_detector = '''  function startPlaybackSeekDetector() {\n    stopPlaybackSeekDetector();\n    state.playbackReadyAt = Date.now() + 1800;\n\n    state.playbackSeekTimer = setInterval(async () => {\n      if (!state.playerReady || !state.player || state.playbackApplyingRemote) return;\n\n      const position = await asyncCurrentPosition();\n      const playing = await asyncIsPlaying();\n      const remote = state.playbackRemoteEvent;\n      const now = Date.now();\n\n      if (\n        remote &&\n        remote.updatedBy !== state.uid &&\n        String(remote.videoId || "") === String(state.currentVideoId || "")\n      ) {\n        const expected = getExpectedPlaybackPosition(remote);\n\n        if (now >= Number(state.playbackReadyAt || 0)) {\n          const drift = Math.abs(position - expected);\n\n          if (drift > 1.25) {\n            state.playbackApplyingRemote = true;\n            state.playbackIgnoreStateChanges = 2;\n            state.playbackIgnoreStateUntil = Date.now() + 1800;\n\n            try {\n              await applyPlayerPosition(expected);\n            } finally {\n              state.playbackApplyingRemote = false;\n              state.playbackLastPosition = await asyncCurrentPosition();\n              state.playbackLastPlaying = await asyncIsPlaying();\n            }\n            return;\n          }\n\n          if (playing !== Boolean(remote.playing)) {\n            state.playbackApplyingRemote = true;\n            state.playbackIgnoreStateChanges = 2;\n            state.playbackIgnoreStateUntil = Date.now() + 1800;\n\n            try {\n              if (remote.playing) {\n                await playPlayer();\n              } else {\n                await pausePlayer();\n              }\n            } finally {\n              state.playbackApplyingRemote = false;\n              state.playbackLastPosition = await asyncCurrentPosition();\n              state.playbackLastPlaying = await asyncIsPlaying();\n            }\n            return;\n          }\n        }\n      }\n\n      if (now < Number(state.playbackIgnoreStateUntil || 0)) {\n        state.playbackLastPosition = position;\n        state.playbackLastPlaying = playing;\n        return;\n      }\n\n      if (now < Number(state.playbackReadyAt || 0)) {\n        state.playbackLastPosition = position;\n        state.playbackLastPlaying = playing;\n        return;\n      }\n\n      if (state.playbackLastPosition === null || state.playbackLastPlaying === null) {\n        state.playbackLastPosition = position;\n        state.playbackLastPlaying = playing;\n        return;\n      }\n\n      const positionDelta = Math.abs(\n        position - Number(state.playbackLastPosition)\n      );\n      const playingChanged =\n        playing !== state.playbackLastPlaying;\n\n      if (positionDelta >= 1.35) {\n        void publishPlaybackEvent("seek", position);\n      } else if (playingChanged) {\n        void publishPlaybackEvent(\n          playing ? "play" : "pause",\n          position\n        );\n      }\n\n      state.playbackLastPosition = position;\n      state.playbackLastPlaying = playing;\n    }, 750);\n  }\n'''
-s = s[:det_start] + new_detector + s[det_end:]
+    const remoteUpdatedAt = Number(event.updatedAt || 0);
+    const lastRemoteUpdatedAt = Number(state.playbackLastRemoteUpdatedAt || 0);
+    if (
+      remoteUpdatedAt > 0 &&
+      lastRemoteUpdatedAt > 0 &&
+      remoteUpdatedAt < lastRemoteUpdatedAt
+    ) {
+      return;
+    }
 
-# Reset shields for a new room video.
-room_video_start = s.find("  async function handleRoomVideo(")
-room_video_end = s.find("\n  /*\n   * =========================================================\n   * EVENT-BASED PLAYBACK SYNC", room_video_start)
-anchor = s.find("      state.playbackRemoteEvent = null;", room_video_start, room_video_end)
-if anchor < 0:
-    raise SystemExit("new-video playback reset anchor not found")
-line_end = s.find("\n", anchor)
-after = s[anchor:line_end + 250]
-if "playbackIgnoreStateChanges" not in after:
-    s = s[:line_end] + "\n      state.playbackLastRemoteEventId = null;\n      state.playbackApplyingRemoteEventId = null;\n      state.playbackIgnoreStateChanges = 0;\n      state.playbackIgnoreStateUntil = 0;" + s[line_end:]
+    if (remoteUpdatedAt > 0) {
+      state.playbackLastRemoteUpdatedAt = remoteUpdatedAt;
+    }'''
+s = require_replace(s, remote_marker, remote_new, "remote playback timestamp guard")
 
-# Reset playback shields during cleanup.
-cleanup_start = s.find("  function disconnectRoomListeners() {")
-cleanup_end = s.find("\n  /*\n   * 保留舊名稱", cleanup_start)
-anchor = s.find("    state.playbackRemoteEvent =\n      null;", cleanup_start, cleanup_end)
-if anchor < 0:
-    raise SystemExit("cleanup playback reset anchor not found")
-line_end = s.find("\n", s.find("      null;", anchor) + len("      null;"))
-after = s[anchor:anchor + 320]
-if "playbackIgnoreStateChanges" not in after:
-    s = s[:line_end] + "\n    state.playbackLastRemoteEventId =\n      null;\n    state.playbackApplyingRemoteEventId =\n      null;\n    state.playbackIgnoreStateChanges =\n      0;\n    state.playbackIgnoreStateUntil =\n      0;" + s[line_end:]
+# Clear conflict state when switching videos.
+video_reset = '''      state.playbackIgnoreStateChanges = 0;
+      state.playbackIgnoreStateUntil = 0;'''
+video_reset_new = '''      state.playbackIgnoreStateChanges = 0;
+      state.playbackIgnoreStateUntil = 0;
+      state.playbackLastRemoteUpdatedAt = 0;
+      state.playbackLastLocalActionKey = "";
+      state.playbackLastLocalActionAt = 0;
+      state.playbackLastLocalSeekWriteAt = 0;'''
+s = require_replace(s, video_reset, video_reset_new, "video playback reset")
+
+# Clear conflict state during room cleanup as well, without touching Firebase Rules.
+cleanup_marker = '''    state.playbackIgnoreStateUntil =
+      0;'''
+cleanup_new = '''    state.playbackIgnoreStateUntil =
+      0;
+    state.playbackLastRemoteUpdatedAt =
+      0;
+    state.playbackLastLocalActionKey =
+      "";
+    state.playbackLastLocalActionAt =
+      0;
+    state.playbackLastLocalSeekWriteAt =
+      0;'''
+if "state.playbackLastRemoteUpdatedAt =\n      0;" not in s[s.find(cleanup_marker):s.find(cleanup_marker) + 500]:
+    s = require_replace(s, cleanup_marker, cleanup_new, "cleanup playback reset")
 
 APP.write_text(s, encoding="utf-8")
 
-rules = json.loads(RULES.read_text(encoding="utf-8"))
-room = rules["rules"]["rooms"]["$roomId"]
-room["playbackEvent"] = {
-    ".read": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
-    ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists() && newData.child('updatedBy').val() === auth.uid",
-    ".validate": "!newData.exists() || (newData.hasChildren(['action','position','videoId','updatedAt','updatedBy','eventId','playing']) && newData.child('action').isString() && (newData.child('action').val() === 'play' || newData.child('action').val() === 'pause' || newData.child('action').val() === 'seek') && newData.child('position').isNumber() && newData.child('position').val() >= 0 && newData.child('videoId').isString() && newData.child('videoId').val().length > 0 && newData.child('videoId').val().length <= 200 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val() === auth.uid && newData.child('eventId').isString() && newData.child('eventId').val().length > 0 && newData.child('eventId').val().length <= 200 && newData.child('playing').isBoolean())"
+# Mobile member list: prevent flex shrinking/clipping from hiding the kick button.
+css = STYLES.read_text(encoding="utf-8")
+css_marker = "/* =========================================================\n   WatchTogether mobile search final layout fix\n   ========================================================= */"
+mobile_fix = r'''/* =========================================================
+   WatchTogether mobile member action layout fix
+   ========================================================= */
+
+.member-list {
+  min-width: 0;
+  width: 100%;
 }
-RULES.write_text(json.dumps(rules, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print("Playback feedback-loop repair applied")
+
+.member {
+  min-width: 0;
+}
+
+.member .member-name {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.member [data-member-kick] {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 52px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 760px) {
+  .members-panel {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .member-list {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: visible !important;
+    overflow-y: auto !important;
+    padding-right: 1px;
+  }
+
+  .member {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    padding: 8px !important;
+    gap: 8px !important;
+    display: grid !important;
+    grid-template-columns: 34px minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    overflow: visible !important;
+  }
+
+  .member .avatar {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+
+  .member .member-name {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .member .member-name b,
+  .member .member-name span {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .member .online {
+    width: 8px !important;
+    min-width: 8px !important;
+  }
+
+  .member [data-member-kick] {
+    min-width: 58px !important;
+    min-height: 36px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+    justify-self: end !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .member {
+    grid-template-columns: 32px minmax(0, 1fr) auto !important;
+    gap: 6px !important;
+    padding: 7px !important;
+  }
+
+  .member .avatar {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+  }
+
+  .member [data-member-kick] {
+    min-width: 54px !important;
+    min-height: 34px !important;
+    padding: 0 8px !important;
+    font-size: 10px !important;
+  }
+}
+
+'''
+if "WatchTogether mobile member action layout fix" not in css:
+    if css_marker not in css:
+        raise SystemExit("styles insertion marker not found")
+    css = css.replace(css_marker, mobile_fix + css_marker, 1)
+
+STYLES.write_text(css, encoding="utf-8")
+print("Playback conflict handling and mobile member layout repair applied")
