@@ -15,11 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply server clock repair
-        run: python3 .github/scripts/fix_server_clock.py
-
       - name: Apply final shared playback repair
         run: python3 .github/scripts/repair_playback_v3.py
+
+      - name: Apply server clock repair
+        run: python3 .github/scripts/fix_server_clock.py
 
       - name: Verify JavaScript
         run: |
