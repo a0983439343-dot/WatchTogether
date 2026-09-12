@@ -11,64 +11,59 @@ def replace_once(old, new, name):
     text = text.replace(old, new, 1)
 
 replace_once(
-'''  async function handleRemotePlaybackSnapshot(
-    snapshot
-  ) {
-    const event =
-      snapshot?.val?.() ||
-      null;
-
-    if (!event || !event.eventId) {
-      return;
+'''  function playbackSyncRef() {
+    if (!db || !state.roomRef || !state.roomId) {
+      return null;
     }
 
-    if (
-      event.updatedBy === state.uid
-    ) {
-      return;
-    }
-
-    if (
-      event.eventId ===
-      state.lastPlaybackEventId
-    ) {
-      return;
-    }
-
-    await applyRemotePlaybackEvent(
-      event
-    );
+    return state.roomRef
+      .child("video")
+      .child("playback");
   }
-
-
-  function attachPlaybackSyncListener() {
-    if (
-      !state.roomRef ||
-      state.playbackListenerAttached
-    ) {
-      return;
-    }
-
-    const ref = playbackSyncRef();
-
-    if (!ref) {
-      return;
-    }
-
-    ref.on(
-      "value",
-      (snapshot) => {
-        void handleRemotePlaybackSnapshot(
-          snapshot
-        );
-      }
-    );
-
-    state.playbackListenerAttached = true;
-  }
-
-
 ''',
+'''  function playbackSyncRef() {
+    if (!db || !state.membersRef || !state.roomId) {
+      return null;
+    }
+
+    return state.membersRef;
+  }
+
+
+  function playbackWriteRef() {
+    if (
+      !state.membersRef ||
+      !state.uid ||
+      !state.roomId
+    ) {
+      return null;
+    }
+
+    return state.membersRef
+      .child(state.uid)
+      .child("playback");
+  }
+''',
+"member playback refs"
+)
+
+replace_once(
+'''    const ref = playbackSyncRef();
+
+    if (!ref || !state.currentVideoId) {
+      return;
+    }
+''',
+'''    const ref = playbackWriteRef();
+
+    if (!ref || !state.currentVideoId) {
+      return;
+    }
+''',
+"playback write ref"
+)
+
+replace_once(
 '''  async function handleRemotePlaybackSnapshot(
     snapshot
   ) {
@@ -106,164 +101,79 @@ replace_once(
       event
     );
   }
-
-
-  async function synchronizePlaybackFromRoom(
-    force = false
+''',
+'''  async function handleRemotePlaybackSnapshot(
+    snapshot
   ) {
-    const event =
-      state.playbackState;
+    const members =
+      snapshot?.val?.() ||
+      {};
+
+    let latest = null;
+
+    Object.entries(
+      members
+    ).forEach(([uid, member]) => {
+      const playback =
+        member?.playback ||
+        null;
+
+      if (!playback) {
+        return;
+      }
+
+      const updatedAt =
+        Number(playback.updatedAt) ||
+        0;
+
+      if (
+        !latest ||
+        updatedAt > Number(latest.updatedAt || 0)
+      ) {
+        latest = {
+          ...playback,
+          updatedBy:
+            playback.updatedBy || uid
+        };
+      }
+    });
+
+    if (!latest) {
+      state.playbackState = null;
+      return;
+    }
+
+    state.playbackState = latest;
 
     if (
-      !event ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId ||
-      String(event.videoId || "") !==
-        String(state.currentVideoId || "")
+      latest.updatedBy === state.uid
     ) {
       return;
     }
 
     if (
-      event.updatedBy === state.uid &&
-      !force
+      latest.eventId &&
+      latest.eventId ===
+        state.lastPlaybackEventId
     ) {
       return;
     }
 
-    if (
-      event.action !== "play" &&
-      event.action !== "pause" &&
-      event.action !== "seek"
-    ) {
-      return;
+    if (latest.eventId) {
+      state.lastPlaybackEventId =
+        latest.eventId;
     }
 
-    if (
-      state.playerType === "bilibili" ||
-      state.playerType === "external"
-    ) {
-      return;
-    }
-
-    const basePosition = Math.max(
-      0,
-      Number(event.position) || 0
+    await applyRemotePlaybackEvent(
+      latest
     );
-
-    let targetPosition = basePosition;
-
-    if (
-      event.action === "play"
-    ) {
-      const serverUpdatedAt =
-        Number(event.updatedAt) || 0;
-
-      const elapsed =
-        serverUpdatedAt > 0
-          ? Math.max(
-              0,
-              (Date.now() - serverUpdatedAt) / 1000
-            )
-          : 0;
-
-      targetPosition =
-        basePosition +
-        Math.min(elapsed, 30);
-    }
-
-    const current =
-      await asyncCurrentPosition();
-
-    const difference =
-      targetPosition - current;
-
-    if (
-      force ||
-      Math.abs(difference) >= 0.75
-    ) {
-      state.playbackApplyingRemote = true;
-      state.playbackReadyAt =
-        Date.now() + 1800;
-
-      try {
-        await applyPlayerPosition(
-          targetPosition
-        );
-
-        if (
-          event.action === "play"
-        ) {
-          await playPlayer();
-        }
-
-        if (
-          event.action === "pause"
-        ) {
-          await pausePlayer();
-        }
-      } finally {
-        state.playbackApplyingRemote =
-          false;
-
-        state.playbackLastPosition =
-          await asyncCurrentPosition();
-
-        state.playbackLastPlaying =
-          await asyncIsPlaying();
-
-        state.playbackLastSampleAt =
-          Date.now();
-      }
-    } else {
-      const localPlaying =
-        await asyncIsPlaying();
-
-      if (
-        event.action === "play" &&
-        !localPlaying
-      ) {
-        state.playbackApplyingRemote = true;
-        state.playbackReadyAt =
-          Date.now() + 1800;
-
-        try {
-          await playPlayer();
-        } finally {
-          state.playbackApplyingRemote =
-            false;
-        }
-      }
-
-      if (
-        event.action === "pause" &&
-        localPlaying
-      ) {
-        state.playbackApplyingRemote = true;
-        state.playbackReadyAt =
-          Date.now() + 1800;
-
-        try {
-          await pausePlayer();
-        } finally {
-          state.playbackApplyingRemote =
-            false;
-        }
-      }
-    }
   }
+''',
+"aggregate member playback state"
+)
 
-
-  function attachPlaybackSyncListener() {
-    if (
-      !state.roomRef ||
-      state.playbackListenerAttached
-    ) {
-      return;
-    }
-
-    const ref = playbackSyncRef();
+replace_once(
+'''    const ref = playbackSyncRef();
 
     if (!ref) {
       return;
@@ -287,188 +197,34 @@ replace_once(
         snapshot
       );
     }).catch(() => {});
-  }
-
-
 ''',
-"remote state sync"
-)
+'''    const ref = playbackSyncRef();
 
-replace_once(
-'''  function startPlaybackSeekDetector() {
-    stopPlaybackSeekDetector();
+    if (!ref) {
+      return;
+    }
 
-    state.playbackReadyAt = Date.now() + 1500;
-    state.playbackLastSampleAt = Date.now();
-
-    state.playbackSeekTimer = setInterval(
-      async () => {
-        if (
-          !state.playerReady ||
-          !state.player ||
-          state.playbackApplyingRemote
-        ) {
-          return;
-        }
-
-        const now = Date.now();
-        const position = await asyncCurrentPosition();
-        const playing = await asyncIsPlaying();
-
-        if (now < Number(state.playbackReadyAt || 0)) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
-
-        if (
-          state.playbackLastPosition === null ||
-          state.playbackLastPlaying === null ||
-          !state.playbackLastSampleAt
-        ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
-
-        const elapsed = Math.max(
-          0.05,
-          (now - state.playbackLastSampleAt) / 1000
+    ref.on(
+      "value",
+      (snapshot) => {
+        void handleRemotePlaybackSnapshot(
+          snapshot
         );
-
-        const delta =
-          position - Number(state.playbackLastPosition);
-
-        const expectedDelta =
-          playing ? elapsed : 0;
-
-        const seekError =
-          Math.abs(delta - expectedDelta);
-
-        if (seekError >= 1.5) {
-          void publishPlaybackEvent(
-            "seek",
-            position
-          );
-
-          state.playbackReadyAt = now + 600;
-        }
-
-        state.playbackLastPosition = position;
-        state.playbackLastPlaying = playing;
-        state.playbackLastSampleAt = now;
-      },
-      350
+      }
     );
-  }
+
+    state.playbackListenerAttached = true;
+
+    void ref.once(
+      "value"
+    ).then((snapshot) => {
+      void handleRemotePlaybackSnapshot(
+        snapshot
+      );
+    }).catch(() => {});
 ''',
-'''  function startPlaybackSeekDetector() {
-    stopPlaybackSeekDetector();
-
-    state.playbackReadyAt = Date.now() + 1500;
-    state.playbackLastSampleAt = Date.now();
-
-    state.playbackSeekTimer = setInterval(
-      async () => {
-        if (
-          !state.playerReady ||
-          !state.player ||
-          state.playbackApplyingRemote
-        ) {
-          return;
-        }
-
-        const now = Date.now();
-        const position = await asyncCurrentPosition();
-        const playing = await asyncIsPlaying();
-
-        if (now < Number(state.playbackReadyAt || 0)) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
-
-        const roomPlayback =
-          state.playbackState;
-
-        if (
-          roomPlayback &&
-          roomPlayback.updatedBy !== state.uid &&
-          String(roomPlayback.videoId || "") ===
-            String(state.currentVideoId || "")
-        ) {
-          await synchronizePlaybackFromRoom();
-        }
-
-        if (
-          state.playbackLastPosition === null ||
-          state.playbackLastPlaying === null ||
-          !state.playbackLastSampleAt
-        ) {
-          state.playbackLastPosition = position;
-          state.playbackLastPlaying = playing;
-          state.playbackLastSampleAt = now;
-          return;
-        }
-
-        const elapsed = Math.max(
-          0.05,
-          (now - state.playbackLastSampleAt) / 1000
-        );
-
-        const delta =
-          position - Number(state.playbackLastPosition);
-
-        const expectedDelta =
-          playing ? elapsed : 0;
-
-        const seekError =
-          Math.abs(delta - expectedDelta);
-
-        if (seekError >= 1.5) {
-          void publishPlaybackEvent(
-            "seek",
-            position
-          );
-
-          state.playbackReadyAt = now + 600;
-        }
-
-        state.playbackLastPosition = position;
-        state.playbackLastPlaying = playing;
-        state.playbackLastSampleAt = now;
-      },
-      700
-    );
-  }
-''',
-"continuous drift correction"
-)
-
-replace_once(
-'''    state.playbackListenerAttached =
-      false;
-
-    state.playbackApplyingRemote =
-      false;
-''',
-'''    state.playbackListenerAttached =
-      false;
-
-    state.playbackApplyingRemote =
-      false;
-
-    state.playbackState =
-      null;
-
-    state.lastPlaybackEventId =
-      null;
-''',
-"cleanup playback state"
+"member playback listener"
 )
 
 path.write_text(text, encoding="utf-8")
-print("room playback authoritative-state patch generated successfully")
+print("member-owned playback state patch generated successfully")
