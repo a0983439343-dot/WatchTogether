@@ -9,4 +9,5 @@
 - storage.rules：保留房間媒體檔案權限限制。
 - firebase.json：對應上述 Rules。
 
-注意：firebase-config.js 仍需要填入你目前 WatchTogether Firebase Web App 的實際 config；這份檔案原本沒有包含可可靠恢復的實際專案設定，不能自行猜測。
+注意：firebase-config.js 仍需要填入你目前 WatchTogether Firebase Web App 的實際 config；這份檔案原本沒有包含可可靠恢復的實際專案設定，不能自行猜測專案設定。
+
