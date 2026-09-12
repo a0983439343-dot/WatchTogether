@@ -15,11 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply server clock repair
+        run: python3 .github/scripts/fix_server_clock.py
+
       - name: Apply final shared playback repair
         run: python3 .github/scripts/repair_playback_v3.py
 
       - name: Verify JavaScript
-        run: node --check app.js
+        run: |
+          node --check app.js
+          grep -q "function attachServerClockSync()" app.js
+          grep -q "function serverNow()" app.js
 
       - name: Commit repaired app
         run: |
@@ -29,6 +35,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Automated final shared playback repair"
+            git commit -m "Fix shared playback server clock sync"
             git push origin HEAD:main
           fi
