@@ -13,4 +13,4 @@ WatchTogether 是一個 Firebase + GitHub Pages 的多人同步觀看網站。
 
 Firebase Web App 設定位於 `firebase-config.js`。
 
-Repair trigger branch verification.
+Final workflow trigger verification.
