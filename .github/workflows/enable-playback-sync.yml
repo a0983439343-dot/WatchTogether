@@ -1,6 +1,9 @@
 name: Repair WatchTogether Playback Sync
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     types:
       - opened
@@ -12,13 +15,13 @@ permissions:
 
 jobs:
   repair:
+    if: ${{ !contains(github.event.head_commit.message, 'Restore and fix playback sync') && !contains(github.event.head_commit.message, 'Automated playback repair') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR branch
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: main
           fetch-depth: 0
 
       - name: Restore known-good app.js base
@@ -48,7 +51,7 @@ jobs:
           git diff --check
           wc -c app.js index.html database.rules.json
 
-      - name: Commit repaired files to PR branch
+      - name: Commit repaired files to main
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -57,5 +60,5 @@ jobs:
             echo "No repair changes to commit."
             exit 0
           fi
-          git commit -m "Restore and fix playback sync"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git commit -m "Automated playback repair"
+          git push origin HEAD:main
