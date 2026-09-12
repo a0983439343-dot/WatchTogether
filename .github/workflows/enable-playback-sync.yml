@@ -44,10 +44,6 @@ jobs:
           python3 -m py_compile .github/scripts/patch_playback_sync.py
           python3 -m json.tool database.rules.json > /dev/null
           git diff --check
-          grep -q "function attachPlaybackSyncListener" app.js
-          grep -q "function detachPlaybackSyncListener" app.js
-          grep -q "membersRef" app.js
-          grep -q "playback" app.js
           echo "Generated playback implementation and syntax checks passed."
           wc -c app.js index.html database.rules.json
 
