@@ -33,9 +33,6 @@ jobs:
       - name: Apply complete WatchTogether repair
         run: python3 .github/scripts/run_playback_patch.py
 
-      - name: Apply generated app verification pass
-        run: python3 .github/scripts/verify_and_fix_generated_app.py
-
       - name: Verify source files
         run: |
           test -s app.js
@@ -51,7 +48,6 @@ jobs:
           python3 -m py_compile .github/scripts/prepare_playback_patch.py
           python3 -m py_compile .github/scripts/run_playback_patch.py
           python3 -m py_compile .github/scripts/patch_playback_sync.py
-          python3 -m py_compile .github/scripts/verify_and_fix_generated_app.py
           python3 -m json.tool database.rules.json > /dev/null
           git diff --check
           wc -c app.js index.html database.rules.json
