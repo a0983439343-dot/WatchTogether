@@ -24,17 +24,16 @@ jobs:
       - name: Apply playback sync patch
         run: python3 .github/scripts/patch_playback_sync.py
 
-      - name: Apply members playback sync
+      - name: Apply room playback state patch
         run: python3 .github/scripts/patch_members_playback_sync.py
 
       - name: Verify
         run: |
           test -s app.js
           grep -q "function attachPlaybackSyncListener()" app.js
-          grep -q "function playbackWriteRef()" app.js
-          grep -q "membersRef" app.js
-          ! grep -q "function playbackSyncRef()" app.js
-          ! grep -q "rooms/\${state.roomId}/playbackEvent" app.js
+          grep -q "function playbackSyncRef()" app.js
+          grep -q 'child("playback")' app.js
+          ! grep -q 'playbackEvent' app.js
           ! grep -q "schedulePlayingPositionSync" app.js
           node --check app.js
           wc -l app.js
