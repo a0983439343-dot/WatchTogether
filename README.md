@@ -1,12 +1,15 @@
-# WatchTogether 修正版
+# WatchTogether
 
-包含：
-- app.js：保留原本多平台、YouTube 搜尋、待播放清單、聊天室、房主踢人，並移除播放秒數同步寫入。
-- index.html：手機搜尋視窗結構、狀態文字與 favicon 佔位修正。
-- styles.css：手機 YouTube 搜尋結果單欄排列、固定可滾動區域、文字防擠壓。
-- firebase-config.js：改為一般 script 可用的 `window.FIREBASE_CONFIG`，不使用 `export`。
-- database.rules.json：依 WatchTogether 實際資料結構重新建立 Rules。
-- storage.rules：保留房間媒體檔案權限限制。
-- firebase.json：對應上述 Rules。
+WatchTogether 是一個多人同步觀看網站，包含房間、YouTube 搜尋、待播放清單、聊天室、房間成員與多平台播放器介面。
 
-注意：firebase-config.js 仍需要填入你目前 WatchTogether Firebase Web App 的實際 config；這份檔案原本沒有包含可可靠恢復的實際專案設定，不能自行猜測。
+目前播放同步採用 Firebase Realtime Database 的成員個人 playback 狀態，房間成員會讀取同房間成員的最新播放狀態並進行播放、暫停、跳轉與進度校正。
+
+主要檔案：
+- `index.html`：網站介面與播放器容器。
+- `app.js`：Firebase、房間、成員、聊天室、佇列、播放器與播放同步邏輯。
+- `styles.css`：網站與行動版版面。
+- `firebase-config.js`：Firebase Web App 設定。
+- `database.rules.json`：Realtime Database 權限。
+- `storage.rules`：房間媒體檔案權限。
+- `firebase.json`：Firebase Hosting 與 Rules 設定。
+- `.github/workflows/enable-playback-sync.yml`：播放同步修復與驗證流程。
