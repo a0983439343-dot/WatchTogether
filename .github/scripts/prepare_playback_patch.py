@@ -5,7 +5,7 @@ path = Path("app.js")
 text = path.read_text(encoding="utf-8")
 
 cleanup_pattern = re.compile(
-    r'  /\*\n   \* =========================================================\n   \* CLEANUP\n   * =========================================================\n   \*/\n\n  function disconnectRoomListeners\(\) \{.*?\n  \}\n\n\n  /\*\n   \* 保留舊名稱',
+    r'  /\*\n   \* =========================================================\n   \* CLEANUP\n   \* =========================================================\n   \*/\n\n  function disconnectRoomListeners\(\) \{.*?\n  \}\n\n\n  /\*\n   \* 保留舊名稱',
     re.DOTALL
 )
 
