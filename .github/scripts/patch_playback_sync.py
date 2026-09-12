@@ -35,8 +35,8 @@ sync_code = r'''  /*
    * ROOM PLAYBACK SYNC
    * =========================================================
    * 每位成員只寫自己的 members/{roomId}/{uid}/playback。
-   * 房間內讀取 members/{roomId} 後取最新播放狀態，避免共用
-   * playbackEvent 寫入權限造成競爭或 PERMISSION_DENIED。
+   * 房間內讀取 members/{roomId} 後取最新播放狀態，並持續修正
+   * 小幅播放誤差，讓晚加入的成員也能直接追上目前位置。
    */
 
   function playbackSyncRef() {
@@ -170,7 +170,11 @@ sync_code = r'''  /*
     let finalPosition = Number(position);
 
     if (!Number.isFinite(finalPosition)) {
-      finalPosition = await asyncCurrentPosition();
+      try {
+        finalPosition = await asyncCurrentPosition();
+      } catch (_) {
+        return;
+      }
     }
 
     finalPosition = Math.max(
@@ -211,6 +215,13 @@ sync_code = r'''  /*
           .slice(2)}`,
       playing
     };
+
+    state.playbackRoomEvent = {
+      ...event,
+      updatedAt: Date.now()
+    };
+
+    state.lastPlaybackEventId = event.eventId;
 
     try {
       await playbackRef.set(event);
@@ -284,11 +295,13 @@ sync_code = r'''  /*
       state.lastPlaybackEventId =
         event.eventId;
 
-      state.playbackLastPosition =
-        await asyncCurrentPosition();
+      try {
+        state.playbackLastPosition =
+          await asyncCurrentPosition();
 
-      state.playbackLastPlaying =
-        await asyncIsPlaying();
+        state.playbackLastPlaying =
+          await asyncIsPlaying();
+      } catch (_) {}
 
       state.playbackLastSampleAt =
         Date.now();
@@ -473,13 +486,6 @@ sync_code = r'''  /*
             return;
           }
 
-          const now = Date.now();
-          const expected =
-            getExpectedPlaybackPosition(
-              event,
-              now
-            );
-
           let current = 0;
           let playing = false;
 
@@ -489,6 +495,13 @@ sync_code = r'''  /*
           } catch (_) {
             return;
           }
+
+          const now = Date.now();
+          const expected =
+            getExpectedPlaybackPosition(
+              event,
+              now
+            );
 
           const shouldPlay =
             eventShouldBePlaying(event);
@@ -500,6 +513,7 @@ sync_code = r'''  /*
             state.playbackApplyingRemote = true;
 
             try {
+              await applyPlayerPosition(expected);
               await playPlayer();
             } catch (_) {
             } finally {
@@ -516,6 +530,7 @@ sync_code = r'''  /*
             state.playbackApplyingRemote = true;
 
             try {
+              await applyPlayerPosition(expected);
               await pausePlayer();
             } catch (_) {
             } finally {
@@ -534,9 +549,7 @@ sync_code = r'''  /*
             state.playbackApplyingRemote = true;
 
             try {
-              await applyPlayerPosition(
-                expected
-              );
+              await applyPlayerPosition(expected);
             } catch (_) {
             } finally {
               state.playbackApplyingRemote = false;
@@ -559,13 +572,8 @@ sync_code = r'''  /*
 
 '''
 
-start_marker = "  /*\n   * =========================================================\n   * ROOM VIDEO"
-insert_before = text.find(start_marker)
-if insert_before < 0:
-    raise SystemExit("ROOM VIDEO marker not found")
-room_video_start = insert_before
 room_ui_marker = "  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */"
-room_ui_pos = text.find(room_ui_marker, room_video_start)
+room_ui_pos = text.find(room_ui_marker)
 if room_ui_pos < 0:
     raise SystemExit("ROOM UI marker not found")
 text = text[:room_ui_pos] + sync_code + text[room_ui_pos:]
@@ -730,6 +738,38 @@ replace_once(
 )
 
 replace_once(
+    '''          void buildYoutubePlayer(
+            id,
+            true
+          );
+''',
+    '''          void buildYoutubePlayer(
+            id,
+            state.isOwner
+          );
+''',
+    "youtube ready autoplay"
+)
+
+replace_once(
+    '''      clearInterval(
+        state.memberHeartbeatTimer
+      );
+
+      unlockPageScroll();
+''',
+    '''      clearInterval(
+        state.memberHeartbeatTimer
+      );
+
+      stopPlaybackSeekDetector();
+
+      unlockPageScroll();
+''',
+    "unload playback detector"
+)
+
+replace_once(
     '''    state.roomRef
         ?.child("video")
         .off();
@@ -769,32 +809,12 @@ replace_once(
     "cleanup playback state"
 )
 
-replace_once(
-    '''      clearInterval(
-        state.memberHeartbeatTimer
-      );
-
-      unlockPageScroll();
-''',
-    '''      clearInterval(
-        state.memberHeartbeatTimer
-      );
-
-      stopPlaybackSeekDetector();
-
-      unlockPageScroll();
-''',
-    "unload playback detector"
-)
-
 index_text = INDEX.read_text(encoding="utf-8")
 index_text = index_text.replace("\n              allowfullscreen", "")
 INDEX.write_text(index_text, encoding="utf-8")
 
 rules = json.loads(RULES.read_text(encoding="utf-8"))
-rooms = rules["rules"]["rooms"]
-room = rooms["$roomId"]
-
+room = rules["rules"]["rooms"]["$roomId"]
 room["sourceType"][".write"] = (
     "auth != null && root.child('members').child($roomId).child(auth.uid).exists()"
 )
