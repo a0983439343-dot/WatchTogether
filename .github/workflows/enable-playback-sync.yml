@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -24,7 +25,7 @@ jobs:
       - name: Apply playback sync patch
         run: python3 .github/scripts/patch_playback_sync.py
 
-      - name: Apply room playback state patch
+      - name: Apply member-owned playback state patch
         run: python3 .github/scripts/patch_members_playback_sync.py
 
       - name: Verify
@@ -32,7 +33,9 @@ jobs:
           test -s app.js
           grep -q "function attachPlaybackSyncListener()" app.js
           grep -q "function playbackSyncRef()" app.js
-          grep -q 'child("playback")' app.js
+          grep -q "function playbackWriteRef()" app.js
+          grep -q "state.playbackState" app.js
+          grep -q 'membersRef' app.js
           ! grep -q 'playbackEvent' app.js
           ! grep -q "schedulePlayingPositionSync" app.js
           node --check app.js
