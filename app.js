@@ -196,6 +196,10 @@
     playbackRemoteEvent: null,
     playbackLastRemoteEventId: null,
     playbackApplyingRemoteEventId: null,
+    playbackLastRemoteUpdatedAt: 0,
+    playbackLastLocalActionKey: "",
+    playbackLastLocalActionAt: 0,
+    playbackLastLocalSeekWriteAt: 0,
 
     queue: {},
 
@@ -5610,6 +5614,10 @@
       state.playbackApplyingRemoteEventId = null;
       state.playbackIgnoreStateChanges = 0;
       state.playbackIgnoreStateUntil = 0;
+      state.playbackLastRemoteUpdatedAt = 0;
+      state.playbackLastLocalActionKey = "";
+      state.playbackLastLocalActionAt = 0;
+      state.playbackLastLocalSeekWriteAt = 0;
       await buildYoutubePlayer(videoId, state.isOwner);
       await applyLatestRoomPlaybackState();
       startPlaybackSeekDetector();
@@ -5659,6 +5667,29 @@
     if (normalizedAction === "pause") playing = false;
     if (normalizedAction === "seek") playing = await asyncIsPlaying();
 
+    const now = Date.now();
+    const localActionKey = `${normalizedAction}:${Math.round(finalPosition * 2) / 2}:${playing ? 1 : 0}`;
+
+    if (
+      localActionKey === state.playbackLastLocalActionKey &&
+      now - Number(state.playbackLastLocalActionAt || 0) < 900
+    ) {
+      return;
+    }
+
+    if (
+      normalizedAction === "seek" &&
+      now - Number(state.playbackLastLocalSeekWriteAt || 0) < 650
+    ) {
+      return;
+    }
+
+    state.playbackLastLocalActionKey = localActionKey;
+    state.playbackLastLocalActionAt = now;
+    if (normalizedAction === "seek") {
+      state.playbackLastLocalSeekWriteAt = now;
+    }
+
     try {
       await ref.set({
         action: normalizedAction,
@@ -5686,6 +5717,20 @@
     const eventId = String(event.eventId || "");
     if (!eventId) return;
     if (state.playbackLastRemoteEventId === eventId) return;
+
+    const remoteUpdatedAt = Number(event.updatedAt || 0);
+    const lastRemoteUpdatedAt = Number(state.playbackLastRemoteUpdatedAt || 0);
+    if (
+      remoteUpdatedAt > 0 &&
+      lastRemoteUpdatedAt > 0 &&
+      remoteUpdatedAt < lastRemoteUpdatedAt
+    ) {
+      return;
+    }
+
+    if (remoteUpdatedAt > 0) {
+      state.playbackLastRemoteUpdatedAt = remoteUpdatedAt;
+    }
     if (state.playbackApplyingRemoteEventId === eventId) return;
 
     state.playbackLastRemoteEventId = eventId;
@@ -6942,6 +6987,14 @@
     state.playbackIgnoreStateChanges =
       0;
     state.playbackIgnoreStateUntil =
+      0;
+    state.playbackLastRemoteUpdatedAt =
+      0;
+    state.playbackLastLocalActionKey =
+      "";
+    state.playbackLastLocalActionAt =
+      0;
+    state.playbackLastLocalSeekWriteAt =
       0;
 
     state.membersListenerAttached =
