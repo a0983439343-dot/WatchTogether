@@ -23,6 +23,9 @@ replacement = '''  function disconnectRoomListeners() {
       state.roomRef
         ?.child("video")
         .off();
+
+      detachPlaybackSyncListener();
+      stopPlaybackSeekDetector();
     } catch (_) {}
 
     state.videoListenerAttached =
