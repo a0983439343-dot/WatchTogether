@@ -1,0 +1,101 @@
+name: Repair member kick
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply kick repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('app.js')
+          s = p.read_text(encoding='utf-8')
+
+          start = s.find('  async function kickMember(\n')
+          end = s.find('  /*\n   * 被踢後立即離開。\n   */', start)
+          if start < 0 or end < 0:
+              raise SystemExit('kickMember markers not found')
+
+          new_func = '''  async function kickMember(
+    targetUid,
+    targetName
+  ) {
+    if (!state.isOwner) {
+      toast("只有房主可以踢人");
+      return;
+    }
+
+    if (!targetUid || targetUid === state.uid) {
+      return;
+    }
+
+    if (!state.membersRef || !db || !state.roomId) {
+      toast("目前不在房間內");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `確定要踢出「${targetName || "這名成員"}」嗎？`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      // 只刪除目標的 membership，使用既有 members 規則即可。
+      // 被踢者的成員監聽會立即發現自己消失並離開房間。
+      await state.membersRef
+        .child(targetUid)
+        .remove();
+
+      toast(`已踢出 ${targetName || "成員"}`);
+    } catch (error) {
+      console.error("踢人失敗:", error);
+      toast(error?.message || "踢人失敗，請檢查 Firebase Rules");
+    }
+  }
+
+
+'''
+          s = s[:start] + new_func + s[end:]
+
+          # Detach server-time listener when leaving a room.
+          marker = '  function disconnectRoomListeners() {\n'
+          cleanup = '''    if (db && state.playbackServerClockHandler) {
+      db.ref(".info/serverTimeOffset").off(
+        "value",
+        state.playbackServerClockHandler
+      );
+      state.playbackServerClockHandler = null;
+    }
+
+'''
+          if 'state.playbackServerClockHandler = null;' not in s[s.find(marker):s.find(marker)+1200]:
+              if marker not in s:
+                  raise SystemExit('disconnectRoomListeners marker not found')
+              s = s.replace(marker, marker + cleanup, 1)
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Verify JavaScript
+        run: node --check app.js
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js .github/workflows/repair-kick-v2.yml
+          git diff --cached --quiet || git commit -m "Fix member kick permission error"
+          git push
