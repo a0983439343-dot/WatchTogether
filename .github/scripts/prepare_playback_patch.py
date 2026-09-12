@@ -1,21 +1,18 @@
 from pathlib import Path
-import re
 
 path = Path("app.js")
 text = path.read_text(encoding="utf-8")
 
-cleanup_pattern = re.compile(
-    r'  /\*\n   \* =========================================================\n   \* CLEANUP\n   * =========================================================\n   \*/\n\n  function disconnectRoomListeners\(\) \{.*?\n  \}\n\n\n  /\*\n   \* 保留舊名稱',
-    re.DOTALL
-)
+start_marker = "  function disconnectRoomListeners() {"
+end_marker = "  function detachRoomListeners() {"
 
-cleanup_replacement = '''  /*
-   * =========================================================
-   * CLEANUP
-   * =========================================================
-   */
+start = text.find(start_marker)
+end = text.find(end_marker, start)
 
-  function disconnectRoomListeners() {
+if start < 0 or end < 0 or end <= start:
+    raise SystemExit("could not locate disconnectRoomListeners function")
+
+replacement = '''  function disconnectRoomListeners() {
     try {
       state.membersRef?.off();
 
@@ -23,38 +20,40 @@ cleanup_replacement = '''  /*
 
       state.queueRef?.off();
 
-    state.roomRef
+      state.roomRef
         ?.child("video")
         .off();
-
     } catch (_) {}
+
+    state.videoListenerAttached =
+      false;
+
+    state.membersListenerAttached =
+      false;
+
+    state.chatListenerAttached =
+      false;
+
+    state.queueListenerAttached =
+      false;
+
+    state.playbackApplyingRemote =
+      false;
+
+    state.playbackRoomEvent =
+      null;
+
+    state.lastPlaybackEventId =
+      null;
+
+    state.queue =
+      {};
   }
 
 
-  /*
-   * 保留舊名稱'''
+'''
 
-text, cleanup_count = cleanup_pattern.subn(
-    cleanup_replacement,
-    text,
-    count=1
-)
-
-if cleanup_count != 1:
-    raise SystemExit(
-        f"playback cleanup function rebuild failed: {cleanup_count}"
-    )
-
-state_marker = "    state.membersListenerAttached =\n"
-if state_marker not in text:
-    raise SystemExit("members listener marker not found")
-
-if "state.playbackApplyingRemote =\n      false;" not in text:
-    text = text.replace(
-        state_marker,
-        "    state.playbackApplyingRemote =\n      false;\n\n" + state_marker,
-        1
-    )
+text = text[:start] + replacement + text[end:]
 
 path.write_text(text, encoding="utf-8")
-print("playback cleanup and state markers prepared")
+print("playback cleanup function prepared")
