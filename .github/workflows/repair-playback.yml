@@ -20,20 +20,21 @@ jobs:
           fetch-depth: 0
 
       - name: Apply playback repair
-        run: python3 .github/scripts/repair_playback.py
+        run: python3 .github/scripts/repair_playback_v2.py
 
       - name: Verify JavaScript and Firebase rules
         run: |
           test -s app.js
           test -s database.rules.json
           node --check app.js
-          python3 -m py_compile .github/scripts/repair_playback.py
+          python3 -m py_compile .github/scripts/repair_playback_v2.py
           python3 -m json.tool database.rules.json > /dev/null
           grep -q "function playbackSyncRef" app.js
           grep -q "function publishPlaybackEvent" app.js
           grep -q "function applyLatestRoomPlaybackState" app.js
           grep -q "function attachPlaybackSyncListener" app.js
           grep -q "playbackEvent" database.rules.json
+          ! grep -q '\\n  /\\*' app.js
           git diff --check
           echo "Playback sync repair verification passed."
 
