@@ -1,0 +1,1 @@
+Trigger syntax verification.
