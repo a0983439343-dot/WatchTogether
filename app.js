@@ -209,12 +209,6 @@
 
     playbackSeekTimer: null,
 
-    playbackMembersHandler: null,
-
-    lastPlaybackEventId: null,
-
-    pendingPlaybackEvent: null,
-
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -5614,25 +5608,19 @@
 
   /*
    * =========================================================
-   * ROOM PLAYBACK SYNC
+   * EVENT-BASED PLAYBACK SYNC
    * =========================================================
-   * 房間同步：播放、暫停、拖曳。
-   * 每個成員只寫自己的最後播放事件，
-   * 其他成員監聽 members/房間並立即套用。
+   * 同步：播放、暫停、拖曳跳轉。
+   * 不做持續性的播放進度同步。
    */
 
-  function playbackWriteRef() {
-    if (
-      !db ||
-      !state.membersRef ||
-      !state.roomId ||
-      !state.uid
-    ) {
+  function playbackSyncRef() {
+    if (!db || !state.roomRef || !state.roomId) {
       return null;
     }
 
-    return state.membersRef
-      .child(state.uid)
+    return state.roomRef
+      .child("video")
       .child("playback");
   }
 
@@ -5644,7 +5632,6 @@
     if (
       !state.uid ||
       !state.roomId ||
-      !state.membersRef ||
       !state.playerReady ||
       !state.player ||
       state.playbackApplyingRemote ||
@@ -5660,7 +5647,7 @@
       return;
     }
 
-    const ref = playbackWriteRef();
+    const ref = playbackSyncRef();
 
     if (!ref || !state.currentVideoId) {
       return;
@@ -5677,30 +5664,33 @@
       Number(finalPosition) || 0
     );
 
-    const normalizedAction =
-      action === "pause"
-        ? "pause"
-        : action === "seek"
-          ? "seek"
-          : "play";
-
-    const eventId =
-      `${state.uid}_${Date.now()}_${Math.random()
-        .toString(36)
-        .slice(2)}`;
-
     try {
       await ref.set({
-        action: normalizedAction,
-        position: finalPosition,
-        videoId: String(state.currentVideoId),
-        updatedAt:
-          firebase.database.ServerValue.TIMESTAMP,
-        updatedBy: state.uid,
-        eventId
-      });
+        action:
+          action === "pause"
+            ? "pause"
+            : action === "seek"
+              ? "seek"
+              : "play",
 
-      state.lastPlaybackEventId = eventId;
+        position: finalPosition,
+
+        videoId:
+          String(state.currentVideoId),
+
+        updatedAt:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP,
+
+        updatedBy:
+          state.uid,
+
+        eventId:
+          `${state.uid}_${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`
+      });
     } catch (error) {
       console.warn(
         "播放同步寫入失敗:",
@@ -5719,7 +5709,6 @@
       !state.player ||
       !state.currentVideoId
     ) {
-      state.pendingPlaybackEvent = event || null;
       return;
     }
 
@@ -5745,21 +5734,8 @@
       return;
     }
 
-    if (
-      event.eventId &&
-      event.eventId === state.lastPlaybackEventId
-    ) {
-      return;
-    }
-
-    state.lastPlaybackEventId =
-      event.eventId || null;
-
-    state.pendingPlaybackEvent =
-      null;
-
     state.playbackApplyingRemote = true;
-    state.playbackReadyAt = Date.now() + 1000;
+    state.playbackReadyAt = Date.now() + 1400;
 
     try {
       const position = Math.max(
@@ -5767,13 +5743,17 @@
         Number(event.position) || 0
       );
 
-      await applyPlayerPosition(
-        position
-      );
+      if (event.action === "seek") {
+        await applyPlayerPosition(position);
+      }
 
       if (event.action === "play") {
+        await applyPlayerPosition(position);
         await playPlayer();
-      } else if (event.action === "pause") {
+      }
+
+      if (event.action === "pause") {
+        await applyPlayerPosition(position);
         await pausePlayer();
       }
     } catch (error) {
@@ -5799,73 +5779,54 @@
   async function handleRemotePlaybackSnapshot(
     snapshot
   ) {
-    const members =
-      snapshot?.val?.() || {};
+    const event =
+      snapshot?.val?.() ||
+      null;
 
-    let newestEvent = null;
-    let newestTime = -1;
-
-    Object.keys(members).forEach((uid) => {
-      if (uid === state.uid) {
-        return;
-      }
-
-      const event =
-        members?.[uid]?.playback ||
-        null;
-
-      if (
-        !event ||
-        !event.eventId ||
-        event.updatedBy === state.uid
-      ) {
-        return;
-      }
-
-      const updatedAt =
-        Number(event.updatedAt) || 0;
-
-      if (updatedAt >= newestTime) {
-        newestTime = updatedAt;
-        newestEvent = event;
-      }
-    });
-
-    if (!newestEvent) {
+    if (!event || !event.eventId) {
       return;
     }
 
     if (
-      newestEvent.eventId ===
+      event.updatedBy === state.uid
+    ) {
+      return;
+    }
+
+    if (
+      event.eventId ===
       state.lastPlaybackEventId
     ) {
       return;
     }
 
     await applyRemotePlaybackEvent(
-      newestEvent
+      event
     );
   }
 
 
   function attachPlaybackSyncListener() {
     if (
-      !state.membersRef ||
+      !state.roomRef ||
       state.playbackListenerAttached
     ) {
       return;
     }
 
-    state.playbackMembersHandler =
+    const ref = playbackSyncRef();
+
+    if (!ref) {
+      return;
+    }
+
+    ref.on(
+      "value",
       (snapshot) => {
         void handleRemotePlaybackSnapshot(
           snapshot
         );
-      };
-
-    state.membersRef.on(
-      "value",
-      state.playbackMembersHandler
+      }
     );
 
     state.playbackListenerAttached = true;
@@ -5873,10 +5834,7 @@
 
 
   function stopPlaybackSeekDetector() {
-    clearInterval(
-      state.playbackSeekTimer
-    );
-
+    clearInterval(state.playbackSeekTimer);
     state.playbackSeekTimer = null;
     state.playbackLastPosition = null;
     state.playbackLastPlaying = null;
@@ -5887,101 +5845,70 @@
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
 
-    state.playbackReadyAt =
-      Date.now() + 1500;
+    state.playbackReadyAt = Date.now() + 1500;
+    state.playbackLastSampleAt = Date.now();
 
-    state.playbackLastSampleAt =
-      Date.now();
+    state.playbackSeekTimer = setInterval(
+      async () => {
+        if (
+          !state.playerReady ||
+          !state.player ||
+          state.playbackApplyingRemote
+        ) {
+          return;
+        }
 
-    state.playbackSeekTimer =
-      setInterval(
-        async () => {
-          if (
-            !state.playerReady ||
-            !state.player ||
-            state.playbackApplyingRemote
-          ) {
-            return;
-          }
+        const now = Date.now();
+        const position = await asyncCurrentPosition();
+        const playing = await asyncIsPlaying();
 
-          const now = Date.now();
-          const position =
-            await asyncCurrentPosition();
-          const playing =
-            await asyncIsPlaying();
+        if (now < Number(state.playbackReadyAt || 0)) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastSampleAt = now;
+          return;
+        }
 
-          if (
-            now <
-            Number(
-              state.playbackReadyAt || 0
-            )
-          ) {
-            state.playbackLastPosition =
-              position;
-            state.playbackLastPlaying =
-              playing;
-            state.playbackLastSampleAt =
-              now;
-            return;
-          }
+        if (
+          state.playbackLastPosition === null ||
+          state.playbackLastPlaying === null ||
+          !state.playbackLastSampleAt
+        ) {
+          state.playbackLastPosition = position;
+          state.playbackLastPlaying = playing;
+          state.playbackLastSampleAt = now;
+          return;
+        }
 
-          if (
-            state.playbackLastPosition ===
-              null ||
-            state.playbackLastPlaying ===
-              null ||
-            !state.playbackLastSampleAt
-          ) {
-            state.playbackLastPosition =
-              position;
-            state.playbackLastPlaying =
-              playing;
-            state.playbackLastSampleAt =
-              now;
-            return;
-          }
+        const elapsed = Math.max(
+          0.05,
+          (now - state.playbackLastSampleAt) / 1000
+        );
 
-          const elapsed =
-            Math.max(
-              0.05,
-              (now -
-                state.playbackLastSampleAt) /
-                1000
-            );
+        const delta =
+          position - Number(state.playbackLastPosition);
 
-          const delta =
-            position -
-            Number(
-              state.playbackLastPosition
-            );
+        const expectedDelta =
+          playing ? elapsed : 0;
 
-          const expectedDelta =
-            playing ? elapsed : 0;
+        const seekError =
+          Math.abs(delta - expectedDelta);
 
-          const seekError =
-            Math.abs(
-              delta - expectedDelta
-            );
+        if (seekError >= 1.5) {
+          void publishPlaybackEvent(
+            "seek",
+            position
+          );
 
-          if (seekError >= 1.5) {
-            void publishPlaybackEvent(
-              "seek",
-              position
-            );
+          state.playbackReadyAt = now + 600;
+        }
 
-            state.playbackReadyAt =
-              now + 600;
-          }
-
-          state.playbackLastPosition =
-            position;
-          state.playbackLastPlaying =
-            playing;
-          state.playbackLastSampleAt =
-            now;
-        },
-        350
-      );
+        state.playbackLastPosition = position;
+        state.playbackLastPlaying = playing;
+        state.playbackLastSampleAt = now;
+      },
+      350
+    );
   }
 
 
@@ -7048,18 +6975,7 @@
         ?.child("video")
         .off();
 
-      if (
-        state.membersRef &&
-        state.playbackMembersHandler
-      ) {
-        state.membersRef.off(
-          "value",
-          state.playbackMembersHandler
-        );
-      }
-
-      state.playbackMembersHandler =
-        null;
+      playbackSyncRef()?.off();
 
       stopPlaybackSeekDetector();
     } catch (_) {}
@@ -7072,15 +6988,6 @@
 
     state.playbackApplyingRemote =
       false;
-
-    state.playbackMembersHandler =
-      null;
-
-    state.lastPlaybackEventId =
-      null;
-
-    state.pendingPlaybackEvent =
-      null;
 
     state.membersListenerAttached =
       false;
