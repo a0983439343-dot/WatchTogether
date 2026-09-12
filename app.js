@@ -5671,6 +5671,7 @@
 
 
 
+
   /*
    * =========================================================
    * SHARED ROOM TIMELINE PLAYBACK SYNC
@@ -5683,6 +5684,33 @@
    * Local play/pause/seek is detected before room correction.
    * Remote player callbacks are never written back as commands.
    */
+
+  function serverNow() {
+    return Date.now() + Number(state.playbackServerTimeOffset || 0);
+  }
+
+
+  function attachServerClockSync() {
+    if (!db) {
+      return;
+    }
+
+    const ref = db.ref(".info/serverTimeOffset");
+
+    if (state.playbackServerClockHandler) {
+      try {
+        ref.off("value", state.playbackServerClockHandler);
+      } catch (_) {}
+    }
+
+    state.playbackServerClockHandler = (snapshot) => {
+      const offset = Number(snapshot?.val());
+      state.playbackServerTimeOffset = Number.isFinite(offset) ? offset : 0;
+    };
+
+    ref.on("value", state.playbackServerClockHandler);
+  }
+
 
   function playbackSyncRef() {
     if (!db || !state.roomId) return null;
@@ -5787,7 +5815,7 @@
           ? await asyncIsPlaying()
           : true;
 
-    const now = Date.now();
+    const now = serverNow();
     const key =
       `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;
 
@@ -6053,7 +6081,7 @@
       return;
     }
 
-    const now = Date.now();
+    const now = serverNow();
     const position = await asyncCurrentPosition();
     const playing = await asyncIsPlaying();
     const expected = getTimelinePosition(timeline, now);
@@ -6124,7 +6152,7 @@
           return;
         }
 
-        const now = Date.now();
+        const now = serverNow();
         const position = await asyncCurrentPosition();
         const playing = await asyncIsPlaying();
         const timeline = state.playbackTimeline;
