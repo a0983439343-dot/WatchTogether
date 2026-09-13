@@ -4708,6 +4708,14 @@
                   const now = Date.now();
                   const data = event.data;
 
+                  if (
+                    state.roomAuthorityV12 &&
+                    (data === YT.PlayerState.PLAYING || data === YT.PlayerState.PAUSED)
+                  ) {
+                    updateTimeUI();
+                    return;
+                  }
+
                   if (data === YT.PlayerState.BUFFERING) {
                     state.playbackTransientStateUntil = now + 1800;
                     state.playbackLastPlayerState = "buffering";
@@ -8403,6 +8411,7 @@
 
   /* =========================================================
      ROOM AUTHORITY PLAYBACK V12
+     Passive YouTube state callbacks never become room commands.
      =========================================================
      Shared Firebase playbackEvent is the only playback clock.
      No member and no player instance is a master.
@@ -8411,6 +8420,8 @@
 
   let roomAuthorityObserverBusy = false;
 
+
+  state.roomAuthorityV12 = true;
 
   function roomAuthorityClock() {
     return typeof serverNow === "function"
