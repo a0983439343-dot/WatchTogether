@@ -15,21 +15,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Normalize playback repair script
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('.github/scripts/repair_playback_v4.py')
-          s = p.read_text(encoding='utf-8')
-          start = s.find('# Add state used by the local-command debounce.')
-          end = s.find('# There must be only one initial room-timeline recovery path.')
-          if start >= 0 and end > start:
-              s = s[:start] + s[end:]
-              p.write_text(s, encoding='utf-8')
-          PY
-
-      - name: Apply shared playback timeline repair v4
-        run: python3 .github/scripts/repair_playback_v4.py
+      - name: Apply shared playback timeline repair v5
+        run: python3 .github/scripts/repair_playback_v5.py
 
       - name: Apply server clock repair
         run: python3 .github/scripts/fix_server_clock.py
@@ -40,7 +27,7 @@ jobs:
           grep -q "function playbackClockNow()" app.js
           grep -q "function serverNow()" app.js
           grep -q "function attachServerClockSync()" app.js
-          grep -q "SHARED ROOM TIMELINE PLAYBACK SYNC V4" app.js
+          grep -q "SHARED ROOM TIMELINE PLAYBACK SYNC V5" app.js
 
       - name: Commit repaired app
         run: |
@@ -50,6 +37,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Fix shared playback timeline and latency sync"
+            git commit -m "Fix shared playback timeline and latency sync v5"
             git push origin HEAD:main
           fi
