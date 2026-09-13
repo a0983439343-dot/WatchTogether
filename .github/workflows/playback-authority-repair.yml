@@ -27,14 +27,17 @@ jobs:
       - name: Install stable shared-timeline authority v16
         run: python3 .github/scripts/room_authority_v16.py
 
+      - name: Install deterministic shared-timeline authority v17
+        run: python3 .github/scripts/room_authority_v17.py
+
       - name: Validate JavaScript
         run: |
           node --check app.js
-          grep -q 'ROOM AUTHORITY PLAYBACK V16' app.js
-          grep -q 'state.roomAuthorityV16' app.js
+          grep -q 'ROOM AUTHORITY PLAYBACK V17' app.js
+          grep -q 'roomAuthorityCanRunV17' app.js
+          grep -q 'roomAuthorityExpectedV17' app.js
+          grep -q 'roomAuthorityForceStateV17' app.js
           grep -q 'roomAuthorityCommandV16' app.js
-          grep -q 'roomAuthorityExpectedV16' app.js
-          grep -q 'roomAuthorityStartObserverV16' app.js
           ! grep -q 'ROOM AUTHORITY PLAYBACK V12' app.js
           ! grep -q 'ROOM AUTHORITY PLAYBACK V14' app.js
           ! grep -q 'ROOM AUTHORITY PLAYBACK V15' app.js
@@ -47,6 +50,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes'
           else
-            git commit -m 'Install stable shared-timeline playback authority v16'
+            git commit -m 'Install deterministic shared-timeline playback authority v17'
             git push origin HEAD:main
           fi
