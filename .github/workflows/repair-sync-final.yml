@@ -24,7 +24,7 @@ jobs:
           start = s.find('# Add state used by the local-command debounce.')
           end = s.find('# There must be only one initial room-timeline recovery path.')
           if start >= 0 and end > start:
-              s = s[:start] + 'playback state fields are created dynamically by the playback engine.\n\n' + s[end:]
+              s = s[:start] + s[end:]
               p.write_text(s, encoding='utf-8')
           PY
 
