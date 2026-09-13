@@ -15,8 +15,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply shared playback timeline repair v6
-        run: python3 .github/scripts/repair_playback_v6.py
+      - name: Apply shared playback timeline repair v7
+        run: python3 .github/scripts/repair_playback_v7.py
 
       - name: Apply server clock repair
         run: python3 .github/scripts/fix_server_clock.py
