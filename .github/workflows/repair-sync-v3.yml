@@ -1,0 +1,240 @@
+name: Repair playback sync v3
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch shared playback engine
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('app.js')
+          s = path.read_text(encoding='utf-8')
+
+          # Local playback intent must survive long enough to distinguish a
+          # real user pause/play from transient player feedback.
+          state_marker = '    playbackUiBridgeBound: false,\n'
+          state_add = '''    playbackLocalStateCandidate: null,\n    playbackLocalStateCandidateAt: 0,\n'''
+          if 'playbackLocalStateCandidate: null' not in s:
+              if state_marker not in s:
+                  raise SystemExit('state marker not found')
+              s = s.replace(state_marker, state_marker + state_add, 1)
+
+          # A remote command must not block a real user action for eight
+          # seconds. Keep only a short feedback-suppression window.
+          s = s.replace(
+              'state.playbackIgnoreStateUntil = Date.now() + 8000;',
+              'state.playbackIgnoreStateUntil = Date.now() + 2500;',
+              1
+          )
+
+          # Replace the old immediate play/pause inference with a debounced
+          # local intent detector. Buffering/ad transitions are therefore not
+          # instantly broadcast as pause commands.
+          old = '''          if (\n            state.playbackLastPlaying !== null &&\n            playing !== state.playbackLastPlaying &&\n            roomPlaying !== null &&\n            playing !== roomPlaying\n          ) {\n            state.playbackLocalIntentAt = now;\n            void publishPlaybackEvent(\n              playing ? "play" : "pause",\n              position\n            );\n\n            state.playbackLastPosition = position;\n            state.playbackLastPlaying = playing;\n            state.playbackLastPlayerState = playing ? "playing" : "paused";\n            state.playbackLastObservedPosition = position;\n            return;\n          }\n'''
+          new = '''          if (\n            state.playbackLastPlaying !== null &&\n            playing !== state.playbackLastPlaying &&\n            roomPlaying !== null &&\n            playing !== roomPlaying\n          ) {\n            if (state.playbackLocalStateCandidate !== playing) {\n              state.playbackLocalStateCandidate = playing;\n              state.playbackLocalStateCandidateAt = now;\n            } else if (now - Number(state.playbackLocalStateCandidateAt || 0) >= 700) {\n              state.playbackLocalIntentAt = now;\n              void publishPlaybackEvent(\n                playing ? "play" : "pause",\n                position\n              );\n\n              state.playbackLocalStateCandidate = null;\n              state.playbackLocalStateCandidateAt = 0;\n\n              state.playbackLastPosition = position;\n              state.playbackLastPlaying = playing;\n              state.playbackLastPlayerState = playing ? "playing" : "paused";\n              state.playbackLastObservedPosition = position;\n              return;\n            }\n          } else {\n            state.playbackLocalStateCandidate = null;\n            state.playbackLocalStateCandidateAt = 0;\n          }\n'''
+          if old not in s:
+              raise SystemExit('local play/pause detector block not found')
+          s = s.replace(old, new, 1)
+
+          # Late join / player recreation must always pull the current room
+          # command after the player is ready. This is not a second write and
+          # is safe because the event id is deduplicated by the engine.
+          detector_marker = '    state.playbackSeekTimer = setInterval(async () => {'
+          detector_add = '''    setTimeout(() => {\n      void applyLatestRoomPlaybackState();\n    }, 180);\n\n'''
+          if 'void applyLatestRoomPlaybackState();\n    }, 180);' not in s:
+              idx = s.find(detector_marker)
+              if idx < 0:
+                  raise SystemExit('seek detector marker not found')
+              # The recovery must run before the interval begins executing.
+              s = s[:idx] + detector_add + s[idx:]
+
+          # Replace the custom room control handlers with authoritative room
+          # commands. Native YouTube controls are still supported by the
+          # debounced detector above.
+          bridge_marker = '  /*\n   * AUTHORITATIVE CONTROL BRIDGE\n   * =========================================================\n   */\n'
+          if 'AUTHORITATIVE CONTROL BRIDGE' not in s:
+              bridge = r'''  /*
+   * =========================================================
+   * AUTHORITATIVE CONTROL BRIDGE
+   * =========================================================
+   *
+   * 房間按鈕不是單機播放器按鈕，而是直接發出 room command。
+   * 所有人都可以發送；沒有 master player。
+   */
+
+  function replaceControlButton(id, handler) {
+    const oldButton = $(id);
+
+    if (!oldButton) {
+      return null;
+    }
+
+    const newButton = oldButton.cloneNode(true);
+    oldButton.replaceWith(newButton);
+    newButton.addEventListener("click", handler);
+    return newButton;
+  }
+
+
+  function installAuthoritativeControlBridge() {
+    if (state.playbackUiBridgeBound) {
+      return;
+    }
+
+    const playerReady = () =>
+      Boolean(state.playerReady && state.player && state.currentVideoId);
+
+    replaceControlButton("playPauseBtn", async () => {
+      if (!playerReady() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
+        return;
+      }
+
+      try {
+        const currentlyPlaying = await asyncIsPlaying();
+        const nextPlaying = !currentlyPlaying;
+        const now = Date.now();
+
+        state.playbackUserActionUntil = now + 1800;
+        state.playbackUserActionKind = nextPlaying ? "play" : "pause";
+        state.playbackLocalIntentAt = now;
+        state.playbackLocalStateCandidate = null;
+        state.playbackLocalStateCandidateAt = 0;
+
+        if (nextPlaying) {
+          await playPlayer();
+        } else {
+          await pausePlayer();
+        }
+
+        const position = await asyncCurrentPosition();
+        await publishPlaybackEvent(
+          nextPlaying ? "play" : "pause",
+          position
+        );
+
+        state.playbackLastPosition = position;
+        state.playbackLastPlaying = nextPlaying;
+        state.playbackLastPlayerState = nextPlaying ? "playing" : "paused";
+        state.playbackLastObservedPosition = position;
+        updateTimeUI();
+      } catch (error) {
+        console.warn("播放按鈕同步失敗:", error);
+      }
+    });
+
+    replaceControlButton("backBtn", async () => {
+      if (!playerReady() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
+        return;
+      }
+
+      try {
+        const current = await asyncCurrentPosition();
+        const target = Math.max(0, current - 10);
+        const playing = await asyncIsPlaying();
+
+        state.playbackUserActionUntil = Date.now() + 1800;
+        state.playbackUserActionKind = "seek";
+        state.playbackLocalIntentAt = Date.now();
+
+        await applyPlayerPosition(target);
+        await publishPlaybackEvent("seek", target);
+
+        state.playbackLastPosition = target;
+        state.playbackLastPlaying = playing;
+        state.playbackLastObservedPosition = target;
+        updateTimeUI();
+      } catch (error) {
+        console.warn("倒退同步失敗:", error);
+      }
+    });
+
+    replaceControlButton("forwardBtn", async () => {
+      if (!playerReady() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
+        return;
+      }
+
+      try {
+        const current = await asyncCurrentPosition();
+        const target = Math.max(0, current + 10);
+        const playing = await asyncIsPlaying();
+
+        state.playbackUserActionUntil = Date.now() + 1800;
+        state.playbackUserActionKind = "seek";
+        state.playbackLocalIntentAt = Date.now();
+
+        await applyPlayerPosition(target);
+        await publishPlaybackEvent("seek", target);
+
+        state.playbackLastPosition = target;
+        state.playbackLastPlaying = playing;
+        state.playbackLastObservedPosition = target;
+        updateTimeUI();
+      } catch (error) {
+        console.warn("快轉同步失敗:", error);
+      }
+    });
+
+    state.playbackUiBridgeBound = true;
+  }
+
+
+'''
+              end_marker = '  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */'
+              idx = s.find(end_marker)
+              if idx < 0:
+                  raise SystemExit('room UI marker not found')
+              s = s[:idx] + bridge + s[idx:]
+
+          # Reset candidate state whenever a new video is loaded.
+          reset_marker = '      state.playbackLocalIntentAt = 0;\n'
+          reset_add = '''      state.playbackLocalStateCandidate = null;\n      state.playbackLocalStateCandidateAt = 0;\n'''
+          if 'state.playbackLocalStateCandidate = null;' not in s:
+              if reset_marker in s:
+                  s = s.replace(reset_marker, reset_marker + reset_add, 1)
+
+          # Install the bridge once the full app has registered its old
+          # listeners. Cloning the buttons removes the old listeners.
+          tail = '\n})();\n'
+          call = '''\n  installAuthoritativeControlBridge();\n\n'''
+          if 'installAuthoritativeControlBridge();' not in s:
+              if tail not in s:
+                  raise SystemExit('app tail not found')
+              s = s.replace(tail, call + tail, 1)
+
+          path.write_text(s, encoding='utf-8')
+          print('patched app.js')
+          PY
+
+      - name: Validate JavaScript
+        shell: bash
+        run: |
+          node --check app.js
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Harden authoritative playback controls and late-join sync"
+          git push
