@@ -7,144 +7,37 @@ APP = Path('app.js')
 s = APP.read_text(encoding='utf-8')
 
 marker = '    playbackLocalIntentAt: 0,\n'
-if marker in s and 'playbackUserActionUntil: 0' not in s:
-    s = s.replace(marker, marker + '    playbackUserActionUntil: 0,\n    playbackUserActionKind: "",\n    playbackUiBridgeBound: false,\n', 1)
+state_add = '''    playbackLocalActionTimer: null,\n    playbackLocalActionSerial: 0,\n'''
+if 'playbackLocalActionTimer: null' not in s:
+    if marker not in s:
+        raise SystemExit('playback local intent marker not found')
+    s = s.replace(marker, marker + state_add, 1)
 
-old_branch = '''if (\n                    data === YT.PlayerState.PLAYING ||\n                    data === YT.PlayerState.PAUSED\n                  ) {\n                    state.playbackLastPlayerState =\n                      data === YT.PlayerState.PLAYING\n                        ? "playing"\n                        : "paused";\n\n                    state.playbackLastObservedPosition =\n                      await asyncCurrentPosition().catch(() => null);\n\n                    // Do not write Firebase from YouTube state callbacks.\n                    // Explicit WatchTogether controls are the only source\n                    // of room playback commands.\n                    return;\n                  }\n\n'''
+# Replace the YouTube state callback so PLAYING/PAUSED are interpreted against
+# the shared room timeline instead of a DOM bridge that cannot see inside the
+# cross-origin YouTube iframe.
+start_marker = '''              onStateChange:\n                async (event) => {'''
+end_marker = '''                  if (data === YT.PlayerState.ENDED) {'''
+start = s.find(start_marker)
+end = s.find(end_marker, start + len(start_marker)) if start >= 0 else -1
+if start < 0 or end < 0:
+    raise SystemExit('YouTube onStateChange block not found')
 
-new_branch = '''if (\n                    data === YT.PlayerState.PLAYING ||\n                    data === YT.PlayerState.PAUSED\n                  ) {\n                    state.playbackLastPlayerState =\n                      data === YT.PlayerState.PLAYING\n                        ? "playing"\n                        : "paused";\n\n                    state.playbackLastObservedPosition =\n                      await asyncCurrentPosition().catch(() => null);\n\n                    // YouTube can emit these callbacks for ads, buffering,\n                    // lifecycle changes and remote commands. Only a recent\n                    // explicit local interaction is allowed to become a\n                    // Firebase room command.\n                    if (Date.now() <= Number(state.playbackUserActionUntil || 0)) {\n                      const kind = state.playbackUserActionKind;\n                      state.playbackUserActionUntil = 0;\n                      state.playbackUserActionKind = \"\";\n\n                      if (kind === \"pause\" && data === YT.PlayerState.PAUSED) {\n                        void publishPlaybackEvent(\"pause\").catch((error) =>\n                          console.warn(\"本機暫停同步失敗:\", error)\n                        );\n                      } else if (kind === \"play\" && data === YT.PlayerState.PLAYING) {\n                        void publishPlaybackEvent(\"play\").catch((error) =>\n                          console.warn(\"本機播放同步失敗:\", error)\n                        );\n                      }\n                    }\n\n                    return;\n                  }\n\n'''
+new_handler = '''              onStateChange:\n                async (event) => {\n                  if (\n                    state.youtubeBuildToken !== token ||\n                    state.player !== event.target\n                  ) {\n                    return;\n                  }\n\n                  forceYoutubeVisible();\n\n                  const now = Date.now();\n                  const data = event.data;\n\n                  if (data === YT.PlayerState.BUFFERING) {\n                    state.playbackTransientStateUntil = now + 1800;\n                    state.playbackLastPlayerState = \"buffering\";\n                    state.playbackLastObservedPosition =\n                      await asyncCurrentPosition().catch(() => null);\n                    updateTimeUI();\n                    return;\n                  }\n\n                  if (data === YT.PlayerState.PLAYING) {\n                    state.playbackLastPlayerState = \"playing\";\n                    state.playbackLastObservedPosition =\n                      await asyncCurrentPosition().catch(() => null);\n\n                    const timelinePlaying =\n                      typeof roomTimelinePlaying === \"function\"\n                        ? roomTimelinePlaying()\n                        : null;\n\n                    if (\n                      document.visibilityState !== \"hidden\" &&\n                      !state.playbackApplyingRemote &&\n                      !state.playbackPendingRecovery &&\n                      !shouldIgnoreTransientYoutubeState() &&\n                      now >= Number(state.playbackReadyAt || 0) &&\n                      (timelinePlaying === false || timelinePlaying === null)\n                    ) {\n                      const serial = ++state.playbackLocalActionSerial;\n                      clearTimeout(state.playbackLocalActionTimer);\n                      state.playbackLocalActionTimer = setTimeout(async () => {\n                        state.playbackLocalActionTimer = null;\n\n                        if (\n                          serial !== state.playbackLocalActionSerial ||\n                          document.visibilityState === \"hidden\" ||\n                          state.playbackApplyingRemote ||\n                          state.playbackPendingRecovery\n                        ) {\n                          return;\n                        }\n\n                        try {\n                          const currentPlaying = await asyncIsPlaying();\n                          const roomPlaying =\n                            typeof roomTimelinePlaying === \"function\"\n                              ? roomTimelinePlaying()\n                              : null;\n\n                          if (currentPlaying && roomPlaying === false) {\n                            const position = await asyncCurrentPosition();\n                            state.playbackLocalIntentAt = Date.now();\n                            await publishPlaybackEvent(\"play\", position, true);\n                          } else if (currentPlaying && roomPlaying === null) {\n                            const position = await asyncCurrentPosition();\n                            state.playbackLocalIntentAt = Date.now();\n                            await publishPlaybackEvent(\"play\", position, true);\n                          }\n                        } catch (error) {\n                          console.warn(\"本機播放同步失敗:\", error);\n                        }\n                      }, 280);\n                    }\n\n                    updateTimeUI();\n                    return;\n                  }\n\n                  if (data === YT.PlayerState.PAUSED) {\n                    state.playbackLastPlayerState = \"paused\";\n                    state.playbackLastObservedPosition =\n                      await asyncCurrentPosition().catch(() => null);\n\n                    const timelinePlaying =\n                      typeof roomTimelinePlaying === \"function\"\n                        ? roomTimelinePlaying()\n                        : null;\n\n                    if (\n                      document.visibilityState !== \"hidden\" &&\n                      !state.playbackApplyingRemote &&\n                      !state.playbackPendingRecovery &&\n                      !shouldIgnoreTransientYoutubeState() &&\n                      now >= Number(state.playbackReadyAt || 0) &&\n                      timelinePlaying === true\n                    ) {\n                      const serial = ++state.playbackLocalActionSerial;\n                      clearTimeout(state.playbackLocalActionTimer);\n                      state.playbackLocalActionTimer = setTimeout(async () => {\n                        state.playbackLocalActionTimer = null;\n\n                        if (\n                          serial !== state.playbackLocalActionSerial ||\n                          document.visibilityState === \"hidden\" ||\n                          state.playbackApplyingRemote ||\n                          state.playbackPendingRecovery\n                        ) {\n                          return;\n                        }\n\n                        try {\n                          const currentPlaying = await asyncIsPlaying();\n                          const roomPlaying =\n                            typeof roomTimelinePlaying === \"function\"\n                              ? roomTimelinePlaying()\n                              : null;\n\n                          if (!currentPlaying && roomPlaying === true) {\n                            const position = await asyncCurrentPosition();\n                            state.playbackLocalIntentAt = Date.now();\n                            await publishPlaybackEvent(\"pause\", position, false);\n                          }\n                        } catch (error) {\n                          console.warn(\"本機暫停同步失敗:\", error);\n                        }\n                      }, 900);\n                    }\n\n                    updateTimeUI();\n                    return;\n                  }\n\n'''
 
-if old_branch not in s:
-    raise SystemExit('V8 YouTube state branch not found')
-s = s.replace(old_branch, new_branch, 1)
+s = s[:start] + new_handler + s[end:]
 
-bridge_marker = '  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */\n'
-bridge = r'''  /*
-   * =========================================================
-   * EXPLICIT LOCAL PLAYBACK COMMAND BRIDGE V9
-   * =========================================================
-   *
-   * Firebase is still the only shared timeline. No participant is
-   * a master. This bridge only identifies a real local play/pause/
-   * seek action so YouTube callbacks from ads/buffering are ignored.
-   */
+# Remove the V9 DOM/iframe bridge entirely. It can see page controls but it
+# cannot reliably observe the native YouTube controls inside the iframe, and
+# wrapping player methods can create feedback loops.
+bridge_start = s.find('  /*\n   * =========================================================\n   * EXPLICIT LOCAL PLAYBACK COMMAND BRIDGE V9')
+room_marker = '''  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */\n'''
+room_pos = s.find(room_marker)
+if bridge_start >= 0 and room_pos > bridge_start:
+    s = s[:bridge_start] + '\n' + s[room_pos:]
 
-  function markLocalPlayerInteraction(kind = "") {
-    state.playbackUserActionUntil = Date.now() + 1400;
-    state.playbackUserActionKind = kind;
-    state.playbackLocalIntentAt = Date.now();
-    state.playbackAdGuardUntil = 0;
-    state.playbackTransientStateUntil = 0;
-  }
+# Make the generated marker explicit for verification.
+s = s.replace('SHARED ROOM TIMELINE PLAYBACK SYNC V8', 'SHARED ROOM TIMELINE PLAYBACK SYNC V10', 1)
+s = s.replace('SHARED ROOM TIMELINE PLAYBACK SYNC V9', 'SHARED ROOM TIMELINE PLAYBACK SYNC V10', 1)
 
-  function isPlaybackControlTarget(target) {
-    if (!target || !(target instanceof Element)) return false;
-
-    const playerWrap = $("playerWrap");
-    const inPlayer = !!playerWrap && playerWrap.contains(target);
-    const text = `${target.id || ""} ${target.className || ""} ${target.getAttribute("aria-label") || ""} ${target.textContent || ""}`.toLowerCase();
-
-    if (inPlayer && /play|pause|播放|暫停|開始|繼續|seek|進度|快轉|快退/.test(text)) {
-      return true;
-    }
-
-    if (/play|pause|播放|暫停|開始|繼續|seek|進度|快轉|快退/.test(text)) {
-      return !!target.closest("button,[role='button'],input[type='range'],[data-playback-action]");
-    }
-
-    return false;
-  }
-
-  function inferPlaybackControlKind(target) {
-    const text = `${target?.id || ""} ${target?.className || ""} ${target?.getAttribute?.("aria-label") || ""} ${target?.textContent || ""}`.toLowerCase();
-    if (/pause|暫停/.test(text)) return "pause";
-    if (/play|播放|開始|繼續/.test(text)) return "play";
-    if (/seek|進度|快轉|快退/.test(text)) return "seek";
-    return "";
-  }
-
-  async function bindPlaybackUiBridge() {
-    if (state.playbackUiBridgeBound) return;
-    state.playbackUiBridgeBound = true;
-
-    document.addEventListener("pointerdown", (event) => {
-      const target = event.target;
-      if (!isPlaybackControlTarget(target)) return;
-      const kind = inferPlaybackControlKind(target);
-      markLocalPlayerInteraction(kind);
-    }, true);
-
-    document.addEventListener("touchstart", (event) => {
-      const target = event.target;
-      if (!isPlaybackControlTarget(target)) return;
-      const kind = inferPlaybackControlKind(target);
-      markLocalPlayerInteraction(kind);
-    }, { capture: true, passive: true });
-
-    document.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!isPlaybackControlTarget(target)) return;
-      const kind = inferPlaybackControlKind(target);
-      if (kind) markLocalPlayerInteraction(kind);
-    }, true);
-
-    const originalPlayPlayer = playPlayer;
-    const originalPausePlayer = pausePlayer;
-
-    playPlayer = async function(...args) {
-      const remote = state.playbackApplyingRemote || state.playbackPendingRecovery;
-      const result = await originalPlayPlayer.apply(this, args);
-      if (!remote) {
-        void publishPlaybackEvent("play").catch((error) =>
-          console.warn("本機播放同步失敗:", error)
-        );
-      }
-      return result;
-    };
-
-    pausePlayer = async function(...args) {
-      const remote = state.playbackApplyingRemote || state.playbackPendingRecovery;
-      const result = await originalPausePlayer.apply(this, args);
-      if (!remote) {
-        void publishPlaybackEvent("pause").catch((error) =>
-          console.warn("本機暫停同步失敗:", error)
-        );
-      }
-      return result;
-    };
-
-    const originalApplyPlayerPosition = applyPlayerPosition;
-    applyPlayerPosition = async function(position, ...args) {
-      const remote = state.playbackApplyingRemote || state.playbackPendingRecovery;
-      const result = await originalApplyPlayerPosition.call(this, position, ...args);
-      if (!remote && Date.now() <= Number(state.playbackUserActionUntil || 0)) {
-        const kind = state.playbackUserActionKind;
-        if (kind === "seek") {
-          state.playbackUserActionUntil = 0;
-          state.playbackUserActionKind = "";
-          void publishPlaybackEvent("seek", position).catch((error) =>
-            console.warn("本機拖曳同步失敗:", error)
-          );
-        }
-      }
-      return result;
-    };
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      void bindPlaybackUiBridge();
-    }, { once: true });
-  } else {
-    void bindPlaybackUiBridge();
-  }
-
-'''
-
-if bridge_marker not in s:
-    raise SystemExit('ROOM UI marker not found')
-s = s.replace(bridge_marker, bridge + bridge_marker, 1)
-
-s = s.replace('SHARED ROOM TIMELINE PLAYBACK SYNC V8', 'SHARED ROOM TIMELINE PLAYBACK SYNC V9', 1)
-s = s.replace('SHARED ROOM TIMELINE PLAYBACK SYNC V7', 'SHARED ROOM TIMELINE PLAYBACK SYNC V9', 1)
 APP.write_text(s, encoding='utf-8')
