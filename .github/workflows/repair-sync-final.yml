@@ -15,8 +15,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply final shared playback repair
-        run: python3 .github/scripts/repair_playback_v3.py
+      - name: Apply shared playback timeline repair v4
+        run: python3 .github/scripts/repair_playback_v4.py
 
       - name: Apply server clock repair
         run: python3 .github/scripts/fix_server_clock.py
@@ -24,8 +24,9 @@ jobs:
       - name: Verify JavaScript
         run: |
           node --check app.js
-          grep -q "function attachServerClockSync()" app.js
+          grep -q "function playbackClockNow()" app.js
           grep -q "function serverNow()" app.js
+          grep -q "function attachServerClockSync()" app.js
 
       - name: Commit repaired app
         run: |
@@ -35,6 +36,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Fix shared playback server clock sync"
+            git commit -m "Fix shared playback timeline and latency sync"
             git push origin HEAD:main
           fi
