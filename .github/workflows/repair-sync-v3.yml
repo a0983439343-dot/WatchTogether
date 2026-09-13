@@ -25,57 +25,72 @@ jobs:
 
           path = Path('app.js')
           s = path.read_text(encoding='utf-8')
+          changed = False
 
-          # Local playback intent must survive long enough to distinguish a
-          # real user pause/play from transient player feedback.
-          state_marker = '    playbackUiBridgeBound: false,\n'
-          state_add = '''    playbackLocalStateCandidate: null,\n    playbackLocalStateCandidateAt: 0,\n'''
           if 'playbackLocalStateCandidate: null' not in s:
-              if state_marker not in s:
+              marker = '    playbackUiBridgeBound: false,'
+              if marker not in s:
                   raise SystemExit('state marker not found')
-              s = s.replace(state_marker, state_marker + state_add, 1)
+              s = s.replace(
+                  marker,
+                  marker + '\n\n    playbackLocalStateCandidate: null,\n    playbackLocalStateCandidateAt: 0,',
+                  1
+              )
+              changed = True
 
-          # A remote command must not block a real user action for eight
-          # seconds. Keep only a short feedback-suppression window.
-          s = s.replace(
+          s2 = s.replace(
               'state.playbackIgnoreStateUntil = Date.now() + 8000;',
               'state.playbackIgnoreStateUntil = Date.now() + 2500;',
               1
           )
+          if s2 != s:
+              s = s2
+              changed = True
 
-          # Replace the old immediate play/pause inference with a debounced
-          # local intent detector. Buffering/ad transitions are therefore not
-          # instantly broadcast as pause commands.
-          old = '''          if (\n            state.playbackLastPlaying !== null &&\n            playing !== state.playbackLastPlaying &&\n            roomPlaying !== null &&\n            playing !== roomPlaying\n          ) {\n            state.playbackLocalIntentAt = now;\n            void publishPlaybackEvent(\n              playing ? "play" : "pause",\n              position\n            );\n\n            state.playbackLastPosition = position;\n            state.playbackLastPlaying = playing;\n            state.playbackLastPlayerState = playing ? "playing" : "paused";\n            state.playbackLastObservedPosition = position;\n            return;\n          }\n'''
-          new = '''          if (\n            state.playbackLastPlaying !== null &&\n            playing !== state.playbackLastPlaying &&\n            roomPlaying !== null &&\n            playing !== roomPlaying\n          ) {\n            if (state.playbackLocalStateCandidate !== playing) {\n              state.playbackLocalStateCandidate = playing;\n              state.playbackLocalStateCandidateAt = now;\n            } else if (now - Number(state.playbackLocalStateCandidateAt || 0) >= 700) {\n              state.playbackLocalIntentAt = now;\n              void publishPlaybackEvent(\n                playing ? "play" : "pause",\n                position\n              );\n\n              state.playbackLocalStateCandidate = null;\n              state.playbackLocalStateCandidateAt = 0;\n\n              state.playbackLastPosition = position;\n              state.playbackLastPlaying = playing;\n              state.playbackLastPlayerState = playing ? "playing" : "paused";\n              state.playbackLastObservedPosition = position;\n              return;\n            }\n          } else {\n            state.playbackLocalStateCandidate = null;\n            state.playbackLocalStateCandidateAt = 0;\n          }\n'''
-          if old not in s:
-              raise SystemExit('local play/pause detector block not found')
-          s = s.replace(old, new, 1)
+          # Replace the immediate state-change publisher with a short
+          # confirmation window. This prevents buffering/ad feedback from
+          # becoming a room-wide pause while preserving real user pauses.
+          pattern = re.compile(
+              r'(?P<indent>\s*)if \(\s*'
+              r'state\.playbackLastPlaying !== null &&\s*'
+              r'playing !== state\.playbackLastPlaying &&\s*'
+              r'roomPlaying !== null &&\s*'
+              r'playing !== roomPlaying\s*'
+              r'\) \{.*?\n(?P=indent)\}\n',
+              re.S
+          )
+          m = pattern.search(s)
+          if m:
+              old = m.group(0)
+              indent = m.group('indent')
+              new = f'''{indent}if (\n{indent}  state.playbackLastPlaying !== null &&\n{indent}  playing !== state.playbackLastPlaying &&\n{indent}  roomPlaying !== null &&\n{indent}  playing !== roomPlaying\n{indent}) {{\n{indent}  if (state.playbackLocalStateCandidate !== playing) {{\n{indent}    state.playbackLocalStateCandidate = playing;\n{indent}    state.playbackLocalStateCandidateAt = now;\n{indent}  }} else if (\n{indent}    now - Number(state.playbackLocalStateCandidateAt || 0) >= 450\n{indent}  ) {{\n{indent}    state.playbackLocalIntentAt = now;\n{indent}    void publishPlaybackEvent(\n{indent}      playing ? "play" : "pause",\n{indent}      position\n{indent}    );\n\n{indent}    state.playbackLocalStateCandidate = null;\n{indent}    state.playbackLocalStateCandidateAt = 0;\n\n{indent}    state.playbackLastPosition = position;\n{indent}    state.playbackLastPlaying = playing;\n{indent}    state.playbackLastPlayerState = playing ? "playing" : "paused";\n{indent}    state.playbackLastObservedPosition = position;\n{indent}    return;\n{indent}  }}\n{indent}}} else {{\n{indent}  state.playbackLocalStateCandidate = null;\n{indent}  state.playbackLocalStateCandidateAt = 0;\n{indent}}}\n'''
+              if old != new:
+                  s = s[:m.start()] + new + s[m.end():]
+                  changed = True
 
-          # Late join / player recreation must always pull the current room
-          # command after the player is ready. This is not a second write and
-          # is safe because the event id is deduplicated by the engine.
+          # Late joiners and recreated players must pull the latest room
+          # command after the player is ready.
+          recovery_call = '''    setTimeout(() => {\n      void applyLatestRoomPlaybackState();\n    }, 180);\n\n'''
           detector_marker = '    state.playbackSeekTimer = setInterval(async () => {'
-          detector_add = '''    setTimeout(() => {\n      void applyLatestRoomPlaybackState();\n    }, 180);\n\n'''
-          if 'void applyLatestRoomPlaybackState();\n    }, 180);' not in s:
+          if 'void applyLatestRoomPlaybackState();' not in s:
               idx = s.find(detector_marker)
               if idx < 0:
                   raise SystemExit('seek detector marker not found')
-              # The recovery must run before the interval begins executing.
-              s = s[:idx] + detector_add + s[idx:]
+              s = s[:idx] + recovery_call + s[idx:]
+              changed = True
 
-          # Replace the custom room control handlers with authoritative room
-          # commands. Native YouTube controls are still supported by the
-          # debounced detector above.
-          bridge_marker = '  /*\n   * AUTHORITATIVE CONTROL BRIDGE\n   * =========================================================\n   */\n'
-          if 'AUTHORITATIVE CONTROL BRIDGE' not in s:
-              bridge = r'''  /*
+          # The three visible room controls are authoritative room commands.
+          # Cloning removes the old local-only click handlers without changing
+          # the HTML or appearance.
+          if 'function installAuthoritativeControlBridge()' not in s:
+              bridge = r'''
+  /*
    * =========================================================
    * AUTHORITATIVE CONTROL BRIDGE
    * =========================================================
    *
-   * 房間按鈕不是單機播放器按鈕，而是直接發出 room command。
-   * 所有人都可以發送；沒有 master player。
+   * 房間控制列直接寫入共享 room timeline。
+   * 沒有任何 master player。
    */
 
   function replaceControlButton(id, handler) {
@@ -97,26 +112,26 @@ jobs:
       return;
     }
 
-    const playerReady = () =>
+    const ready = () =>
       Boolean(state.playerReady && state.player && state.currentVideoId);
 
     replaceControlButton("playPauseBtn", async () => {
-      if (!playerReady() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
+      if (!ready() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
         return;
       }
 
       try {
-        const currentlyPlaying = await asyncIsPlaying();
-        const nextPlaying = !currentlyPlaying;
+        const before = await asyncIsPlaying();
+        const targetPlaying = !before;
         const now = Date.now();
 
         state.playbackUserActionUntil = now + 1800;
-        state.playbackUserActionKind = nextPlaying ? "play" : "pause";
+        state.playbackUserActionKind = targetPlaying ? "play" : "pause";
         state.playbackLocalIntentAt = now;
         state.playbackLocalStateCandidate = null;
         state.playbackLocalStateCandidateAt = 0;
 
-        if (nextPlaying) {
+        if (targetPlaying) {
           await playPlayer();
         } else {
           await pausePlayer();
@@ -124,13 +139,13 @@ jobs:
 
         const position = await asyncCurrentPosition();
         await publishPlaybackEvent(
-          nextPlaying ? "play" : "pause",
+          targetPlaying ? "play" : "pause",
           position
         );
 
         state.playbackLastPosition = position;
-        state.playbackLastPlaying = nextPlaying;
-        state.playbackLastPlayerState = nextPlaying ? "playing" : "paused";
+        state.playbackLastPlaying = targetPlaying;
+        state.playbackLastPlayerState = targetPlaying ? "playing" : "paused";
         state.playbackLastObservedPosition = position;
         updateTimeUI();
       } catch (error) {
@@ -139,24 +154,27 @@ jobs:
     });
 
     replaceControlButton("backBtn", async () => {
-      if (!playerReady() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
+      if (!ready() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
         return;
       }
 
       try {
         const current = await asyncCurrentPosition();
-        const target = Math.max(0, current - 10);
         const playing = await asyncIsPlaying();
+        const target = Math.max(0, current - 10);
 
         state.playbackUserActionUntil = Date.now() + 1800;
         state.playbackUserActionKind = "seek";
         state.playbackLocalIntentAt = Date.now();
+        state.playbackLocalStateCandidate = null;
+        state.playbackLocalStateCandidateAt = 0;
 
         await applyPlayerPosition(target);
         await publishPlaybackEvent("seek", target);
 
         state.playbackLastPosition = target;
         state.playbackLastPlaying = playing;
+        state.playbackLastPlayerState = playing ? "playing" : "paused";
         state.playbackLastObservedPosition = target;
         updateTimeUI();
       } catch (error) {
@@ -165,24 +183,27 @@ jobs:
     });
 
     replaceControlButton("forwardBtn", async () => {
-      if (!playerReady() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
+      if (!ready() || state.playbackApplyingRemote || state.playbackPendingRecovery) {
         return;
       }
 
       try {
         const current = await asyncCurrentPosition();
-        const target = Math.max(0, current + 10);
         const playing = await asyncIsPlaying();
+        const target = Math.max(0, current + 10);
 
         state.playbackUserActionUntil = Date.now() + 1800;
         state.playbackUserActionKind = "seek";
         state.playbackLocalIntentAt = Date.now();
+        state.playbackLocalStateCandidate = null;
+        state.playbackLocalStateCandidateAt = 0;
 
         await applyPlayerPosition(target);
         await publishPlaybackEvent("seek", target);
 
         state.playbackLastPosition = target;
         state.playbackLastPlaying = playing;
+        state.playbackLastPlayerState = playing ? "playing" : "paused";
         state.playbackLastObservedPosition = target;
         updateTimeUI();
       } catch (error) {
@@ -193,38 +214,36 @@ jobs:
     state.playbackUiBridgeBound = true;
   }
 
-
 '''
-              end_marker = '  /*\n   * =========================================================\n   * ROOM UI\n   * =========================================================\n   */'
-              idx = s.find(end_marker)
-              if idx < 0:
-                  raise SystemExit('room UI marker not found')
-              s = s[:idx] + bridge + s[idx:]
+              room_marker = re.search(r'\n\s*/\*\s*={5,}\s*\n\s*ROOM UI', s)
+              if not room_marker:
+                  raise SystemExit('room UI section marker not found')
+              s = s[:room_marker.start()] + '\n' + bridge + s[room_marker.start():]
+              changed = True
 
-          # Reset candidate state whenever a new video is loaded.
-          reset_marker = '      state.playbackLocalIntentAt = 0;\n'
-          reset_add = '''      state.playbackLocalStateCandidate = null;\n      state.playbackLocalStateCandidateAt = 0;\n'''
-          if 'state.playbackLocalStateCandidate = null;' not in s:
-              if reset_marker in s:
-                  s = s.replace(reset_marker, reset_marker + reset_add, 1)
-
-          # Install the bridge once the full app has registered its old
-          # listeners. Cloning the buttons removes the old listeners.
-          tail = '\n})();\n'
-          call = '''\n  installAuthoritativeControlBridge();\n\n'''
           if 'installAuthoritativeControlBridge();' not in s:
-              if tail not in s:
-                  raise SystemExit('app tail not found')
-              s = s.replace(tail, call + tail, 1)
+              match = re.search(r'\n\}\)\(\);\s*$', s)
+              if not match:
+                  raise SystemExit('IIFE tail not found')
+              s = s[:match.start()] + '\n\n  installAuthoritativeControlBridge();\n' + s[match.start():]
+              changed = True
 
-          path.write_text(s, encoding='utf-8')
-          print('patched app.js')
+          if changed:
+              path.write_text(s, encoding='utf-8')
+          print('playback v3 patch complete' if changed else 'playback v3 already applied')
           PY
 
       - name: Validate JavaScript
         shell: bash
+        run: node --check app.js
+
+      - name: Verify required playback markers
+        shell: bash
         run: |
-          node --check app.js
+          grep -q 'function installAuthoritativeControlBridge' app.js
+          grep -q 'playbackLocalStateCandidate' app.js
+          grep -q 'playbackTimeline' app.js
+          grep -q 'void applyLatestRoomPlaybackState();' app.js
 
       - name: Commit repair
         shell: bash
