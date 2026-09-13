@@ -15,13 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Patch app.js
+      - name: Install room authority
         run: python3 .github/scripts/install_playback_v12.py
 
-      - name: Validate app.js
+      - name: Harden YouTube callbacks
+        run: python3 .github/scripts/harden_playback_v13.py
+
+      - name: Validate JavaScript
         run: |
           node --check app.js
           grep -q 'ROOM AUTHORITY PLAYBACK V12' app.js
+          grep -q 'state.roomAuthorityV12' app.js
           grep -q 'roomAuthorityInstallControls' app.js
           grep -q 'roomAuthorityStartObserver' app.js
           grep -q 'roomAuthorityExpectedPosition' app.js
@@ -34,6 +38,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes'
           else
-            git commit -m 'Stabilize shared room playback authority'
+            git commit -m 'Finalize authoritative room playback synchronization'
             git push origin HEAD:main
           fi
