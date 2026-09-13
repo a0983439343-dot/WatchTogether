@@ -24,16 +24,20 @@ jobs:
       - name: Install single-timeline authority v15
         run: python3 .github/scripts/room_authority_v14.py
 
+      - name: Install stable shared-timeline authority v16
+        run: python3 .github/scripts/room_authority_v16.py
+
       - name: Validate JavaScript
         run: |
           node --check app.js
-          grep -q 'ROOM AUTHORITY PLAYBACK V15' app.js
-          grep -q 'state.roomAuthorityV15' app.js
-          grep -q 'roomAuthorityCommandV15' app.js
-          grep -q 'roomAuthorityExpectedV15' app.js
-          grep -q 'roomAuthorityStartObserverV15' app.js
+          grep -q 'ROOM AUTHORITY PLAYBACK V16' app.js
+          grep -q 'state.roomAuthorityV16' app.js
+          grep -q 'roomAuthorityCommandV16' app.js
+          grep -q 'roomAuthorityExpectedV16' app.js
+          grep -q 'roomAuthorityStartObserverV16' app.js
           ! grep -q 'ROOM AUTHORITY PLAYBACK V12' app.js
           ! grep -q 'ROOM AUTHORITY PLAYBACK V14' app.js
+          ! grep -q 'ROOM AUTHORITY PLAYBACK V15' app.js
 
       - name: Commit
         run: |
@@ -43,6 +47,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes'
           else
-            git commit -m 'Replace duplicated playback authority with stable v15 timeline'
+            git commit -m 'Install stable shared-timeline playback authority v16'
             git push origin HEAD:main
           fi
