@@ -4635,7 +4635,7 @@
 
                   setTimeout(async () => {
                     try {
-                      await roomAuthorityInitializeVideoV15(autoplay && state.isOwner);
+                      await roomAuthorityInitializeVideoV16(autoplay && state.isOwner);
                       startPlaybackSeekDetector();
                     } catch (error) {
                       console.warn("播放器就緒後同步失敗:", error);
@@ -4682,11 +4682,11 @@
                   }
 
                   if (
-                    state.roomAuthorityV15 &&
+                    state.roomAuthorityV16 &&
                     (data === YT.PlayerState.PLAYING || data === YT.PlayerState.PAUSED)
                   ) {
                     updateTimeUI();
-                    void roomAuthorityObserveYoutubeStateV15(data);
+                    void roomAuthorityObserveYoutubeStateV16(data);
                     return;
                   }
 
@@ -8385,33 +8385,46 @@
 
 
 
+
+
   /* =========================================================
-     ROOM AUTHORITY PLAYBACK V15
+     ROOM AUTHORITY PLAYBACK V16
      =========================================================
-     One shared Firebase timeline. No participant is a master.
-     The room command contains the content position and its server timestamp.
+     One shared room timeline. No participant is a playback master.
+
+     Firebase stores only:
+       videoId + position + updatedAt + playing + eventId
+
+     A user's button/seek action writes a room command.
+     Native YouTube PLAYING/PAUSED callbacks are observations only.
+     They NEVER write playback commands, because ads/buffering/background
+     recovery can produce those callbacks without a user intent.
      ========================================================= */
 
-  state.roomAuthorityV15 = true;
-  state.roomAuthorityBusyV15 = false;
-  state.roomAuthorityTimerV15 = null;
-  state.roomAuthorityRecoveryTimerV15 = null;
-  state.roomAuthorityLocalStateTimerV15 = null;
-  state.roomAuthorityLastNativeStateV15 = null;
-  state.roomAuthorityLastNativeStateAtV15 = 0;
-  state.roomAuthorityLastObservedPositionV15 = null;
-  state.roomAuthorityAdGraceUntilV15 = 0;
-  state.roomAuthorityApplyingV15 = false;
+  state.roomAuthorityV16 = true;
+  state.roomAuthorityBusyV16 = false;
+  state.roomAuthorityTimerV16 = null;
+  state.roomAuthorityRecoveryTimerV16 = null;
+  state.roomAuthorityLocalStateTimerV16 = null;
+  state.roomAuthorityApplyingV16 = false;
+  state.roomAuthorityLastEventIdV16 = null;
+  state.roomAuthorityLastUpdatedAtV16 = 0;
+  state.roomAuthorityLastObservedPositionV16 = null;
+  state.roomAuthorityLastNativeStateV16 = null;
+  state.roomAuthorityLastNativeStateAtV16 = 0;
+  state.roomAuthorityAdGraceUntilV16 = 0;
+  state.roomAuthorityLocalCommandAtV16 = 0;
+  state.roomAuthorityLocalCommandKindV16 = "";
+  state.roomAuthorityCommandSeqV16 = 0;
+  state.roomAuthorityRecoveryTokenV16 = 0;
 
-
-  function roomAuthorityNowV15() {
+  function roomAuthorityNowV16() {
     return typeof serverNow === "function"
       ? Number(serverNow())
       : Date.now();
   }
 
-
-  function roomAuthorityExpectedV15(event, now = roomAuthorityNowV15()) {
+  function roomAuthorityExpectedV16(event, now = roomAuthorityNowV16()) {
     if (!event) return null;
 
     const base = Number(event.position);
@@ -8426,35 +8439,50 @@
       return Math.max(0, base);
     }
 
-    return Math.max(
-      0,
-      base + Math.min(7200, Math.max(0, (now - updatedAt) / 1000))
-    );
+    const elapsed = Math.max(0, (now - updatedAt) / 1000);
+    return Math.max(0, base + Math.min(7200, elapsed));
   }
 
+  function roomAuthorityRememberV16(event) {
+    if (!event || !event.eventId) return false;
 
-  async function roomAuthorityReadV15() {
-    if (!db || !state.roomId || !state.currentVideoId) return null;
-
-    const snapshot = await db
-      .ref(`rooms/${state.roomId}/playbackEvent`)
-      .once("value");
-
-    const event = snapshot.val();
+    const incomingUpdatedAt = Number(event.updatedAt || 0);
+    const currentUpdatedAt = Number(state.roomAuthorityLastUpdatedAtV16 || 0);
 
     if (
-      !event ||
-      String(event.videoId || "") !== String(state.currentVideoId || "")
+      incomingUpdatedAt > 0 &&
+      currentUpdatedAt > 0 &&
+      incomingUpdatedAt < currentUpdatedAt
     ) {
-      return null;
+      return false;
     }
 
-    state.playbackTimeline = event;
-    return event;
+    const normalized = {
+      videoId: String(event.videoId || ""),
+      position: Math.max(0, Number(event.position) || 0),
+      playing: event.playing === true,
+      updatedAt: incomingUpdatedAt || roomAuthorityNowV16(),
+      eventId: String(event.eventId),
+      action: String(event.action || ""),
+      updatedBy: String(event.updatedBy || "")
+    };
+
+    state.playbackTimeline = normalized;
+    state.playbackRemoteEvent = normalized;
+    state.roomAuthorityLastEventIdV16 = normalized.eventId;
+    state.roomAuthorityLastUpdatedAtV16 = normalized.updatedAt;
+    state.playbackLastRemoteEventId = normalized.eventId;
+    state.playbackLastRemoteUpdatedAt = normalized.updatedAt;
+
+    return true;
   }
 
+  function playbackSyncRef() {
+    if (!db || !state.roomId) return null;
+    return db.ref(`rooms/${state.roomId}/playbackEvent`);
+  }
 
-  function roomAuthorityCanRunV15() {
+  function roomAuthorityCanRunV16() {
     return Boolean(
       db &&
       state.roomId &&
@@ -8465,9 +8493,27 @@
     );
   }
 
+  async function roomAuthorityReadV16() {
+    const ref = playbackSyncRef();
+    if (!ref || !state.currentVideoId) return null;
 
-  function roomAuthorityEventV15(action, position, playing) {
+    const snapshot = await ref.once("value");
+    const event = snapshot.val();
+
+    if (
+      !event ||
+      String(event.videoId || "") !== String(state.currentVideoId || "")
+    ) {
+      return null;
+    }
+
+    roomAuthorityRememberV16(event);
+    return event;
+  }
+
+  function roomAuthorityCreateEventV16(action, position, playing) {
     const now = Date.now();
+    const seq = ++state.roomAuthorityCommandSeqV16;
 
     return {
       action,
@@ -8475,13 +8521,12 @@
       videoId: String(state.currentVideoId),
       updatedAt: firebase.database.ServerValue.TIMESTAMP,
       updatedBy: state.uid,
-      eventId: `${state.uid}_${now}_${++state.playbackActionSeq}_${Math.random().toString(36).slice(2)}`,
+      eventId: `${state.uid}_${now}_${seq}_${Math.random().toString(36).slice(2)}`,
       playing: playing === true
     };
   }
 
-
-  async function roomAuthorityWriteV15(action, position, playing) {
+  async function roomAuthorityWriteV16(action, position, playing) {
     if (
       !state.uid ||
       !state.roomId ||
@@ -8491,42 +8536,34 @@
       return null;
     }
 
-    const ref = db.ref(
-      `rooms/${state.roomId}/playbackEvent`
-    );
+    const ref = playbackSyncRef();
+    if (!ref) return null;
 
-    const event = roomAuthorityEventV15(
+    const event = roomAuthorityCreateEventV16(
       action,
       position,
       playing
     );
 
-    const localUpdatedAt = roomAuthorityNowV15();
-
-    state.playbackTimeline = {
+    const localNow = roomAuthorityNowV16();
+    roomAuthorityRememberV16({
       ...event,
-      updatedAt: localUpdatedAt
-    };
+      updatedAt: localNow
+    });
 
-    state.playbackRemoteEvent = state.playbackTimeline;
-    state.playbackLastRemoteEventId = event.eventId;
-    state.playbackLastRemoteUpdatedAt = localUpdatedAt;
+    state.playbackLastPosition = Number(position) || 0;
+    state.playbackLastPlaying = playing === true;
 
     await ref.set(event);
-
     return event;
   }
 
-
-  async function roomAuthorityForcePlayingV15(wantPlaying, attempts = 12) {
+  async function roomAuthorityForceStateV16(wantPlaying, attempts = 15) {
     for (let index = 0; index < attempts; index += 1) {
-      if (!roomAuthorityCanRunV15()) return;
+      if (!roomAuthorityCanRunV16()) return false;
 
       const current = await asyncIsPlaying().catch(() => null);
-
-      if (current === wantPlaying) {
-        return;
-      }
+      if (current === wantPlaying) return true;
 
       try {
         if (wantPlaying) {
@@ -8537,14 +8574,15 @@
       } catch (_) {}
 
       if (index + 1 < attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 180));
+        await new Promise((resolve) => setTimeout(resolve, 160));
       }
     }
+
+    return (await asyncIsPlaying().catch(() => null)) === wantPlaying;
   }
 
-
-  async function roomAuthorityApplyV15(event, force = false) {
-    if (!roomAuthorityCanRunV15() || !event) return;
+  async function roomAuthorityApplyV16(event, force = false) {
+    if (!roomAuthorityCanRunV16() || !event) return;
 
     if (
       String(event.videoId || "") !==
@@ -8553,112 +8591,87 @@
       return;
     }
 
-    const expected = roomAuthorityExpectedV15(event);
+    const expected = roomAuthorityExpectedV16(event);
     if (expected === null) return;
 
-    state.roomAuthorityApplyingV15 = true;
+    state.roomAuthorityApplyingV16 = true;
     state.playbackApplyingRemote = true;
     state.playbackPendingRecovery = true;
-    state.playbackIgnoreStateChanges = 30;
-    state.playbackIgnoreStateUntil = Date.now() + 6000;
-    state.playbackReadyAt = Date.now() + 500;
+    state.playbackIgnoreStateChanges = 50;
+    state.playbackIgnoreStateUntil = Date.now() + 8000;
+    state.playbackReadyAt = Date.now() + 900;
 
     try {
-      const localPosition = await asyncCurrentPosition();
-      const localPlaying = await asyncIsPlaying();
-      const shouldPlay = event.playing === true;
+      const currentPosition = await asyncCurrentPosition();
+      const currentPlaying = await asyncIsPlaying();
+      const wantPlaying = event.playing === true;
+      const drift = Math.abs(currentPosition - expected);
 
-      const difference = Math.abs(
-        Number(localPosition) - Number(expected)
-      );
-
-      if (force || difference > 0.80) {
+      if (force || drift > 0.55) {
         await applyPlayerPosition(expected);
       }
 
-      if (localPlaying !== shouldPlay) {
-        await roomAuthorityForcePlayingV15(
-          shouldPlay,
-          shouldPlay ? 10 : 12
+      if (currentPlaying !== wantPlaying) {
+        await roomAuthorityForceStateV16(
+          wantPlaying,
+          wantPlaying ? 15 : 18
         );
       }
 
-      state.playbackLastPosition = expected;
-      state.playbackLastPlaying = shouldPlay;
-      state.playbackLastObservedPosition =
-        await asyncCurrentPosition().catch(() => expected);
-      state.roomAuthorityLastObservedPositionV15 =
-        state.playbackLastObservedPosition;
+      state.playbackLastPosition = await asyncCurrentPosition().catch(() => expected);
+      state.playbackLastPlaying = await asyncIsPlaying().catch(() => wantPlaying);
+      state.playbackLastObservedPosition = state.playbackLastPosition;
+      state.roomAuthorityLastObservedPositionV16 = state.playbackLastPosition;
 
       if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          `已同步 ${formatTime(expected)}`;
+        $("syncStatus").textContent = `已同步 ${formatTime(expected)}`;
       }
     } catch (error) {
       console.warn("房間播放狀態套用失敗:", error);
     } finally {
-      state.roomAuthorityApplyingV15 = false;
+      state.roomAuthorityApplyingV16 = false;
       state.playbackApplyingRemote = false;
       state.playbackPendingRecovery = false;
     }
   }
 
+  async function roomAuthorityApplyLatestV16(force = true) {
+    if (!roomAuthorityCanRunV16()) return;
 
-  async function roomAuthorityApplyLatestV15(force = true) {
-    if (!roomAuthorityCanRunV15()) return;
+    const token = ++state.roomAuthorityRecoveryTokenV16;
 
     try {
-      const event = await roomAuthorityReadV15();
+      const event = await roomAuthorityReadV16();
+      if (!event) return;
 
-      if (!event) {
-        return;
-      }
-
-      await roomAuthorityApplyV15(event, force);
+      if (token !== state.roomAuthorityRecoveryTokenV16) return;
+      await roomAuthorityApplyV16(event, force);
     } catch (error) {
       console.warn("讀取房間播放時間軸失敗:", error);
     }
   }
 
-
-  function roomAuthorityRoomButtonV15(id, handler) {
-    const oldButton = $(id);
-
-    if (!oldButton) return;
-
-    const replacement = oldButton.cloneNode(true);
-    oldButton.replaceWith(replacement);
-    replacement.addEventListener("click", handler);
-  }
-
-
-  async function roomAuthorityCommandV15(action, requestedPosition = null) {
+  async function roomAuthorityCommandV16(action, requestedPosition = null) {
     if (
-      !roomAuthorityCanRunV15() ||
-      state.roomAuthorityBusyV15
+      !roomAuthorityCanRunV16() ||
+      state.roomAuthorityBusyV16
     ) {
       return;
     }
 
-    state.roomAuthorityBusyV15 = true;
-    state.playbackUserActionUntil = Date.now() + 5000;
-    state.playbackUserActionKind = action;
+    state.roomAuthorityBusyV16 = true;
+    state.roomAuthorityLocalCommandAtV16 = Date.now();
+    state.roomAuthorityLocalCommandKindV16 = action;
     state.playbackLocalIntentAt = Date.now();
-    state.playbackIgnoreStateChanges = 30;
-    state.playbackIgnoreStateUntil = Date.now() + 6000;
+    state.playbackIgnoreStateChanges = 50;
+    state.playbackIgnoreStateUntil = Date.now() + 8000;
 
     try {
-      const event = await roomAuthorityReadV15();
+      const event = await roomAuthorityReadV16();
+      if (!event) return;
 
-      if (!event) {
-        return;
-      }
-
-      const sharedPosition = roomAuthorityExpectedV15(event);
-
-      if (sharedPosition === null) {
-        return;
-      }
+      const sharedPosition = roomAuthorityExpectedV16(event);
+      if (!Number.isFinite(sharedPosition)) return;
 
       let targetPosition = sharedPosition;
       let targetPlaying = event.playing === true;
@@ -8668,37 +8681,33 @@
       } else if (action === "play") {
         targetPlaying = true;
       } else if (action === "seek") {
-        const value = Number(requestedPosition);
-
-        if (!Number.isFinite(value)) {
-          return;
-        }
-
-        targetPosition = Math.max(0, value);
+        const requested = Number(requestedPosition);
+        if (!Number.isFinite(requested)) return;
+        targetPosition = Math.max(0, requested);
       } else {
         return;
       }
 
-      /*
-       * Apply locally first so the person pressing the button does not
-       * wait for Firebase. Then commit exactly the same room command.
-       */
-      if (action === "pause") {
-        await pausePlayer();
-      } else if (action === "play") {
-        await applyPlayerPosition(targetPosition);
-        await playPlayer();
-      } else if (action === "seek") {
-        await applyPlayerPosition(targetPosition);
+      state.playbackApplyingRemote = true;
+      state.roomAuthorityApplyingV16 = true;
 
-        if (targetPlaying) {
-          await playPlayer();
+      try {
+        if (action === "pause") {
+          await applyPlayerPosition(targetPosition);
+          await roomAuthorityForceStateV16(false, 18);
+        } else if (action === "play") {
+          await applyPlayerPosition(targetPosition);
+          await roomAuthorityForceStateV16(true, 18);
         } else {
-          await pausePlayer();
+          await applyPlayerPosition(targetPosition);
+          await roomAuthorityForceStateV16(targetPlaying, 18);
         }
+      } finally {
+        state.roomAuthorityApplyingV16 = false;
+        state.playbackApplyingRemote = false;
       }
 
-      await roomAuthorityWriteV15(
+      await roomAuthorityWriteV16(
         action,
         targetPosition,
         targetPlaying
@@ -8710,50 +8719,42 @@
       console.warn("房間播放指令失敗:", error);
     } finally {
       setTimeout(() => {
-        state.roomAuthorityBusyV15 = false;
-      }, 150);
+        state.roomAuthorityBusyV16 = false;
+      }, 100);
     }
   }
 
-
-  async function roomAuthorityInitializeVideoV15(autoplayOwner) {
-    if (!roomAuthorityCanRunV15()) return;
+  async function roomAuthorityInitializeVideoV16(ownerAutoplay) {
+    if (!roomAuthorityCanRunV16()) return;
 
     try {
-      const existing = await roomAuthorityReadV15();
+      const existing = await roomAuthorityReadV16();
 
       if (existing) {
-        await roomAuthorityApplyV15(existing, true);
+        await roomAuthorityApplyV16(existing, true);
         return;
       }
 
-      /*
-       * The old playbackEvent belongs to the previous video, so this is a
-       * brand-new room timeline. Only the room owner initializes it.
-       */
-      if (autoplayOwner && state.isOwner) {
-        await roomAuthorityWriteV15("play", 0, true);
-        const created = await roomAuthorityReadV15();
-
+      if (ownerAutoplay && state.isOwner) {
+        await roomAuthorityWriteV16("play", 0, true);
+        const created = await roomAuthorityReadV16();
         if (created) {
-          await roomAuthorityApplyV15(created, true);
+          await roomAuthorityApplyV16(created, true);
         }
-      } else {
-        await pausePlayer();
+        return;
       }
+
+      await roomAuthorityForceStateV16(false, 12);
     } catch (error) {
       console.warn("新影片房間時間軸初始化失敗:", error);
     }
   }
 
-
-  async function roomAuthorityObserveYoutubeStateV15(data) {
+  async function roomAuthorityObserveYoutubeStateV16(data) {
     if (
-      !state.roomAuthorityV15 ||
-      !roomAuthorityCanRunV15() ||
-      state.roomAuthorityApplyingV15 ||
+      !roomAuthorityCanRunV16() ||
+      state.roomAuthorityApplyingV16 ||
       state.playbackApplyingRemote ||
-      state.playbackPendingRecovery ||
       document.visibilityState !== "visible"
     ) {
       return;
@@ -8762,217 +8763,333 @@
     const now = Date.now();
 
     if (
-      state.roomAuthorityLastNativeStateV15 === data &&
-      now - Number(state.roomAuthorityLastNativeStateAtV15 || 0) < 500
+      state.roomAuthorityLastNativeStateV16 === data &&
+      now - Number(state.roomAuthorityLastNativeStateAtV16 || 0) < 350
     ) {
       return;
     }
 
-    state.roomAuthorityLastNativeStateV15 = data;
-    state.roomAuthorityLastNativeStateAtV15 = now;
+    state.roomAuthorityLastNativeStateV16 = data;
+    state.roomAuthorityLastNativeStateAtV16 = now;
 
-    clearTimeout(state.roomAuthorityLocalStateTimerV15);
-
-    state.roomAuthorityLocalStateTimerV15 = setTimeout(async () => {
+    /*
+     * Native state is observation only.
+     * Do not publish it and do not immediately force it back.
+     * Ads, buffering and mobile background/resume may all emit PAUSED/PLAYING.
+     * The shared Firebase command remains authoritative.
+     */
+    clearTimeout(state.roomAuthorityLocalStateTimerV16);
+    state.roomAuthorityLocalStateTimerV16 = setTimeout(async () => {
       if (
-        !roomAuthorityCanRunV15() ||
-        state.roomAuthorityApplyingV15 ||
-        state.playbackApplyingRemote ||
-        document.visibilityState !== "visible"
+        !roomAuthorityCanRunV16() ||
+        state.roomAuthorityApplyingV16 ||
+        state.playbackApplyingRemote
       ) {
         return;
       }
 
-      /*
-       * Native YouTube state is observed, never promoted to a room command.
-       * This is what prevents ads/buffering/background recovery from changing
-       * the shared room state.
-       */
-      try {
-        const event = await roomAuthorityReadV15();
+      if (
+        Date.now() - Number(state.roomAuthorityLocalCommandAtV16 || 0) < 1800
+      ) {
+        return;
+      }
 
+      try {
+        const event = await roomAuthorityReadV16();
         if (!event) return;
 
-        const localPlaying = await asyncIsPlaying();
         const roomPlaying = event.playing === true;
+        const localPlaying = await asyncIsPlaying();
+        const position = await asyncCurrentPosition();
+        const expected = roomAuthorityExpectedV16(event);
 
-        if (roomPlaying !== localPlaying) {
-          await roomAuthorityApplyV15(event, false);
+        if (!Number.isFinite(expected)) return;
+
+        /*
+         * Only a large, persistent content-time discrepancy is corrected here.
+         * A brief PAUSED/PLAYING transition is ignored so ads do not become
+         * fake room commands.
+         */
+        if (
+          roomPlaying &&
+          localPlaying &&
+          position < expected - 4
+        ) {
+          state.roomAuthorityAdGraceUntilV16 = Math.max(
+            Number(state.roomAuthorityAdGraceUntilV16 || 0),
+            Date.now() + 30000
+          );
+          return;
+        }
+
+        if (
+          !roomPlaying &&
+          localPlaying &&
+          Date.now() >= Number(state.roomAuthorityAdGraceUntilV16 || 0)
+        ) {
+          await roomAuthorityApplyV16(event, false);
+          return;
+        }
+
+        if (
+          roomPlaying &&
+          !localPlaying &&
+          Date.now() >= Number(state.roomAuthorityAdGraceUntilV16 || 0)
+        ) {
+          await roomAuthorityApplyV16(event, false);
         }
       } catch (error) {
         console.warn("YouTube 狀態觀察失敗:", error);
       }
-    }, 550);
+    }, 1200);
   }
 
-
-  async function roomAuthorityObserverTickV15() {
+  async function roomAuthorityObserverTickV16() {
     if (
-      state.roomAuthorityBusyV15 ||
-      state.roomAuthorityApplyingV15 ||
-      !roomAuthorityCanRunV15() ||
+      state.roomAuthorityBusyV16 ||
+      state.roomAuthorityApplyingV16 ||
+      !roomAuthorityCanRunV16() ||
       document.visibilityState !== "visible"
     ) {
       return;
     }
 
-    const event = await roomAuthorityReadV15();
+    const event = await roomAuthorityReadV16();
+    if (!event) return;
 
-    if (!event) {
-      return;
-    }
-
-    const expected = roomAuthorityExpectedV15(event);
-
-    if (expected === null) {
-      return;
-    }
+    const expected = roomAuthorityExpectedV16(event);
+    if (!Number.isFinite(expected)) return;
 
     const position = await asyncCurrentPosition();
     const playing = await asyncIsPlaying();
     const roomPlaying = event.playing === true;
     const now = Date.now();
-    const previous = Number(state.roomAuthorityLastObservedPositionV15);
+    const previous = Number(state.roomAuthorityLastObservedPositionV16);
 
-    /*
-     * YouTube ads can temporarily stop advancing content time or report a
-     * non-content state. During that short anomaly, never let the local player
-     * drag the room timeline backwards and never seek every 500ms into an ad.
-     */
+    const localCommandAge =
+      now - Number(state.roomAuthorityLocalCommandAtV16 || 0);
+
+    /* Detect ad/buffering/background discontinuity without writing it to Firebase. */
     if (
       roomPlaying &&
       Number.isFinite(previous) &&
       Number.isFinite(position) &&
-      position < previous - 2.0 &&
-      now - Number(state.playbackLocalIntentAt || 0) > 1000
+      position < previous - 2 &&
+      localCommandAge > 1500
     ) {
-      state.roomAuthorityAdGraceUntilV15 = now + 45000;
+      state.roomAuthorityAdGraceUntilV16 = Math.max(
+        Number(state.roomAuthorityAdGraceUntilV16 || 0),
+        now + 45000
+      );
     }
 
     if (
       roomPlaying &&
-      Number.isFinite(previous) &&
       Number.isFinite(position) &&
-      position >= previous + 0.15
+      position + 3 < expected &&
+      localCommandAge > 1500
     ) {
-      if (now > Number(state.roomAuthorityAdGraceUntilV15 || 0)) {
-        state.roomAuthorityAdGraceUntilV15 = 0;
-      }
+      state.roomAuthorityAdGraceUntilV16 = Math.max(
+        Number(state.roomAuthorityAdGraceUntilV16 || 0),
+        now + 45000
+      );
     }
 
-    state.roomAuthorityLastObservedPositionV15 = position;
+    state.roomAuthorityLastObservedPositionV16 = position;
     state.playbackLastObservedPosition = position;
 
+    const adGrace =
+      now < Number(state.roomAuthorityAdGraceUntilV16 || 0);
+
+    /* During a suspected ad, never publish or fight the local player. */
+    if (adGrace) {
+      return;
+    }
+
+    if (roomPlaying && !playing) {
+      /* A remote/shared PLAY command must still win once grace is over. */
+      await roomAuthorityApplyV16(event, false);
+      return;
+    }
+
+    if (!roomPlaying && playing) {
+      /* A remote/shared PAUSE command always wins. */
+      await roomAuthorityApplyV16(event, false);
+      return;
+    }
+
     if (
-      now < Number(state.roomAuthorityAdGraceUntilV15 || 0) &&
-      roomPlaying &&
-      playing
+      Date.now() < Number(state.playbackReadyAt || 0) ||
+      Date.now() < Number(state.playbackIgnoreStateUntil || 0)
     ) {
       return;
     }
 
-    const positionDifference = Math.abs(
-      Number(position) - Number(expected)
-    );
+    const drift = Math.abs(position - expected);
 
-    if (positionDifference > 1.35) {
-      await roomAuthorityApplyV15(event, false);
-      return;
-    }
+    if (drift > 1.15) {
+      state.playbackApplyingRemote = true;
+      state.roomAuthorityApplyingV16 = true;
+      state.playbackPendingRecovery = true;
+      state.playbackIgnoreStateChanges = 25;
+      state.playbackIgnoreStateUntil = Date.now() + 5000;
 
-    if (roomPlaying !== playing) {
-      await roomAuthorityApplyV15(event, false);
+      try {
+        await applyPlayerPosition(expected);
+      } catch (error) {
+        console.warn("房間播放位置校正失敗:", error);
+      } finally {
+        state.roomAuthorityApplyingV16 = false;
+        state.playbackApplyingRemote = false;
+        state.playbackPendingRecovery = false;
+      }
     }
   }
 
-
-  function roomAuthorityStartObserverV15() {
-    clearInterval(state.roomAuthorityTimerV15);
-
-    state.roomAuthorityTimerV15 = setInterval(() => {
-      void roomAuthorityObserverTickV15().catch((error) => {
+  function roomAuthorityStartObserverV16() {
+    clearInterval(state.roomAuthorityTimerV16);
+    state.roomAuthorityTimerV16 = setInterval(() => {
+      void roomAuthorityObserverTickV16().catch((error) => {
         console.warn("房間播放校正失敗:", error);
       });
     }, 650);
   }
 
+  function roomAuthorityRecoverV16() {
+    clearTimeout(state.roomAuthorityRecoveryTimerV16);
 
-  function roomAuthorityRecoverV15() {
-    clearTimeout(state.roomAuthorityRecoveryTimerV15);
-
-    state.roomAuthorityRecoveryTimerV15 = setTimeout(async () => {
-      if (!roomAuthorityCanRunV15()) return;
-
-      state.playbackPendingRecovery = true;
-
-      try {
-        await roomAuthorityApplyLatestV15(true);
-      } finally {
-        state.playbackPendingRecovery = false;
+    state.roomAuthorityRecoveryTimerV16 = setTimeout(() => {
+      if (document.visibilityState && document.visibilityState !== "visible") {
+        return;
       }
-    }, 400);
+      void roomAuthorityApplyLatestV16(true);
+    }, 450);
   }
 
-
-  function roomAuthorityInstallControlsV15() {
-    roomAuthorityRoomButtonV15("playPauseBtn", async () => {
-      if (!roomAuthorityCanRunV15()) return;
-
-      const event = await roomAuthorityReadV15();
-
+  function roomAuthorityInstallControlsV16() {
+    roomAuthorityRoomButtonV16("playPauseBtn", async () => {
+      const event = await roomAuthorityReadV16();
       if (!event) return;
-
-      await roomAuthorityCommandV15(
+      await roomAuthorityCommandV16(
         event.playing === true ? "pause" : "play"
       );
     });
 
-    roomAuthorityRoomButtonV15("backBtn", async () => {
-      const event = await roomAuthorityReadV15();
-
-      if (!event) return;
-
-      const position = roomAuthorityExpectedV15(event);
-
-      if (position === null) return;
-
-      await roomAuthorityCommandV15(
-        "seek",
-        Math.max(0, position - 10)
-      );
+    roomAuthorityRoomButtonV16("backBtn", async () => {
+      const event = await roomAuthorityReadV16();
+      const position = event
+        ? roomAuthorityExpectedV16(event)
+        : null;
+      if (Number.isFinite(position)) {
+        await roomAuthorityCommandV16(
+          "seek",
+          Math.max(0, position - 10)
+        );
+      }
     });
 
-    roomAuthorityRoomButtonV15("forwardBtn", async () => {
-      const event = await roomAuthorityReadV15();
-
-      if (!event) return;
-
-      const position = roomAuthorityExpectedV15(event);
-
-      if (position === null) return;
-
-      await roomAuthorityCommandV15(
-        "seek",
-        position + 10
-      );
+    roomAuthorityRoomButtonV16("forwardBtn", async () => {
+      const event = await roomAuthorityReadV16();
+      const position = event
+        ? roomAuthorityExpectedV16(event)
+        : null;
+      if (Number.isFinite(position)) {
+        await roomAuthorityCommandV16(
+          "seek",
+          position + 10
+        );
+      }
     });
   }
 
+  function roomAuthorityRoomButtonV16(id, handler) {
+    const oldButton = $(id);
+    if (!oldButton) return;
 
-  /* Compatibility names used earlier in the app. */
+    const replacement = oldButton.cloneNode(true);
+    oldButton.replaceWith(replacement);
+    replacement.addEventListener("click", handler);
+  }
+
+  function handleRemotePlaybackSnapshot(snapshot) {
+    const event = snapshot?.val?.() || null;
+
+    if (!event || !event.eventId) return;
+    if (!roomAuthorityRememberV16(event)) return;
+
+    if (
+      String(event.videoId || "") !==
+      String(state.currentVideoId || "")
+    ) {
+      return;
+    }
+
+    if (event.updatedBy === state.uid) return;
+
+    if (
+      state.roomAuthorityLastEventIdV16 ===
+      String(event.eventId) &&
+      state.playbackLastRemoteEventId === String(event.eventId)
+    ) {
+      return;
+    }
+
+    void roomAuthorityApplyV16(event, false);
+  }
+
+  function attachPlaybackSyncListener() {
+    if (!state.roomRef || state.playbackListenerAttached) return;
+
+    const ref = playbackSyncRef();
+    if (!ref) return;
+
+    ref.on("value", handleRemotePlaybackSnapshot);
+    state.playbackListenerAttached = true;
+  }
+
+  function stopPlaybackSeekDetector() {
+    clearInterval(state.playbackSeekTimer);
+    state.playbackSeekTimer = null;
+    clearInterval(state.roomAuthorityTimerV16);
+    state.roomAuthorityTimerV16 = null;
+    clearTimeout(state.roomAuthorityLocalStateTimerV16);
+    state.roomAuthorityLocalStateTimerV16 = null;
+  }
+
+  function startPlaybackSeekDetector() {
+    if (!state.roomAuthorityTimerV16) {
+      roomAuthorityStartObserverV16();
+    }
+  }
+
+  function recoverPlaybackAfterPageResume() {
+    roomAuthorityRecoverV16();
+  }
+
   async function applyLatestRoomPlaybackState(force = true) {
-    await roomAuthorityApplyLatestV15(force);
+    await roomAuthorityApplyLatestV16(force);
   }
 
-  async function publishPlaybackEvent(action, position = null, explicitPlaying = undefined) {
-    if (!roomAuthorityCanRunV15()) return;
+  async function publishPlaybackEvent(
+    action,
+    position = null,
+    explicitPlaying = undefined
+  ) {
+    if (!roomAuthorityCanRunV16()) return;
+
+    const normalized =
+      action === "pause"
+        ? "pause"
+        : action === "seek"
+          ? "seek"
+          : "play";
 
     let targetPosition = Number(position);
 
     if (!Number.isFinite(targetPosition)) {
-      const event = await roomAuthorityReadV15();
+      const event = await roomAuthorityReadV16();
       targetPosition = event
-        ? roomAuthorityExpectedV15(event)
+        ? roomAuthorityExpectedV16(event)
         : await asyncCurrentPosition();
     }
 
@@ -8980,913 +9097,34 @@
 
     let playing;
 
-    if (typeof explicitPlaying === "boolean") {
+    if (normalized === "pause") {
+      playing = false;
+    } else if (normalized === "play") {
+      playing = true;
+    } else if (typeof explicitPlaying === "boolean") {
       playing = explicitPlaying;
     } else {
-      playing = action === "pause"
-        ? false
-        : action === "play"
-          ? true
-          : await asyncIsPlaying();
+      const event = await roomAuthorityReadV16();
+      playing = event
+        ? event.playing === true
+        : await asyncIsPlaying();
     }
 
-    await roomAuthorityWriteV15(
-      action === "pause" ? "pause" : action === "seek" ? "seek" : "play",
-      targetPosition,
-      playing
+    await roomAuthorityCommandV16(
+      normalized,
+      targetPosition
     );
   }
 
-
-  roomAuthorityInstallControlsV15();
-  roomAuthorityStartObserverV15();
+  roomAuthorityInstallControlsV16();
+  roomAuthorityStartObserverV16();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      roomAuthorityRecoverV15();
+      roomAuthorityRecoverV16();
     }
   });
 
-  window.addEventListener("pageshow", roomAuthorityRecoverV15);
-
-
-
-
-  /* =========================================================
-     ROOM AUTHORITY PLAYBACK V15
-     =========================================================
-     One shared Firebase timeline. No participant is a master.
-     ========================================================= */
-
-  state.roomAuthorityV15 = true;
-  state.roomAuthorityBusyV15 = false;
-  state.roomAuthorityTimerV15 = null;
-  state.roomAuthorityRecoveryTimerV15 = null;
-  state.roomAuthorityLocalStateTimerV15 = null;
-  state.roomAuthorityLastNativeStateV15 = null;
-  state.roomAuthorityLastNativeStateAtV15 = 0;
-  state.roomAuthorityLastObservedPositionV15 = null;
-  state.roomAuthorityAdGraceUntilV15 = 0;
-  state.roomAuthorityApplyingV15 = false;
-
-  function roomAuthorityNowV15() {
-    return typeof serverNow === "function" ? Number(serverNow()) : Date.now();
-  }
-
-  function roomAuthorityExpectedV15(event, now = roomAuthorityNowV15()) {
-    if (!event) return null;
-    const base = Number(event.position);
-    if (!Number.isFinite(base)) return null;
-    if (event.playing !== true) return Math.max(0, base);
-    const updatedAt = Number(event.updatedAt);
-    if (!Number.isFinite(updatedAt) || updatedAt <= 0) return Math.max(0, base);
-    return Math.max(0, base + Math.min(7200, Math.max(0, (now - updatedAt) / 1000)));
-  }
-
-  function roomAuthorityRememberV15(event) {
-    if (!event || !event.eventId) return false;
-    const incoming = Number(event.updatedAt || 0);
-    const current = Number(state.playbackTimeline?.updatedAt || 0);
-    if (incoming > 0 && current > 0 && incoming < current) return false;
-    state.playbackTimeline = {
-      videoId: String(event.videoId || ""),
-      position: Math.max(0, Number(event.position) || 0),
-      playing: event.playing === true,
-      updatedAt: incoming || roomAuthorityNowV15(),
-      eventId: String(event.eventId),
-      action: event.action || "",
-      updatedBy: event.updatedBy || ""
-    };
-    state.playbackRemoteEvent = state.playbackTimeline;
-    return true;
-  }
-
-  function playbackSyncRef() {
-    if (!db || !state.roomId) return null;
-    return db.ref(`rooms/${state.roomId}/playbackEvent`);
-  }
-
-  async function roomAuthorityReadV15() {
-    const ref = playbackSyncRef();
-    if (!ref || !state.currentVideoId) return null;
-    const snapshot = await ref.once("value");
-    const event = snapshot.val();
-    if (!event || String(event.videoId || "") !== String(state.currentVideoId || "")) return null;
-    roomAuthorityRememberV15(event);
-    return event;
-  }
-
-  function roomAuthorityCanRunV15() {
-    return Boolean(
-      db && state.roomId && state.currentVideoId && state.player &&
-      state.playerReady && state.playerType === "youtube"
-    );
-  }
-
-  function roomAuthorityEventV15(action, position, playing) {
-    const now = Date.now();
-    return {
-      action,
-      position: Math.max(0, Number(position) || 0),
-      videoId: String(state.currentVideoId),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedBy: state.uid,
-      eventId: `${state.uid}_${now}_${++state.playbackActionSeq}_${Math.random().toString(36).slice(2)}`,
-      playing: playing === true
-    };
-  }
-
-  async function roomAuthorityWriteV15(action, position, playing) {
-    if (!state.uid || !state.roomId || !state.currentVideoId || !db) return null;
-    const ref = playbackSyncRef();
-    if (!ref) return null;
-    const event = roomAuthorityEventV15(action, position, playing);
-    const localNow = roomAuthorityNowV15();
-    roomAuthorityRememberV15({ ...event, updatedAt: localNow });
-    state.playbackLastRemoteEventId = event.eventId;
-    state.playbackLastRemoteUpdatedAt = localNow;
-    await ref.set(event);
-    return event;
-  }
-
-  async function roomAuthorityForcePlayingV15(wantPlaying, attempts = 12) {
-    for (let index = 0; index < attempts; index += 1) {
-      if (!roomAuthorityCanRunV15()) return;
-      const current = await asyncIsPlaying().catch(() => null);
-      if (current === wantPlaying) return;
-      try {
-        if (wantPlaying) await playPlayer();
-        else await pausePlayer();
-      } catch (_) {}
-      if (index + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 180));
-    }
-  }
-
-  async function roomAuthorityApplyV15(event, force = false) {
-    if (!roomAuthorityCanRunV15() || !event) return;
-    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
-    const expected = roomAuthorityExpectedV15(event);
-    if (expected === null) return;
-
-    state.roomAuthorityApplyingV15 = true;
-    state.playbackApplyingRemote = true;
-    state.playbackPendingRecovery = true;
-    state.playbackIgnoreStateChanges = 30;
-    state.playbackIgnoreStateUntil = Date.now() + 6000;
-    state.playbackReadyAt = Date.now() + 500;
-
-    try {
-      const localPosition = await asyncCurrentPosition();
-      const localPlaying = await asyncIsPlaying();
-      const wantPlaying = event.playing === true;
-
-      if (force || Math.abs(localPosition - expected) > 0.80) {
-        await applyPlayerPosition(expected);
-      }
-
-      if (localPlaying !== wantPlaying) {
-        await roomAuthorityForcePlayingV15(wantPlaying, wantPlaying ? 10 : 12);
-      }
-
-      state.playbackLastPosition = expected;
-      state.playbackLastPlaying = wantPlaying;
-      state.playbackLastObservedPosition = await asyncCurrentPosition().catch(() => expected);
-      state.roomAuthorityLastObservedPositionV15 = state.playbackLastObservedPosition;
-
-      if ($("syncStatus")) $("syncStatus").textContent = `已同步 ${formatTime(expected)}`;
-    } catch (error) {
-      console.warn("房間播放狀態套用失敗:", error);
-    } finally {
-      state.roomAuthorityApplyingV15 = false;
-      state.playbackApplyingRemote = false;
-      state.playbackPendingRecovery = false;
-    }
-  }
-
-  async function roomAuthorityApplyLatestV15(force = true) {
-    if (!roomAuthorityCanRunV15()) return;
-    try {
-      const event = await roomAuthorityReadV15();
-      if (event) await roomAuthorityApplyV15(event, force);
-    } catch (error) {
-      console.warn("讀取房間播放時間軸失敗:", error);
-    }
-  }
-
-  async function roomAuthorityCommandV15(action, requestedPosition = null) {
-    if (!roomAuthorityCanRunV15() || state.roomAuthorityBusyV15) return;
-
-    state.roomAuthorityBusyV15 = true;
-    state.playbackUserActionUntil = Date.now() + 5000;
-    state.playbackUserActionKind = action;
-    state.playbackLocalIntentAt = Date.now();
-    state.playbackIgnoreStateChanges = 30;
-    state.playbackIgnoreStateUntil = Date.now() + 6000;
-
-    try {
-      const event = await roomAuthorityReadV15();
-      if (!event) return;
-
-      const sharedPosition = roomAuthorityExpectedV15(event);
-      if (sharedPosition === null) return;
-
-      let targetPosition = sharedPosition;
-      let targetPlaying = event.playing === true;
-
-      if (action === "pause") {
-        targetPlaying = false;
-      } else if (action === "play") {
-        targetPlaying = true;
-      } else if (action === "seek") {
-        const value = Number(requestedPosition);
-        if (!Number.isFinite(value)) return;
-        targetPosition = Math.max(0, value);
-      } else {
-        return;
-      }
-
-      if (action === "pause") {
-        await pausePlayer();
-      } else if (action === "play") {
-        await applyPlayerPosition(targetPosition);
-        await playPlayer();
-      } else {
-        await applyPlayerPosition(targetPosition);
-        if (targetPlaying) await playPlayer();
-        else await pausePlayer();
-      }
-
-      await roomAuthorityWriteV15(action, targetPosition, targetPlaying);
-      state.playbackLastPosition = targetPosition;
-      state.playbackLastPlaying = targetPlaying;
-    } catch (error) {
-      console.warn("房間播放指令失敗:", error);
-    } finally {
-      setTimeout(() => { state.roomAuthorityBusyV15 = false; }, 150);
-    }
-  }
-
-  async function roomAuthorityInitializeVideoV15(ownerAutoplay) {
-    if (!roomAuthorityCanRunV15()) return;
-
-    try {
-      const existing = await roomAuthorityReadV15();
-
-      if (existing) {
-        await roomAuthorityApplyV15(existing, true);
-        return;
-      }
-
-      if (ownerAutoplay && state.isOwner) {
-        await roomAuthorityWriteV15("play", 0, true);
-        const created = await roomAuthorityReadV15();
-        if (created) await roomAuthorityApplyV15(created, true);
-      } else {
-        await pausePlayer();
-      }
-    } catch (error) {
-      console.warn("新影片房間時間軸初始化失敗:", error);
-    }
-  }
-
-  async function roomAuthorityObserveYoutubeStateV15(data) {
-    if (
-      !roomAuthorityCanRunV15() ||
-      state.roomAuthorityApplyingV15 ||
-      state.playbackApplyingRemote ||
-      state.playbackPendingRecovery ||
-      document.visibilityState !== "visible"
-    ) return;
-
-    const now = Date.now();
-    if (
-      state.roomAuthorityLastNativeStateV15 === data &&
-      now - Number(state.roomAuthorityLastNativeStateAtV15 || 0) < 500
-    ) return;
-
-    state.roomAuthorityLastNativeStateV15 = data;
-    state.roomAuthorityLastNativeStateAtV15 = now;
-
-    clearTimeout(state.roomAuthorityLocalStateTimerV15);
-    state.roomAuthorityLocalStateTimerV15 = setTimeout(async () => {
-      if (!roomAuthorityCanRunV15() || state.roomAuthorityApplyingV15 || state.playbackApplyingRemote) return;
-      try {
-        const event = await roomAuthorityReadV15();
-        if (!event) return;
-        if ((await asyncIsPlaying()) !== (event.playing === true)) {
-          await roomAuthorityApplyV15(event, false);
-        }
-      } catch (error) {
-        console.warn("YouTube 狀態觀察失敗:", error);
-      }
-    }, 550);
-  }
-
-  async function roomAuthorityObserverTickV15() {
-    if (
-      state.roomAuthorityBusyV15 ||
-      state.roomAuthorityApplyingV15 ||
-      !roomAuthorityCanRunV15() ||
-      document.visibilityState !== "visible"
-    ) return;
-
-    const event = await roomAuthorityReadV15();
-    if (!event) return;
-
-    const expected = roomAuthorityExpectedV15(event);
-    if (expected === null) return;
-
-    const position = await asyncCurrentPosition();
-    const playing = await asyncIsPlaying();
-    const roomPlaying = event.playing === true;
-    const now = Date.now();
-    const previous = Number(state.roomAuthorityLastObservedPositionV15);
-
-    /* Detect an ad/buffering discontinuity. Never feed it back into Firebase. */
-    if (
-      roomPlaying &&
-      Number.isFinite(previous) &&
-      Number.isFinite(position) &&
-      position < previous - 2.0 &&
-      now - Number(state.playbackLocalIntentAt || 0) > 1000
-    ) {
-      state.roomAuthorityAdGraceUntilV15 = now + 45000;
-    }
-
-    /* Also tolerate a local content-time stall while the shared room clock keeps moving. */
-    if (
-      roomPlaying &&
-      playing &&
-      Number.isFinite(previous) &&
-      Number.isFinite(position) &&
-      now - Number(state.playbackLocalIntentAt || 0) > 1500 &&
-      position <= previous + 0.08 &&
-      expected - position > 1.35
-    ) {
-      state.roomAuthorityAdGraceUntilV15 = Math.max(
-        Number(state.roomAuthorityAdGraceUntilV15 || 0),
-        now + 45000
-      );
-    }
-
-    state.roomAuthorityLastObservedPositionV15 = position;
-    state.playbackLastObservedPosition = position;
-
-    if (
-      roomPlaying &&
-      playing &&
-      now < Number(state.roomAuthorityAdGraceUntilV15 || 0)
-    ) return;
-
-    const drift = Math.abs(position - expected);
-    if (drift > 1.35 || roomPlaying !== playing) {
-      await roomAuthorityApplyV15(event, false);
-    }
-  }
-
-  function roomAuthorityStartObserverV15() {
-    clearInterval(state.roomAuthorityTimerV15);
-    state.roomAuthorityTimerV15 = setInterval(() => {
-      void roomAuthorityObserverTickV15().catch((error) => console.warn("房間播放校正失敗:", error));
-    }, 650);
-  }
-
-  function roomAuthorityRecoverV15() {
-    clearTimeout(state.roomAuthorityRecoveryTimerV15);
-    state.roomAuthorityRecoveryTimerV15 = setTimeout(() => {
-      void roomAuthorityApplyLatestV15(true);
-    }, 400);
-  }
-
-  function roomAuthorityInstallControlsV15() {
-    roomAuthorityRoomButtonV15("playPauseBtn", async () => {
-      const event = await roomAuthorityReadV15();
-      if (event) await roomAuthorityCommandV15(event.playing === true ? "pause" : "play");
-    });
-
-    roomAuthorityRoomButtonV15("backBtn", async () => {
-      const event = await roomAuthorityReadV15();
-      const position = event ? roomAuthorityExpectedV15(event) : null;
-      if (position !== null) await roomAuthorityCommandV15("seek", Math.max(0, position - 10));
-    });
-
-    roomAuthorityRoomButtonV15("forwardBtn", async () => {
-      const event = await roomAuthorityReadV15();
-      const position = event ? roomAuthorityExpectedV15(event) : null;
-      if (position !== null) await roomAuthorityCommandV15("seek", position + 10);
-    });
-  }
-
-  function roomAuthorityRoomButtonV15(id, handler) {
-    const oldButton = $(id);
-    if (!oldButton) return;
-    const replacement = oldButton.cloneNode(true);
-    oldButton.replaceWith(replacement);
-    replacement.addEventListener("click", handler);
-  }
-
-  /* Compatibility functions used by the existing room lifecycle. */
-  function handleRemotePlaybackSnapshot(snapshot) {
-    const event = snapshot?.val?.() || null;
-    if (!event || !event.eventId) return;
-    if (!roomAuthorityRememberV15(event)) return;
-    if (event.updatedBy === state.uid) return;
-    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
-    void roomAuthorityApplyV15(event, false);
-  }
-
-  function attachPlaybackSyncListener() {
-    if (!state.roomRef || state.playbackListenerAttached) return;
-    const ref = playbackSyncRef();
-    if (!ref) return;
-    ref.on("value", handleRemotePlaybackSnapshot);
-    state.playbackListenerAttached = true;
-  }
-
-  function stopPlaybackSeekDetector() {
-    clearInterval(state.playbackSeekTimer);
-    state.playbackSeekTimer = null;
-    clearInterval(state.roomAuthorityTimerV15);
-    state.roomAuthorityTimerV15 = null;
-  }
-
-  function startPlaybackSeekDetector() {
-    if (!state.roomAuthorityTimerV15) roomAuthorityStartObserverV15();
-  }
-
-  function recoverPlaybackAfterPageResume() {
-    roomAuthorityRecoverV15();
-  }
-
-  async function applyLatestRoomPlaybackState(force = true) {
-    await roomAuthorityApplyLatestV15(force);
-  }
-
-  async function publishPlaybackEvent(action, position = null, explicitPlaying = undefined) {
-    if (!roomAuthorityCanRunV15()) return;
-    let targetPosition = Number(position);
-    if (!Number.isFinite(targetPosition)) {
-      const event = await roomAuthorityReadV15();
-      targetPosition = event ? roomAuthorityExpectedV15(event) : await asyncCurrentPosition();
-    }
-    if (!Number.isFinite(targetPosition)) return;
-    const playing = typeof explicitPlaying === "boolean"
-      ? explicitPlaying
-      : action === "pause" ? false : action === "play" ? true : await asyncIsPlaying();
-    await roomAuthorityWriteV15(
-      action === "pause" ? "pause" : action === "seek" ? "seek" : "play",
-      targetPosition,
-      playing
-    );
-  }
-
-  roomAuthorityInstallControlsV15();
-  roomAuthorityStartObserverV15();
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") roomAuthorityRecoverV15();
-  });
-
-  window.addEventListener("pageshow", roomAuthorityRecoverV15);
-
-
-
-
-  /* =========================================================
-     ROOM AUTHORITY PLAYBACK V15
-     =========================================================
-     One shared Firebase timeline. No participant is a master.
-     ========================================================= */
-
-  state.roomAuthorityV15 = true;
-  state.roomAuthorityBusyV15 = false;
-  state.roomAuthorityTimerV15 = null;
-  state.roomAuthorityRecoveryTimerV15 = null;
-  state.roomAuthorityLocalStateTimerV15 = null;
-  state.roomAuthorityLastNativeStateV15 = null;
-  state.roomAuthorityLastNativeStateAtV15 = 0;
-  state.roomAuthorityLastObservedPositionV15 = null;
-  state.roomAuthorityAdGraceUntilV15 = 0;
-  state.roomAuthorityApplyingV15 = false;
-
-  function roomAuthorityNowV15() {
-    return typeof serverNow === "function" ? Number(serverNow()) : Date.now();
-  }
-
-  function roomAuthorityExpectedV15(event, now = roomAuthorityNowV15()) {
-    if (!event) return null;
-    const base = Number(event.position);
-    if (!Number.isFinite(base)) return null;
-    if (event.playing !== true) return Math.max(0, base);
-    const updatedAt = Number(event.updatedAt);
-    if (!Number.isFinite(updatedAt) || updatedAt <= 0) return Math.max(0, base);
-    return Math.max(0, base + Math.min(7200, Math.max(0, (now - updatedAt) / 1000)));
-  }
-
-  function roomAuthorityRememberV15(event) {
-    if (!event || !event.eventId) return false;
-    const incoming = Number(event.updatedAt || 0);
-    const current = Number(state.playbackTimeline?.updatedAt || 0);
-    if (incoming > 0 && current > 0 && incoming < current) return false;
-    state.playbackTimeline = {
-      videoId: String(event.videoId || ""),
-      position: Math.max(0, Number(event.position) || 0),
-      playing: event.playing === true,
-      updatedAt: incoming || roomAuthorityNowV15(),
-      eventId: String(event.eventId),
-      action: event.action || "",
-      updatedBy: event.updatedBy || ""
-    };
-    state.playbackRemoteEvent = state.playbackTimeline;
-    return true;
-  }
-
-  function playbackSyncRef() {
-    if (!db || !state.roomId) return null;
-    return db.ref(`rooms/${state.roomId}/playbackEvent`);
-  }
-
-  async function roomAuthorityReadV15() {
-    const ref = playbackSyncRef();
-    if (!ref || !state.currentVideoId) return null;
-    const snapshot = await ref.once("value");
-    const event = snapshot.val();
-    if (!event || String(event.videoId || "") !== String(state.currentVideoId || "")) return null;
-    roomAuthorityRememberV15(event);
-    return event;
-  }
-
-  function roomAuthorityCanRunV15() {
-    return Boolean(
-      db && state.roomId && state.currentVideoId && state.player &&
-      state.playerReady && state.playerType === "youtube"
-    );
-  }
-
-  function roomAuthorityEventV15(action, position, playing) {
-    const now = Date.now();
-    return {
-      action,
-      position: Math.max(0, Number(position) || 0),
-      videoId: String(state.currentVideoId),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedBy: state.uid,
-      eventId: `${state.uid}_${now}_${++state.playbackActionSeq}_${Math.random().toString(36).slice(2)}`,
-      playing: playing === true
-    };
-  }
-
-  async function roomAuthorityWriteV15(action, position, playing) {
-    if (!state.uid || !state.roomId || !state.currentVideoId || !db) return null;
-    const ref = playbackSyncRef();
-    if (!ref) return null;
-    const event = roomAuthorityEventV15(action, position, playing);
-    const localNow = roomAuthorityNowV15();
-    roomAuthorityRememberV15({ ...event, updatedAt: localNow });
-    state.playbackLastRemoteEventId = event.eventId;
-    state.playbackLastRemoteUpdatedAt = localNow;
-    await ref.set(event);
-    return event;
-  }
-
-  async function roomAuthorityForcePlayingV15(wantPlaying, attempts = 12) {
-    for (let index = 0; index < attempts; index += 1) {
-      if (!roomAuthorityCanRunV15()) return;
-      const current = await asyncIsPlaying().catch(() => null);
-      if (current === wantPlaying) return;
-      try {
-        if (wantPlaying) await playPlayer();
-        else await pausePlayer();
-      } catch (_) {}
-      if (index + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 180));
-    }
-  }
-
-  async function roomAuthorityApplyV15(event, force = false) {
-    if (!roomAuthorityCanRunV15() || !event) return;
-    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
-    const expected = roomAuthorityExpectedV15(event);
-    if (expected === null) return;
-
-    state.roomAuthorityApplyingV15 = true;
-    state.playbackApplyingRemote = true;
-    state.playbackPendingRecovery = true;
-    state.playbackIgnoreStateChanges = 30;
-    state.playbackIgnoreStateUntil = Date.now() + 6000;
-    state.playbackReadyAt = Date.now() + 500;
-
-    try {
-      const localPosition = await asyncCurrentPosition();
-      const localPlaying = await asyncIsPlaying();
-      const wantPlaying = event.playing === true;
-
-      if (force || Math.abs(localPosition - expected) > 0.80) {
-        await applyPlayerPosition(expected);
-      }
-
-      if (localPlaying !== wantPlaying) {
-        await roomAuthorityForcePlayingV15(wantPlaying, wantPlaying ? 10 : 12);
-      }
-
-      state.playbackLastPosition = expected;
-      state.playbackLastPlaying = wantPlaying;
-      state.playbackLastObservedPosition = await asyncCurrentPosition().catch(() => expected);
-      state.roomAuthorityLastObservedPositionV15 = state.playbackLastObservedPosition;
-
-      if ($("syncStatus")) $("syncStatus").textContent = `已同步 ${formatTime(expected)}`;
-    } catch (error) {
-      console.warn("房間播放狀態套用失敗:", error);
-    } finally {
-      state.roomAuthorityApplyingV15 = false;
-      state.playbackApplyingRemote = false;
-      state.playbackPendingRecovery = false;
-    }
-  }
-
-  async function roomAuthorityApplyLatestV15(force = true) {
-    if (!roomAuthorityCanRunV15()) return;
-    try {
-      const event = await roomAuthorityReadV15();
-      if (event) await roomAuthorityApplyV15(event, force);
-    } catch (error) {
-      console.warn("讀取房間播放時間軸失敗:", error);
-    }
-  }
-
-  async function roomAuthorityCommandV15(action, requestedPosition = null) {
-    if (!roomAuthorityCanRunV15() || state.roomAuthorityBusyV15) return;
-
-    state.roomAuthorityBusyV15 = true;
-    state.playbackUserActionUntil = Date.now() + 5000;
-    state.playbackUserActionKind = action;
-    state.playbackLocalIntentAt = Date.now();
-    state.playbackIgnoreStateChanges = 30;
-    state.playbackIgnoreStateUntil = Date.now() + 6000;
-
-    try {
-      const event = await roomAuthorityReadV15();
-      if (!event) return;
-
-      const sharedPosition = roomAuthorityExpectedV15(event);
-      if (sharedPosition === null) return;
-
-      let targetPosition = sharedPosition;
-      let targetPlaying = event.playing === true;
-
-      if (action === "pause") {
-        targetPlaying = false;
-      } else if (action === "play") {
-        targetPlaying = true;
-      } else if (action === "seek") {
-        const value = Number(requestedPosition);
-        if (!Number.isFinite(value)) return;
-        targetPosition = Math.max(0, value);
-      } else {
-        return;
-      }
-
-      if (action === "pause") {
-        await pausePlayer();
-      } else if (action === "play") {
-        await applyPlayerPosition(targetPosition);
-        await playPlayer();
-      } else {
-        await applyPlayerPosition(targetPosition);
-        if (targetPlaying) await playPlayer();
-        else await pausePlayer();
-      }
-
-      await roomAuthorityWriteV15(action, targetPosition, targetPlaying);
-      state.playbackLastPosition = targetPosition;
-      state.playbackLastPlaying = targetPlaying;
-    } catch (error) {
-      console.warn("房間播放指令失敗:", error);
-    } finally {
-      setTimeout(() => { state.roomAuthorityBusyV15 = false; }, 150);
-    }
-  }
-
-  async function roomAuthorityInitializeVideoV15(ownerAutoplay) {
-    if (!roomAuthorityCanRunV15()) return;
-
-    try {
-      const existing = await roomAuthorityReadV15();
-
-      if (existing) {
-        await roomAuthorityApplyV15(existing, true);
-        return;
-      }
-
-      if (ownerAutoplay && state.isOwner) {
-        await roomAuthorityWriteV15("play", 0, true);
-        const created = await roomAuthorityReadV15();
-        if (created) await roomAuthorityApplyV15(created, true);
-      } else {
-        await pausePlayer();
-      }
-    } catch (error) {
-      console.warn("新影片房間時間軸初始化失敗:", error);
-    }
-  }
-
-  async function roomAuthorityObserveYoutubeStateV15(data) {
-    if (
-      !roomAuthorityCanRunV15() ||
-      state.roomAuthorityApplyingV15 ||
-      state.playbackApplyingRemote ||
-      state.playbackPendingRecovery ||
-      document.visibilityState !== "visible"
-    ) return;
-
-    const now = Date.now();
-    if (
-      state.roomAuthorityLastNativeStateV15 === data &&
-      now - Number(state.roomAuthorityLastNativeStateAtV15 || 0) < 500
-    ) return;
-
-    state.roomAuthorityLastNativeStateV15 = data;
-    state.roomAuthorityLastNativeStateAtV15 = now;
-
-    clearTimeout(state.roomAuthorityLocalStateTimerV15);
-    state.roomAuthorityLocalStateTimerV15 = setTimeout(async () => {
-      if (!roomAuthorityCanRunV15() || state.roomAuthorityApplyingV15 || state.playbackApplyingRemote) return;
-      try {
-        const event = await roomAuthorityReadV15();
-        if (!event) return;
-        if ((await asyncIsPlaying()) !== (event.playing === true)) {
-          await roomAuthorityApplyV15(event, false);
-        }
-      } catch (error) {
-        console.warn("YouTube 狀態觀察失敗:", error);
-      }
-    }, 550);
-  }
-
-  async function roomAuthorityObserverTickV15() {
-    if (
-      state.roomAuthorityBusyV15 ||
-      state.roomAuthorityApplyingV15 ||
-      !roomAuthorityCanRunV15() ||
-      document.visibilityState !== "visible"
-    ) return;
-
-    const event = await roomAuthorityReadV15();
-    if (!event) return;
-
-    const expected = roomAuthorityExpectedV15(event);
-    if (expected === null) return;
-
-    const position = await asyncCurrentPosition();
-    const playing = await asyncIsPlaying();
-    const roomPlaying = event.playing === true;
-    const now = Date.now();
-    const previous = Number(state.roomAuthorityLastObservedPositionV15);
-
-    /* Detect an ad/buffering discontinuity. Never feed it back into Firebase. */
-    if (
-      roomPlaying &&
-      Number.isFinite(previous) &&
-      Number.isFinite(position) &&
-      position < previous - 2.0 &&
-      now - Number(state.playbackLocalIntentAt || 0) > 1000
-    ) {
-      state.roomAuthorityAdGraceUntilV15 = now + 45000;
-    }
-
-    /* Also tolerate a local content-time stall while the shared room clock keeps moving. */
-    if (
-      roomPlaying &&
-      playing &&
-      Number.isFinite(previous) &&
-      Number.isFinite(position) &&
-      now - Number(state.playbackLocalIntentAt || 0) > 1500 &&
-      position <= previous + 0.08 &&
-      expected - position > 1.35
-    ) {
-      state.roomAuthorityAdGraceUntilV15 = Math.max(
-        Number(state.roomAuthorityAdGraceUntilV15 || 0),
-        now + 45000
-      );
-    }
-
-    state.roomAuthorityLastObservedPositionV15 = position;
-    state.playbackLastObservedPosition = position;
-
-    if (
-      roomPlaying &&
-      playing &&
-      now < Number(state.roomAuthorityAdGraceUntilV15 || 0)
-    ) return;
-
-    const drift = Math.abs(position - expected);
-    if (drift > 1.35 || roomPlaying !== playing) {
-      await roomAuthorityApplyV15(event, false);
-    }
-  }
-
-  function roomAuthorityStartObserverV15() {
-    clearInterval(state.roomAuthorityTimerV15);
-    state.roomAuthorityTimerV15 = setInterval(() => {
-      void roomAuthorityObserverTickV15().catch((error) => console.warn("房間播放校正失敗:", error));
-    }, 650);
-  }
-
-  function roomAuthorityRecoverV15() {
-    clearTimeout(state.roomAuthorityRecoveryTimerV15);
-    state.roomAuthorityRecoveryTimerV15 = setTimeout(() => {
-      void roomAuthorityApplyLatestV15(true);
-    }, 400);
-  }
-
-  function roomAuthorityInstallControlsV15() {
-    roomAuthorityRoomButtonV15("playPauseBtn", async () => {
-      const event = await roomAuthorityReadV15();
-      if (event) await roomAuthorityCommandV15(event.playing === true ? "pause" : "play");
-    });
-
-    roomAuthorityRoomButtonV15("backBtn", async () => {
-      const event = await roomAuthorityReadV15();
-      const position = event ? roomAuthorityExpectedV15(event) : null;
-      if (position !== null) await roomAuthorityCommandV15("seek", Math.max(0, position - 10));
-    });
-
-    roomAuthorityRoomButtonV15("forwardBtn", async () => {
-      const event = await roomAuthorityReadV15();
-      const position = event ? roomAuthorityExpectedV15(event) : null;
-      if (position !== null) await roomAuthorityCommandV15("seek", position + 10);
-    });
-  }
-
-  function roomAuthorityRoomButtonV15(id, handler) {
-    const oldButton = $(id);
-    if (!oldButton) return;
-    const replacement = oldButton.cloneNode(true);
-    oldButton.replaceWith(replacement);
-    replacement.addEventListener("click", handler);
-  }
-
-  /* Compatibility functions used by the existing room lifecycle. */
-  function handleRemotePlaybackSnapshot(snapshot) {
-    const event = snapshot?.val?.() || null;
-    if (!event || !event.eventId) return;
-    if (!roomAuthorityRememberV15(event)) return;
-    if (event.updatedBy === state.uid) return;
-    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
-    void roomAuthorityApplyV15(event, false);
-  }
-
-  function attachPlaybackSyncListener() {
-    if (!state.roomRef || state.playbackListenerAttached) return;
-    const ref = playbackSyncRef();
-    if (!ref) return;
-    ref.on("value", handleRemotePlaybackSnapshot);
-    state.playbackListenerAttached = true;
-  }
-
-  function stopPlaybackSeekDetector() {
-    clearInterval(state.playbackSeekTimer);
-    state.playbackSeekTimer = null;
-    clearInterval(state.roomAuthorityTimerV15);
-    state.roomAuthorityTimerV15 = null;
-  }
-
-  function startPlaybackSeekDetector() {
-    if (!state.roomAuthorityTimerV15) roomAuthorityStartObserverV15();
-  }
-
-  function recoverPlaybackAfterPageResume() {
-    roomAuthorityRecoverV15();
-  }
-
-  async function applyLatestRoomPlaybackState(force = true) {
-    await roomAuthorityApplyLatestV15(force);
-  }
-
-  async function publishPlaybackEvent(action, position = null, explicitPlaying = undefined) {
-    if (!roomAuthorityCanRunV15()) return;
-    let targetPosition = Number(position);
-    if (!Number.isFinite(targetPosition)) {
-      const event = await roomAuthorityReadV15();
-      targetPosition = event ? roomAuthorityExpectedV15(event) : await asyncCurrentPosition();
-    }
-    if (!Number.isFinite(targetPosition)) return;
-    const playing = typeof explicitPlaying === "boolean"
-      ? explicitPlaying
-      : action === "pause" ? false : action === "play" ? true : await asyncIsPlaying();
-    await roomAuthorityWriteV15(
-      action === "pause" ? "pause" : action === "seek" ? "seek" : "play",
-      targetPosition,
-      playing
-    );
-  }
-
-  roomAuthorityInstallControlsV15();
-  roomAuthorityStartObserverV15();
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") roomAuthorityRecoverV15();
-  });
-
-  window.addEventListener("pageshow", roomAuthorityRecoverV15);
+  window.addEventListener("pageshow", roomAuthorityRecoverV16);
 
 })();
