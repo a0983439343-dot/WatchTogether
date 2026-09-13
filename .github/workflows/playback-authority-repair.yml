@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   repair:
     runs-on: ubuntu-latest
@@ -12,296 +15,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install authoritative playback layer
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
+      - name: Patch app.js
+        run: python3 .github/scripts/install_playback_v12.py
 
-          path = Path('app.js')
-          text = path.read_text(encoding='utf-8')
-
-          marker = 'STABLE ROOM AUTHORITY PLAYBACK V11'
-          if marker in text:
-              print('playback layer already installed')
-              raise SystemExit(0)
-
-          layer = r'''
-
-  /* =========================================================
-     STABLE ROOM AUTHORITY PLAYBACK V11
-     =========================================================
-     Firebase playbackEvent is the shared room authority.
-     No user/player is a master.
-  ========================================================= */
-
-  function stableRoomPlayerReady() {
-    return Boolean(
-      state &&
-      state.playerReady &&
-      state.player &&
-      state.currentVideoId &&
-      typeof asyncCurrentPosition === "function"
-    );
-  }
-
-  function stableRoomClock() {
-    return typeof serverNow === "function" ? serverNow() : Date.now();
-  }
-
-  function stableRoomExpectedPosition(timeline, now = stableRoomClock()) {
-    if (!timeline) return null;
-    const base = Number(timeline.position);
-    if (!Number.isFinite(base)) return null;
-    if (timeline.playing !== true) return Math.max(0, base);
-    const updatedAt = Number(timeline.updatedAt);
-    if (!Number.isFinite(updatedAt)) return Math.max(0, base);
-    return Math.max(0, base + Math.min(7200, Math.max(0, (now - updatedAt) / 1000)));
-  }
-
-  function stableRoomTransient() {
-    const now = Date.now();
-    return (
-      Number(state.playbackAdGuardUntil || 0) > now ||
-      Number(state.playbackTransientStateUntil || 0) > now ||
-      Number(state.playbackIgnoreStateUntil || 0) > now ||
-      Number(state.playbackReadyAt || 0) > now ||
-      Number(state.playbackRecoveryUntil || 0) > now
-    );
-  }
-
-  async function stableRoomReadTimeline() {
-    if (!state.roomId || !db || !state.currentVideoId) return null;
-    const snapshot = await db.ref(`rooms/${state.roomId}/playbackEvent`).once('value');
-    const event = snapshot.val();
-    if (!event || event.videoId !== state.currentVideoId) return null;
-    return event;
-  }
-
-  async function stableRoomApply(force = false) {
-    if (!stableRoomPlayerReady()) return;
-
-    try {
-      const event = await stableRoomReadTimeline();
-      if (!event) return;
-
-      state.playbackTimeline = event;
-
-      const expected = stableRoomExpectedPosition(event);
-      if (expected === null) return;
-
-      const current = await asyncCurrentPosition();
-      if (Math.abs(expected - current) > 0.7 && typeof applyPlayerPosition === 'function') {
-        state.playbackIgnoreStateChanges = 4;
-        state.playbackIgnoreStateUntil = Date.now() + 2200;
-        await applyPlayerPosition(expected);
-      }
-
-      const localPlaying = await asyncIsPlaying();
-
-      if (event.playing === true && !localPlaying) {
-        state.playbackIgnoreStateChanges = 6;
-        state.playbackIgnoreStateUntil = Date.now() + 2500;
-        if (typeof playPlayer === 'function') await playPlayer();
-      } else if (event.playing !== true && localPlaying) {
-        state.playbackIgnoreStateChanges = 6;
-        state.playbackIgnoreStateUntil = Date.now() + 2500;
-        if (typeof pausePlayer === 'function') await pausePlayer();
-      }
-    } catch (error) {
-      console.warn('房間播放狀態恢復失敗:', error);
-    }
-  }
-
-  async function stableRoomCommand(action, position) {
-    if (!state.roomId || !state.currentVideoId || !stableRoomPlayerReady()) return;
-    if (state.playbackApplyingRemote || state.playbackPendingRecovery) return;
-    if (typeof publishPlaybackEvent === 'function') {
-      await publishPlaybackEvent(action, position);
-    }
-  }
-
-  function stableRoomReplaceButton(id, handler) {
-    const oldButton = $(id);
-    if (!oldButton) return;
-    const button = oldButton.cloneNode(true);
-    oldButton.replaceWith(button);
-    button.addEventListener('click', handler);
-  }
-
-  function stableRoomInstallControls() {
-    stableRoomReplaceButton('playPauseBtn', async () => {
-      if (!stableRoomPlayerReady() || state.playbackApplyingRemote) return;
-      const before = await asyncIsPlaying();
-      const target = !before;
-      const position = await asyncCurrentPosition();
-      const now = Date.now();
-
-      state.playbackUserActionUntil = now + 2200;
-      state.playbackUserActionKind = target ? 'play' : 'pause';
-      state.playbackLocalIntentAt = now;
-      state.playbackIgnoreStateChanges = 6;
-      state.playbackIgnoreStateUntil = now + 2500;
-      state.playbackLocalStateCandidate = null;
-      state.playbackLocalStateCandidateAt = 0;
-
-      if (target) await playPlayer();
-      else await pausePlayer();
-
-      await stableRoomCommand(target ? 'play' : 'pause', position);
-      state.playbackLastPosition = position;
-      state.playbackLastPlaying = target;
-      state.playbackLastPlayerState = target ? 'playing' : 'paused';
-      state.playbackLastObservedPosition = position;
-      updateTimeUI();
-    });
-
-    const stableSeek = async (delta) => {
-      if (!stableRoomPlayerReady() || state.playbackApplyingRemote) return;
-      const current = await asyncCurrentPosition();
-      const playing = await asyncIsPlaying();
-      const target = Math.max(0, current + delta);
-      const now = Date.now();
-
-      state.playbackUserActionUntil = now + 2200;
-      state.playbackUserActionKind = 'seek';
-      state.playbackLocalIntentAt = now;
-      state.playbackIgnoreStateChanges = 6;
-      state.playbackIgnoreStateUntil = now + 2500;
-      state.playbackLocalStateCandidate = null;
-      state.playbackLocalStateCandidateAt = 0;
-
-      await applyPlayerPosition(target);
-      await stableRoomCommand('seek', target);
-      state.playbackLastPosition = target;
-      state.playbackLastPlaying = playing;
-      state.playbackLastPlayerState = playing ? 'playing' : 'paused';
-      state.playbackLastObservedPosition = target;
-      updateTimeUI();
-    };
-
-    stableRoomReplaceButton('backBtn', () => stableSeek(-10));
-    stableRoomReplaceButton('forwardBtn', () => stableSeek(10));
-  }
-
-  let stableRoomObserverBusy = false;
-
-  function stableRoomStartObserver() {
-    if (state.stableRoomObserverTimer) clearInterval(state.stableRoomObserverTimer);
-
-    state.stableRoomObserverTimer = setInterval(async () => {
-      if (stableRoomObserverBusy || !state.roomId || !stableRoomPlayerReady()) return;
-      stableRoomObserverBusy = true;
-
-      try {
-        const timeline = state.playbackTimeline || await stableRoomReadTimeline();
-        if (!timeline || timeline.videoId !== state.currentVideoId) {
-          await stableRoomApply(false);
-          return;
-        }
-
-        state.playbackTimeline = timeline;
-
-        if (stableRoomTransient()) return;
-
-        const current = await asyncCurrentPosition();
-        const localPlaying = await asyncIsPlaying();
-        const roomPlaying = timeline.playing === true;
-        const expected = stableRoomExpectedPosition(timeline);
-
-        if (expected !== null) {
-          const drift = expected - current;
-          if (Math.abs(drift) > 1.25) {
-            state.playbackIgnoreStateChanges = 4;
-            state.playbackIgnoreStateUntil = Date.now() + 2200;
-            await applyPlayerPosition(expected);
-          }
-        }
-
-        if (localPlaying !== roomPlaying) {
-          const now = Date.now();
-          if (Number(state.playbackUserActionUntil || 0) > now) {
-            return;
-          }
-
-          if (state.playbackLocalStateCandidate !== localPlaying) {
-            state.playbackLocalStateCandidate = localPlaying;
-            state.playbackLocalStateCandidateAt = now;
-            return;
-          }
-
-          if (now - Number(state.playbackLocalStateCandidateAt || 0) >= 550) {
-            const position = await asyncCurrentPosition();
-            await stableRoomCommand(localPlaying ? 'play' : 'pause', position);
-            state.playbackLocalStateCandidate = null;
-            state.playbackLocalStateCandidateAt = 0;
-          }
-        } else {
-          state.playbackLocalStateCandidate = null;
-          state.playbackLocalStateCandidateAt = 0;
-        }
-      } catch (error) {
-        console.warn('播放同步監測失敗:', error);
-      } finally {
-        stableRoomObserverBusy = false;
-      }
-    }, 350);
-  }
-
-  function stableRoomRecover() {
-    clearTimeout(state.stableRoomRecoveryTimer);
-    state.stableRoomRecoveryTimer = setTimeout(async () => {
-      if (!state.roomId || !stableRoomPlayerReady()) return;
-      state.playbackPendingRecovery = true;
-      try {
-        await stableRoomApply(true);
-      } finally {
-        state.playbackPendingRecovery = false;
-        stableRoomStartObserver();
-      }
-    }, 350);
-  }
-
-  stableRoomInstallControls();
-  stableRoomStartObserver();
-  setTimeout(() => stableRoomApply(false), 300);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') stableRoomRecover();
-  });
-
-  window.addEventListener('pageshow', stableRoomRecover);
-'''
-
-          idx = text.rfind('\n})();')
-          if idx < 0:
-              idx = text.rfind('})();')
-          if idx < 0:
-              raise SystemExit('IIFE tail not found')
-
-          text = text[:idx] + layer + text[idx:]
-          path.write_text(text, encoding='utf-8')
-          print('playback layer installed')
-          PY
-
-      - name: Validate JavaScript
-        shell: bash
+      - name: Validate app.js
         run: |
           node --check app.js
-          grep -q 'STABLE ROOM AUTHORITY PLAYBACK V11' app.js
-          grep -q 'function stableRoomInstallControls' app.js
-          grep -q 'function stableRoomStartObserver' app.js
-          grep -q 'function stableRoomRecover' app.js
+          grep -q 'ROOM AUTHORITY PLAYBACK V12' app.js
+          grep -q 'roomAuthorityInstallControls' app.js
+          grep -q 'roomAuthorityStartObserver' app.js
+          grep -q 'roomAuthorityExpectedPosition' app.js
 
-      - name: Commit repair
-        shell: bash
+      - name: Commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app.js
           if git diff --cached --quiet; then
             echo 'No changes'
-            exit 0
+          else
+            git commit -m 'Stabilize shared room playback authority'
+            git push origin HEAD:main
           fi
-          git commit -m 'Stabilize room authoritative playback synchronization'
-          git push origin HEAD:main
