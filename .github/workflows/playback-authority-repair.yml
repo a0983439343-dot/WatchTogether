@@ -21,19 +21,19 @@ jobs:
       - name: Harden YouTube callbacks
         run: python3 .github/scripts/harden_playback_v13.py
 
-      - name: Install single-timeline authority v14
+      - name: Install single-timeline authority v15
         run: python3 .github/scripts/room_authority_v14.py
 
       - name: Validate JavaScript
         run: |
           node --check app.js
-          grep -q 'ROOM AUTHORITY PLAYBACK V12' app.js
-          grep -q 'ROOM AUTHORITY PLAYBACK V14' app.js
-          grep -q 'state.roomAuthorityV12' app.js
-          grep -q 'state.roomAuthorityV14' app.js
-          grep -q 'roomAuthorityCommandV14' app.js
-          grep -q 'roomAuthorityExpectedV14' app.js
-          grep -q 'roomAuthorityStartObserverV14' app.js
+          grep -q 'ROOM AUTHORITY PLAYBACK V15' app.js
+          grep -q 'state.roomAuthorityV15' app.js
+          grep -q 'roomAuthorityCommandV15' app.js
+          grep -q 'roomAuthorityExpectedV15' app.js
+          grep -q 'roomAuthorityStartObserverV15' app.js
+          ! grep -q 'ROOM AUTHORITY PLAYBACK V12' app.js
+          ! grep -q 'ROOM AUTHORITY PLAYBACK V14' app.js
 
       - name: Commit
         run: |
@@ -43,6 +43,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes'
           else
-            git commit -m 'Install single-timeline authoritative playback v14'
+            git commit -m 'Replace duplicated playback authority with stable v15 timeline'
             git push origin HEAD:main
           fi
