@@ -207,6 +207,8 @@
     playbackServerClockHandler: null,
     playbackActionSeq: 0,
     playbackPendingRecovery: false,
+    playbackPausePublishTimer: null,
+    playbackLocalIntentAt: 0,
 
     playbackTimeline: null,
     playbackAdGuardUntil: 0,
@@ -5674,28 +5676,35 @@
 
 
 
+
   /*
    * =========================================================
-   * SHARED ROOM TIMELINE PLAYBACK SYNC V4
+   * SHARED ROOM TIMELINE PLAYBACK SYNC V5
    * =========================================================
    *
-   * Firebase playbackEvent is the room command/time-axis.
-   * There is NO master participant and nobody's player position
-   * is used as the room's ongoing progress source.
+   * Firebase stores ONE shared room command, not a master player.
+   * No participant's continuously changing currentTime is used as
+   * the room progress source.
    *
-   * A command stores:
-   *   position   = content position at command time
-   *   playing    = whether the room should be playing
-   *   updatedAt  = Firebase server timestamp
+   * Every command has:
+   *   position  = content position at command time
+   *   playing   = room playback state
+   *   updatedAt = Firebase server time
    *
-   * Every client reconstructs the same expected position from
-   * server time, so network delay does not make the late client
-   * permanently lag behind the room.
+   * While playing, each client reconstructs the same expected position
+   * from the room command and server clock.
+   *
+   * A local app control creates the room command first. Remote commands
+   * are applied with a guard so the resulting YouTube callbacks never
+   * echo the command back into Firebase.
    */
 
   function playbackClockNow() {
     if (typeof serverNow === "function") {
-      return Number(serverNow());
+      const value = Number(serverNow());
+      if (Number.isFinite(value) && value > 0) {
+        return value;
+      }
     }
 
     return Date.now() + Number(
@@ -5742,18 +5751,21 @@
   }
 
 
-  function getTimelinePosition(event, now = playbackClockNow()) {
+  function getTimelinePosition(
+    timeline,
+    now = playbackClockNow()
+  ) {
     const base = Math.max(
       0,
-      Number(event?.position) || 0
+      Number(timeline?.position) || 0
     );
 
-    if (event?.playing !== true) {
+    if (timeline?.playing !== true) {
       return base;
     }
 
     const updatedAt = Number(
-      event?.updatedAt
+      timeline?.updatedAt || 0
     );
 
     if (
@@ -5777,7 +5789,7 @@
 
   function rememberRoomTimeline(event) {
     if (!event || !event.eventId) {
-      return;
+      return false;
     }
 
     const incomingUpdatedAt = Number(
@@ -5793,7 +5805,7 @@
       currentUpdatedAt > 0 &&
       incomingUpdatedAt < currentUpdatedAt
     ) {
-      return;
+      return false;
     }
 
     state.playbackRemoteEvent = event;
@@ -5811,6 +5823,8 @@
         incomingUpdatedAt || playbackClockNow(),
       eventId: String(event.eventId)
     };
+
+    return true;
   }
 
 
@@ -5824,7 +5838,8 @@
 
 
   function roomTimelinePlaying() {
-    const timeline = state.playbackTimeline;
+    const timeline =
+      state.playbackTimeline;
 
     if (
       !timeline ||
@@ -5838,9 +5853,15 @@
   }
 
 
+  function markLocalPlaybackIntent() {
+    state.playbackLocalIntentAt =
+      Date.now();
+  }
+
+
   async function writePlaybackCommand(
-    normalized,
-    finalPosition,
+    action,
+    position,
     playing
   ) {
     if (
@@ -5860,18 +5881,18 @@
       return;
     }
 
-    const position = Math.max(
+    const finalPosition = Math.max(
       0,
-      Number(finalPosition) || 0
+      Number(position) || 0
     );
 
-    const serverNowValue = playbackClockNow();
+    const now = playbackClockNow();
     const eventId =
       `${state.uid}_${Date.now()}_${++state.playbackActionSeq}_${Math.random().toString(36).slice(2)}`;
 
     const event = {
-      action: normalized,
-      position,
+      action,
+      position: finalPosition,
       videoId: String(
         state.currentVideoId
       ),
@@ -5882,27 +5903,29 @@
       playing: Boolean(playing)
     };
 
-    // Optimistic local room state. The timeline is shared room state,
-    // not a copy of any participant's playback clock.
-    const localTimeline = {
-      videoId: String(state.currentVideoId),
-      position,
+    state.playbackRemoteEvent = {
+      ...event,
+      updatedAt: now
+    };
+
+    state.playbackTimeline = {
+      videoId: String(
+        state.currentVideoId
+      ),
+      position: finalPosition,
       playing: Boolean(playing),
-      updatedAt: serverNowValue,
+      updatedAt: now,
       eventId
     };
 
-    state.playbackRemoteEvent = {
-      ...event,
-      updatedAt: serverNowValue
-    };
-
-    state.playbackTimeline = localTimeline;
-    state.playbackLastRemoteEventId = eventId;
-    state.playbackLastRemoteUpdatedAt = serverNowValue;
-    state.playbackLastPosition = position;
-    state.playbackLastPlaying = Boolean(playing);
-    state.playbackLocalIntentAt = Date.now();
+    state.playbackLastRemoteEventId =
+      eventId;
+    state.playbackLastRemoteUpdatedAt =
+      now;
+    state.playbackLastPosition =
+      finalPosition;
+    state.playbackLastPlaying =
+      Boolean(playing);
 
     try {
       await ref.set(event);
@@ -5917,7 +5940,8 @@
 
   async function publishPlaybackEvent(
     action,
-    position = null
+    position = null,
+    explicitPlaying = undefined
   ) {
     if (
       !state.uid ||
@@ -5962,40 +5986,41 @@
       playing = false;
     } else if (normalized === "play") {
       playing = true;
+    } else if (typeof explicitPlaying === "boolean") {
+      playing = explicitPlaying;
     } else {
       playing = await asyncIsPlaying();
     }
 
-    const currentRoomPlaying =
+    const roomPlaying =
       roomTimelinePlaying();
 
-    // A player callback created by applying a remote command has the same
-    // desired state as the room command. It must NEVER be written back.
-    // A genuine local play/pause flips the desired state away from the
-    // current room state, so it becomes the new room command.
+    /*
+     * A YouTube callback produced by our own remote command must not
+     * create a new room command. Likewise, a repeated click on a control
+     * that already reflects the room state should not create a fake change.
+     */
     if (
-      normalized === "play" &&
-      currentRoomPlaying === true
+      (normalized === "play" && roomPlaying === true) ||
+      (normalized === "pause" && roomPlaying === false)
     ) {
       return;
     }
 
-    if (
-      normalized === "pause" &&
-      currentRoomPlaying === false
-    ) {
-      return;
-    }
-
+    /*
+     * Pause callbacks can be produced by transient buffering/player state.
+     * Wait briefly and publish only if the player is still actually paused.
+     * The app's explicit pause button calls this function directly, so it
+     * still becomes the room command immediately after the debounce.
+     */
     if (normalized === "pause") {
       cancelPendingPausePublish();
+      markLocalPlaybackIntent();
 
-      // Ignore very short pauses caused by buffering/player transitions.
-      // A real user pause remains paused and is then published immediately
-      // after the short debounce.
       state.playbackPausePublishTimer =
         setTimeout(async () => {
-          state.playbackPausePublishTimer = null;
+          state.playbackPausePublishTimer =
+            null;
 
           try {
             if (
@@ -6013,19 +6038,15 @@
               return;
             }
 
-            const roomPlaying =
-              roomTimelinePlaying();
-
-            if (roomPlaying === false) {
+            if (
+              roomTimelinePlaying() === false
+            ) {
               return;
             }
 
-            const nowPosition =
-              await asyncCurrentPosition();
-
             await writePlaybackCommand(
               "pause",
-              nowPosition,
+              await asyncCurrentPosition(),
               false
             );
           } catch (error) {
@@ -6034,34 +6055,39 @@
               error
             );
           }
-        }, 300);
+        }, 220);
 
       return;
     }
 
     if (normalized === "play") {
       cancelPendingPausePublish();
+      markLocalPlaybackIntent();
     }
 
+    /*
+     * Seek is accepted only when it is a meaningful jump away from the
+     * shared timeline. Normal drift correction must never create a new
+     * room command.
+     */
     if (normalized === "seek") {
       const timeline =
         state.playbackTimeline;
 
-      const expected = timeline
-        ? getTimelinePosition(
-            timeline
-          )
-        : null;
+      if (timeline) {
+        const expected =
+          getTimelinePosition(timeline);
 
-      if (
-        expected !== null &&
-        Math.abs(
-          finalPosition - expected
-        ) < 0.85
-      ) {
-        // This is normal playback drift, not a user seek.
-        return;
+        if (
+          Math.abs(
+            finalPosition - expected
+          ) < 1.2
+        ) {
+          return;
+        }
       }
+
+      markLocalPlaybackIntent();
     }
 
     const now = serverNow();
@@ -6072,7 +6098,7 @@
       key === state.playbackLastLocalActionKey &&
       now - Number(
         state.playbackLastLocalActionAt || 0
-      ) < 700
+      ) < 650
     ) {
       return;
     }
@@ -6081,16 +6107,19 @@
       normalized === "seek" &&
       now - Number(
         state.playbackLastLocalSeekWriteAt || 0
-      ) < 450
+      ) < 400
     ) {
       return;
     }
 
-    state.playbackLastLocalActionKey = key;
-    state.playbackLastLocalActionAt = now;
+    state.playbackLastLocalActionKey =
+      key;
+    state.playbackLastLocalActionAt =
+      now;
 
     if (normalized === "seek") {
-      state.playbackLastLocalSeekWriteAt = now;
+      state.playbackLastLocalSeekWriteAt =
+        now;
     }
 
     await writePlaybackCommand(
@@ -6130,14 +6159,6 @@
     }
 
     if (
-      event.updatedBy === state.uid &&
-      !force
-    ) {
-      rememberRoomTimeline(event);
-      return;
-    }
-
-    if (
       state.playerType === "bilibili" ||
       state.playerType === "external"
     ) {
@@ -6152,15 +6173,7 @@
       return;
     }
 
-    if (
-      !force &&
-      state.playbackLastRemoteEventId === eventId
-    ) {
-      rememberRoomTimeline(event);
-      return;
-    }
-
-    const remoteUpdatedAt = Number(
+    const incomingUpdatedAt = Number(
       event.updatedAt || 0
     );
 
@@ -6170,72 +6183,89 @@
 
     if (
       !force &&
-      remoteUpdatedAt > 0 &&
+      incomingUpdatedAt > 0 &&
       lastUpdatedAt > 0 &&
-      remoteUpdatedAt < lastUpdatedAt
+      incomingUpdatedAt < lastUpdatedAt
     ) {
+      return;
+    }
+
+    if (
+      !force &&
+      state.playbackLastRemoteEventId === eventId
+    ) {
+      rememberRoomTimeline(event);
+      return;
+    }
+
+    if (
+      !force &&
+      event.updatedBy === state.uid
+    ) {
+      rememberRoomTimeline(event);
       return;
     }
 
     rememberRoomTimeline(event);
 
-    if (remoteUpdatedAt > 0) {
-      state.playbackLastRemoteUpdatedAt =
-        remoteUpdatedAt;
-    }
-
-    if (
-      state.playbackApplyingRemoteEventId ===
-      eventId
-    ) {
-      return;
-    }
-
     cancelPendingPausePublish();
 
     state.playbackLastRemoteEventId =
       eventId;
+
+    if (incomingUpdatedAt > 0) {
+      state.playbackLastRemoteUpdatedAt =
+        incomingUpdatedAt;
+    }
+
     state.playbackApplyingRemoteEventId =
       eventId;
-    state.playbackApplyingRemote = true;
-    state.playbackPendingRecovery = true;
-    state.playbackIgnoreStateChanges = 12;
+    state.playbackApplyingRemote =
+      true;
+    state.playbackPendingRecovery =
+      true;
+    state.playbackIgnoreStateChanges =
+      16;
     state.playbackIgnoreStateUntil =
-      Date.now() + 8000;
+      Date.now() + 9000;
     state.playbackReadyAt =
-      Date.now() + 1000;
+      Date.now() + 900;
 
     try {
       const expected =
-        getTimelinePosition(
-          event
-        );
+        getTimelinePosition(event);
 
       const current =
         await asyncCurrentPosition();
 
+      /*
+       * Everyone seeks to the shared room time. There is no participant
+       * whose current position is copied into the room.
+       */
       if (
         Math.abs(
           current - expected
-        ) > 0.45
+        ) > 0.35
       ) {
         await applyPlayerPosition(
           expected
         );
       }
 
-      const wantedPlaying =
+      const wantPlaying =
         event.playing === true;
 
-      const currentPlaying =
+      const currentlyPlaying =
         await asyncIsPlaying();
 
-      // Force the room command. A remote pause must stop this player;
-      // a remote play must start it. No participant is the time master.
+      /*
+       * Force the room state. A pause means every client pauses; a play
+       * means every client plays, including a client that was just opened.
+       */
       if (
-        wantedPlaying !== currentPlaying
+        wantPlaying !== currentlyPlaying
       ) {
-        if (wantedPlaying) {
+        if (wantPlaying) {
           await playPlayer();
         } else {
           await pausePlayer();
@@ -6246,6 +6276,11 @@
         await asyncCurrentPosition();
       state.playbackLastPlaying =
         await asyncIsPlaying();
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          `已同步 ${formatTime(expected)}`;
+      }
     } catch (error) {
       console.warn(
         "套用房間播放命令失敗:",
@@ -6288,16 +6323,16 @@
         return;
       }
 
-      rememberRoomTimeline(
-        event
-      );
+      rememberRoomTimeline(event);
 
-      state.playbackPendingRecovery =
-        true;
-
+      /*
+       * On a new client, applying the latest room command is mandatory.
+       * A local copy of the database event is never treated as a reason
+       * to skip initial recovery.
+       */
       await applyRemotePlaybackEvent(
         event,
-        force || event.updatedBy !== state.uid
+        true
       );
     } catch (error) {
       state.playbackPendingRecovery =
@@ -6332,6 +6367,16 @@
 
     state.playbackListenerAttached =
       true;
+
+    /*
+     * Initial room state is the source for a late joiner. It is not a
+     * participant and it does not depend on another user's player.
+     */
+    setTimeout(() => {
+      void applyLatestRoomPlaybackState(
+        true
+      );
+    }, 180);
   }
 
 
@@ -6349,13 +6394,15 @@
       return;
     }
 
-    rememberRoomTimeline(
-      event
-    );
+    if (!state.currentVideoId) {
+      rememberRoomTimeline(event);
+      return;
+    }
+
+    rememberRoomTimeline(event);
 
     if (
-      String(event.updatedBy || "") ===
-      String(state.uid || "")
+      event.updatedBy === state.uid
     ) {
       return;
     }
@@ -6371,223 +6418,9 @@
       true;
 
     void applyRemotePlaybackEvent(
-      event
+      event,
+      false
     );
-  }
-
-
-  async function reconcileRoomTimeline() {
-    if (
-      !state.playbackTimeline ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId ||
-      state.playbackApplyingRemote ||
-      state.playbackPendingRecovery
-    ) {
-      return;
-    }
-
-    const timeline =
-      state.playbackTimeline;
-
-    if (
-      String(timeline.videoId || "") !==
-      String(state.currentVideoId || "")
-    ) {
-      return;
-    }
-
-    const now =
-      playbackClockNow();
-
-    const expected =
-      getTimelinePosition(
-        timeline,
-        now
-      );
-
-    const current =
-      await asyncCurrentPosition();
-
-    const playing =
-      await asyncIsPlaying();
-
-    if (
-      now < Number(
-        state.playbackReadyAt || 0
-      ) ||
-      now < Number(
-        state.playbackIgnoreStateUntil || 0
-      )
-    ) {
-      return;
-    }
-
-    const drift = Math.abs(
-      current - expected
-    );
-
-    // The expected position is derived from Firebase server time, so this
-    // corrects actual network delay instead of adding another client delay.
-    if (drift > 1.15) {
-      state.playbackApplyingRemote =
-        true;
-      state.playbackPendingRecovery =
-        true;
-      state.playbackIgnoreStateChanges =
-        4;
-      state.playbackIgnoreStateUntil =
-        Date.now() + 2500;
-
-      try {
-        await applyPlayerPosition(
-          expected
-        );
-      } catch (error) {
-        console.warn(
-          "房間時間軸校正失敗:",
-          error
-        );
-      } finally {
-        state.playbackApplyingRemote =
-          false;
-        state.playbackPendingRecovery =
-          false;
-        state.playbackLastPosition =
-          await asyncCurrentPosition().catch(
-            () => null
-          );
-        state.playbackLastPlaying =
-          await asyncIsPlaying().catch(
-            () => null
-          );
-      }
-
-      return;
-    }
-
-    // PLAY/PAUSE is a room command. Keep enforcing it on every client.
-    // A paused member cannot silently continue while the room says paused.
-    if (
-      timeline.playing !== playing
-    ) {
-      state.playbackApplyingRemote =
-        true;
-      state.playbackPendingRecovery =
-        true;
-      state.playbackIgnoreStateChanges =
-        4;
-      state.playbackIgnoreStateUntil =
-        Date.now() + 2500;
-
-      try {
-        if (timeline.playing) {
-          await playPlayer();
-        } else {
-          await pausePlayer();
-        }
-      } catch (error) {
-        console.warn(
-          "房間播放狀態校正失敗:",
-          error
-        );
-      } finally {
-        state.playbackApplyingRemote =
-          false;
-        state.playbackPendingRecovery =
-          false;
-        state.playbackLastPosition =
-          await asyncCurrentPosition().catch(
-            () => null
-          );
-        state.playbackLastPlaying =
-          await asyncIsPlaying().catch(
-            () => null
-          );
-      }
-    }
-  }
-
-
-  async function inspectLocalPlaybackChange() {
-    if (
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId ||
-      state.playbackApplyingRemote ||
-      state.playbackPendingRecovery
-    ) {
-      return;
-    }
-
-    const timeline =
-      state.playbackTimeline;
-
-    if (!timeline) {
-      return;
-    }
-
-    if (
-      String(timeline.videoId || "") !==
-      String(state.currentVideoId || "")
-    ) {
-      return;
-    }
-
-    const now =
-      playbackClockNow();
-
-    if (
-      now < Number(
-        state.playbackReadyAt || 0
-      ) ||
-      now < Number(
-        state.playbackIgnoreStateUntil || 0
-      )
-    ) {
-      return;
-    }
-
-    const position =
-      await asyncCurrentPosition();
-    const playing =
-      await asyncIsPlaying();
-    const expected =
-      getTimelinePosition(
-        timeline,
-        now
-      );
-
-    const roomPlaying =
-      timeline.playing === true;
-
-    // State change against the room command means local intent. For pause,
-    // publishPlaybackEvent adds a small debounce to avoid buffering blips.
-    if (
-      playing !== roomPlaying
-    ) {
-      await publishPlaybackEvent(
-        playing ? "play" : "pause",
-        position
-      );
-
-      return;
-    }
-
-    // A large position jump while the room play state stays unchanged is a
-    // local seek. Normal network drift is ignored here because it is close
-    // to the server-time-derived expected position.
-    if (
-      Math.abs(
-        position - expected
-      ) > 2.0
-    ) {
-      await publishPlaybackEvent(
-        "seek",
-        position
-      );
-    }
   }
 
 
@@ -6612,21 +6445,178 @@
   }
 
 
+  async function reconcileRoomTimeline() {
+    if (
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId ||
+      state.playbackApplyingRemote ||
+      state.playbackPendingRecovery
+    ) {
+      return;
+    }
+
+    const timeline =
+      state.playbackTimeline;
+
+    if (
+      !timeline ||
+      String(timeline.videoId || "") !==
+      String(state.currentVideoId || "")
+    ) {
+      return;
+    }
+
+    const now =
+      playbackClockNow();
+
+    const position =
+      await asyncCurrentPosition();
+
+    const playing =
+      await asyncIsPlaying();
+
+    const expected =
+      getTimelinePosition(
+        timeline,
+        now
+      );
+
+    state.playbackLastObservedPosition =
+      position;
+
+    if (
+      now < Number(
+        state.playbackReadyAt || 0
+      )
+    ) {
+      return;
+    }
+
+    const drift =
+      Math.abs(
+        position - expected
+      );
+
+    /*
+     * Strong room state: a room pause/play always wins over local drift.
+     * This is how a single pause stops every participant.
+     */
+    const wantPlaying =
+      timeline.playing === true;
+
+    if (
+      wantPlaying !== playing
+    ) {
+      state.playbackApplyingRemote =
+        true;
+      state.playbackPendingRecovery =
+        true;
+      state.playbackIgnoreStateChanges =
+        8;
+      state.playbackIgnoreStateUntil =
+        Date.now() + 4000;
+
+      try {
+        if (wantPlaying) {
+          await playPlayer();
+        } else {
+          await pausePlayer();
+        }
+      } finally {
+        state.playbackApplyingRemote =
+          false;
+        state.playbackPendingRecovery =
+          false;
+      }
+
+      return;
+    }
+
+    /*
+     * Small natural clock/network drift is ignored. Larger drift is a
+     * correction to the room timeline, never an update of that timeline.
+     */
+    if (
+      drift > 1.35
+    ) {
+      state.playbackApplyingRemote =
+        true;
+      state.playbackPendingRecovery =
+        true;
+      state.playbackIgnoreStateChanges =
+        8;
+      state.playbackIgnoreStateUntil =
+        Date.now() + 4000;
+
+      try {
+        await applyPlayerPosition(
+          expected
+        );
+      } finally {
+        state.playbackApplyingRemote =
+          false;
+        state.playbackPendingRecovery =
+          false;
+        state.playbackLastPosition =
+          await asyncCurrentPosition().catch(
+            () => null
+          );
+        state.playbackLastPlaying =
+          await asyncIsPlaying().catch(
+            () => null
+          );
+      }
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          `已校正 ${formatTime(expected)}`;
+      }
+    }
+  }
+
+
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
 
     state.playbackReadyAt =
       Date.now() + 700;
 
+    /*
+     * The detector is a ROOM-TIMELINE CORRECTOR. It deliberately does not
+     * write currentTime into Firebase. The room command is changed only by
+     * explicit playback controls/state-intent or a meaningful local seek.
+     */
     state.playbackSeekTimer =
-      setInterval(() => {
-        void inspectLocalPlaybackChange();
-        void reconcileRoomTimeline();
-      }, 300);
+      setInterval(async () => {
+        try {
+          if (
+            !state.playerReady ||
+            !state.player ||
+            !state.currentVideoId
+          ) {
+            return;
+          }
+
+          if (
+            state.playbackApplyingRemote ||
+            state.playbackPendingRecovery
+          ) {
+            return;
+          }
+
+          await reconcileRoomTimeline();
+        } catch (error) {
+          console.warn(
+            "播放時間軸校正失敗:",
+            error
+          );
+        }
+      }, 700);
   }
 
 
-  function recoverPlaybackAfterPageResume() {
+  function schedulePlaybackRecovery() {
     clearTimeout(
       state.playbackRecoveryTimer
     );
@@ -6636,26 +6626,58 @@
         state.playbackRecoveryTimer =
           null;
 
-        void applyLatestRoomPlaybackState(
-          true
-        );
-        startPlaybackSeekDetector();
+        if (
+          document.visibilityState ===
+            "visible"
+        ) {
+          void applyLatestRoomPlaybackState(
+            true
+          );
+        }
       }, 350);
   }
 
 
-  function syncPlaybackAfterPlayerReady() {
-    state.playbackReadyAt =
-      Date.now() + 500;
+  function recoverPlaybackAfterPageResume() {
+    if (
+      document.visibilityState === "hidden" ||
+      !state.roomId ||
+      !state.uid ||
+      !state.playerReady
+    ) {
+      return;
+    }
 
-    void applyLatestRoomPlaybackState(
-      true
-    );
-
-    startPlaybackSeekDetector();
+    schedulePlaybackRecovery();
   }
 
-  /*
+
+  if (!state.__sharedPlaybackLifecycleBound) {
+    state.__sharedPlaybackLifecycleBound =
+      true;
+
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (
+          document.visibilityState ===
+            "visible"
+        ) {
+          recoverPlaybackAfterPageResume();
+        }
+      }
+    );
+
+    window.addEventListener(
+      "pageshow",
+      () => {
+        recoverPlaybackAfterPageResume();
+      }
+    );
+  }
+
+
+    /*
    * =========================================================
    * ROOM UI
    * =========================================================
