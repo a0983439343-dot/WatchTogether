@@ -4728,6 +4728,11 @@
 
                     state.playbackLastObservedPosition =
                       await asyncCurrentPosition().catch(() => null);
+
+                    // Do not write Firebase from YouTube state callbacks.
+                    // Explicit WatchTogether controls are the only source
+                    // of room playback commands.
+                    return;
                   }
 
                   if (data === YT.PlayerState.ENDED) {
@@ -5679,9 +5684,11 @@
 
 
 
+
+
   /*
    * =========================================================
-   * SHARED ROOM TIMELINE PLAYBACK SYNC V6
+   * SHARED ROOM TIMELINE PLAYBACK SYNC V8
    * =========================================================
    *
    * Firebase is the only room timeline. No player is a master.
@@ -5991,13 +5998,24 @@
     const expected = getTimelinePosition(timeline, now);
     const previousObserved = Number(state.playbackLastObservedPosition);
 
-    if (timeline.playing === true && Number.isFinite(previousObserved) &&
-        position < previousObserved - 3 &&
-        now - Number(state.playbackLocalIntentAt || 0) > 1200) {
-      state.playbackAdGuardUntil = Date.now() + 7500;
-      state.playbackTransientStateUntil = Date.now() + 7500;
+    if (
+      timeline.playing === true &&
+      Number.isFinite(previousObserved) &&
+      position < previousObserved - 3 &&
+      now - Number(state.playbackLocalIntentAt || 0) > 1200
+    ) {
+      state.playbackAdGuardUntil = Date.now() + 3000;
+      state.playbackTransientStateUntil = Date.now() + 3000;
       state.playbackLastObservedPosition = position;
       return;
+    }
+
+    if (
+      Number(state.playbackAdGuardUntil || 0) > Date.now() &&
+      Math.abs(position - expected) <= 3.0
+    ) {
+      state.playbackAdGuardUntil = 0;
+      state.playbackTransientStateUntil = 0;
     }
 
     state.playbackLastObservedPosition = position;
@@ -6056,6 +6074,7 @@
    * ROOM UI
    * =========================================================
    */
+
 
 
   function updateRoomOwnerUI() {
