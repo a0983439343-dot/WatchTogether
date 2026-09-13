@@ -5677,41 +5677,24 @@
 
 
 
+
+
   /*
    * =========================================================
-   * SHARED ROOM TIMELINE PLAYBACK SYNC V5
+   * SHARED ROOM TIMELINE PLAYBACK SYNC V6
    * =========================================================
    *
-   * Firebase stores ONE shared room command, not a master player.
-   * No participant's continuously changing currentTime is used as
-   * the room progress source.
-   *
-   * Every command has:
-   *   position  = content position at command time
-   *   playing   = room playback state
-   *   updatedAt = Firebase server time
-   *
-   * While playing, each client reconstructs the same expected position
-   * from the room command and server clock.
-   *
-   * A local app control creates the room command first. Remote commands
-   * are applied with a guard so the resulting YouTube callbacks never
-   * echo the command back into Firebase.
+   * Firebase is the only room timeline. No player is a master.
+   * A command is position + playing + updatedAt + eventId.
    */
 
   function playbackClockNow() {
     if (typeof serverNow === "function") {
       const value = Number(serverNow());
-      if (Number.isFinite(value) && value > 0) {
-        return value;
-      }
+      if (Number.isFinite(value) && value > 0) return value;
     }
-
-    return Date.now() + Number(
-      state.playbackServerTimeOffset || 0
-    );
+    return Date.now() + Number(state.playbackServerTimeOffset || 0);
   }
-
 
   function serverNow() {
     return Date.now() + Number(state.playbackServerTimeOffset || 0);
@@ -5741,322 +5724,128 @@
 
 
   function playbackSyncRef() {
-    if (!db || !state.roomId) {
-      return null;
-    }
-
-    return db.ref(
-      `rooms/${state.roomId}/playbackEvent`
-    );
+    if (!db || !state.roomId) return null;
+    return db.ref(`rooms/${state.roomId}/playbackEvent`);
   }
 
-
-  function getTimelinePosition(
-    timeline,
-    now = playbackClockNow()
-  ) {
-    const base = Math.max(
-      0,
-      Number(timeline?.position) || 0
-    );
-
-    if (timeline?.playing !== true) {
-      return base;
-    }
-
-    const updatedAt = Number(
-      timeline?.updatedAt || 0
-    );
-
-    if (
-      !Number.isFinite(updatedAt) ||
-      updatedAt <= 0
-    ) {
-      return base;
-    }
-
-    const elapsed = Math.max(
-      0,
-      (now - updatedAt) / 1000
-    );
-
-    return base + Math.min(
-      elapsed,
-      7200
-    );
+  function getTimelinePosition(timeline, now = playbackClockNow()) {
+    const base = Math.max(0, Number(timeline?.position) || 0);
+    if (timeline?.playing !== true) return base;
+    const updatedAt = Number(timeline?.updatedAt || 0);
+    if (!Number.isFinite(updatedAt) || updatedAt <= 0) return base;
+    return base + Math.min(Math.max(0, (now - updatedAt) / 1000), 7200);
   }
-
 
   function rememberRoomTimeline(event) {
-    if (!event || !event.eventId) {
-      return false;
-    }
-
-    const incomingUpdatedAt = Number(
-      event.updatedAt || 0
-    );
-
-    const currentUpdatedAt = Number(
-      state.playbackTimeline?.updatedAt || 0
-    );
-
-    if (
-      incomingUpdatedAt > 0 &&
-      currentUpdatedAt > 0 &&
-      incomingUpdatedAt < currentUpdatedAt
-    ) {
-      return false;
-    }
+    if (!event || !event.eventId) return false;
+    const incoming = Number(event.updatedAt || 0);
+    const current = Number(state.playbackTimeline?.updatedAt || 0);
+    if (incoming > 0 && current > 0 && incoming < current) return false;
 
     state.playbackRemoteEvent = event;
-
     state.playbackTimeline = {
-      videoId: String(
-        event.videoId || ""
-      ),
-      position: Math.max(
-        0,
-        Number(event.position) || 0
-      ),
+      videoId: String(event.videoId || ""),
+      position: Math.max(0, Number(event.position) || 0),
       playing: event.playing === true,
-      updatedAt:
-        incomingUpdatedAt || playbackClockNow(),
-      eventId: String(event.eventId)
+      updatedAt: incoming || playbackClockNow(),
+      eventId: String(event.eventId),
     };
-
     return true;
   }
 
-
-  function cancelPendingPausePublish() {
-    clearTimeout(
-      state.playbackPausePublishTimer
-    );
-
-    state.playbackPausePublishTimer = null;
-  }
-
-
   function roomTimelinePlaying() {
-    const timeline =
-      state.playbackTimeline;
-
-    if (
-      !timeline ||
-      String(timeline.videoId || "") !==
-        String(state.currentVideoId || "")
-    ) {
+    const timeline = state.playbackTimeline;
+    if (!timeline || String(timeline.videoId || "") !== String(state.currentVideoId || "")) {
       return null;
     }
-
     return timeline.playing === true;
   }
 
-
   function markLocalPlaybackIntent() {
-    state.playbackLocalIntentAt =
-      Date.now();
+    state.playbackLocalIntentAt = Date.now();
   }
 
+  function cancelPendingPausePublish() {
+    clearTimeout(state.playbackPausePublishTimer);
+    state.playbackPausePublishTimer = null;
+  }
 
-  async function writePlaybackCommand(
-    action,
-    position,
-    playing
-  ) {
-    if (
-      !state.uid ||
-      !state.roomId ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId ||
-      state.playbackApplyingRemote
-    ) {
-      return;
-    }
+  async function writePlaybackCommand(action, position, playing) {
+    if (!state.uid || !state.roomId || !state.playerReady || !state.player ||
+        !state.currentVideoId || state.playbackApplyingRemote) return;
 
     const ref = playbackSyncRef();
+    if (!ref) return;
 
-    if (!ref) {
-      return;
-    }
-
-    const finalPosition = Math.max(
-      0,
-      Number(position) || 0
-    );
-
+    const finalPosition = Math.max(0, Number(position) || 0);
     const now = playbackClockNow();
-    const eventId =
-      `${state.uid}_${Date.now()}_${++state.playbackActionSeq}_${Math.random().toString(36).slice(2)}`;
-
+    const eventId = `${state.uid}_${Date.now()}_${++state.playbackActionSeq}_${Math.random().toString(36).slice(2)}`;
     const event = {
       action,
       position: finalPosition,
-      videoId: String(
-        state.currentVideoId
-      ),
-      updatedAt:
-        firebase.database.ServerValue.TIMESTAMP,
+      videoId: String(state.currentVideoId),
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
       updatedBy: state.uid,
       eventId,
-      playing: Boolean(playing)
+      playing: Boolean(playing),
     };
 
-    state.playbackRemoteEvent = {
-      ...event,
-      updatedAt: now
-    };
-
+    state.playbackRemoteEvent = { ...event, updatedAt: now };
     state.playbackTimeline = {
-      videoId: String(
-        state.currentVideoId
-      ),
+      videoId: String(state.currentVideoId),
       position: finalPosition,
       playing: Boolean(playing),
       updatedAt: now,
-      eventId
+      eventId,
     };
-
-    state.playbackLastRemoteEventId =
-      eventId;
-    state.playbackLastRemoteUpdatedAt =
-      now;
-    state.playbackLastPosition =
-      finalPosition;
-    state.playbackLastPlaying =
-      Boolean(playing);
+    state.playbackLastRemoteEventId = eventId;
+    state.playbackLastRemoteUpdatedAt = now;
+    state.playbackLastPosition = finalPosition;
+    state.playbackLastPlaying = Boolean(playing);
 
     try {
       await ref.set(event);
     } catch (error) {
-      console.warn(
-        "播放同步寫入失敗:",
-        error
-      );
+      console.warn("播放同步寫入失敗:", error);
     }
   }
 
+  async function publishPlaybackEvent(action, position = null, explicitPlaying = undefined) {
+    if (!state.uid || !state.roomId || !state.playerReady || !state.player ||
+        !state.currentVideoId || state.playbackApplyingRemote) return;
 
-  async function publishPlaybackEvent(
-    action,
-    position = null,
-    explicitPlaying = undefined
-  ) {
-    if (
-      !state.uid ||
-      !state.roomId ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId ||
-      state.playbackApplyingRemote
-    ) {
-      return;
-    }
+    if (state.playerType === "bilibili" || state.playerType === "external") return;
+    if (Date.now() < Number(state.playbackAdGuardUntil || 0)) return;
 
-    if (
-      state.playerType === "bilibili" ||
-      state.playerType === "external"
-    ) {
-      return;
-    }
-
-    const normalized =
-      action === "pause"
-        ? "pause"
-        : action === "seek"
-          ? "seek"
-          : "play";
-
+    const normalized = action === "pause" ? "pause" : action === "seek" ? "seek" : "play";
     let finalPosition = Number(position);
-
-    if (!Number.isFinite(finalPosition)) {
-      finalPosition =
-        await asyncCurrentPosition();
-    }
-
-    finalPosition = Math.max(
-      0,
-      Number(finalPosition) || 0
-    );
+    if (!Number.isFinite(finalPosition)) finalPosition = await asyncCurrentPosition();
+    finalPosition = Math.max(0, Number(finalPosition) || 0);
 
     let playing;
+    if (normalized === "pause") playing = false;
+    else if (normalized === "play") playing = true;
+    else if (typeof explicitPlaying === "boolean") playing = explicitPlaying;
+    else playing = await asyncIsPlaying();
 
-    if (normalized === "pause") {
-      playing = false;
-    } else if (normalized === "play") {
-      playing = true;
-    } else if (typeof explicitPlaying === "boolean") {
-      playing = explicitPlaying;
-    } else {
-      playing = await asyncIsPlaying();
-    }
+    const roomPlaying = roomTimelinePlaying();
+    if ((normalized === "play" && roomPlaying === true) ||
+        (normalized === "pause" && roomPlaying === false)) return;
 
-    const roomPlaying =
-      roomTimelinePlaying();
-
-    /*
-     * A YouTube callback produced by our own remote command must not
-     * create a new room command. Likewise, a repeated click on a control
-     * that already reflects the room state should not create a fake change.
-     */
-    if (
-      (normalized === "play" && roomPlaying === true) ||
-      (normalized === "pause" && roomPlaying === false)
-    ) {
-      return;
-    }
-
-    /*
-     * Pause callbacks can be produced by transient buffering/player state.
-     * Wait briefly and publish only if the player is still actually paused.
-     * The app's explicit pause button calls this function directly, so it
-     * still becomes the room command immediately after the debounce.
-     */
     if (normalized === "pause") {
       cancelPendingPausePublish();
       markLocalPlaybackIntent();
-
-      state.playbackPausePublishTimer =
-        setTimeout(async () => {
-          state.playbackPausePublishTimer =
-            null;
-
-          try {
-            if (
-              state.playbackApplyingRemote ||
-              !state.playerReady ||
-              !state.player
-            ) {
-              return;
-            }
-
-            const stillPaused =
-              !(await asyncIsPlaying());
-
-            if (!stillPaused) {
-              return;
-            }
-
-            if (
-              roomTimelinePlaying() === false
-            ) {
-              return;
-            }
-
-            await writePlaybackCommand(
-              "pause",
-              await asyncCurrentPosition(),
-              false
-            );
-          } catch (error) {
-            console.warn(
-              "本機暫停同步失敗:",
-              error
-            );
-          }
-        }, 220);
-
+      state.playbackPausePublishTimer = setTimeout(async () => {
+        state.playbackPausePublishTimer = null;
+        try {
+          if (state.playbackApplyingRemote || !state.playerReady || !state.player) return;
+          if (await asyncIsPlaying()) return;
+          if (roomTimelinePlaying() === false) return;
+          await writePlaybackCommand("pause", await asyncCurrentPosition(), false);
+        } catch (error) {
+          console.warn("本機暫停同步失敗:", error);
+        }
+      }, 180);
       return;
     }
 
@@ -6065,623 +5854,209 @@
       markLocalPlaybackIntent();
     }
 
-    /*
-     * Seek is accepted only when it is a meaningful jump away from the
-     * shared timeline. Normal drift correction must never create a new
-     * room command.
-     */
     if (normalized === "seek") {
-      const timeline =
-        state.playbackTimeline;
-
-      if (timeline) {
-        const expected =
-          getTimelinePosition(timeline);
-
-        if (
-          Math.abs(
-            finalPosition - expected
-          ) < 1.2
-        ) {
-          return;
-        }
-      }
-
+      const timeline = state.playbackTimeline;
+      if (timeline && Math.abs(finalPosition - getTimelinePosition(timeline)) < 1.25) return;
       markLocalPlaybackIntent();
     }
 
-    const now = serverNow();
-    const key =
-      `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;
+    const now = Date.now();
+    const key = `${normalized}:${Math.round(finalPosition * 4) / 4}:${playing ? 1 : 0}`;
+    if (key === state.playbackLastLocalActionKey &&
+        now - Number(state.playbackLastLocalActionAt || 0) < 650) return;
+    if (normalized === "seek" && now - Number(state.playbackLastLocalSeekWriteAt || 0) < 400) return;
 
-    if (
-      key === state.playbackLastLocalActionKey &&
-      now - Number(
-        state.playbackLastLocalActionAt || 0
-      ) < 650
-    ) {
-      return;
-    }
+    state.playbackLastLocalActionKey = key;
+    state.playbackLastLocalActionAt = now;
+    if (normalized === "seek") state.playbackLastLocalSeekWriteAt = now;
 
-    if (
-      normalized === "seek" &&
-      now - Number(
-        state.playbackLastLocalSeekWriteAt || 0
-      ) < 400
-    ) {
-      return;
-    }
-
-    state.playbackLastLocalActionKey =
-      key;
-    state.playbackLastLocalActionAt =
-      now;
-
-    if (normalized === "seek") {
-      state.playbackLastLocalSeekWriteAt =
-        now;
-    }
-
-    await writePlaybackCommand(
-      normalized,
-      finalPosition,
-      playing
-    );
+    await writePlaybackCommand(normalized, finalPosition, playing);
   }
 
-
-  async function applyRemotePlaybackEvent(
-    event,
-    force = false
-  ) {
-    if (
-      !event ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId
-    ) {
-      return;
+  async function enforceRoomPlayingState(wantPlaying, retries = 5) {
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      if (!state.playerReady || !state.player || !state.currentVideoId) return;
+      try {
+        if ((await asyncIsPlaying()) === wantPlaying) return;
+        if (wantPlaying) await playPlayer();
+        else await pausePlayer();
+      } catch (error) {
+        console.warn("強制套用房間播放狀態失敗:", error);
+      }
+      if (attempt + 1 < retries) await new Promise((resolve) => setTimeout(resolve, 350));
     }
+  }
 
-    if (
-      String(event.videoId || "") !==
-      String(state.currentVideoId || "")
-    ) {
-      return;
-    }
+  async function applyRemotePlaybackEvent(event, force = false) {
+    if (!event || !state.playerReady || !state.player || !state.currentVideoId) return;
+    if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
+    if (!["play", "pause", "seek"].includes(event.action)) return;
+    if (state.playerType === "bilibili" || state.playerType === "external") return;
 
-    if (
-      !["play", "pause", "seek"].includes(
-        event.action
-      )
-    ) {
-      return;
-    }
+    const eventId = String(event.eventId || "");
+    if (!eventId) return;
 
-    if (
-      state.playerType === "bilibili" ||
-      state.playerType === "external"
-    ) {
-      return;
-    }
-
-    const eventId = String(
-      event.eventId || ""
-    );
-
-    if (!eventId) {
-      return;
-    }
-
-    const incomingUpdatedAt = Number(
-      event.updatedAt || 0
-    );
-
-    const lastUpdatedAt = Number(
-      state.playbackLastRemoteUpdatedAt || 0
-    );
-
-    if (
-      !force &&
-      incomingUpdatedAt > 0 &&
-      lastUpdatedAt > 0 &&
-      incomingUpdatedAt < lastUpdatedAt
-    ) {
-      return;
-    }
-
-    if (
-      !force &&
-      state.playbackLastRemoteEventId === eventId
-    ) {
+    const incoming = Number(event.updatedAt || 0);
+    const previous = Number(state.playbackLastRemoteUpdatedAt || 0);
+    if (!force && incoming > 0 && previous > 0 && incoming < previous) return;
+    if (!force && state.playbackLastRemoteEventId === eventId) {
       rememberRoomTimeline(event);
       return;
     }
-
-    if (
-      !force &&
-      event.updatedBy === state.uid
-    ) {
+    if (!force && event.updatedBy === state.uid) {
       rememberRoomTimeline(event);
       return;
     }
 
     rememberRoomTimeline(event);
-
     cancelPendingPausePublish();
+    state.playbackLastRemoteEventId = eventId;
+    if (incoming > 0) state.playbackLastRemoteUpdatedAt = incoming;
 
-    state.playbackLastRemoteEventId =
-      eventId;
-
-    if (incomingUpdatedAt > 0) {
-      state.playbackLastRemoteUpdatedAt =
-        incomingUpdatedAt;
-    }
-
-    state.playbackApplyingRemoteEventId =
-      eventId;
-    state.playbackApplyingRemote =
-      true;
-    state.playbackPendingRecovery =
-      true;
-    state.playbackIgnoreStateChanges =
-      16;
-    state.playbackIgnoreStateUntil =
-      Date.now() + 9000;
-    state.playbackReadyAt =
-      Date.now() + 900;
+    state.playbackApplyingRemoteEventId = eventId;
+    state.playbackApplyingRemote = true;
+    state.playbackPendingRecovery = true;
+    state.playbackIgnoreStateChanges = 20;
+    state.playbackIgnoreStateUntil = Date.now() + 8000;
+    state.playbackReadyAt = Date.now() + 1100;
 
     try {
-      const expected =
-        getTimelinePosition(event);
-
-      const current =
-        await asyncCurrentPosition();
-
-      /*
-       * Everyone seeks to the shared room time. There is no participant
-       * whose current position is copied into the room.
-       */
-      if (
-        Math.abs(
-          current - expected
-        ) > 0.35
-      ) {
-        await applyPlayerPosition(
-          expected
-        );
-      }
-
-      const wantPlaying =
-        event.playing === true;
-
-      const currentlyPlaying =
-        await asyncIsPlaying();
-
-      /*
-       * Force the room state. A pause means every client pauses; a play
-       * means every client plays, including a client that was just opened.
-       */
-      if (
-        wantPlaying !== currentlyPlaying
-      ) {
-        if (wantPlaying) {
-          await playPlayer();
-        } else {
-          await pausePlayer();
-        }
-      }
-
-      state.playbackLastPosition =
-        await asyncCurrentPosition();
-      state.playbackLastPlaying =
-        await asyncIsPlaying();
-
-      if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          `已同步 ${formatTime(expected)}`;
-      }
+      const expected = getTimelinePosition(event);
+      const current = await asyncCurrentPosition();
+      if (Math.abs(current - expected) > 0.30) await applyPlayerPosition(expected);
+      await enforceRoomPlayingState(event.playing === true, 6);
+      state.playbackLastPosition = await asyncCurrentPosition();
+      state.playbackLastPlaying = await asyncIsPlaying();
+      if ($("syncStatus")) $("syncStatus").textContent = `已同步 ${formatTime(expected)}`;
     } catch (error) {
-      console.warn(
-        "套用房間播放命令失敗:",
-        error
-      );
+      console.warn("套用房間播放命令失敗:", error);
     } finally {
-      state.playbackApplyingRemote =
-        false;
-      state.playbackPendingRecovery =
-        false;
-      state.playbackApplyingRemoteEventId =
-        null;
+      state.playbackApplyingRemote = false;
+      state.playbackPendingRecovery = false;
+      state.playbackApplyingRemoteEventId = null;
     }
   }
 
-
-  async function applyLatestRoomPlaybackState(
-    force = false
-  ) {
+  async function applyLatestRoomPlaybackState(force = true) {
     const ref = playbackSyncRef();
-
-    if (
-      !ref ||
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId
-    ) {
-      return;
-    }
-
+    if (!ref || !state.playerReady || !state.player || !state.currentVideoId) return;
     try {
-      const event =
-        (await ref.once("value"))
-          .val();
-
-      if (
-        !event ||
-        !event.eventId
-      ) {
-        return;
-      }
-
+      const event = (await ref.once("value")).val();
+      if (!event || !event.eventId) return;
       rememberRoomTimeline(event);
-
-      /*
-       * On a new client, applying the latest room command is mandatory.
-       * A local copy of the database event is never treated as a reason
-       * to skip initial recovery.
-       */
-      await applyRemotePlaybackEvent(
-        event,
-        true
-      );
+      await applyRemotePlaybackEvent(event, force);
     } catch (error) {
-      state.playbackPendingRecovery =
-        false;
-
-      console.warn(
-        "讀取最新房間播放時間軸失敗:",
-        error
-      );
+      state.playbackPendingRecovery = false;
+      console.warn("讀取最新房間播放時間軸失敗:", error);
     }
   }
-
 
   function attachPlaybackSyncListener() {
-    if (
-      !state.roomRef ||
-      state.playbackListenerAttached
-    ) {
-      return;
-    }
-
+    if (!state.roomRef || state.playbackListenerAttached) return;
     const ref = playbackSyncRef();
-
-    if (!ref) {
-      return;
-    }
-
-    ref.on(
-      "value",
-      handleRemotePlaybackSnapshot
-    );
-
-    state.playbackListenerAttached =
-      true;
-
-    /*
-     * Initial room state is the source for a late joiner. It is not a
-     * participant and it does not depend on another user's player.
-     */
-    setTimeout(() => {
-      void applyLatestRoomPlaybackState(
-        true
-      );
-    }, 180);
+    if (!ref) return;
+    ref.on("value", handleRemotePlaybackSnapshot);
+    state.playbackListenerAttached = true;
   }
 
-
-  function handleRemotePlaybackSnapshot(
-    snapshot
-  ) {
-    const event =
-      snapshot?.val?.() ||
-      null;
-
-    if (
-      !event ||
-      !event.eventId
-    ) {
-      return;
-    }
-
-    if (!state.currentVideoId) {
-      rememberRoomTimeline(event);
-      return;
-    }
-
-    rememberRoomTimeline(event);
-
-    if (
-      event.updatedBy === state.uid
-    ) {
-      return;
-    }
-
-    if (
-      state.playbackLastRemoteEventId ===
-      String(event.eventId)
-    ) {
-      return;
-    }
-
-    state.playbackPendingRecovery =
-      true;
-
-    void applyRemotePlaybackEvent(
-      event,
-      false
-    );
+  function handleRemotePlaybackSnapshot(snapshot) {
+    const event = snapshot?.val?.() || null;
+    if (!event || !event.eventId) return;
+    if (!rememberRoomTimeline(event)) return;
+    if (event.updatedBy === state.uid) return;
+    if (state.playbackLastRemoteEventId === String(event.eventId)) return;
+    state.playbackPendingRecovery = true;
+    void applyRemotePlaybackEvent(event, false);
   }
-
 
   function stopPlaybackSeekDetector() {
-    clearInterval(
-      state.playbackSeekTimer
-    );
-
-    state.playbackSeekTimer =
-      null;
-
-    cancelPendingPausePublish();
-
-    state.playbackLastPosition =
-      null;
-    state.playbackLastPlaying =
-      null;
-    state.playbackLastPlayerState =
-      null;
-    state.playbackLastObservedPosition =
-      null;
+    clearInterval(state.playbackSeekTimer);
+    state.playbackSeekTimer = null;
+    state.playbackLastPosition = null;
+    state.playbackLastPlaying = null;
+    state.playbackLastPlayerState = null;
+    state.playbackLastObservedPosition = null;
   }
-
 
   async function reconcileRoomTimeline() {
-    if (
-      !state.playerReady ||
-      !state.player ||
-      !state.currentVideoId ||
-      state.playbackApplyingRemote ||
-      state.playbackPendingRecovery
-    ) {
+    if (!state.playerReady || !state.player || !state.currentVideoId ||
+        state.playbackApplyingRemote || state.playbackPendingRecovery) return;
+
+    const timeline = state.playbackTimeline;
+    if (!timeline || String(timeline.videoId || "") !== String(state.currentVideoId || "")) return;
+
+    const now = playbackClockNow();
+    const position = await asyncCurrentPosition();
+    const playing = await asyncIsPlaying();
+    const expected = getTimelinePosition(timeline, now);
+    const previousObserved = Number(state.playbackLastObservedPosition);
+
+    if (timeline.playing === true && Number.isFinite(previousObserved) &&
+        position < previousObserved - 3 &&
+        now - Number(state.playbackLocalIntentAt || 0) > 1200) {
+      state.playbackAdGuardUntil = Date.now() + 7500;
+      state.playbackTransientStateUntil = Date.now() + 7500;
+      state.playbackLastObservedPosition = position;
       return;
     }
 
-    const timeline =
-      state.playbackTimeline;
+    state.playbackLastObservedPosition = position;
+    if (now < Number(state.playbackAdGuardUntil || 0)) return;
+    if (Date.now() < Number(state.playbackTransientStateUntil || 0)) return;
+    if (now < Number(state.playbackReadyAt || 0)) return;
 
-    if (
-      !timeline ||
-      String(timeline.videoId || "") !==
-      String(state.currentVideoId || "")
-    ) {
-      return;
-    }
-
-    const now =
-      playbackClockNow();
-
-    const position =
-      await asyncCurrentPosition();
-
-    const playing =
-      await asyncIsPlaying();
-
-    const expected =
-      getTimelinePosition(
-        timeline,
-        now
-      );
-
-    state.playbackLastObservedPosition =
-      position;
-
-    if (
-      now < Number(
-        state.playbackReadyAt || 0
-      )
-    ) {
-      return;
-    }
-
-    const drift =
-      Math.abs(
-        position - expected
-      );
-
-    /*
-     * Strong room state: a room pause/play always wins over local drift.
-     * This is how a single pause stops every participant.
-     */
-    const wantPlaying =
-      timeline.playing === true;
-
-    if (
-      wantPlaying !== playing
-    ) {
-      state.playbackApplyingRemote =
-        true;
-      state.playbackPendingRecovery =
-        true;
-      state.playbackIgnoreStateChanges =
-        8;
-      state.playbackIgnoreStateUntil =
-        Date.now() + 4000;
-
+    if (Math.abs(position - expected) > 1.75) {
+      state.playbackApplyingRemote = true;
+      state.playbackPendingRecovery = true;
+      state.playbackIgnoreStateChanges = 10;
+      state.playbackIgnoreStateUntil = Date.now() + 3500;
       try {
-        if (wantPlaying) {
-          await playPlayer();
-        } else {
-          await pausePlayer();
-        }
+        await applyPlayerPosition(expected);
+      } catch (error) {
+        console.warn("播放位置校正失敗:", error);
       } finally {
-        state.playbackApplyingRemote =
-          false;
-        state.playbackPendingRecovery =
-          false;
+        state.playbackApplyingRemote = false;
+        state.playbackPendingRecovery = false;
       }
-
+      if ($("syncStatus")) $("syncStatus").textContent = `已校正 ${formatTime(expected)}`;
       return;
     }
 
-    /*
-     * Small natural clock/network drift is ignored. Larger drift is a
-     * correction to the room timeline, never an update of that timeline.
-     */
-    if (
-      drift > 1.35
-    ) {
-      state.playbackApplyingRemote =
-        true;
-      state.playbackPendingRecovery =
-        true;
-      state.playbackIgnoreStateChanges =
-        8;
-      state.playbackIgnoreStateUntil =
-        Date.now() + 4000;
-
+    if (timeline.playing === true && !playing || timeline.playing === false && playing) {
+      state.playbackApplyingRemote = true;
+      state.playbackPendingRecovery = true;
+      state.playbackIgnoreStateChanges = 10;
+      state.playbackIgnoreStateUntil = Date.now() + 3500;
       try {
-        await applyPlayerPosition(
-          expected
-        );
+        await enforceRoomPlayingState(timeline.playing === true, 4);
       } finally {
-        state.playbackApplyingRemote =
-          false;
-        state.playbackPendingRecovery =
-          false;
-        state.playbackLastPosition =
-          await asyncCurrentPosition().catch(
-            () => null
-          );
-        state.playbackLastPlaying =
-          await asyncIsPlaying().catch(
-            () => null
-          );
-      }
-
-      if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          `已校正 ${formatTime(expected)}`;
+        state.playbackApplyingRemote = false;
+        state.playbackPendingRecovery = false;
       }
     }
   }
-
 
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
-
-    state.playbackReadyAt =
-      Date.now() + 700;
-
-    /*
-     * The detector is a ROOM-TIMELINE CORRECTOR. It deliberately does not
-     * write currentTime into Firebase. The room command is changed only by
-     * explicit playback controls/state-intent or a meaningful local seek.
-     */
-    state.playbackSeekTimer =
-      setInterval(async () => {
-        try {
-          if (
-            !state.playerReady ||
-            !state.player ||
-            !state.currentVideoId
-          ) {
-            return;
-          }
-
-          if (
-            state.playbackApplyingRemote ||
-            state.playbackPendingRecovery
-          ) {
-            return;
-          }
-
-          await reconcileRoomTimeline();
-        } catch (error) {
-          console.warn(
-            "播放時間軸校正失敗:",
-            error
-          );
-        }
-      }, 700);
+    state.playbackReadyAt = Date.now() + 700;
+    state.playbackSeekTimer = setInterval(() => void reconcileRoomTimeline(), 650);
   }
-
-
-  function schedulePlaybackRecovery() {
-    clearTimeout(
-      state.playbackRecoveryTimer
-    );
-
-    state.playbackRecoveryTimer =
-      setTimeout(() => {
-        state.playbackRecoveryTimer =
-          null;
-
-        if (
-          document.visibilityState ===
-            "visible"
-        ) {
-          void applyLatestRoomPlaybackState(
-            true
-          );
-        }
-      }, 350);
-  }
-
 
   function recoverPlaybackAfterPageResume() {
-    if (
-      document.visibilityState === "hidden" ||
-      !state.roomId ||
-      !state.uid ||
-      !state.playerReady
-    ) {
-      return;
-    }
-
-    schedulePlaybackRecovery();
+    clearTimeout(state.playbackRecoveryTimer);
+    state.playbackRecoveryTimer = setTimeout(async () => {
+      state.playbackRecoveryTimer = null;
+      await applyLatestRoomPlaybackState(true);
+      startPlaybackSeekDetector();
+    }, 450);
   }
 
-
-  if (!state.__sharedPlaybackLifecycleBound) {
-    state.__sharedPlaybackLifecycleBound =
-      true;
-
-    document.addEventListener(
-      "visibilitychange",
-      () => {
-        if (
-          document.visibilityState ===
-            "visible"
-        ) {
-          recoverPlaybackAfterPageResume();
-        }
-      }
-    );
-
-    window.addEventListener(
-      "pageshow",
-      () => {
-        recoverPlaybackAfterPageResume();
-      }
-    );
-  }
-
-
-    /*
+  /*
    * =========================================================
    * ROOM UI
    * =========================================================
    */
+
 
   function updateRoomOwnerUI() {
     const element =
