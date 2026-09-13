@@ -15,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply shared playback timeline repair v9
+      - name: Apply shared playback timeline repair v10
         run: python3 .github/scripts/repair_playback_v9.py
 
       - name: Apply server clock repair
@@ -27,7 +27,7 @@ jobs:
           grep -q "function playbackClockNow()" app.js
           grep -q "function serverNow()" app.js
           grep -q "function attachServerClockSync()" app.js
-          grep -q "SHARED ROOM TIMELINE PLAYBACK SYNC V9" app.js
+          grep -q "SHARED ROOM TIMELINE PLAYBACK SYNC V10" app.js
 
       - name: Commit repaired app
         run: |
@@ -37,6 +37,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Fix shared playback timeline and local command handling v9"
+            git commit -m "Fix shared playback timeline and local command handling v10"
             git push origin HEAD:main
           fi
