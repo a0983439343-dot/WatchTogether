@@ -4,14 +4,9 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   repair:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,14 +21,18 @@ jobs:
           path = Path('app.js')
           text = path.read_text(encoding='utf-8')
 
-          if 'STABLE ROOM AUTHORITY PLAYBACK V11' not in text:
-              layer = r'''
+          marker = 'STABLE ROOM AUTHORITY PLAYBACK V11'
+          if marker in text:
+              print('playback layer already installed')
+              raise SystemExit(0)
+
+          layer = r'''
 
   /* =========================================================
      STABLE ROOM AUTHORITY PLAYBACK V11
      =========================================================
-     Firebase playbackEvent is the only shared playback authority.
-     No user/player is a master. Every member may publish commands.
+     Firebase playbackEvent is the shared room authority.
+     No user/player is a master.
   ========================================================= */
 
   function stableRoomPlayerReady() {
@@ -71,31 +70,43 @@ jobs:
     );
   }
 
+  async function stableRoomReadTimeline() {
+    if (!state.roomId || !db || !state.currentVideoId) return null;
+    const snapshot = await db.ref(`rooms/${state.roomId}/playbackEvent`).once('value');
+    const event = snapshot.val();
+    if (!event || event.videoId !== state.currentVideoId) return null;
+    return event;
+  }
+
   async function stableRoomApply(force = false) {
-    if (!state.roomId || !stableRoomPlayerReady() || !db) return;
+    if (!stableRoomPlayerReady()) return;
 
     try {
-      const snapshot = await db.ref(`rooms/${state.roomId}/playbackEvent`).once('value');
-      const event = snapshot.val();
-      if (!event || event.videoId !== state.currentVideoId) return;
+      const event = await stableRoomReadTimeline();
+      if (!event) return;
 
-      if (typeof applyRemotePlaybackEvent === 'function') {
-        await applyRemotePlaybackEvent(event, force);
-        return;
-      }
+      state.playbackTimeline = event;
 
       const expected = stableRoomExpectedPosition(event);
       if (expected === null) return;
 
       const current = await asyncCurrentPosition();
       if (Math.abs(expected - current) > 0.7 && typeof applyPlayerPosition === 'function') {
+        state.playbackIgnoreStateChanges = 4;
+        state.playbackIgnoreStateUntil = Date.now() + 2200;
         await applyPlayerPosition(expected);
       }
 
-      if (event.playing === true) {
+      const localPlaying = await asyncIsPlaying();
+
+      if (event.playing === true && !localPlaying) {
+        state.playbackIgnoreStateChanges = 6;
+        state.playbackIgnoreStateUntil = Date.now() + 2500;
         if (typeof playPlayer === 'function') await playPlayer();
-      } else if (typeof pausePlayer === 'function') {
-        await pausePlayer();
+      } else if (event.playing !== true && localPlaying) {
+        state.playbackIgnoreStateChanges = 6;
+        state.playbackIgnoreStateUntil = Date.now() + 2500;
+        if (typeof pausePlayer === 'function') await pausePlayer();
       }
     } catch (error) {
       console.warn('房間播放狀態恢復失敗:', error);
@@ -121,7 +132,6 @@ jobs:
   function stableRoomInstallControls() {
     stableRoomReplaceButton('playPauseBtn', async () => {
       if (!stableRoomPlayerReady() || state.playbackApplyingRemote) return;
-
       const before = await asyncIsPlaying();
       const target = !before;
       const position = await asyncCurrentPosition();
@@ -139,7 +149,6 @@ jobs:
       else await pausePlayer();
 
       await stableRoomCommand(target ? 'play' : 'pause', position);
-
       state.playbackLastPosition = position;
       state.playbackLastPlaying = target;
       state.playbackLastPlayerState = target ? 'playing' : 'paused';
@@ -149,7 +158,6 @@ jobs:
 
     const stableSeek = async (delta) => {
       if (!stableRoomPlayerReady() || state.playbackApplyingRemote) return;
-
       const current = await asyncCurrentPosition();
       const playing = await asyncIsPlaying();
       const target = Math.max(0, current + delta);
@@ -165,7 +173,6 @@ jobs:
 
       await applyPlayerPosition(target);
       await stableRoomCommand('seek', target);
-
       state.playbackLastPosition = target;
       state.playbackLastPlaying = playing;
       state.playbackLastPlayerState = playing ? 'playing' : 'paused';
@@ -187,36 +194,45 @@ jobs:
       stableRoomObserverBusy = true;
 
       try {
-        const timeline = state.playbackTimeline;
+        const timeline = state.playbackTimeline || await stableRoomReadTimeline();
         if (!timeline || timeline.videoId !== state.currentVideoId) {
           await stableRoomApply(false);
           return;
         }
+
+        state.playbackTimeline = timeline;
+
+        if (stableRoomTransient()) return;
 
         const current = await asyncCurrentPosition();
         const localPlaying = await asyncIsPlaying();
         const roomPlaying = timeline.playing === true;
         const expected = stableRoomExpectedPosition(timeline);
 
-        if (expected !== null && !stableRoomTransient()) {
+        if (expected !== null) {
           const drift = expected - current;
-          if (Math.abs(drift) > 1.25 && typeof applyPlayerPosition === 'function') {
+          if (Math.abs(drift) > 1.25) {
             state.playbackIgnoreStateChanges = 4;
             state.playbackIgnoreStateUntil = Date.now() + 2200;
             await applyPlayerPosition(expected);
           }
         }
 
-        if (!stableRoomTransient() && localPlaying !== roomPlaying) {
+        if (localPlaying !== roomPlaying) {
           const now = Date.now();
           if (Number(state.playbackUserActionUntil || 0) > now) {
-            state.playbackLocalStateCandidate = null;
-          } else if (state.playbackLocalStateCandidate !== localPlaying) {
+            return;
+          }
+
+          if (state.playbackLocalStateCandidate !== localPlaying) {
             state.playbackLocalStateCandidate = localPlaying;
             state.playbackLocalStateCandidateAt = now;
-          } else if (now - Number(state.playbackLocalStateCandidateAt || 0) >= 450) {
-            const p = await asyncCurrentPosition();
-            await stableRoomCommand(localPlaying ? 'play' : 'pause', p);
+            return;
+          }
+
+          if (now - Number(state.playbackLocalStateCandidateAt || 0) >= 550) {
+            const position = await asyncCurrentPosition();
+            await stableRoomCommand(localPlaying ? 'play' : 'pause', position);
             state.playbackLocalStateCandidate = null;
             state.playbackLocalStateCandidateAt = 0;
           }
@@ -224,10 +240,6 @@ jobs:
           state.playbackLocalStateCandidate = null;
           state.playbackLocalStateCandidateAt = 0;
         }
-
-        state.playbackLastPosition = current;
-        state.playbackLastPlaying = localPlaying;
-        state.playbackLastObservedPosition = current;
       } catch (error) {
         console.warn('播放同步監測失敗:', error);
       } finally {
@@ -252,23 +264,22 @@ jobs:
 
   stableRoomInstallControls();
   stableRoomStartObserver();
-  setTimeout(() => stableRoomApply(false), 250);
+  setTimeout(() => stableRoomApply(false), 300);
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') stableRoomRecover();
   });
 
   window.addEventListener('pageshow', stableRoomRecover);
-
 '''
 
-              idx = text.rfind('\n})();')
-              if idx < 0:
-                  idx = text.rfind('})();')
-              if idx < 0:
-                  raise SystemExit('IIFE tail not found')
-              text = text[:idx] + layer + text[idx:]
+          idx = text.rfind('\n})();')
+          if idx < 0:
+              idx = text.rfind('})();')
+          if idx < 0:
+              raise SystemExit('IIFE tail not found')
 
+          text = text[:idx] + layer + text[idx:]
           path.write_text(text, encoding='utf-8')
           print('playback layer installed')
           PY
