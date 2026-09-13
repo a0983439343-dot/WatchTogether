@@ -209,6 +209,9 @@
     playbackPendingRecovery: false,
     playbackPausePublishTimer: null,
     playbackLocalIntentAt: 0,
+    playbackUserActionUntil: 0,
+    playbackUserActionKind: "",
+    playbackUiBridgeBound: false,
 
     playbackTimeline: null,
     playbackAdGuardUntil: 0,
@@ -4729,9 +4732,26 @@
                     state.playbackLastObservedPosition =
                       await asyncCurrentPosition().catch(() => null);
 
-                    // Do not write Firebase from YouTube state callbacks.
-                    // Explicit WatchTogether controls are the only source
-                    // of room playback commands.
+                    // YouTube can emit these callbacks for ads, buffering,
+                    // lifecycle changes and remote commands. Only a recent
+                    // explicit local interaction is allowed to become a
+                    // Firebase room command.
+                    if (Date.now() <= Number(state.playbackUserActionUntil || 0)) {
+                      const kind = state.playbackUserActionKind;
+                      state.playbackUserActionUntil = 0;
+                      state.playbackUserActionKind = "";
+
+                      if (kind === "pause" && data === YT.PlayerState.PAUSED) {
+                        void publishPlaybackEvent("pause").catch((error) =>
+                          console.warn("本機暫停同步失敗:", error)
+                        );
+                      } else if (kind === "play" && data === YT.PlayerState.PLAYING) {
+                        void publishPlaybackEvent("play").catch((error) =>
+                          console.warn("本機播放同步失敗:", error)
+                        );
+                      }
+                    }
+
                     return;
                   }
 
@@ -5686,9 +5706,11 @@
 
 
 
+
+
   /*
    * =========================================================
-   * SHARED ROOM TIMELINE PLAYBACK SYNC V8
+   * SHARED ROOM TIMELINE PLAYBACK SYNC V9
    * =========================================================
    *
    * Firebase is the only room timeline. No player is a master.
@@ -6071,9 +6093,130 @@
 
   /*
    * =========================================================
+   * EXPLICIT LOCAL PLAYBACK COMMAND BRIDGE V9
+   * =========================================================
+   *
+   * Firebase is still the only shared timeline. No participant is
+   * a master. This bridge only identifies a real local play/pause/
+   * seek action so YouTube callbacks from ads/buffering are ignored.
+   */
+
+  function markLocalPlayerInteraction(kind = "") {
+    state.playbackUserActionUntil = Date.now() + 1400;
+    state.playbackUserActionKind = kind;
+    state.playbackLocalIntentAt = Date.now();
+    state.playbackAdGuardUntil = 0;
+    state.playbackTransientStateUntil = 0;
+  }
+
+  function isPlaybackControlTarget(target) {
+    if (!target || !(target instanceof Element)) return false;
+
+    const playerWrap = $("playerWrap");
+    const inPlayer = !!playerWrap && playerWrap.contains(target);
+    const text = `${target.id || ""} ${target.className || ""} ${target.getAttribute("aria-label") || ""} ${target.textContent || ""}`.toLowerCase();
+
+    if (inPlayer && /play|pause|播放|暫停|開始|繼續|seek|進度|快轉|快退/.test(text)) {
+      return true;
+    }
+
+    if (/play|pause|播放|暫停|開始|繼續|seek|進度|快轉|快退/.test(text)) {
+      return !!target.closest("button,[role='button'],input[type='range'],[data-playback-action]");
+    }
+
+    return false;
+  }
+
+  function inferPlaybackControlKind(target) {
+    const text = `${target?.id || ""} ${target?.className || ""} ${target?.getAttribute?.("aria-label") || ""} ${target?.textContent || ""}`.toLowerCase();
+    if (/pause|暫停/.test(text)) return "pause";
+    if (/play|播放|開始|繼續/.test(text)) return "play";
+    if (/seek|進度|快轉|快退/.test(text)) return "seek";
+    return "";
+  }
+
+  async function bindPlaybackUiBridge() {
+    if (state.playbackUiBridgeBound) return;
+    state.playbackUiBridgeBound = true;
+
+    document.addEventListener("pointerdown", (event) => {
+      const target = event.target;
+      if (!isPlaybackControlTarget(target)) return;
+      const kind = inferPlaybackControlKind(target);
+      markLocalPlayerInteraction(kind);
+    }, true);
+
+    document.addEventListener("touchstart", (event) => {
+      const target = event.target;
+      if (!isPlaybackControlTarget(target)) return;
+      const kind = inferPlaybackControlKind(target);
+      markLocalPlayerInteraction(kind);
+    }, { capture: true, passive: true });
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!isPlaybackControlTarget(target)) return;
+      const kind = inferPlaybackControlKind(target);
+      if (kind) markLocalPlayerInteraction(kind);
+    }, true);
+
+    const originalPlayPlayer = playPlayer;
+    const originalPausePlayer = pausePlayer;
+
+    playPlayer = async function(...args) {
+      const remote = state.playbackApplyingRemote || state.playbackPendingRecovery;
+      const result = await originalPlayPlayer.apply(this, args);
+      if (!remote) {
+        void publishPlaybackEvent("play").catch((error) =>
+          console.warn("本機播放同步失敗:", error)
+        );
+      }
+      return result;
+    };
+
+    pausePlayer = async function(...args) {
+      const remote = state.playbackApplyingRemote || state.playbackPendingRecovery;
+      const result = await originalPausePlayer.apply(this, args);
+      if (!remote) {
+        void publishPlaybackEvent("pause").catch((error) =>
+          console.warn("本機暫停同步失敗:", error)
+        );
+      }
+      return result;
+    };
+
+    const originalApplyPlayerPosition = applyPlayerPosition;
+    applyPlayerPosition = async function(position, ...args) {
+      const remote = state.playbackApplyingRemote || state.playbackPendingRecovery;
+      const result = await originalApplyPlayerPosition.call(this, position, ...args);
+      if (!remote && Date.now() <= Number(state.playbackUserActionUntil || 0)) {
+        const kind = state.playbackUserActionKind;
+        if (kind === "seek") {
+          state.playbackUserActionUntil = 0;
+          state.playbackUserActionKind = "";
+          void publishPlaybackEvent("seek", position).catch((error) =>
+            console.warn("本機拖曳同步失敗:", error)
+          );
+        }
+      }
+      return result;
+    };
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      void bindPlaybackUiBridge();
+    }, { once: true });
+  } else {
+    void bindPlaybackUiBridge();
+  }
+
+  /*
+   * =========================================================
    * ROOM UI
    * =========================================================
    */
+
 
 
 
