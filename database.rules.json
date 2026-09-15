@@ -3,7 +3,7 @@
     "rooms": {
       "$roomId": {
         ".read": "auth != null && (data.child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists())",
-        ".write": "auth != null && !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.hasChildren(['owner','name','sourceType','video'])",
+        ".write": "auth != null && !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.hasChildren(['owner','name','sourceType'])",
         "owner": {
           ".write": false
         },
