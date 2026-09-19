@@ -1,19 +1,66 @@
-# WatchTogether 修正版
+# WatchTogether
 
-包含：
-- app.js：保留原本多平台、YouTube 搜尋、待播放清單、聊天室、房主踢人，並移除播放秒數同步寫入。
-- index.html：手機搜尋視窗結構、狀態文字與 favicon 佔位修正。
-- styles.css：手機 YouTube 搜尋結果單欄排列、固定可滾動區域、文字防擠壓。
-- firebase-config.js：改為一般 script 可用的 `window.FIREBASE_CONFIG`，不使用 `export`。
-- database.rules.json：依 WatchTogether 實際資料結構重新建立 Rules。
-- storage.rules：保留房間媒體檔案權限限制。
-- firebase.json：對應上述 Rules。
+目前 GitHub Pages 使用的正式版本。
 
-注意：firebase-config.js 仍需要填入你目前 WatchTogether Firebase Web App 的實際 config；這份檔案原本沒有包含可可靠恢復的實際專案設定，不能自行猜測專案設定。
+## 專案檔案
 
-## 維護狀態
+- `index.html`：頁面結構與 Firebase / YouTube / Vimeo SDK 載入。
+- `app.js`：房間、搜尋、播放器、聊天室、待播放清單與同步核心。
+- `styles.css`：桌面與手機版介面。
+- `firebase-config.js`：目前 WatchTogether Firebase Web App 設定。
+- `database.rules.json`：Realtime Database 權限與資料驗證。
+- `storage.rules`：房間媒體檔案權限。
+- `firebase.json`：Firebase Rules / Hosting 對應設定。
 
-目前版本使用單一 Firebase shared timeline：`videoId + position + updatedAt + playing + eventId`。舊的 V12/V13/V14/V15/V16/V17 自動注入腳本已移除；GitHub Actions 現在只做驗證，不會再改寫 `app.js`。
+## 播放同步
 
-聊天室、待播放清單與播放同步已從 `rooms/{roomId}` 拆到獨立節點，避免房間根節點的讀取權限意外放開私人資料。影片切換與待播放清單的「播放下一部」由房主執行，Firebase Rules 也會再次檢查。
+目前使用 Firebase shared playback timeline，包含：
 
+- `videoId`
+- `position`
+- `action`
+- `playing`
+- `playbackRate`
+- `issuedAt`
+- `updatedAt`
+- `updatedBy`
+- `eventId`
+- 暫停時的 `effectiveAt`
+
+播放器會使用 Firebase server time offset 做共同時間基準，並對小幅漂移做播放速度修正；較大的漂移才進行位置校正。
+
+暫停操作會先建立共同的 `effectiveAt)，讓不同網路延遲的裝置在同一個時間點執行 pause。
+
+## 影片切換
+
+房主更換影片時會：
+
+1. 更新 `rooms/{roomId}` 的平台與影片。
+2. 由房主清除舊的 `playback/{roomId}` timeline。
+3. 清理同步狀態失敗時仍會繼續完成影片切換，避免搜尋視窗卡住。
+
+## Firebase Rules
+
+Realtime Database Rules 會限制：
+
+- 房主建立與修改房間影片。
+- 成員自己的成員資料。
+- 成員聊天與待播放清單。
+- 成員播放事件只能以自己的 UID 寫入。
+- `playback/{roomId}` 的刪除只允許房主。
+- `effectiveAt` 若存在必須是正數。
+
+## 目前檢查
+
+已檢查目前 main 分支的：
+
+- `index.html`
+- `app.js`
+- `styles.css`
+- `firebase-config.js`
+- `database.rules.json`
+- `storage.rules`
+- `firebase.json`
+- `README.md`
+
+`app.js` JavaScript 語法檢查通過；CSS 大括號結構與 Firebase JSON 也檢查通過。
