@@ -1308,8 +1308,144 @@ select:focus {
 }
 
 /* =========================================================
+   WatchTogether desktop search result layout
+   ========================================================= */
+
+#sourceModal #modalVideoSearchResults .video-result-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .72);
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-card:hover {
+  border-color: rgba(99, 102, 241, .55);
+  background: rgba(30, 41, 59, .86);
+  transform: translateY(-1px);
+}
+
+#sourceModal #modalVideoSearchResults .video-result-card.selected {
+  border-color: rgba(59, 130, 246, .8);
+  background: rgba(30, 64, 175, .18);
+}
+
+#sourceModal #modalVideoSearchResults .video-result-main {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-main > div:first-child {
+  position: relative;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  height: 84px;
+  min-height: 84px;
+  max-height: 84px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-main img {
+  display: block;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  height: 84px;
+  min-height: 84px;
+  max-height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  align-content: center;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-info strong {
+  display: -webkit-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-info small {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-card > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 10px 10px;
+  box-sizing: border-box;
+}
+
+#sourceModal #modalVideoSearchResults .video-result-card > div:last-child .tiny-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+@media (min-width: 761px) {
+  #sourceModal #modalVideoSearchResults {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+}
+
+/* =========================================================
    WatchTogether mobile search final layout fix
    ========================================================= */
+
 
 #sourceModal {
   box-sizing: border-box;
