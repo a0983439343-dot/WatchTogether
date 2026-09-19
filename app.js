@@ -5847,11 +5847,25 @@
 
   function getTimelinePosition(timeline, now = playbackClockNow()) {
     const base = Math.max(0, Number(timeline?.position) || 0);
-    if (timeline?.playing !== true) return base;
     const anchor = Number(timeline?.issuedAt || 0);
+    const rate = Math.max(0.01, Number(timeline?.playbackRate) || 1);
+
     if (!Number.isFinite(anchor) || anchor <= 0) return base;
+
+    if (
+      timeline?.action === "pause" &&
+      Number(timeline?.effectiveAt || 0) > anchor
+    ) {
+      const effectiveAt = Number(timeline.effectiveAt);
+      const until = Math.min(now, effectiveAt);
+      const elapsed = Math.max(0, (until - anchor) / 1000);
+      return base + Math.min(elapsed * rate, 7200);
+    }
+
+    if (timeline?.playing !== true) return base;
+
     const elapsed = Math.max(0, (now - anchor) / 1000);
-    return base + Math.min(elapsed * Math.max(0.01, Number(timeline?.playbackRate) || 1), 7200);
+    return base + Math.min(elapsed * rate, 7200);
   }
 
   function rememberRoomTimeline(event) {
@@ -5865,12 +5879,14 @@
     const issuedAt = Number(event.issuedAt || event.updatedAt || playbackClockNow());
     state.playbackRemoteEvent = event;
     state.playbackTimeline = {
+      action: String(event.action || ""),
       videoId: String(event.videoId || ""),
       platform: String(event.platform || ""),
       position: Math.max(0, Number(event.position) || 0),
       playing: event.playing === true,
       playbackRate: Math.max(0.01, Number(event.playbackRate) || 1),
       issuedAt: Number.isFinite(issuedAt) && issuedAt > 0 ? issuedAt : playbackClockNow(),
+      effectiveAt: Number(event.effectiveAt || 0),
       updatedAt: incomingUpdatedAt || playbackClockNow(),
       eventId: String(event.eventId)
     };
@@ -5902,12 +5918,133 @@
     state.playbackPausePublishTimer = null;
   }
 
+  function cancelScheduledLocalPause() {
+    clearTimeout(state.playbackLocalPauseTimer);
+    state.playbackLocalPauseTimer = null;
+  }
+
+  function cancelScheduledRemotePause() {
+    clearTimeout(state.playbackRemotePauseTimer);
+    state.playbackRemotePauseTimer = null;
+    state.playbackRemotePauseEventId = "";
+  }
+
+  function getPauseLeadMs() {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const rtt = Number(connection?.rtt);
+
+    if (!Number.isFinite(rtt) || rtt <= 0) {
+      return 180;
+    }
+
+    return Math.max(
+      140,
+      Math.min(
+        450,
+        Math.round(rtt * 0.75 + 100)
+      )
+    );
+  }
+
+  async function pauseAtPosition(position) {
+    if (!state.playerReady || !state.player) return;
+
+    state.playbackApplyingRemote = true;
+
+    try {
+      await pausePlayer();
+
+      const target = Math.max(0, Number(position) || 0);
+      const current = await asyncCurrentPosition().catch(() => target);
+
+      if (Math.abs(current - target) >= 0.08) {
+        await applyPlayerPosition(target);
+      }
+
+      await setPlaybackRateSafe(1);
+      state.playbackLastPosition = await asyncCurrentPosition().catch(() => target);
+      state.playbackLastPlaying = false;
+    } finally {
+      state.playbackApplyingRemote = false;
+    }
+  }
+
+  function scheduleLocalPause(effectiveAt, position) {
+    cancelScheduledLocalPause();
+
+    const run = async () => {
+      if (!state.roomId || !state.playerReady || !state.player) return;
+      await pauseAtPosition(position);
+    };
+
+    const delay = Math.max(0, Number(effectiveAt) - playbackClockNow());
+
+    if (delay <= 8) {
+      void run();
+      return;
+    }
+
+    state.playbackLocalPauseTimer = setTimeout(() => {
+      state.playbackLocalPauseTimer = null;
+      void run();
+    }, delay);
+  }
+
+  function scheduleRemotePause(event) {
+    cancelScheduledRemotePause();
+
+    const eventId = String(event?.eventId || "");
+    const effectiveAt = Number(event?.effectiveAt || 0);
+    const target = getTimelinePosition(
+      { ...event, action: "pause" },
+      effectiveAt || playbackClockNow()
+    );
+
+    const run = async () => {
+      if (!state.roomId || !state.playerReady || !state.player) return;
+
+      const timeline = state.playbackTimeline;
+      if (
+        eventId &&
+        timeline?.eventId &&
+        String(timeline.eventId) !== eventId
+      ) {
+        return;
+      }
+
+      await pauseAtPosition(target);
+    };
+
+    const delay = effectiveAt > 0
+      ? Math.max(0, effectiveAt - playbackClockNow())
+      : 0;
+
+    state.playbackRemotePauseEventId = eventId;
+
+    if (delay <= 8) {
+      void run();
+      return;
+    }
+
+    state.playbackRemotePauseTimer = setTimeout(() => {
+      state.playbackRemotePauseTimer = null;
+      state.playbackRemotePauseEventId = "";
+      void run();
+    }, delay);
+  }
+
   function getLocalPlaybackRevision() {
     state.playbackActionSeq = Number(state.playbackActionSeq || 0) + 1;
     return state.playbackActionSeq;
   }
 
-  async function writePlaybackCommand(action, position, playing, issuedAt = playbackClockNow()) {
+  async function writePlaybackCommand(
+    action,
+    position,
+    playing,
+    issuedAt = playbackClockNow(),
+    effectiveAt = 0
+  ) {
     if (
       !state.uid || !state.roomId || !state.playerReady || !state.player ||
       !state.currentVideoId || state.playbackApplyingRemote
@@ -5933,10 +6070,14 @@
       updatedBy: state.uid,
       eventId,
       playing: Boolean(playing),
-      playbackRate
+      playbackRate,
+      ...(Number.isFinite(Number(effectiveAt)) && Number(effectiveAt) > 0
+        ? { effectiveAt: Number(effectiveAt) }
+        : {})
     };
 
     const localEvent = { ...event, updatedAt: safeIssuedAt };
+    cancelScheduledRemotePause();
     rememberRoomTimeline(localEvent);
     state.playbackLastRemoteEventId = eventId;
     state.playbackLastRemoteUpdatedAt = safeIssuedAt;
@@ -5952,7 +6093,13 @@
     }
   }
 
-  function publishPlaybackEvent(action, position = null, explicitPlaying = undefined, issuedAtOverride = null) {
+  function publishPlaybackEvent(
+    action,
+    position = null,
+    explicitPlaying = undefined,
+    issuedAtOverride = null,
+    effectiveAt = 0
+  ) {
     if (
       !state.uid || !state.roomId || !state.playerReady || !state.player ||
       !state.currentVideoId || state.playbackApplyingRemote
@@ -5987,7 +6134,13 @@
           ? Number(issuedAtOverride)
           : playbackClockNow();
 
-        await writePlaybackCommand(normalized, finalPosition, playing, issuedAt);
+        await writePlaybackCommand(
+          normalized,
+          finalPosition,
+          playing,
+          issuedAt,
+          normalized === "pause" ? effectiveAt : 0
+        );
       } catch (error) {
         console.warn("播放控制同步寫入失敗:", error);
       }
@@ -6130,6 +6283,12 @@
 
     rememberRoomTimeline(event);
     cancelPendingPausePublish();
+    cancelScheduledRemotePause();
+
+    if (event.action === "play" || event.action === "seek") {
+      cancelScheduledLocalPause();
+    }
+
     state.playbackLastRemoteEventId = eventId;
     if (incoming > 0) state.playbackLastRemoteUpdatedAt = incoming;
 
@@ -6154,10 +6313,28 @@
       const youtubeHardSeekThreshold = 0.35;
 
       if (event.action === "pause") {
-        if (Math.abs(current - Number(event.position || 0)) > 0.08) {
-          await applyPlayerPosition(Number(event.position || 0));
+        const effectiveAt = Number(event.effectiveAt || 0);
+
+        if (effectiveAt > playbackClockNow() + 8) {
+          state.playbackApplyingRemote = false;
+          scheduleRemotePause(event);
+          return;
         }
+
         await pausePlayer();
+
+        const target = getTimelinePosition(
+          { ...event, action: "pause" },
+          effectiveAt || playbackClockNow()
+        );
+
+        const pausedPosition =
+          await asyncCurrentPosition().catch(() => target);
+
+        if (Math.abs(pausedPosition - target) >= 0.08) {
+          await applyPlayerPosition(target);
+        }
+
         await setPlaybackRateSafe(1);
         state.playbackReadyAt = Date.now() + 80;
       } else if (event.action === "seek") {
@@ -6289,6 +6466,21 @@
     if (Date.now() < Number(state.playbackTransientStateUntil || 0)) return;
     if (Date.now() < Number(state.playbackReadyAt || 0)) return;
 
+    const pendingPauseAt = Number(timeline.effectiveAt || 0);
+
+    if (
+      timeline.action === "pause" &&
+      pendingPauseAt > now + 8
+    ) {
+      if (!playing) {
+        await enforceRoomPlayingState(true);
+      }
+      await setPlaybackRateSafe(
+        timeline.playbackRate || 1
+      );
+      return;
+    }
+
     if (timeline.playing) {
       if (!playing) {
         await enforceRoomPlayingState(true);
@@ -6327,14 +6519,20 @@
         await setPlaybackRateSafe(rate);
       }
     } else {
-      if (playing) await enforceRoomPlayingState(false);
-      if (Math.abs(position - Number(timeline.position || 0)) >= 0.08) {
+      if (playing) {
+        await enforceRoomPlayingState(false);
+      }
+
+      const target = getTimelinePosition(timeline, now);
+
+      if (Math.abs(position - target) >= 0.08) {
         state.playbackApplyingRemote = true;
         try {
-          await applyPlayerPosition(Number(timeline.position || 0));
+          await applyPlayerPosition(target);
         } catch (_) {}
         finally { state.playbackApplyingRemote = false; }
       }
+
       await setPlaybackRateSafe(1);
     }
 
@@ -7559,6 +7757,8 @@
     state.playbackAwaitingActualStart = false;
     clearTimeout(state.playbackActualStartTimer);
     state.playbackActualStartTimer = null;
+    cancelScheduledLocalPause();
+    cancelScheduledRemotePause();
 
     state.membersListenerAttached =
       false;
@@ -7885,9 +8085,26 @@
               state.playbackAwaitingActualStart = false;
               clearTimeout(state.playbackActualStartTimer);
               state.playbackActualStartTimer = null;
-              await pausePlayer();
-              publishPlaybackEvent("pause", position, false);
+
+              const issuedAt = playbackClockNow();
+              const effectiveAt = issuedAt + getPauseLeadMs();
+
+              cancelScheduledRemotePause();
+              scheduleLocalPause(
+                effectiveAt,
+                position + (effectiveAt - issuedAt) / 1000
+              );
+
+              publishPlaybackEvent(
+                "pause",
+                position,
+                false,
+                issuedAt,
+                effectiveAt
+              );
             } else {
+              cancelScheduledLocalPause();
+              cancelScheduledRemotePause();
               state.playbackAwaitingActualStart = true;
               clearTimeout(state.playbackActualStartTimer);
               state.playbackActualStartTimer = setTimeout(async () => {
