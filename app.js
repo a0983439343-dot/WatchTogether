@@ -221,6 +221,12 @@
     playbackLastPlayerState: null,
     playbackLastObservedPosition: null,
     playbackAppliedRate: null,
+    playbackIsBuffering: false,
+    playbackYoutubeRates: null,
+    playbackYoutubeRatesVideoId: "",
+    playbackYoutubeRatesCheckedAt: 0,
+    playbackAwaitingActualStart: false,
+    playbackActualStartTimer: null,
 
     queue: {},
 
@@ -4657,15 +4663,39 @@
                         rememberRoomTimeline(eventData);
                         await applyRemotePlaybackEvent(eventData, true);
                       } else if (state.isOwner && autoplay) {
-                        const created = await writePlaybackCommand("play", 0, true);
-                        if (created) {
-                          await applyRemotePlaybackEvent(
-                            {
-                              ...created,
-                              updatedAt: playbackClockNow()
-                            },
-                            true
+                        const playerState =
+                          typeof event.target.getPlayerState === "function"
+                            ? event.target.getPlayerState()
+                            : YT.PlayerState.UNSTARTED;
+
+                        if (playerState === YT.PlayerState.PLAYING) {
+                          const actualPosition = await asyncCurrentPosition();
+                          await writePlaybackCommand(
+                            "play",
+                            actualPosition,
+                            true,
+                            playbackClockNow()
                           );
+                        } else {
+                          state.playbackAwaitingActualStart = true;
+                          clearTimeout(state.playbackActualStartTimer);
+                          state.playbackActualStartTimer = setTimeout(async () => {
+                            state.playbackActualStartTimer = null;
+                            if (!state.playbackAwaitingActualStart || state.playbackApplyingRemote) return;
+                            state.playbackAwaitingActualStart = false;
+                            try {
+                              if (await asyncIsPlaying()) {
+                                const actualPosition = await asyncCurrentPosition();
+                                await writePlaybackCommand(
+                                  "play",
+                                  actualPosition,
+                                  true,
+                                  playbackClockNow()
+                                );
+                              }
+                            } catch (_) {}
+                          }, 1400);
+                          await playPlayer();
                         }
                       } else {
                         await applyPlayerPosition(0);
@@ -4709,9 +4739,9 @@
                   const now = Date.now();
                   const data = event.data;
 
-
                   if (data === YT.PlayerState.BUFFERING) {
-                    state.playbackTransientStateUntil = now + 1800;
+                    state.playbackIsBuffering = true;
+                    state.playbackTransientStateUntil = 0;
                     state.playbackLastPlayerState = "buffering";
                     state.playbackLastObservedPosition =
                       await asyncCurrentPosition().catch(() => null);
@@ -4720,14 +4750,58 @@
                   }
 
                   if (data === YT.PlayerState.PLAYING) {
+                    state.playbackIsBuffering = false;
+                    state.playbackTransientStateUntil = 0;
+                    state.playbackReadyAt = Math.min(
+                      Number(state.playbackReadyAt || 0),
+                      now + 120
+                    );
                     state.playbackLastPlayerState = "playing";
                     state.playbackLastObservedPosition =
                       await asyncCurrentPosition().catch(() => null);
+
+                    if (
+                      state.playbackAwaitingActualStart &&
+                      !state.playbackApplyingRemote
+                    ) {
+                      state.playbackAwaitingActualStart = false;
+                      clearTimeout(state.playbackActualStartTimer);
+                      state.playbackActualStartTimer = null;
+                      setTimeout(async () => {
+                        try {
+                          if (
+                            state.youtubeBuildToken !== token ||
+                            state.player !== event.target ||
+                            state.playbackApplyingRemote
+                          ) {
+                            return;
+                          }
+                          const position = await asyncCurrentPosition();
+                          publishPlaybackEvent("play", position, true, playbackClockNow());
+                          await reconcileRoomTimeline();
+                        } catch (error) {
+                          console.warn("實際播放時間校準失敗:", error);
+                        }
+                      }, 0);
+                    } else {
+                      setTimeout(() => {
+                        if (
+                          state.youtubeBuildToken === token &&
+                          state.player === event.target &&
+                          !state.playbackApplyingRemote
+                        ) {
+                          void reconcileRoomTimeline();
+                        }
+                      }, 0);
+                    }
+
                     updateTimeUI();
                     return;
                   }
 
                   if (data === YT.PlayerState.PAUSED) {
+                    state.playbackIsBuffering = false;
+                    state.playbackTransientStateUntil = 0;
                     state.playbackLastPlayerState = "paused";
                     state.playbackLastObservedPosition =
                       await asyncCurrentPosition().catch(() => null);
@@ -4736,6 +4810,9 @@
                   }
 
                   if (data === YT.PlayerState.ENDED) {
+                    state.playbackIsBuffering = false;
+                    state.playbackTransientStateUntil = 0;
+                    state.playbackLastPlayerState = "ended";
                     if (state.isOwner) {
                       setTimeout(
                         async () => {
@@ -5674,6 +5751,13 @@
 
       state.playbackTimeline = null;
       state.playbackAppliedRate = null;
+      state.playbackIsBuffering = false;
+      state.playbackYoutubeRates = null;
+      state.playbackYoutubeRatesVideoId = "";
+      state.playbackYoutubeRatesCheckedAt = 0;
+      state.playbackAwaitingActualStart = false;
+      clearTimeout(state.playbackActualStartTimer);
+      state.playbackActualStartTimer = null;
       state.playbackAdGuardUntil = 0;
       state.playbackTransientStateUntil = 0;
       state.playbackLastPlayerState = null;
@@ -5868,7 +5952,7 @@
     }
   }
 
-  function publishPlaybackEvent(action, position = null, explicitPlaying = undefined) {
+  function publishPlaybackEvent(action, position = null, explicitPlaying = undefined, issuedAtOverride = null) {
     if (
       !state.uid || !state.roomId || !state.playerReady || !state.player ||
       !state.currentVideoId || state.playbackApplyingRemote
@@ -5877,7 +5961,6 @@
     if (Date.now() < Number(state.playbackAdGuardUntil || 0)) return;
 
     const normalized = action === "pause" ? "pause" : action === "seek" ? "seek" : "play";
-    const issuedAt = playbackClockNow();
     markLocalPlaybackIntent(normalized);
 
     void (async () => {
@@ -5894,11 +5977,15 @@
 
         const now = Date.now();
         const key = `${normalized}:${Math.round(finalPosition * 20) / 20}:${playing ? 1 : 0}`;
-        if (key === state.playbackLastLocalActionKey && now - Number(state.playbackLastLocalActionAt || 0) < 160) return;
-        if (normalized === "seek" && now - Number(state.playbackLastLocalSeekWriteAt || 0) < 120) return;
+        if (key === state.playbackLastLocalActionKey && now - Number(state.playbackLastLocalActionAt || 0) < 120) return;
+        if (normalized === "seek" && now - Number(state.playbackLastLocalSeekWriteAt || 0) < 100) return;
         state.playbackLastLocalActionKey = key;
         state.playbackLastLocalActionAt = now;
         if (normalized === "seek") state.playbackLastLocalSeekWriteAt = now;
+
+        const issuedAt = Number.isFinite(Number(issuedAtOverride)) && Number(issuedAtOverride) > 0
+          ? Number(issuedAtOverride)
+          : playbackClockNow();
 
         await writePlaybackCommand(normalized, finalPosition, playing, issuedAt);
       } catch (error) {
@@ -5909,6 +5996,7 @@
 
   async function enforceRoomPlayingState(wantPlaying) {
     if (!state.playerReady || !state.player || !state.currentVideoId) return false;
+    if (state.playerType === "youtube" && state.playbackIsBuffering && wantPlaying) return false;
     try {
       const current = await asyncIsPlaying();
       if (current === wantPlaying) return true;
@@ -5924,26 +6012,101 @@
   function correctionPlaybackRate(drift, baseRate = 1) {
     const abs = Math.abs(drift);
     if (abs < 0.08) return baseRate;
-    if (abs < 0.25) return drift > 0 ? baseRate * 1.01 : baseRate * 0.99;
-    if (abs < 0.60) return drift > 0 ? baseRate * 1.025 : baseRate * 0.975;
-    if (abs < 1.25) return drift > 0 ? baseRate * 1.05 : baseRate * 0.95;
+    if (abs < 0.25) return baseRate * (drift > 0 ? 1.01 : 0.99);
+    if (abs < 0.60) return baseRate * (drift > 0 ? 1.025 : 0.975);
+    if (abs < 1.25) return baseRate * (drift > 0 ? 1.05 : 0.95);
     return baseRate;
   }
 
+  function getYoutubeAvailablePlaybackRates() {
+    if (
+      state.playerType !== "youtube" ||
+      !state.player ||
+      typeof state.player.getAvailablePlaybackRates !== "function"
+    ) {
+      return [1];
+    }
+
+    const videoId = String(state.currentVideoId || "");
+    const now = Date.now();
+    if (
+      state.playbackYoutubeRatesVideoId === videoId &&
+      Array.isArray(state.playbackYoutubeRates) &&
+      state.playbackYoutubeRates.length &&
+      now - Number(state.playbackYoutubeRatesCheckedAt || 0) < 5000
+    ) {
+      return state.playbackYoutubeRates;
+    }
+
+    try {
+      const rates = state.player
+        .getAvailablePlaybackRates()
+        .map(Number)
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b);
+      const normalized = rates.length ? [...new Set(rates)] : [1];
+      if (!normalized.includes(1)) normalized.push(1);
+      normalized.sort((a, b) => a - b);
+      state.playbackYoutubeRates = normalized;
+      state.playbackYoutubeRatesVideoId = videoId;
+      state.playbackYoutubeRatesCheckedAt = now;
+      return normalized;
+    } catch (_) {
+      state.playbackYoutubeRates = [1];
+      state.playbackYoutubeRatesVideoId = videoId;
+      state.playbackYoutubeRatesCheckedAt = now;
+      return [1];
+    }
+  }
+
+  function youtubeHasFinePlaybackCorrection() {
+    const rates = getYoutubeAvailablePlaybackRates();
+    return rates.some(rate =>
+      Math.abs(rate - 1) > 0.001 &&
+      Math.abs(rate - 1) <= 0.15
+    );
+  }
+
+  function chooseSupportedPlaybackRate(rate, rates) {
+    const target = Math.max(0.25, Math.min(2, Number(rate) || 1));
+    const list = Array.isArray(rates) && rates.length ? rates : [1];
+    return list.reduce((best, current) =>
+      Math.abs(current - target) < Math.abs(best - target)
+        ? current
+        : best
+    , list[0]);
+  }
+
   async function setPlaybackRateSafe(rate) {
-    const normalized = Math.max(0.5, Math.min(2, Number(rate) || 1));
-    const last = Number(state.playbackAppliedRate);
-    if (Number.isFinite(last) && Math.abs(last - normalized) < 0.002) return;
+    const requested = Math.max(0.5, Math.min(2, Number(rate) || 1));
     const type = state.playerType;
     const player = state.player;
     if (!player) return;
+
+    let normalized = requested;
+
     try {
       if (type === "youtube" && typeof player.setPlaybackRate === "function") {
+        const available = getYoutubeAvailablePlaybackRates();
+        normalized = chooseSupportedPlaybackRate(requested, available);
+        if (Math.abs(normalized - requested) > 0.001 && Math.abs(normalized - 1) < 0.001) {
+          normalized = 1;
+        }
+        if (Array.isArray(available) && available.length === 1 && available[0] === 1) {
+          normalized = 1;
+        }
+        if (Number.isFinite(Number(state.playbackAppliedRate)) && Math.abs(Number(state.playbackAppliedRate) - normalized) < 0.002) {
+          return;
+        }
         player.setPlaybackRate(normalized);
       } else if (type === "vimeo" && typeof player.setPlaybackRate === "function") {
+        if (Number.isFinite(Number(state.playbackAppliedRate)) && Math.abs(Number(state.playbackAppliedRate) - normalized) < 0.002) return;
         await player.setPlaybackRate(normalized);
       } else if (type === "dailymotion" && typeof player.setPlaybackRate === "function") {
+        if (Number.isFinite(Number(state.playbackAppliedRate)) && Math.abs(Number(state.playbackAppliedRate) - normalized) < 0.002) return;
         await player.setPlaybackRate(normalized);
+      } else {
+        return;
       }
       state.playbackAppliedRate = normalized;
     } catch (_) {}
@@ -5953,9 +6116,7 @@
     if (!event || !state.playerReady || !state.player || !state.currentVideoId) return;
     if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
     if (String(event.platform || "") !== String(state.playerType || "")) return;
-    if (![
-      "play", "pause", "seek"
-    ].includes(event.action)) return;
+    if (!["play", "pause", "seek"].includes(event.action)) return;
     if (state.playerType === "bilibili" || state.playerType === "external") return;
 
     const eventId = String(event.eventId || "");
@@ -5975,37 +6136,67 @@
     state.playbackApplyingRemoteEventId = eventId;
     state.playbackApplyingRemote = true;
     state.playbackPendingRecovery = true;
-    state.playbackIgnoreStateChanges = 8;
-    state.playbackIgnoreStateUntil = Date.now() + 1400;
+    state.playbackAwaitingActualStart = false;
+    clearTimeout(state.playbackActualStartTimer);
+    state.playbackActualStartTimer = null;
+    state.playbackIgnoreStateChanges = 3;
+    state.playbackIgnoreStateUntil = Date.now() + 300;
+    state.playbackReadyAt = Date.now() + 120;
 
     try {
       const expected = getTimelinePosition(event);
       const current = await asyncCurrentPosition();
+      const drift = expected - current;
+      const absDrift = Math.abs(drift);
+      const useYoutubeFineRate =
+        state.playerType === "youtube" &&
+        youtubeHasFinePlaybackCorrection();
+      const youtubeHardSeekThreshold = 0.35;
 
       if (event.action === "pause") {
-        if (Math.abs(current - Number(event.position || 0)) > 0.12) {
+        if (Math.abs(current - Number(event.position || 0)) > 0.08) {
           await applyPlayerPosition(Number(event.position || 0));
         }
         await pausePlayer();
         await setPlaybackRateSafe(1);
+        state.playbackReadyAt = Date.now() + 80;
       } else if (event.action === "seek") {
-        if (Math.abs(current - expected) > 0.12) {
+        if (Math.abs(current - expected) > 0.08) {
           await applyPlayerPosition(expected);
         }
-        if (event.playing === true) await playPlayer();
-        else await pausePlayer();
+        if (event.playing === true) {
+          await playPlayer();
+        } else {
+          await pausePlayer();
+        }
         await setPlaybackRateSafe(1);
       } else {
-        const drift = expected - current;
-        if (Math.abs(drift) >= 1.25) {
-          await applyPlayerPosition(expected);
-          await setPlaybackRateSafe(1);
-        } else {
-          const correction = correctionPlaybackRate(drift, 1);
-          await setPlaybackRateSafe(correction);
+        if (!state.playbackIsBuffering) {
+          const shouldSeek =
+            state.playerType === "youtube"
+              ? absDrift >= youtubeHardSeekThreshold && !useYoutubeFineRate
+              : absDrift >= 1.0;
+
+          if (shouldSeek) {
+            try {
+              await applyPlayerPosition(expected);
+            } finally {
+              state.playbackApplyingRemote = true;
+            }
+            await setPlaybackRateSafe(1);
+          } else if (state.playerType !== "youtube" || useYoutubeFineRate) {
+            const correction = correctionPlaybackRate(drift, 1);
+            await setPlaybackRateSafe(correction);
+          } else {
+            await setPlaybackRateSafe(1);
+          }
         }
-        if (event.playing === true) await playPlayer();
-        else await pausePlayer();
+
+        if (event.playing === true && !state.playbackIsBuffering) {
+          await playPlayer();
+        } else if (event.playing !== true) {
+          await pausePlayer();
+        }
       }
 
       state.playbackLastPosition = await asyncCurrentPosition();
@@ -6020,6 +6211,9 @@
       state.playbackApplyingRemote = false;
       state.playbackPendingRecovery = false;
       state.playbackApplyingRemoteEventId = null;
+      if (event.action === "play" && state.playbackIsBuffering) {
+        state.playbackReadyAt = Date.now() + 100;
+      }
     }
   }
 
@@ -6065,6 +6259,14 @@
     state.playbackLastPlaying = null;
     state.playbackLastPlayerState = null;
     state.playbackLastObservedPosition = null;
+    state.playbackIsBuffering = false;
+    state.playbackYoutubeRates = null;
+    state.playbackYoutubeRatesVideoId = "";
+    state.playbackYoutubeRatesCheckedAt = 0;
+    state.playbackAppliedRate = null;
+    state.playbackAwaitingActualStart = false;
+    clearTimeout(state.playbackActualStartTimer);
+    state.playbackActualStartTimer = null;
   }
 
   async function reconcileRoomTimeline() {
@@ -6073,12 +6275,14 @@
 
     const timeline = state.playbackTimeline;
     if (!roomTimelineMatchesPlayer()) return;
+    if (state.playerType === "youtube" && state.playbackIsBuffering) return;
 
     const now = playbackClockNow();
     const position = await asyncCurrentPosition();
     const playing = await asyncIsPlaying();
     const expected = getTimelinePosition(timeline, now);
     const drift = expected - position;
+    const absDrift = Math.abs(drift);
 
     state.playbackLastObservedPosition = position;
 
@@ -6090,7 +6294,25 @@
         await enforceRoomPlayingState(true);
       }
 
-      if (Math.abs(drift) >= 1.25) {
+      if (state.playerType === "youtube") {
+        const fineRate = youtubeHasFinePlaybackCorrection();
+        if (absDrift >= 0.35 && !fineRate) {
+          state.playbackApplyingRemote = true;
+          try {
+            await applyPlayerPosition(expected);
+            await setPlaybackRateSafe(1);
+          } catch (error) {
+            console.warn("播放位置校正失敗:", error);
+          } finally {
+            state.playbackApplyingRemote = false;
+          }
+        } else if (fineRate) {
+          const rate = correctionPlaybackRate(drift, 1);
+          await setPlaybackRateSafe(rate);
+        } else {
+          await setPlaybackRateSafe(1);
+        }
+      } else if (absDrift >= 1.0) {
         state.playbackApplyingRemote = true;
         try {
           await applyPlayerPosition(expected);
@@ -6106,7 +6328,7 @@
       }
     } else {
       if (playing) await enforceRoomPlayingState(false);
-      if (Math.abs(position - Number(timeline.position || 0)) >= 0.12) {
+      if (Math.abs(position - Number(timeline.position || 0)) >= 0.08) {
         state.playbackApplyingRemote = true;
         try {
           await applyPlayerPosition(Number(timeline.position || 0));
@@ -6117,8 +6339,7 @@
     }
 
     if ($("syncStatus")) {
-      const abs = Math.abs(drift);
-      if (abs < 0.08) {
+      if (absDrift < 0.08) {
         $("syncStatus").textContent = "同步鎖定";
       } else if (timeline.playing) {
         $("syncStatus").textContent = `同步中 ${drift >= 0 ? "+" : ""}${drift.toFixed(2)}s`;
@@ -6128,10 +6349,10 @@
 
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
-    state.playbackReadyAt = Date.now() + 700;
+    state.playbackReadyAt = Date.now() + 250;
     state.playbackSeekTimer = setInterval(() => {
       void reconcileRoomTimeline();
-    }, 150);
+    }, 100);
   }
 
   function recoverPlaybackAfterPageResume() {
@@ -6140,7 +6361,7 @@
       state.playbackRecoveryTimer = null;
       await applyLatestRoomPlaybackState(true);
       startPlaybackSeekDetector();
-    }, 250);
+    }, 120);
   }
 
   /*
@@ -7331,6 +7552,13 @@
       0;
     state.playbackLastLocalSeekWriteAt =
       0;
+    state.playbackIsBuffering = false;
+    state.playbackYoutubeRates = null;
+    state.playbackYoutubeRatesVideoId = "";
+    state.playbackYoutubeRatesCheckedAt = 0;
+    state.playbackAwaitingActualStart = false;
+    clearTimeout(state.playbackActualStartTimer);
+    state.playbackActualStartTimer = null;
 
     state.membersListenerAttached =
       false;
@@ -7654,11 +7882,27 @@
           try {
             markLocalPlaybackIntent(playing ? "pause" : "play");
             if (playing) {
+              state.playbackAwaitingActualStart = false;
+              clearTimeout(state.playbackActualStartTimer);
+              state.playbackActualStartTimer = null;
               await pausePlayer();
               publishPlaybackEvent("pause", position, false);
             } else {
+              state.playbackAwaitingActualStart = true;
+              clearTimeout(state.playbackActualStartTimer);
+              state.playbackActualStartTimer = setTimeout(async () => {
+                state.playbackActualStartTimer = null;
+                if (!state.playbackAwaitingActualStart || state.playbackApplyingRemote) return;
+                state.playbackAwaitingActualStart = false;
+                try {
+                  const actualPlaying = await asyncIsPlaying();
+                  if (actualPlaying) {
+                    const actualPosition = await asyncCurrentPosition();
+                    publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
+                  }
+                } catch (_) {}
+              }, 1400);
               await playPlayer();
-              publishPlaybackEvent("play", position, true);
             }
           } catch (error) {
             console.warn("播放控制同步失敗:", error);
