@@ -7467,7 +7467,11 @@
 
     const timelineRef = playbackSyncRef();
     if (timelineRef) {
-      await timelineRef.remove();
+      try {
+        await timelineRef.remove();
+      } catch (error) {
+        console.warn("清理舊播放同步狀態失敗，繼續切換影片:", error);
+      }
     }
 
     state.room.sourceType =
