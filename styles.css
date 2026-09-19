@@ -1616,7 +1616,7 @@ select:focus {
     word-break: break-word !important;
   }
 }
-
+ 
 /* Desktop search result fix */
 @media (min-width: 761px) {
   #sourceModal #modalVideoSearchResults .video-result-card {
@@ -1624,11 +1624,8 @@ select:focus {
     flex-direction: column;
     width: 100%;
     min-width: 0;
-    box-sizing: border-box;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 12px;
-    background: rgba(15, 23, 42, .72);
+    box-sizing: border-box;
   }
 
   #sourceModal #modalVideoSearchResults .video-result-main {
@@ -1638,29 +1635,21 @@ select:focus {
     gap: 12px;
     width: 100%;
     min-width: 0;
-    min-height: 104px;
-    margin: 0;
     padding: 10px;
     box-sizing: border-box;
-    border: 0;
-    background: transparent;
     text-align: left;
   }
 
-  #sourceModal #modalVideoSearchResults .video-result-main > div:first-child {
+  #sourceModal #modalVideoSearchResults .video-result-main > div:first-child,
+  #sourceModal #modalVideoSearchResults .video-result-main img {
     width: 150px;
     min-width: 150px;
+    max-width: 150px;
     height: 84px;
     min-height: 84px;
-    overflow: hidden;
-    border-radius: 8px;
-  }
-
-  #sourceModal #modalVideoSearchResults .video-result-main img {
-    display: block;
-    width: 150px;
-    height: 84px;
+    max-height: 84px;
     object-fit: cover;
+    overflow: hidden;
     border-radius: 8px;
   }
 
@@ -1671,25 +1660,23 @@ select:focus {
     gap: 4px;
   }
 
-  #sourceModal #modalVideoSearchResults .video-result-info strong {
-    display: -webkit-box;
-    min-width: 0;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    text-overflow: ellipsis;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    font-size: 13px;
-    line-height: 1.4;
-  }
-
+  #sourceModal #modalVideoSearchResults .video-result-info strong,
   #sourceModal #modalVideoSearchResults .video-result-info small {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-info strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-info small {
     white-space: nowrap;
-    font-size: 10px;
   }
 
   #sourceModal #modalVideoSearchResults .video-result-card > div:last-child {
