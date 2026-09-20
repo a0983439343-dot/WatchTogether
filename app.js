@@ -1007,7 +1007,7 @@
    * =========================================================
    */
 
-  function updateAuthUI() {
+  function updateAuthUI(user = undefined) {
     const loginButton =
       $("googleLoginBtn");
 
@@ -1021,8 +1021,12 @@
       $("authStatus");
 
     const currentUser =
-      auth?.currentUser ||
-      null;
+      user !== undefined
+        ? user
+        : (
+            auth?.currentUser ||
+            null
+          );
 
     if (currentUser) {
       if (authStatus) {
@@ -1176,35 +1180,100 @@
     const currentUser =
       auth.currentUser;
 
-    if (
-      currentUser &&
-      currentUser.isAnonymous
-    ) {
-      try {
-        await currentUser.linkWithRedirect(
+    try {
+      /*
+       * 優先使用 Popup，避免 Redirect 回站後
+       * getRedirectResult / 匿名登入恢復時序互相干擾。
+       */
+      if (
+        currentUser &&
+        currentUser.isAnonymous
+      ) {
+        try {
+          const result =
+            await currentUser.linkWithPopup(
+              provider
+            );
+
+          const user =
+            result?.user ||
+            auth.currentUser ||
+            null;
+
+          if (!user) {
+            throw new Error(
+              "Google 登入成功，但找不到 Firebase 使用者"
+            );
+          }
+
+          state.uid =
+            user.uid;
+
+          updateAuthUI(user);
+
+          toast(
+            "Google 登入成功"
+          );
+
+          return user;
+        } catch (linkError) {
+          /*
+           * 這個 Google 帳號已經綁定其他 Firebase
+           * 使用者時，改成直接登入該 Google 帳號。
+           */
+          if (
+            linkError?.code !==
+            "auth/credential-already-in-use"
+          ) {
+            throw linkError;
+          }
+        }
+      }
+
+      const result =
+        await auth.signInWithPopup(
           provider
         );
 
-        return;
-      } catch (error) {
-        if (
-          error?.code ===
-          "auth/credential-already-in-use"
-        ) {
-          await auth.signInWithRedirect(
-            provider
-          );
+      const user =
+        result?.user ||
+        auth.currentUser ||
+        null;
 
-          return;
-        }
-
-        throw error;
+      if (!user) {
+        throw new Error(
+          "Google 登入完成，但 Firebase 沒有回傳使用者"
+        );
       }
-    }
 
-    await auth.signInWithRedirect(
-      provider
-    );
+      state.uid =
+        user.uid;
+
+      updateAuthUI(user);
+
+      toast(
+        "Google 登入成功"
+      );
+
+      return user;
+    } catch (error) {
+      console.error(
+        "Google 登入失敗:",
+        error
+      );
+
+      const code =
+        error?.code ||
+        "unknown";
+
+      const message =
+        error?.message ||
+        "Google 登入失敗";
+
+      throw new Error(
+        `Google 登入失敗 [${code}]：${message}`
+      );
+    }
   }
 
 
