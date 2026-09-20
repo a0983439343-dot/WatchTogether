@@ -4936,11 +4936,6 @@
     container.allow =
       "autoplay; fullscreen; picture-in-picture";
 
-    container.setAttribute(
-      "allowfullscreen",
-      ""
-    );
-
     const player =
       new Vimeo.Player(
         container
@@ -5149,11 +5144,6 @@
 
     iframe.allow =
       "autoplay; fullscreen; picture-in-picture";
-
-    iframe.setAttribute(
-      "allowfullscreen",
-      ""
-    );
 
     state.currentVideoId =
       video.id;
@@ -5882,9 +5872,21 @@
 
   function rememberRoomTimeline(event) {
     if (!event || !event.eventId) return false;
-    const incomingUpdatedAt = Number(event.updatedAt || 0);
-    const currentUpdatedAt = Number(state.playbackTimeline?.updatedAt || 0);
-    if (incomingUpdatedAt > 0 && currentUpdatedAt > 0 && incomingUpdatedAt < currentUpdatedAt) {
+    const incomingOrder =
+      Number(event.updatedAt || event.issuedAt || 0);
+
+    const currentOrder =
+      Number(
+        state.playbackTimeline?.updatedAt ||
+        state.playbackTimeline?.issuedAt ||
+        0
+      );
+
+    if (
+      incomingOrder > 0 &&
+      currentOrder > 0 &&
+      incomingOrder < currentOrder
+    ) {
       return false;
     }
 
@@ -6454,7 +6456,25 @@
     const ref = playbackSyncRef();
     if (!ref) return null;
 
-    const finalPosition = Math.max(0, Number(position) || 0);
+    const roomVideoId =
+      String(state.room?.video?.id || "");
+
+    const activeVideoId =
+      String(state.currentVideoId || "");
+
+    if (
+      roomVideoId &&
+      activeVideoId &&
+      roomVideoId !== activeVideoId
+    ) {
+      return null;
+    }
+
+    const finalPosition =
+      Math.max(
+        0,
+        Number(position) || 0
+      );
     const safeIssuedAt = Number.isFinite(Number(issuedAt)) && Number(issuedAt) > 0
       ? Number(issuedAt)
       : playbackClockNow();
@@ -6606,6 +6626,17 @@
     ) return;
     if (state.playerType === "bilibili" || state.playerType === "external") return;
     if (Date.now() < Number(state.playbackAdGuardUntil || 0)) return;
+
+    const roomVideoId =
+      String(state.room?.video?.id || "");
+
+    if (
+      roomVideoId &&
+      String(state.currentVideoId || "") !==
+        roomVideoId
+    ) {
+      return;
+    }
 
     const normalized = action === "pause" ? "pause" : action === "seek" ? "seek" : "play";
     markLocalPlaybackIntent(normalized);
@@ -8093,14 +8124,41 @@
         roomVideo
     });
 
-    const timelineRef = playbackSyncRef();
-    if (timelineRef) {
-      try {
-        await timelineRef.remove();
-      } catch (error) {
-        console.warn("清理舊播放同步狀態失敗，繼續切換影片:", error);
-      }
-    }
+    cancelScheduledLocalPause();
+    cancelScheduledRemotePause();
+    cancelScheduledRemotePlay();
+    cancelScheduledRemoteSeek();
+
+    clearTimeout(
+      state.playbackLocalSeekTimer
+    );
+
+    state.playbackLocalSeekTimer =
+      null;
+
+    state.playbackLocalScheduledEventId =
+      "";
+
+    state.playbackLocalControlUntil =
+      0;
+
+    state.playbackTimeline =
+      null;
+
+    state.playbackRemoteEvent =
+      null;
+
+    state.playbackLastRemoteEventId =
+      null;
+
+    state.playbackLastRemoteUpdatedAt =
+      0;
+
+    state.playbackLastObservedPosition =
+      null;
+
+    state.playbackAppliedRate =
+      null;
 
     state.room.sourceType =
       platform;
