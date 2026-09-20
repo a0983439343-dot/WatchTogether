@@ -5872,20 +5872,18 @@
 
   function rememberRoomTimeline(event) {
     if (!event || !event.eventId) return false;
-    const incomingOrder =
-      Number(event.updatedAt || event.issuedAt || 0);
+    const incomingUpdatedAt =
+      Number(event.updatedAt || 0);
 
-    const currentOrder =
+    const currentUpdatedAt =
       Number(
-        state.playbackTimeline?.updatedAt ||
-        state.playbackTimeline?.issuedAt ||
-        0
+        state.playbackTimeline?.updatedAt || 0
       );
 
     if (
-      incomingOrder > 0 &&
-      currentOrder > 0 &&
-      incomingOrder < currentOrder
+      incomingUpdatedAt > 0 &&
+      currentUpdatedAt > 0 &&
+      incomingUpdatedAt < currentUpdatedAt
     ) {
       return false;
     }
