@@ -9,10 +9,23 @@
    * =========================================================
    */
 
-  const YOUTUBE_API_KEY =
-    "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
+  const APP_CONFIG =
+    window.WATCHTOGETHER_CONFIG ||
+    {};
 
-  const YOUTUBE_SEARCH_PAGE_SIZE = 50;
+  const YOUTUBE_SEARCH_PROXY_URL =
+    String(
+      APP_CONFIG.youtubeSearchProxyUrl ||
+      ""
+    ).trim();
+
+  const DAILYMOTION_PLAYER_ID =
+    String(
+      APP_CONFIG.dailymotionPlayerId ||
+      ""
+    ).trim();
+
+  const YOUTUBE_SEARCH_PAGE_SIZE = 25;
   const YOUTUBE_MAX_SEARCH_PAGES = 2;
   const YOUTUBE_SEARCH_COOLDOWN_MS = 1500;
 
@@ -243,6 +256,8 @@
     playbackYoutubeRatesCheckedAt: 0,
     playbackAwaitingActualStart: false,
     playbackActualStartTimer: null,
+
+    timeUiRequestId: 0,
 
     queue: {},
 
@@ -512,7 +527,7 @@
 
     for (
       let i = 0;
-      i < 6;
+      i < 12;
       i++
     ) {
       result +=
@@ -1517,13 +1532,18 @@
     }
 
     try {
+      /*
+       * 登出前先離開目前房間，
+       * 避免 Firebase Auth UID 改變後，
+       * 房間成員 / owner 還留著舊 UID。
+       */
+      if (state.roomId) {
+        await exitCurrentRoom();
+      }
+
       await auth.signOut();
 
-      await auth.signInAnonymously();
-
-      state.uid =
-        auth.currentUser?.uid ||
-        null;
+      await ensureAnonymousAuth();
 
       updateAuthUI();
 
@@ -1537,6 +1557,7 @@
       );
 
       toast(
+        error?.message ||
         "登出失敗"
       );
     }
@@ -2075,12 +2096,9 @@
       );
     }
 
-    if (
-      !YOUTUBE_API_KEY ||
-      YOUTUBE_API_KEY.startsWith("請")
-    ) {
+    if (!YOUTUBE_SEARCH_PROXY_URL) {
       throw new Error(
-        "請先把 YouTube API Key 放到 app.js"
+        "YouTube 搜尋服務尚未設定，請先部署搜尋 Worker 並填入網址"
       );
     }
 
@@ -2118,22 +2136,12 @@
 
     const url =
       new URL(
-        "https://www.googleapis.com/youtube/v3/search"
+        YOUTUBE_SEARCH_PROXY_URL
       );
-
-    url.searchParams.set(
-      "part",
-      "snippet"
-    );
 
     url.searchParams.set(
       "q",
       query
-    );
-
-    url.searchParams.set(
-      "type",
-      "video"
     );
 
     url.searchParams.set(
@@ -2158,11 +2166,6 @@
       "moderate"
     );
 
-    url.searchParams.set(
-      "videoEmbeddable",
-      "true"
-    );
-
     if (
       append &&
       state.searchNextPageToken
@@ -2173,17 +2176,22 @@
       );
     }
 
-    url.searchParams.set(
-      "key",
-      YOUTUBE_API_KEY
-    );
-
     state.lastYoutubeSearchAt =
       now;
 
     const response =
       await fetch(
-        url.toString()
+        url.toString(),
+        {
+          method:
+            "GET",
+          headers: {
+            Accept:
+              "application/json"
+          },
+          credentials:
+            "omit"
+        }
       );
 
     if (!response.ok) {
@@ -2208,70 +2216,11 @@
       await response.json();
 
     const items =
-      Array.isArray(data.items)
+      Array.isArray(
+        data?.items
+      )
         ? data.items
         : [];
-
-    const ids =
-      items
-        .map(
-          (item) =>
-            item?.id?.videoId
-        )
-        .filter(Boolean);
-
-    let detailMap = {};
-
-    if (ids.length) {
-      try {
-        const detailUrl =
-          new URL(
-            "https://www.googleapis.com/youtube/v3/videos"
-          );
-
-        detailUrl.searchParams.set(
-          "part",
-          "contentDetails,statistics"
-        );
-
-        detailUrl.searchParams.set(
-          "id",
-          ids.join(",")
-        );
-
-        detailUrl.searchParams.set(
-          "key",
-          YOUTUBE_API_KEY
-        );
-
-        const detailResponse =
-          await fetch(
-            detailUrl.toString()
-          );
-
-        if (detailResponse.ok) {
-          const detailData =
-            await detailResponse.json();
-
-          for (
-            const item of
-            Array.isArray(
-              detailData.items
-            )
-              ? detailData.items
-              : []
-          ) {
-            detailMap[item.id] =
-              item;
-          }
-        }
-      } catch (error) {
-        console.warn(
-          "YouTube 詳細資料載入失敗:",
-          error
-        );
-      }
-    }
 
     const results =
       items
@@ -2286,18 +2235,6 @@
           if (!id) {
             return null;
           }
-
-          const detail =
-            detailMap[id] ||
-            {};
-
-          const statistics =
-            detail.statistics ||
-            {};
-
-          const contentDetails =
-            detail.contentDetails ||
-            {};
 
           return {
             id,
@@ -2330,23 +2267,24 @@
 
             viewCount:
               Number(
-                statistics.viewCount ||
+                item?.viewCount ||
                 0
               ),
 
             likeCount:
               Number(
-                statistics.likeCount ||
+                item?.likeCount ||
                 0
               ),
 
             duration:
-              contentDetails.duration ||
+              item?.duration ||
               "",
 
             durationSeconds:
-              parseISO8601Duration(
-                contentDetails.duration
+              Number(
+                item?.durationSeconds ||
+                0
               ),
 
             live:
@@ -2368,62 +2306,28 @@
 
     state.searchNextPageToken =
       state.searchPageCount <
-      YOUTUBE_MAX_SEARCH_PAGES
-        ? (
-            data.nextPageToken ||
-            ""
+        YOUTUBE_MAX_SEARCH_PAGES &&
+      data?.nextPageToken
+        ? String(
+            data.nextPageToken
           )
         : "";
 
-    state.searchQuery =
-      query;
-
     if (append) {
-      const existingIds =
-        new Set(
-          state.searchResults.map(
-            (item) =>
-              String(item.id)
-          )
+      state.searchResults =
+        state.searchResults.concat(
+          results
         );
-
-      for (
-        const item of results
-      ) {
-        if (
-          !existingIds.has(
-            String(item.id)
-          )
-        ) {
-          state.searchResults.push(
-            item
-          );
-        }
-      }
     } else {
       state.searchResults =
         results;
-
-      state.modalSelectedVideo =
-        null;
-
-      state.modalSelectedVideoId =
-        "";
     }
 
-    renderSearchResults(
-      state.searchResults
-    );
+    renderSearchResults();
 
     return results;
   }
 
-
-  /*
-   * =========================================================
-   * SEARCH OBSERVER
-   * =========================================================
-   */
 
   function disconnectSearchObserver() {
     const container =
@@ -4059,7 +3963,7 @@
   }
 
 
-  function updateTimeUI() {
+  async function updateTimeUI() {
     const readout =
       $("timeReadout");
 
@@ -4067,14 +3971,66 @@
       return;
     }
 
-    readout.textContent =
-      `${formatTime(
-        currentPosition()
-      )} / ${formatTime(
-        duration()
-      )}`;
-  }
+    const unsupportedTypes = [
+      "bilibili",
+      "external",
+      "dailymotion-iframe",
+      "twitch-clip"
+    ];
 
+    if (
+      unsupportedTypes.includes(
+        state.playerType
+      )
+    ) {
+      readout.textContent =
+        "此平台不支援本站同步時間";
+      return;
+    }
+
+    if (
+      !state.playerReady ||
+      !state.player
+    ) {
+      readout.textContent =
+        "00:00 / 00:00";
+      return;
+    }
+
+    const requestId =
+      Number(
+        state.timeUiRequestId || 0
+      ) + 1;
+
+    state.timeUiRequestId =
+      requestId;
+
+    try {
+      const [
+        position,
+        total
+      ] = await Promise.all([
+        asyncCurrentPosition(),
+        asyncDuration()
+      ]);
+
+      if (
+        requestId !==
+        Number(
+          state.timeUiRequestId
+        )
+      ) {
+        return;
+      }
+
+      readout.textContent =
+        `${formatTime(
+          position
+        )} / ${formatTime(
+          total
+        )}`;
+    } catch (_) {}
+  }
 
   function startLocalTimeUpdate() {
     clearInterval(
@@ -4083,7 +4039,7 @@
 
     state.localTimer =
       setInterval(() => {
-        updateTimeUI();
+        void updateTimeUI();
 
         if (
           state.playerType ===
@@ -5285,8 +5241,6 @@
   ) {
     await destroyCurrentPlayer();
 
-    await loadDailymotionSdk();
-
     hidePlayers();
 
     showPlayerElement(
@@ -5304,6 +5258,84 @@
 
     container.innerHTML =
       "";
+
+    /*
+     * Dailymotion 目前要求自訂 Web SDK 使用 Player ID。
+     * 沒有 Player ID 時，改用官方 default Player iframe，
+     * 讓 Dailymotion 仍然可以播放，而不是整個平台失效。
+     */
+    if (!DAILYMOTION_PLAYER_ID) {
+      const iframe =
+        document.createElement(
+          "iframe"
+        );
+
+      iframe.title =
+        video.title ||
+        "Dailymotion";
+
+      iframe.src =
+        "https://geo.dailymotion.com/player.html?video=" +
+        encodeURIComponent(
+          video.id
+        );
+
+      iframe.allow =
+        "autoplay; fullscreen; picture-in-picture; web-share";
+
+      iframe.allowFullscreen =
+        true;
+
+      iframe.frameBorder =
+        "0";
+
+      iframe.referrerPolicy =
+        "strict-origin-when-cross-origin";
+
+      Object.assign(
+        iframe.style,
+        {
+          width:
+            "100%",
+          height:
+            "100%",
+          display:
+            "block",
+          border:
+            "0"
+        }
+      );
+
+      container.appendChild(
+        iframe
+      );
+
+      state.player =
+        iframe;
+
+      state.currentVideoId =
+        video.id;
+
+      state.currentVideoUrl =
+        video.url ||
+        null;
+
+      state.playerType =
+        "dailymotion-iframe";
+
+      state.playerReady =
+        false;
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "Dailymotion 官方播放器：此模式不支援本站時間同步";
+      }
+
+      void updateTimeUI();
+      return;
+    }
+
+    await loadDailymotionSdk();
 
     const playerId =
       "dm_" +
@@ -5365,7 +5397,6 @@
     void applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
   }
-
 
   /*
    * =========================================================
@@ -5466,8 +5497,6 @@
   ) {
     await destroyCurrentPlayer();
 
-    await loadTwitchSdk();
-
     hidePlayers();
 
     showPlayerElement(
@@ -5485,6 +5514,100 @@
 
     container.innerHTML =
       "";
+
+    const host =
+      location.hostname ||
+      "localhost";
+
+    /*
+     * Twitch Clip 官方文件明確指出 Clip 不支援
+     * Interactive JavaScript Player，必須使用 clips iframe。
+     */
+    if (
+      video.twitchType ===
+      "clip"
+    ) {
+      const iframe =
+        document.createElement(
+          "iframe"
+        );
+
+      iframe.title =
+        video.title ||
+        "Twitch Clip";
+
+      const params =
+        new URLSearchParams();
+
+      params.set(
+        "clip",
+        video.id
+      );
+
+      params.set(
+        "parent",
+        host
+      );
+
+      iframe.src =
+        "https://clips.twitch.tv/embed?" +
+        params.toString();
+
+      iframe.allow =
+        "autoplay; fullscreen; picture-in-picture";
+
+      iframe.allowFullscreen =
+        true;
+
+      iframe.frameBorder =
+        "0";
+
+      Object.assign(
+        iframe.style,
+        {
+          width:
+            "100%",
+          height:
+            "100%",
+          display:
+            "block",
+          border:
+            "0",
+          minHeight:
+            "300px"
+        }
+      );
+
+      container.appendChild(
+        iframe
+      );
+
+      state.player =
+        iframe;
+
+      state.currentVideoId =
+        video.id;
+
+      state.currentVideoUrl =
+        video.url ||
+        null;
+
+      state.playerType =
+        "twitch-clip";
+
+      state.playerReady =
+        false;
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "Twitch Clip：此官方嵌入模式不支援本站同步控制";
+      }
+
+      void updateTimeUI();
+      return;
+    }
+
+    await loadTwitchSdk();
 
     const wrapperId =
       "tw_" +
@@ -5509,10 +5632,6 @@
     container.appendChild(
       target
     );
-
-    const host =
-      location.hostname ||
-      "localhost";
 
     const options = {
       width:
@@ -5615,7 +5734,6 @@
 
     startLocalTimeUpdate();
   }
-
 
   /*
    * =========================================================
@@ -5883,7 +6001,7 @@
         .toUpperCase();
 
     if (
-      !/^[A-Z0-9]{6}$/.test(
+      !/^(?:[A-Z0-9]{6}|[A-Z0-9]{12})$/.test(
         roomId
       )
     ) {
@@ -7594,6 +7712,16 @@
           : "👥 成員";
     }
 
+    const controlSupported =
+      [
+        "youtube",
+        "vimeo",
+        "dailymotion",
+        "twitch"
+      ].includes(
+        state.playerType
+      );
+
     [
       "playPauseBtn",
       "backBtn",
@@ -7609,12 +7737,19 @@
       }
 
       button.disabled =
-        !state.isOwner;
+        !state.isOwner ||
+        !controlSupported;
 
-      button.title =
-        state.isOwner
-          ? ""
-          : "只有房主可以控制播放";
+      if (!state.isOwner) {
+        button.title =
+          "只有房主可以控制播放";
+      } else if (!controlSupported) {
+        button.title =
+          "此平台目前不支援本站播放控制";
+      } else {
+        button.title =
+          "";
+      }
     });
   }
 
@@ -7810,6 +7945,181 @@
    * 被踢後立即離開。
    */
 
+  async function transferOwnershipBeforeLeave() {
+    if (
+      !state.isOwner ||
+      !state.roomId ||
+      !state.uid
+    ) {
+      return null;
+    }
+
+    const members =
+      await getMembersOnce();
+
+    const candidates =
+      Object.entries(
+        members || {}
+      )
+        .filter(
+          ([uid, member]) =>
+            uid !== state.uid &&
+            member &&
+            typeof member === "object"
+        )
+        .sort(
+          ([, a], [, b]) => {
+            const onlineDiff =
+              Boolean(b?.online) -
+              Boolean(a?.online);
+
+            if (onlineDiff !== 0) {
+              return onlineDiff;
+            }
+
+            return (
+              Number(a?.joinedAt || 0) -
+              Number(b?.joinedAt || 0)
+            );
+          }
+        );
+
+    if (!candidates.length) {
+      return null;
+    }
+
+    const nextOwnerUid =
+      candidates[0][0];
+
+    /*
+     * Multi-location update：
+     * 房間與房間 metadata 同步轉移，
+     * 避免新房主看到舊 owner。
+     */
+    await db.ref().update({
+      [`rooms/${state.roomId}/owner`]:
+        nextOwnerUid,
+
+      [`roomMeta/${state.roomId}/owner`]:
+        nextOwnerUid
+    });
+
+    try {
+      await state.roomRef
+        ?.child("owner")
+        .onDisconnect()
+        .cancel();
+    } catch (_) {}
+
+    return nextOwnerUid;
+  }
+
+
+  async function scheduleOwnerFailover() {
+    if (
+      !state.isOwner ||
+      !state.roomId ||
+      !state.uid ||
+      !state.roomRef
+    ) {
+      return;
+    }
+
+    const members =
+      await getMembersOnce();
+
+    const candidates =
+      Object.entries(
+        members || {}
+      )
+        .filter(
+          ([uid, member]) =>
+            uid !== state.uid &&
+            member &&
+            typeof member === "object"
+        )
+        .sort(
+          ([, a], [, b]) =>
+            (
+              Boolean(b?.online) -
+              Boolean(a?.online)
+            ) ||
+            (
+              Number(a?.joinedAt || 0) -
+              Number(b?.joinedAt || 0)
+            )
+        );
+
+    if (!candidates.length) {
+      return;
+    }
+
+    const nextOwnerUid =
+      candidates[0][0];
+
+    try {
+      await state.roomRef
+        .child("owner")
+        .onDisconnect()
+        .set(nextOwnerUid);
+
+      await db.ref(
+        `roomMeta/${state.roomId}/owner`
+      )
+        .onDisconnect()
+        .set(nextOwnerUid);
+    } catch (error) {
+      console.warn(
+        "房主斷線轉移設定失敗:",
+        error
+      );
+    }
+  }
+
+
+  async function exitCurrentRoom() {
+    if (
+      !state.roomId
+    ) {
+      return;
+    }
+
+    if (
+      state.isOwner
+    ) {
+      const nextOwner =
+        await transferOwnershipBeforeLeave();
+
+      if (!nextOwner) {
+        /*
+         * 房內沒有其他成員時，不做錯誤的 owner 刪除，
+         * 只離開目前頁面。房間資料會保留。
+         */
+      }
+    }
+
+    try {
+      if (
+        state.membersRef &&
+        state.uid
+      ) {
+        await state.membersRef
+          .child(
+            state.uid
+          )
+          .remove();
+      }
+    } catch (error) {
+      console.warn(
+        "離開房間時移除成員失敗:",
+        error
+      );
+    }
+
+    await leaveRoomLocally();
+  }
+
+
   async function leaveRoomLocally(
     reason = ""
   ) {
@@ -7869,6 +8179,11 @@
 
     state.wasMemberInRoom =
       false;
+
+    state.timeUiRequestId =
+      Number(
+        state.timeUiRequestId || 0
+      ) + 1;
 
     state.kickedLocally =
       false;
@@ -7982,7 +8297,7 @@
     state.memberHeartbeatTimer =
       setInterval(
         heartbeatMember,
-        15000
+        60000
       );
 
     attachPlaybackSyncListener();
@@ -8052,6 +8367,12 @@
           renderMembers(
             members
           );
+
+          if (
+            state.isOwner
+          ) {
+            void scheduleOwnerFailover();
+          }
         }
       );
 
@@ -9125,36 +9446,49 @@
      */
 
     $("leaveRoomBtn")
-  ?.addEventListener(
-    "click",
-    async () => {
-      const confirmed =
-        window.confirm(
-          "確定要離開這個房間嗎？"
-        );
+      ?.addEventListener(
+        "click",
+        async () => {
+          const confirmed =
+            window.confirm(
+              "確定要離開這個房間嗎？"
+            );
 
-      if (!confirmed) {
-        return;
-      }
+          if (!confirmed) {
+            return;
+          }
 
-      state.kickedLocally = true;
+          try {
+            await exitCurrentRoom();
+          } catch (error) {
+            console.error(
+              "離開房間失敗:",
+              error
+            );
 
-      try {
-        if (
-          state.membersRef &&
-          state.uid
-        ) {
-          await state.membersRef
-            .child(
-              state.uid
-            )
-            .remove();
+            toast(
+              error?.message ||
+              "離開房間失敗"
+            );
+          }
         }
-      } catch (_) {}
+      );
 
-      await leaveRoomLocally();
-    }
-  );
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+          if (
+            state.roomId
+          ) {
+            void heartbeatMember();
+          }
+        }
+      }
+    );
 
     /*
      * PLAY / PAUSE
@@ -9170,10 +9504,21 @@
           }
 
           if (
-            state.playerType === "bilibili" ||
-            state.playerType === "external"
+            ![
+              "youtube",
+              "vimeo",
+              "dailymotion",
+              "twitch"
+            ].includes(
+              state.playerType
+            )
           ) {
             toast("此平台目前無法由本站控制播放");
+            return;
+          }
+
+          if (!state.isOwner) {
+            toast("只有房主可以控制播放");
             return;
           }
 
@@ -9243,7 +9588,16 @@
         async () => {
           if (
             !state.playerReady ||
-            !state.player
+            !state.player ||
+            !state.isOwner ||
+            ![
+              "youtube",
+              "vimeo",
+              "dailymotion",
+              "twitch"
+            ].includes(
+              state.playerType
+            )
           ) {
             return;
           }
@@ -9283,7 +9637,16 @@
         async () => {
           if (
             !state.playerReady ||
-            !state.player
+            !state.player ||
+            !state.isOwner ||
+            ![
+              "youtube",
+              "vimeo",
+              "dailymotion",
+              "twitch"
+            ].includes(
+              state.playerType
+            )
           ) {
             return;
           }
