@@ -1170,6 +1170,66 @@
   }
 
 
+  async function waitForGoogleAuthUser(timeoutMs = 3500) {
+    if (!auth) {
+      return null;
+    }
+
+    const currentUser =
+      auth.currentUser;
+
+    if (
+      currentUser &&
+      !currentUser.isAnonymous
+    ) {
+      return currentUser;
+    }
+
+    return new Promise((resolve) => {
+      let finished = false;
+      let unsubscribe = null;
+
+      const finish = (user) => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        try {
+          unsubscribe?.();
+        } catch (_) {}
+
+        clearTimeout(
+          timer
+        );
+
+        resolve(
+          user ||
+          null
+        );
+      };
+
+      unsubscribe =
+        auth.onAuthStateChanged(
+          (user) => {
+            if (
+              user &&
+              !user.isAnonymous
+            ) {
+              finish(user);
+            }
+          }
+        );
+
+      const timer =
+        setTimeout(() => {
+          finish(null);
+        }, timeoutMs);
+    });
+  }
+
+
   async function googleLogin() {
     if (!auth) {
       throw new Error(
@@ -1280,14 +1340,45 @@
         "Google 登入失敗";
 
       /*
-       * Popup 被瀏覽器擋掉時，給出明確訊息，
-       * 不把真正的 Firebase 錯誤吞掉。
+       * Chrome / Firebase Popup 在遇到 COOP 時，
+       * 有可能只是無法正確讀取 popup.closed，
+       * 但 Firebase Auth 實際上已經完成登入。
+       *
+       * 因此先檢查 Auth 狀態，再決定是否真的算登入失敗。
        */
       if (
         code ===
           "auth/popup-blocked" ||
         code ===
+          "auth/popup-closed-by-user" ||
+        code ===
           "auth/cancelled-popup-request"
+      ) {
+        const recoveredUser =
+          await waitForGoogleAuthUser();
+
+        if (
+          recoveredUser &&
+          !recoveredUser.isAnonymous
+        ) {
+          state.uid =
+            recoveredUser.uid;
+
+          updateAuthUI(
+            recoveredUser
+          );
+
+          toast(
+            "Google 登入成功"
+          );
+
+          return recoveredUser;
+        }
+      }
+
+      if (
+        code ===
+          "auth/popup-blocked"
       ) {
         throw new Error(
           "Google 登入視窗被瀏覽器阻擋，請允許此網站開啟登入視窗後再試一次"
