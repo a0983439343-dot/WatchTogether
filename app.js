@@ -6584,10 +6584,11 @@
           0;
       }
 
-      throw error;
-    }
-    } catch (error) {
-      console.warn("播放同步寫入失敗:", error);
+      console.warn(
+        "播放同步寫入失敗:",
+        error
+      );
+
       return null;
     }
   }
