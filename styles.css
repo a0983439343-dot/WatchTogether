@@ -1706,12 +1706,40 @@ select:focus {
   }
 
   .room-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 32vw);
+    grid-template-areas: "watch side";
+    align-items: start;
     gap: 10px;
   }
 
   .watch-panel {
+    grid-area: watch;
     padding: 8px;
+    min-width: 0;
+  }
+
+  .side-column {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: calc(100svh - 72px);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .chat-panel {
+    order: 1;
+    min-height: 0;
+    height: min(42svh, 360px);
+  }
+
+  .members-panel {
+    order: 2;
+  }
+
+  .queue-panel {
+    order: 3;
   }
 
   .player-wrap {
@@ -1769,11 +1797,6 @@ select:focus {
 
   .room-actions button {
     min-height: 38px;
-  }
-
-  .side-column {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 10px;
   }
 
   .members-panel,
