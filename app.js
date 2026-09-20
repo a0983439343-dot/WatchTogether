@@ -1137,21 +1137,12 @@
       }
     );
 
-    if (!auth.currentUser) {
-      await auth.signInAnonymously();
-    }
-
-    state.uid =
-      auth.currentUser?.uid ||
-      null;
-
-    if (!state.uid) {
-      throw new Error(
-        "Firebase 匿名登入失敗"
-      );
-    }
-
-    updateAuthUI();
+    /*
+     * 不要在這裡立刻建立匿名使用者。
+     * Google Redirect 回站後，必須先處理 getRedirectResult()
+     * 再決定是否需要進入訪客模式。
+     */
+    updateAuthUI(auth.currentUser || null);
   }
 
 
@@ -9632,6 +9623,84 @@
    * =========================================================
    */
 
+  async function waitForInitialAuthState() {
+    if (!auth) {
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      let finished = false;
+
+      const unsubscribe =
+        auth.onAuthStateChanged(
+          (user) => {
+            if (finished) {
+              return;
+            }
+
+            finished = true;
+
+            try {
+              unsubscribe();
+            } catch (_) {}
+
+            resolve(user || null);
+          }
+        );
+    });
+  }
+
+
+  async function ensureAnonymousAuth() {
+    if (!auth) {
+      throw new Error(
+        "Firebase Auth 尚未初始化"
+      );
+    }
+
+    const existingUser =
+      auth.currentUser;
+
+    if (existingUser) {
+      state.uid =
+        existingUser.uid;
+
+      updateAuthUI(existingUser);
+
+      return existingUser;
+    }
+
+    try {
+      const credential =
+        await auth.signInAnonymously();
+
+      const user =
+        credential?.user ||
+        auth.currentUser ||
+        null;
+
+      state.uid =
+        user?.uid ||
+        null;
+
+      if (!state.uid) {
+        throw new Error(
+          "Firebase 匿名登入失敗"
+        );
+      }
+
+      updateAuthUI(user);
+
+      return user;
+    } catch (error) {
+      throw new Error(
+        error?.message ||
+        "Firebase 匿名登入失敗"
+      );
+    }
+  }
+
+
   async function start() {
     try {
       state.memberName =
@@ -9639,7 +9708,28 @@
 
       await initializeFirebase();
 
+      /*
+       * Google Redirect 一定先處理。
+       * 不要在這之前建立匿名帳號。
+       */
       await handleGoogleRedirectResult();
+
+      /*
+       * Redirect 結果處理完，再等 Auth 的初始狀態確定。
+       */
+      const initialUser =
+        await waitForInitialAuthState();
+
+      if (initialUser) {
+        state.uid =
+          initialUser.uid;
+
+        updateAuthUI(
+          initialUser
+        );
+      } else {
+        await ensureAnonymousAuth();
+      }
 
       setupEvents();
 
