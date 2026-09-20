@@ -997,7 +997,8 @@
       if (container.scrollHeight > container.clientHeight) {
         container.style.overflowY = "auto";
       }
-    });  }
+    });
+  }
 
 
   /*
@@ -1006,7 +1007,7 @@
    * =========================================================
    */
 
-  function updateAuthUI(user = undefined) {
+  function updateAuthUI() {
     const loginButton =
       $("googleLoginBtn");
 
@@ -1021,15 +1022,12 @@
 
     const currentUser =
       auth?.currentUser ||
-      user ||
       null;
 
     if (currentUser) {
       if (authStatus) {
         authStatus.textContent =
-          currentUser.isAnonymous
-            ? "訪客模式"
-            : "已登入 Google";
+          "已連線";
       }
 
       const isGoogleUser =
@@ -1132,16 +1130,25 @@
             null;
         }
 
-        updateAuthUI(user);
+        updateAuthUI();
       }
     );
 
-    /*
-     * 不要在這裡立刻建立匿名使用者。
-     * Google Redirect 回站後，必須先處理 getRedirectResult()
-     * 再決定是否需要進入訪客模式。
-     */
-    updateAuthUI(auth.currentUser || null);
+    if (!auth.currentUser) {
+      await auth.signInAnonymously();
+    }
+
+    state.uid =
+      auth.currentUser?.uid ||
+      null;
+
+    if (!state.uid) {
+      throw new Error(
+        "Firebase 匿名登入失敗"
+      );
+    }
+
+    updateAuthUI();
   }
 
 
@@ -1169,144 +1176,90 @@
     const currentUser =
       auth.currentUser;
 
-    try {
-      /*
-       * Popup 必須直接由按鈕 click 啟動。
-       * 這是目前 WatchTogether 原本可正常登入的流程。
-       */
-      if (
-        currentUser &&
-        currentUser.isAnonymous
-      ) {
-        try {
-          const result =
-            await currentUser.linkWithPopup(
-              provider
-            );
-
-          const user =
-            result?.user ||
-            auth.currentUser ||
-            null;
-
-          if (!user) {
-            throw new Error(
-              "Google 登入成功，但找不到 Firebase 使用者"
-            );
-          }
-
-          state.uid =
-            user.uid;
-
-          updateAuthUI(
-            user
-          );
-
-          toast(
-            "Google 登入成功"
-          );
-
-          return user;
-        } catch (error) {
-          /*
-           * Google 帳號已經存在於另一個 Firebase
-           * 帳號時，改成直接登入該 Google 帳號。
-           */
-          if (
-            error?.code ===
-            "auth/credential-already-in-use" ||
-            error?.code ===
-            "auth/provider-already-linked"
-          ) {
-            const result =
-              await auth.signInWithPopup(
-                provider
-              );
-
-            const user =
-              result?.user ||
-              auth.currentUser ||
-              null;
-
-            if (!user) {
-              throw new Error(
-                "Google 登入成功，但找不到 Firebase 使用者"
-              );
-            }
-
-            state.uid =
-              user.uid;
-
-            updateAuthUI(
-              user
-            );
-
-            toast(
-              "Google 登入成功"
-            );
-
-            return user;
-          }
-
-          throw error;
-        }
-      }
-
-      const result =
-        await auth.signInWithPopup(
+    if (
+      currentUser &&
+      currentUser.isAnonymous
+    ) {
+      try {
+        await currentUser.linkWithRedirect(
           provider
         );
 
-      const user =
-        result?.user ||
-        auth.currentUser ||
-        null;
+        return;
+      } catch (error) {
+        if (
+          error?.code ===
+          "auth/credential-already-in-use"
+        ) {
+          await auth.signInWithRedirect(
+            provider
+          );
 
-      if (!user) {
-        throw new Error(
-          "Google 登入完成，但 Firebase 沒有回傳使用者"
+          return;
+        }
+
+        throw error;
+      }
+    }
+
+    await auth.signInWithRedirect(
+      provider
+    );
+  }
+
+
+  async function handleGoogleRedirectResult() {
+    if (
+      !auth ||
+      state.googleRedirectHandled
+    ) {
+      return;
+    }
+
+    state.googleRedirectHandled =
+      true;
+
+    try {
+      const result =
+        await auth.getRedirectResult();
+
+      if (result?.user) {
+        const user =
+          result.user;
+
+        state.uid =
+          user.uid;
+
+        if (
+          user.displayName &&
+          !localStorage.getItem(
+            "wt_name"
+          )
+        ) {
+          try {
+            setMemberName(
+              user.displayName
+            );
+          } catch (_) {}
+        }
+
+        updateAuthUI();
+
+        toast(
+          "Google 登入成功"
         );
       }
-
-      state.uid =
-        user.uid;
-
-      updateAuthUI(
-        user
-      );
-
-      toast(
-        "Google 登入成功"
-      );
-
-      return user;
     } catch (error) {
       console.error(
         "Google 登入失敗:",
         error
       );
 
-      const code =
-        error?.code ||
-        "unknown";
-
-      const message =
+      toast(
         error?.message ||
-        "Google 登入失敗";
-
-      throw new Error(
-        `Google 登入失敗 [${code}]：${message}`
+        "Google 登入失敗"
       );
     }
-  }
-
-
-  async function handleGoogleRedirectResult() {
-    /*
-     * Popup 模式正常使用時不需要 Redirect 結果。
-     * 保留此函式是為了相容先前版本留下的 Redirect 狀態。
-     */
-    return null;
   }
 
 
@@ -2044,7 +1997,8 @@
             )
               ? detailData.items
               : []
-          ) {            detailMap[item.id] =
+          ) {
+            detailMap[item.id] =
               item;
           }
         }
@@ -3043,7 +2997,8 @@
 
   /*
    * =========================================================
-   * QUEUE   * =========================================================
+   * QUEUE
+   * =========================================================
    */
 
   async function addToQueue(video) {
@@ -4042,7 +3997,8 @@
   }
 
 
-  async function pausePlayer() {    if (
+  async function pausePlayer() {
+    if (
       !state.playerReady ||
       !state.player
     ) {
@@ -5041,7 +4997,8 @@
 
     if (!container) {
       throw new Error(
-        "找不到 vimeoPlayer"      );
+        "找不到 vimeoPlayer"
+      );
     }
 
     container.src =
@@ -6040,7 +5997,8 @@
   function markLocalPlaybackIntent(kind = "") {
     state.playbackLocalIntentAt = Date.now();
     state.playbackUserActionKind = kind;
-    state.playbackUserActionUntil = Date.now() + 900;  }
+    state.playbackUserActionUntil = Date.now() + 900;
+  }
 
   function cancelPendingPausePublish() {
     clearTimeout(state.playbackPausePublishTimer);
@@ -7039,6 +6997,7 @@
             state.playerType === "youtube"
               ? absDrift >= youtubeHardSeekThreshold && !useYoutubeFineRate
               : absDrift >= 1.0;
+
           if (shouldSeek) {
             try {
               await applyPlayerPosition(expected);
@@ -8038,7 +7997,8 @@
                   class="member-name"
                   style="
                     min-width:0;
-                    flex:1;                  "
+                    flex:1;
+                  "
                 >
 
                   <b>
@@ -9037,7 +8997,8 @@
       ?.addEventListener(
         "click",
         async () => {
-          if (            !state.playerReady ||
+          if (
+            !state.playerReady ||
             !state.player
           ) {
             return;
@@ -9676,84 +9637,6 @@
    * =========================================================
    */
 
-  async function waitForInitialAuthState() {
-    if (!auth) {
-      return null;
-    }
-
-    return new Promise((resolve) => {
-      let finished = false;
-
-      const unsubscribe =
-        auth.onAuthStateChanged(
-          (user) => {
-            if (finished) {
-              return;
-            }
-
-            finished = true;
-
-            try {
-              unsubscribe();
-            } catch (_) {}
-
-            resolve(user || null);
-          }
-        );
-    });
-  }
-
-
-  async function ensureAnonymousAuth() {
-    if (!auth) {
-      throw new Error(
-        "Firebase Auth 尚未初始化"
-      );
-    }
-
-    const existingUser =
-      auth.currentUser;
-
-    if (existingUser) {
-      state.uid =
-        existingUser.uid;
-
-      updateAuthUI(existingUser);
-
-      return existingUser;
-    }
-
-    try {
-      const credential =
-        await auth.signInAnonymously();
-
-      const user =
-        credential?.user ||
-        auth.currentUser ||
-        null;
-
-      state.uid =
-        user?.uid ||
-        null;
-
-      if (!state.uid) {
-        throw new Error(
-          "Firebase 匿名登入失敗"
-        );
-      }
-
-      updateAuthUI(user);
-
-      return user;
-    } catch (error) {
-      throw new Error(
-        error?.message ||
-        "Firebase 匿名登入失敗"
-      );
-    }
-  }
-
-
   async function start() {
     try {
       state.memberName =
@@ -9761,60 +9644,9 @@
 
       await initializeFirebase();
 
-      /*
-       * 先等待 Firebase 完成第一次 Auth 狀態初始化。
-       */
-      const initialUser =
-        await waitForInitialAuthState();
+      await handleGoogleRedirectResult();
 
-      const currentUser =
-        auth?.currentUser ||
-        initialUser ||
-        null;
-
-      if (currentUser) {
-        state.uid =
-          currentUser.uid;
-
-        updateAuthUI(
-          currentUser
-        );
-      }
-
-      /*
-       * 事件一定先綁定。
-       * 就算匿名登入功能在 Firebase Console 沒開，
-       * Google 登入按鈕仍然必須可以使用。
-       */
       setupEvents();
-
-      /*
-       * 沒有現有 Firebase 使用者時才建立訪客帳號。
-       * 匿名登入失敗不再讓整個網站初始化中止。
-       */
-      if (!currentUser) {
-        try {
-          await ensureAnonymousAuth();
-        } catch (error) {
-          console.error(
-            "匿名登入失敗:",
-            error
-          );
-
-          if ($("authStatus")) {
-            $("authStatus")
-              .textContent =
-              "Google 登入可用";
-          }
-
-          toast(
-            `訪客登入失敗：${
-              error?.message ||
-              "Firebase Anonymous Auth 未啟用"
-            }`
-          );
-        }
-      }
 
       const roomId =
         getRoomIdFromUrl();
