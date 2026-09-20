@@ -9808,7 +9808,7 @@
           try {
             const time =
               formatTime(
-                currentPosition()
+                await asyncCurrentPosition()
               );
 
             await navigator.clipboard.writeText(
