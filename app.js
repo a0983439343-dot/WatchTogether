@@ -1045,12 +1045,8 @@
         "hidden"
       );
 
-      /*
-       * 訪客模式不顯示登出。
-       */
-      logoutButton?.classList.toggle(
-        "hidden",
-        currentUser.isAnonymous
+      logoutButton?.classList.remove(
+        "hidden"
       );
 
       return;
@@ -1271,10 +1267,7 @@
     const currentUser =
       auth.currentUser;
 
-    if (
-      !currentUser ||
-      currentUser.isAnonymous
-    ) {
+    if (!currentUser) {
       updateAuthUI();
       return;
     }
