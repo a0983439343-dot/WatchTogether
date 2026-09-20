@@ -1250,8 +1250,8 @@
 
     try {
       /*
-       * 優先把目前的匿名訪客帳號直接綁定 Google。
-       * 這樣房間成員 UID 不會因登入而改變。
+       * 新的 Google 帳號：
+       * 直接把目前匿名訪客帳號綁定到 Google。
        */
       if (
         currentUser &&
@@ -1286,9 +1286,52 @@
           return user;
         } catch (linkError) {
           /*
-           * Google 帳號已經綁定另一個 Firebase 帳號。
-           * 這時不能再綁定目前匿名 UID，改成直接登入
-           * 已存在的 Google Firebase 帳號。
+           * 原本已經註冊過的 Google 帳號會走到這裡。
+           *
+           * 最重要的是：
+           * 不要再開第二個 Popup。
+           *
+           * Firebase 在 credential-already-in-use
+           * 錯誤中會帶回原本的 Google credential，
+           * 可以直接 signInWithCredential() 登入既有帳號。
+           */
+          if (
+            linkError?.code ===
+              "auth/credential-already-in-use" &&
+            linkError?.credential
+          ) {
+            const result =
+              await auth.signInWithCredential(
+                linkError.credential
+              );
+
+            const user =
+              result?.user ||
+              auth.currentUser ||
+              null;
+
+            if (!user) {
+              throw new Error(
+                "Google 帳號已存在，但 Firebase 沒有回傳使用者"
+              );
+            }
+
+            state.uid =
+              user.uid;
+
+            updateAuthUI(user);
+
+            toast(
+              "Google 登入成功"
+            );
+
+            return user;
+          }
+
+          /*
+           * 部分 Firebase 版本可能沒有把 credential
+           * 附在錯誤物件上；這種情況才退回一般 Popup
+           * 登入，避免影響其他帳號的正常流程。
            */
           if (
             linkError?.code !==
@@ -1340,11 +1383,9 @@
         "Google 登入失敗";
 
       /*
-       * Chrome / Firebase Popup 在遇到 COOP 時，
-       * 有可能只是無法正確讀取 popup.closed，
-       * 但 Firebase Auth 實際上已經完成登入。
-       *
-       * 因此先檢查 Auth 狀態，再決定是否真的算登入失敗。
+       * Chrome / Firebase Popup 在 COOP 下可能只是
+       * 無法正確偵測 popup.closed，但 Firebase Auth
+       * 實際上已經完成登入。
        */
       if (
         code ===
