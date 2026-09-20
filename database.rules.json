@@ -12,11 +12,11 @@
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
         },
         "sourceType": {
-          ".write": "auth != null && root.child('rooms').child($roomId).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('rooms').child($roomId).exists() && root.child('members').child($roomId).child(auth.uid).exists()",
           ".validate": "newData.isString() && (newData.val() === 'youtube' || newData.val() === 'vimeo' || newData.val() === 'dailymotion' || newData.val() === 'bilibili' || newData.val() === 'twitch' || newData.val() === 'netflix' || newData.val() === 'crunchyroll' || newData.val() === 'disneyplus' || newData.val() === 'primevideo' || newData.val() === 'appletv' || newData.val() === 'max' || newData.val() === 'hulu' || newData.val() === 'paramount' || newData.val() === 'peacock')"
         },
         "video": {
-          ".write": "auth != null && root.child('rooms').child($roomId).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('rooms').child($roomId).exists() && root.child('members').child($roomId).child(auth.uid).exists()",
           ".validate": "!newData.exists() || (newData.hasChildren(['id','platform','title','thumbnail','channel']) && (newData.child('id').isString() || newData.child('id').val() === null) && newData.child('platform').isString() && newData.child('title').isString() && newData.child('title').val().length <= 200 && newData.child('thumbnail').isString() && newData.child('channel').isString() && newData.child('channel').val().length <= 100 && (!newData.child('url').exists() || (newData.child('url').isString() && newData.child('url').val().length <= 2000)) && (!newData.child('twitchType').exists() || (newData.child('twitchType').isString() && (newData.child('twitchType').val() === 'channel' || newData.child('twitchType').val() === 'video' || newData.child('twitchType').val() === 'clip'))))"
         }
       }
