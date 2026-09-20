@@ -6482,6 +6482,9 @@
       updatedAt: 0
     };
 
+    const previousTimeline =
+      state.playbackTimeline;
+
     cancelScheduledRemotePause();
     cancelScheduledRemotePlay();
     cancelScheduledRemoteSeek();
@@ -6500,6 +6503,25 @@
     state.playbackLastPlaying =
       Boolean(playing);
 
+    const finalEffectiveAt =
+      Number(event.effectiveAt || 0);
+
+    if (
+      finalEffectiveAt >
+      safeIssuedAt
+    ) {
+      state.playbackLocalScheduledEventId =
+        eventId;
+
+      state.playbackLocalControlUntil =
+        finalEffectiveAt + 500;
+    } else {
+      state.playbackLocalScheduledEventId =
+        "";
+      state.playbackLocalControlUntil =
+        0;
+    }
+
     try {
       const writeStartedAt =
         performance.now();
@@ -6511,19 +6533,10 @@
           writeStartedAt
       );
 
-      const finalEffectiveAt =
-        Number(event.effectiveAt || 0);
-
       if (
         finalEffectiveAt >
         safeIssuedAt
       ) {
-        state.playbackLocalScheduledEventId =
-          eventId;
-
-        state.playbackLocalControlUntil =
-          finalEffectiveAt + 500;
-
         if (action === "pause") {
           const localTarget =
             finalPosition +
@@ -6549,6 +6562,30 @@
       }
 
       return event;
+    } catch (error) {
+      if (
+        String(
+          state.playbackTimeline?.eventId || ""
+        ) === eventId
+      ) {
+        state.playbackTimeline =
+          previousTimeline || null;
+        state.playbackRemoteEvent =
+          previousTimeline || null;
+      }
+
+      if (
+        state.playbackLocalScheduledEventId ===
+        eventId
+      ) {
+        state.playbackLocalScheduledEventId =
+          "";
+        state.playbackLocalControlUntil =
+          0;
+      }
+
+      throw error;
+    }
     } catch (error) {
       console.warn("播放同步寫入失敗:", error);
       return null;
