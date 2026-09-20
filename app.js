@@ -1236,16 +1236,34 @@
         );
       }
 
-      state.uid =
-        user.uid;
+      try {
+        await user.reload();
+      } catch (_) {}
 
-      updateAuthUI(user);
+      const verifiedUser =
+        auth.currentUser ||
+        user;
+
+      if (
+        verifiedUser.isAnonymous
+      ) {
+        throw new Error(
+          "Google 視窗完成，但 Firebase 目前仍是匿名使用者"
+        );
+      }
+
+      state.uid =
+        verifiedUser.uid;
+
+      updateAuthUI(
+        verifiedUser
+      );
 
       toast(
         "Google 登入成功"
       );
 
-      return user;
+      return verifiedUser;
     } catch (error) {
       console.error(
         "Google 登入失敗:",
@@ -9774,14 +9792,11 @@
       await initializeFirebase();
 
       /*
-       * Google Redirect 一定先處理。
-       * 不要在這之前建立匿名帳號。
+       * 先處理 Google Redirect。
+       * 這一步不能被匿名登入卡住。
        */
       await handleGoogleRedirectResult();
 
-      /*
-       * Redirect 結果處理完，再等 Auth 的初始狀態確定。
-       */
       const initialUser =
         await waitForInitialAuthState();
 
@@ -9792,11 +9807,42 @@
         updateAuthUI(
           initialUser
         );
-      } else {
-        await ensureAnonymousAuth();
       }
 
+      /*
+       * 事件一定先綁定。
+       * 就算匿名登入功能在 Firebase Console 沒開，
+       * Google 登入按鈕仍然必須可以使用。
+       */
       setupEvents();
+
+      /*
+       * 沒有現有 Firebase 使用者時才建立訪客帳號。
+       * 匿名登入失敗不再讓整個網站初始化中止。
+       */
+      if (!initialUser) {
+        try {
+          await ensureAnonymousAuth();
+        } catch (error) {
+          console.error(
+            "匿名登入失敗:",
+            error
+          );
+
+          if ($("authStatus")) {
+            $("authStatus")
+              .textContent =
+              "Google 登入可用";
+          }
+
+          toast(
+            `訪客登入失敗：${
+              error?.message ||
+              "Firebase Anonymous Auth 未啟用"
+            }`
+          );
+        }
+      }
 
       const roomId =
         getRoomIdFromUrl();
