@@ -1172,98 +1172,51 @@
 
     try {
       /*
-       * 優先使用 Popup，避免 Redirect 回站後
-       * getRedirectResult / 匿名登入恢復時序互相干擾。
+       * 使用 Redirect，不再依賴 Popup。
+       *
+       * 這可以避免：
+       * 1. 瀏覽器封鎖 Popup
+       * 2. auth/popup-blocked
+       * 3. Popup 的 Cross-Origin-Opener-Policy 警告
+       *
+       * 若目前是匿名使用者，優先把 Google
+       * 帳號連結到目前的匿名使用者。
        */
       if (
         currentUser &&
         currentUser.isAnonymous
       ) {
         try {
-          const result =
-            await currentUser.linkWithPopup(
+          await currentUser.linkWithRedirect(
+            provider
+          );
+
+          return;
+        } catch (error) {
+          /*
+           * Google 帳號如果已經綁定其他 Firebase
+           * 使用者，就直接切換成該 Google 帳號登入。
+           */
+          if (
+            error?.code ===
+            "auth/credential-already-in-use" ||
+            error?.code ===
+            "auth/provider-already-linked"
+          ) {
+            await auth.signInWithRedirect(
               provider
             );
 
-          const user =
-            result?.user ||
-            auth.currentUser ||
-            null;
-
-          if (!user) {
-            throw new Error(
-              "Google 登入成功，但找不到 Firebase 使用者"
-            );
+            return;
           }
 
-          state.uid =
-            user.uid;
-
-          updateAuthUI(user);
-
-          toast(
-            "Google 登入成功"
-          );
-
-          return user;
-        } catch (linkError) {
-          /*
-           * 這個 Google 帳號已經綁定其他 Firebase
-           * 使用者時，改成直接登入該 Google 帳號。
-           */
-          if (
-            linkError?.code !==
-            "auth/credential-already-in-use"
-          ) {
-            throw linkError;
-          }
+          throw error;
         }
       }
 
-      const result =
-        await auth.signInWithPopup(
-          provider
-        );
-
-      const user =
-        result?.user ||
-        auth.currentUser ||
-        null;
-
-      if (!user) {
-        throw new Error(
-          "Google 登入完成，但 Firebase 沒有回傳使用者"
-        );
-      }
-
-      try {
-        await user.reload();
-      } catch (_) {}
-
-      const verifiedUser =
-        auth.currentUser ||
-        user;
-
-      if (
-        verifiedUser.isAnonymous
-      ) {
-        throw new Error(
-          "Google 視窗完成，但 Firebase 目前仍是匿名使用者"
-        );
-      }
-
-      state.uid =
-        verifiedUser.uid;
-
-      updateAuthUI(
-        verifiedUser
+      await auth.signInWithRedirect(
+        provider
       );
-
-      toast(
-        "Google 登入成功"
-      );
-
-      return verifiedUser;
     } catch (error) {
       console.error(
         "Google 登入失敗:",
