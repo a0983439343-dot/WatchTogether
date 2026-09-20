@@ -1038,15 +1038,13 @@
         !currentUser.isAnonymous
       );
 
-      /*
-       * 帳號功能。
-       */
-      accountButton?.classList.remove(
+      accountButton?.classList.add(
         "hidden"
       );
 
-      logoutButton?.classList.remove(
-        "hidden"
+      logoutButton?.classList.toggle(
+        "hidden",
+        currentUser.isAnonymous
       );
 
       return;
