@@ -4789,10 +4789,50 @@
                             return;
                           }
                           const position = await asyncCurrentPosition();
-                          publishPlaybackEvent("play", position, true, playbackClockNow());
+                          publishPlaybackEvent(
+                            "play",
+                            position,
+                            true,
+                            playbackClockNow()
+                          );
                           await reconcileRoomTimeline();
                         } catch (error) {
-                          console.warn("實際播放時間校準失敗:", error);
+                          console.warn(
+                            "實際播放時間校準失敗:",
+                            error
+                          );
+                        }
+                      }, 0);
+                    } else if (
+                      !state.playbackApplyingRemote &&
+                      Date.now() >= Number(state.playbackUserActionUntil || 0)
+                    ) {
+                      setTimeout(async () => {
+                        try {
+                          if (
+                            state.youtubeBuildToken !== token ||
+                            state.player !== event.target ||
+                            state.playbackApplyingRemote
+                          ) {
+                            return;
+                          }
+
+                          const position =
+                            await asyncCurrentPosition();
+
+                          publishPlaybackEvent(
+                            "play",
+                            position,
+                            true,
+                            playbackClockNow()
+                          );
+
+                          await reconcileRoomTimeline();
+                        } catch (error) {
+                          console.warn(
+                            "YouTube 播放狀態同步失敗:",
+                            error
+                          );
                         }
                       }, 0);
                     } else {
@@ -4817,6 +4857,32 @@
                     state.playbackLastPlayerState = "paused";
                     state.playbackLastObservedPosition =
                       await asyncCurrentPosition().catch(() => null);
+
+                    if (
+                      !state.playbackApplyingRemote &&
+                      Date.now() >= Number(state.playbackUserActionUntil || 0)
+                    ) {
+                      const position =
+                        Number(state.playbackLastObservedPosition);
+
+                      const issuedAt =
+                        playbackClockNow();
+
+                      const effectiveAt =
+                        issuedAt +
+                        getControlLeadMs();
+
+                      publishPlaybackEvent(
+                        "pause",
+                        Number.isFinite(position)
+                          ? position
+                          : 0,
+                        false,
+                        issuedAt,
+                        effectiveAt
+                      );
+                    }
+
                     updateTimeUI();
                     return;
                   }
