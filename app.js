@@ -8812,11 +8812,17 @@
               ) - 10
             );
 
-          await applyPlayerPosition(target);
+          const wasPlaying =
+            await asyncIsPlaying();
+
+          await applyPlayerPosition(
+            target
+          );
+
           publishPlaybackEvent(
             "seek",
             target,
-            await asyncIsPlaying(),
+            wasPlaying,
             playbackClockNow()
           );
         }
@@ -8849,11 +8855,17 @@
               ) + 10
             );
 
-          await applyPlayerPosition(target);
+          const wasPlaying =
+            await asyncIsPlaying();
+
+          await applyPlayerPosition(
+            target
+          );
+
           publishPlaybackEvent(
             "seek",
             target,
-            await asyncIsPlaying(),
+            wasPlaying,
             playbackClockNow()
           );
         }
