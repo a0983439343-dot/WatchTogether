@@ -1144,29 +1144,14 @@
       }
     );
 
-    if (!auth.currentUser) {
-      await auth.signInAnonymously();
-    }
-
-    state.uid =
-      auth.currentUser?.uid ||
-      null;
-
-    if (!state.uid) {
-      throw new Error(
-        "Firebase 匿名登入失敗"
-      );
-    }
-
-    updateAuthUI();
+    /*
+     * Redirect 登入必須先讓 Firebase 處理
+     * getRedirectResult，再決定是否建立匿名帳號。
+     * 否則回站時先 signInAnonymously() 可能干擾
+     * Google Redirect 的登入/綁定結果。
+     */
   }
 
-
-  /*
-   * =========================================================
-   * GOOGLE
-   * =========================================================
-   */
 
   async function googleLogin() {
     if (!auth) {
@@ -1188,80 +1173,36 @@
 
     try {
       /*
-       * 優先使用 Popup，避免 Redirect 回站後
-       * getRedirectResult / 匿名登入恢復時序互相干擾。
+       * GitHub Pages 使用 Redirect 登入，
+       * 避免 Popup / COOP / popup-blocked 問題。
+       *
+       * 如果目前是匿名訪客，優先把目前匿名帳號
+       * 綁定到 Google，盡量保持原本 UID。
        */
       if (
         currentUser &&
         currentUser.isAnonymous
       ) {
-        try {
-          const result =
-            await currentUser.linkWithPopup(
-              provider
-            );
-
-          const user =
-            result?.user ||
-            auth.currentUser ||
-            null;
-
-          if (!user) {
-            throw new Error(
-              "Google 登入成功，但找不到 Firebase 使用者"
-            );
-          }
-
-          state.uid =
-            user.uid;
-
-          updateAuthUI(user);
-
-          toast(
-            "Google 登入成功"
-          );
-
-          return user;
-        } catch (linkError) {
-          /*
-           * 這個 Google 帳號已經綁定其他 Firebase
-           * 使用者時，改成直接登入該 Google 帳號。
-           */
-          if (
-            linkError?.code !==
-            "auth/credential-already-in-use"
-          ) {
-            throw linkError;
-          }
-        }
-      }
-
-      const result =
-        await auth.signInWithPopup(
+        await currentUser.linkWithRedirect(
           provider
         );
 
-      const user =
-        result?.user ||
-        auth.currentUser ||
-        null;
-
-      if (!user) {
-        throw new Error(
-          "Google 登入完成，但 Firebase 沒有回傳使用者"
-        );
+        /*
+         * Redirect 會離開目前頁面。
+         * 回站後由 handleGoogleRedirectResult()
+         * 處理 getRedirectResult()。
+         */
+        return null;
       }
 
-      state.uid =
-        user.uid;
-
-      updateAuthUI(user);
-
-      toast(
-        "Google 登入成功"
+      await auth.signInWithRedirect(
+        provider
       );
 
-      return user;
+      /*
+       * 實際 user 會在 Redirect 回站後取得。
+       */
+      return null;
     } catch (error) {
       console.error(
         "Google 登入失敗:",
@@ -1288,7 +1229,7 @@
       !auth ||
       state.googleRedirectHandled
     ) {
-      return;
+      return null;
     }
 
     state.googleRedirectHandled =
@@ -1318,22 +1259,73 @@
           } catch (_) {}
         }
 
-        updateAuthUI();
+        updateAuthUI(user);
 
         toast(
           "Google 登入成功"
         );
+
+        return user;
       }
+
+      return null;
     } catch (error) {
       console.error(
-        "Google 登入失敗:",
+        "Google Redirect 登入失敗:",
         error
       );
+
+      /*
+       * linkWithRedirect() 若遇到 Google 帳號已經
+       * 綁定其他 Firebase 帳號，錯誤會在回站後的
+       * getRedirectResult() 才出現。
+       *
+       * 此時改成直接 Google 登入。
+       */
+      if (
+        error?.code ===
+        "auth/credential-already-in-use"
+      ) {
+        try {
+          const provider =
+            new firebase.auth.GoogleAuthProvider();
+
+          provider.setCustomParameters({
+            prompt:
+              "select_account"
+          });
+
+          state.googleRedirectHandled =
+            false;
+
+          await auth.signInWithRedirect(
+            provider
+          );
+
+          return {
+            redirecting: true
+          };
+        } catch (redirectError) {
+          console.error(
+            "Google 直接登入失敗:",
+            redirectError
+          );
+
+          toast(
+            redirectError?.message ||
+            "Google 登入失敗"
+          );
+
+          return null;
+        }
+      }
 
       toast(
         error?.message ||
         "Google 登入失敗"
       );
+
+      return null;
     }
   }
 
@@ -9726,7 +9718,35 @@
 
       await initializeFirebase();
 
-      await handleGoogleRedirectResult();
+      const redirectResult =
+        await handleGoogleRedirectResult();
+
+      /*
+       * 只有在沒有 Google Redirect 使用者，
+       * 而且 Firebase 目前也沒有使用者時，
+       * 才建立匿名訪客帳號。
+       */
+      if (
+        redirectResult?.redirecting
+      ) {
+        return;
+      }
+
+      if (!auth.currentUser) {
+        await auth.signInAnonymously();
+      }
+
+      state.uid =
+        auth.currentUser?.uid ||
+        null;
+
+      if (!state.uid) {
+        throw new Error(
+          "Firebase 匿名登入失敗"
+        );
+      }
+
+      updateAuthUI();
 
       setupEvents();
 
