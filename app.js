@@ -223,6 +223,7 @@
     playbackLocalSeekTimer: null,
     playbackRemotePlayTimer: null,
     playbackRemoteSeekTimer: null,
+    playbackResumeRecoveryUntil: 0,
 
     playbackTimeline: null,
     playbackAdGuardUntil: 0,
@@ -3111,8 +3112,8 @@
 
 
   async function playQueueItem(queueId) {
-    if (!state.isOwner) {
-      throw new Error("只有房主可以播放待播放清單");
+    if (!state.uid || !state.roomId) {
+      throw new Error("目前不在房間內");
     }
 
     const item =
@@ -3153,10 +3154,20 @@
     }
 
     await changeVideo(
-      video
+      video,
+      {
+        allowMember: true
+      }
     );
 
-    if (state.queueRef) {
+    if (
+      state.queueRef &&
+      (
+        state.isOwner ||
+        String(item.addedBy || "") ===
+          String(state.uid || "")
+      )
+    ) {
       await state.queueRef
         .child(queueId)
         .remove();
@@ -7140,6 +7151,10 @@
       seekJump &&
       Date.now() >=
         Number(
+          state.playbackResumeRecoveryUntil || 0
+        ) &&
+      Date.now() >=
+        Number(
           state.playbackLocalSeekSuppressUntil || 0
         ) &&
       Date.now() >=
@@ -7277,12 +7292,62 @@
   }
 
   function recoverPlaybackAfterPageResume() {
-    clearTimeout(state.playbackRecoveryTimer);
-    state.playbackRecoveryTimer = setTimeout(async () => {
-      state.playbackRecoveryTimer = null;
-      await applyLatestRoomPlaybackState(true);
-      startPlaybackSeekDetector();
-    }, 120);
+    clearTimeout(
+      state.playbackRecoveryTimer
+    );
+
+    state.playbackRecoveryTimer =
+      setTimeout(
+        async () => {
+          state.playbackRecoveryTimer =
+            null;
+
+          state.playbackResumeRecoveryUntil =
+            Date.now() + 1800;
+
+          const ref =
+            playbackSyncRef();
+
+          try {
+            if (ref) {
+              const event =
+                (
+                  await ref.once("value")
+                ).val();
+
+              if (
+                event &&
+                event.eventId
+              ) {
+                rememberRoomTimeline(
+                  event
+                );
+              }
+            }
+          } catch (error) {
+            console.warn(
+              "恢復同步時間軸失敗:",
+              error
+            );
+          }
+
+          state.playbackLocalSeekSuppressUntil =
+            Date.now() + 1800;
+
+          startPlaybackSeekDetector();
+
+          setTimeout(() => {
+            if (
+              state.roomId &&
+              state.playerReady &&
+              state.player
+            ) {
+              void reconcileRoomTimeline();
+            }
+          }, 80);
+        },
+        120
+      );
   }
 
   /*
@@ -8116,10 +8181,24 @@
    */
 
   async function changeVideo(
-    video
+    video,
+    options = {}
   ) {
-    if (!state.isOwner) {
+    const allowMember =
+      options?.allowMember === true;
+
+    if (
+      !state.isOwner &&
+      !allowMember
+    ) {
       throw new Error("只有房主可以更換影片");
+    }
+
+    if (
+      !state.isOwner &&
+      !state.uid
+    ) {
+      throw new Error("目前不在房間內");
     }
     if (
       !video?.id &&
@@ -8513,6 +8592,8 @@
     state.playbackLocalControlUntil =
       0;
     state.playbackLocalSeekSuppressUntil =
+      0;
+    state.playbackResumeRecoveryUntil =
       0;
     state.playbackIsBuffering = false;
     state.playbackYoutubeRates = null;
