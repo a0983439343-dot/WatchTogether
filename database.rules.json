@@ -5,7 +5,8 @@
         ".read": "auth != null && (data.child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists())",
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.numChildren() === 3 && newData.hasChildren(['owner','name','sourceType'])",
         "owner": {
-          ".write": "false"
+          ".write": "auth != null && (( !data.exists() && newData.exists() && newData.val() === auth.uid ) || (data.exists() && data.val() === auth.uid && newData.isString() && (newData.val() === auth.uid || root.child('members').child($roomId).child(newData.val()).exists())))",
+          ".validate": "newData.isString() && (newData.val() === (data.val() || auth.uid) || root.child('members').child($roomId).child(newData.val()).exists())"
         },
         "name": {
           ".write": "auth != null && root.child('rooms').child($roomId).child('owner').val() === auth.uid && newData.isString() && newData.val().length > 0 && newData.val().length <= 40",
@@ -69,6 +70,10 @@
       "$roomId": {
         ".read": "auth != null",
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.numChildren() === 2",
+        "owner": {
+          ".write": "auth != null && (( !data.exists() && newData.exists() && newData.val() === auth.uid ) || (data.exists() && data.val() === auth.uid && newData.isString() && (newData.val() === auth.uid || root.child('members').child($roomId).child(newData.val()).exists())))",
+          ".validate": "newData.isString() && (newData.val() === (data.val() || auth.uid) || root.child('members').child($roomId).child(newData.val()).exists())"
+        },
         ".validate": "newData.hasChildren(['owner','name']) && newData.numChildren() === 2 && newData.child('owner').isString() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40"
       }
     }
