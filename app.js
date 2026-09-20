@@ -1030,21 +1030,27 @@
           "已連線";
       }
 
-      /*
-       * Google 登入後隱藏登入按鈕。
-       */
+      const isGoogleUser =
+        !currentUser.isAnonymous;
+
       loginButton?.classList.toggle(
         "hidden",
-        !currentUser.isAnonymous
+        isGoogleUser
       );
 
-      accountButton?.classList.add(
-        "hidden"
+      accountButton?.classList.toggle(
+        "hidden",
+        !isGoogleUser
       );
+
+      if (accountButton) {
+        accountButton.textContent =
+          "改名";
+      }
 
       logoutButton?.classList.toggle(
         "hidden",
-        currentUser.isAnonymous
+        !isGoogleUser
       );
 
       return;
