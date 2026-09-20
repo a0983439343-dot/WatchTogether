@@ -997,8 +997,7 @@
       if (container.scrollHeight > container.clientHeight) {
         container.style.overflowY = "auto";
       }
-    });
-  }
+    });  }
 
 
   /*
@@ -1007,7 +1006,7 @@
    * =========================================================
    */
 
-  function updateAuthUI() {
+  function updateAuthUI(user = undefined) {
     const loginButton =
       $("googleLoginBtn");
 
@@ -1021,8 +1020,12 @@
       $("authStatus");
 
     const currentUser =
-      auth?.currentUser ||
-      null;
+      user !== undefined
+        ? user
+        : (
+            auth?.currentUser ||
+            null
+          );
 
     if (currentUser) {
       if (authStatus) {
@@ -1130,7 +1133,7 @@
             null;
         }
 
-        updateAuthUI();
+        updateAuthUI(user);
       }
     );
 
@@ -1243,7 +1246,7 @@
           } catch (_) {}
         }
 
-        updateAuthUI();
+        updateAuthUI(user);
 
         toast(
           "Google 登入成功"
@@ -1997,8 +2000,7 @@
             )
               ? detailData.items
               : []
-          ) {
-            detailMap[item.id] =
+          ) {            detailMap[item.id] =
               item;
           }
         }
@@ -2997,8 +2999,7 @@
 
   /*
    * =========================================================
-   * QUEUE
-   * =========================================================
+   * QUEUE   * =========================================================
    */
 
   async function addToQueue(video) {
@@ -3997,8 +3998,7 @@
   }
 
 
-  async function pausePlayer() {
-    if (
+  async function pausePlayer() {    if (
       !state.playerReady ||
       !state.player
     ) {
@@ -4997,8 +4997,7 @@
 
     if (!container) {
       throw new Error(
-        "找不到 vimeoPlayer"
-      );
+        "找不到 vimeoPlayer"      );
     }
 
     container.src =
@@ -5997,8 +5996,7 @@
   function markLocalPlaybackIntent(kind = "") {
     state.playbackLocalIntentAt = Date.now();
     state.playbackUserActionKind = kind;
-    state.playbackUserActionUntil = Date.now() + 900;
-  }
+    state.playbackUserActionUntil = Date.now() + 900;  }
 
   function cancelPendingPausePublish() {
     clearTimeout(state.playbackPausePublishTimer);
@@ -6997,7 +6995,6 @@
             state.playerType === "youtube"
               ? absDrift >= youtubeHardSeekThreshold && !useYoutubeFineRate
               : absDrift >= 1.0;
-
           if (shouldSeek) {
             try {
               await applyPlayerPosition(expected);
@@ -7997,8 +7994,7 @@
                   class="member-name"
                   style="
                     min-width:0;
-                    flex:1;
-                  "
+                    flex:1;                  "
                 >
 
                   <b>
@@ -8997,8 +8993,7 @@
       ?.addEventListener(
         "click",
         async () => {
-          if (
-            !state.playerReady ||
+          if (            !state.playerReady ||
             !state.player
           ) {
             return;
