@@ -13,6 +13,8 @@
     "AIzaSyA77rYYAE8G6BVrY91aQztCA-8L5WyLzGY";
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 50;
+  const YOUTUBE_MAX_SEARCH_PAGES = 2;
+  const YOUTUBE_SEARCH_COOLDOWN_MS = 1500;
 
   const PLATFORMS = {
     youtube: {
@@ -164,6 +166,10 @@
     searchQuery: "",
 
     searchLoadingMore: false,
+
+    searchPageCount: 0,
+
+    lastYoutubeSearchAt: 0,
 
     searchBusy: false,
 
@@ -1915,14 +1921,34 @@
 
     if (
       append &&
-      state.searchQuery === query &&
-      !state.searchNextPageToken
+      state.searchPageCount >=
+        YOUTUBE_MAX_SEARCH_PAGES
     ) {
+      state.searchNextPageToken =
+        "";
+
       toast(
-        "已經沒有更多結果"
+        "為避免濫用，單次搜尋最多載入 " +
+        YOUTUBE_MAX_SEARCH_PAGES +
+        " 頁"
       );
 
       return [];
+    }
+
+    const now =
+      Date.now();
+
+    if (
+      now -
+      Number(
+        state.lastYoutubeSearchAt || 0
+      ) <
+      YOUTUBE_SEARCH_COOLDOWN_MS
+    ) {
+      throw new Error(
+        "搜尋太頻繁，請稍候再試"
+      );
     }
 
     const url =
@@ -1986,6 +2012,9 @@
       "key",
       YOUTUBE_API_KEY
     );
+
+    state.lastYoutubeSearchAt =
+      now;
 
     const response =
       await fetch(
@@ -2165,9 +2194,21 @@
         })
         .filter(Boolean);
 
+    state.searchPageCount =
+      append
+        ? Number(
+            state.searchPageCount || 0
+          ) + 1
+        : 1;
+
     state.searchNextPageToken =
-      data.nextPageToken ||
-      "";
+      state.searchPageCount <
+      YOUTUBE_MAX_SEARCH_PAGES
+        ? (
+            data.nextPageToken ||
+            ""
+          )
+        : "";
 
     state.searchQuery =
       query;
@@ -2315,76 +2356,12 @@
 
 
   function setupYoutubeInfiniteScroll() {
+    /*
+     * 不再使用捲動自動分頁，避免公開 API Key
+     * 被自動連續消耗配額。
+     * 使用者只能透過按鈕載入下一頁。
+     */
     disconnectSearchObserver();
-
-    const container =
-      $("modalVideoSearchResults");
-
-    if (!container) {
-      return;
-    }
-
-    const sentinel =
-      $("youtubeLoadMore");
-
-    if (
-      !sentinel ||
-      !state.searchNextPageToken
-    ) {
-      return;
-    }
-
-    if (
-      typeof IntersectionObserver ===
-      "undefined"
-    ) {
-      return;
-    }
-
-    const observer =
-      new IntersectionObserver(
-        (entries) => {
-          const entry =
-            entries[0];
-
-          if (
-            !entry?.isIntersecting
-          ) {
-            return;
-          }
-
-          if (
-            state.searchLoadingMore
-          ) {
-            return;
-          }
-
-          if (
-            !state.searchNextPageToken
-          ) {
-            return;
-          }
-
-          void loadMoreYoutubeResults();
-        },
-        {
-          root:
-            container,
-
-          rootMargin:
-            "800px 0px",
-
-          threshold:
-            0.01
-        }
-      );
-
-    container.__youtubeObserver =
-      observer;
-
-    observer.observe(
-      sentinel
-    );
   }
 
 
@@ -2652,7 +2629,7 @@
                 font-size:11px;
               "
             >
-              繼續往下滑會自動載入更多
+              單次搜尋最多載入 2 頁，請按按鈕載入下一頁。
             </div>
 
           </div>
@@ -3178,6 +3155,10 @@
 
 
   async function playQueueItem(queueId) {
+    if (!state.isOwner) {
+      throw new Error("只有房主可以播放待播放清單");
+    }
+
     if (!state.uid || !state.roomId) {
       throw new Error("目前不在房間內");
     }
@@ -3220,10 +3201,7 @@
     }
 
     await changeVideo(
-      video,
-      {
-        allowMember: true
-      }
+      video
     );
 
     if (
@@ -3392,15 +3370,15 @@
                 "
               >
 
-                <button
-                  type="button"
-                  class="tiny-btn"
-                  data-queue-play="${escapeHtml(
-                    item.queueId
-                  )}"
-                >
-                  ▶ 播放
-                </button>
+                ${state.isOwner ? `
+                  <button
+                    type="button"
+                    class="tiny-btn"
+                    data-queue-play="${item.queueId}"
+                  >
+                    ▶ 播放
+                  </button>
+                ` : ""}
 
                 ${
                   state.isOwner || String(item.addedBy || "") === String(state.uid || "")
@@ -3481,6 +3459,10 @@
 
 
   async function playNextQueueItem() {
+    if (!state.isOwner) {
+      return false;
+    }
+
     const list =
       getSortedQueue();
 
@@ -6590,8 +6572,13 @@
     effectiveAt = 0
   ) {
     if (
-      !state.uid || !state.roomId || !state.playerReady || !state.player ||
-      !state.currentVideoId || state.playbackApplyingRemote
+      !state.isOwner ||
+      !state.uid ||
+      !state.roomId ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId ||
+      state.playbackApplyingRemote
     ) return null;
 
     const ref = playbackSyncRef();
@@ -6762,8 +6749,13 @@
     effectiveAt = 0
   ) {
     if (
-      !state.uid || !state.roomId || !state.playerReady || !state.player ||
-      !state.currentVideoId || state.playbackApplyingRemote
+      !state.isOwner ||
+      !state.uid ||
+      !state.roomId ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId ||
+      state.playbackApplyingRemote
     ) return;
     if (state.playerType === "bilibili" || state.playerType === "external") return;
     if (Date.now() < Number(state.playbackAdGuardUntil || 0)) return;
@@ -7430,14 +7422,35 @@
     const element =
       $("roomOwnerStatus");
 
-    if (!element) {
-      return;
+    if (element) {
+      element.textContent =
+        state.isOwner
+          ? "👑 房主"
+          : "👥 成員";
     }
 
-    element.textContent =
-      state.isOwner
-        ? "👑 房主"
-        : "👥 成員";
+    [
+      "playPauseBtn",
+      "backBtn",
+      "forwardBtn",
+      "changeSourceBtn",
+      "playQueueNowBtn"
+    ].forEach((id) => {
+      const button =
+        $(id);
+
+      if (!button) {
+        return;
+      }
+
+      button.disabled =
+        !state.isOwner;
+
+      button.title =
+        state.isOwner
+          ? ""
+          : "只有房主可以控制播放";
+    });
   }
 
 
@@ -8250,20 +8263,11 @@
     video,
     options = {}
   ) {
-    const allowMember =
-      options?.allowMember === true;
-
-    if (
-      !state.isOwner &&
-      !allowMember
-    ) {
+    if (!state.isOwner) {
       throw new Error("只有房主可以更換影片");
     }
 
-    if (
-      !state.isOwner &&
-      !state.uid
-    ) {
+    if (!state.uid) {
       throw new Error("目前不在房間內");
     }
     if (
@@ -8422,6 +8426,9 @@
     state.searchNextPageToken =
       "";
 
+    state.searchPageCount =
+      0;
+
     state.searchQuery =
       "";
 
@@ -8521,6 +8528,9 @@
 
     state.searchNextPageToken =
       "";
+
+    state.searchPageCount =
+      0;
 
     state.searchQuery =
       "";
@@ -9437,6 +9447,9 @@
 
           state.searchNextPageToken =
             "";
+
+          state.searchPageCount =
+            0;
 
           state.searchQuery =
             query;
