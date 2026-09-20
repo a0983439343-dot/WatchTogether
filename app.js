@@ -1020,17 +1020,16 @@
       $("authStatus");
 
     const currentUser =
-      user !== undefined
-        ? user
-        : (
-            auth?.currentUser ||
-            null
-          );
+      auth?.currentUser ||
+      user ||
+      null;
 
     if (currentUser) {
       if (authStatus) {
         authStatus.textContent =
-          "已連線";
+          currentUser.isAnonymous
+            ? "訪客模式"
+            : "已登入 Google";
       }
 
       const isGoogleUser =
@@ -1243,7 +1242,7 @@
       !auth ||
       state.googleRedirectHandled
     ) {
-      return;
+      return null;
     }
 
     state.googleRedirectHandled =
@@ -1253,32 +1252,41 @@
       const result =
         await auth.getRedirectResult();
 
-      if (result?.user) {
-        const user =
-          result.user;
+      const user =
+        result?.user ||
+        auth.currentUser ||
+        null;
 
-        state.uid =
-          user.uid;
+      if (!user) {
+        return null;
+      }
 
-        if (
-          user.displayName &&
-          !localStorage.getItem(
-            "wt_name"
-          )
-        ) {
-          try {
-            setMemberName(
-              user.displayName
-            );
-          } catch (_) {}
-        }
+      state.uid =
+        user.uid;
 
-        updateAuthUI(user);
+      if (
+        !user.isAnonymous &&
+        user.displayName &&
+        !localStorage.getItem(
+          "wt_name"
+        )
+      ) {
+        try {
+          setMemberName(
+            user.displayName
+          );
+        } catch (_) {}
+      }
 
+      updateAuthUI(user);
+
+      if (!user.isAnonymous) {
         toast(
           "Google 登入成功"
         );
       }
+
+      return user;
     } catch (error) {
       console.error(
         "Google 登入失敗:",
@@ -1289,6 +1297,8 @@
         error?.message ||
         "Google 登入失敗"
       );
+
+      return null;
     }
   }
 
@@ -9745,20 +9755,32 @@
       await initializeFirebase();
 
       /*
-       * 先處理 Google Redirect。
-       * 這一步不能被匿名登入卡住。
+       * 先等待 Firebase 完成第一次 Auth 狀態初始化。
        */
-      await handleGoogleRedirectResult();
-
       const initialUser =
         await waitForInitialAuthState();
 
-      if (initialUser) {
+      /*
+       * 再處理 Google Redirect。
+       */
+      const redirectUser =
+        await handleGoogleRedirectResult();
+
+      /*
+       * Redirect 使用者優先，避免舊狀態覆蓋 Google 登入。
+       */
+      const currentUser =
+        auth?.currentUser ||
+        redirectUser ||
+        initialUser ||
+        null;
+
+      if (currentUser) {
         state.uid =
-          initialUser.uid;
+          currentUser.uid;
 
         updateAuthUI(
-          initialUser
+          currentUser
         );
       }
 
@@ -9773,7 +9795,7 @@
        * 沒有現有 Firebase 使用者時才建立訪客帳號。
        * 匿名登入失敗不再讓整個網站初始化中止。
        */
-      if (!initialUser) {
+      if (!currentUser) {
         try {
           await ensureAnonymousAuth();
         } catch (error) {
