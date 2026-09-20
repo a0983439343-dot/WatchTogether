@@ -9,6 +9,70 @@
   <link rel="icon" href="data:,">
   <title>WatchTogether｜一起看</title>
 
+  <!--
+    GitHub Pages 沒有可自訂的 HTTP COOP header。
+    先註冊同源 Service Worker，讓後續頁面導覽使用
+    same-origin-allow-popups，以相容 Firebase Google Popup Auth。
+  -->
+  <script>
+  (() => {
+    if (!("serviceWorker" in navigator)) {
+      return;
+    }
+
+    window.addEventListener("load", async () => {
+      try {
+        const registration =
+          await navigator.serviceWorker.register(
+            "./sw.js?v=20260920-2355-coop",
+            {
+              scope: "./"
+            }
+          );
+
+        await registration.update();
+
+        if (
+          !navigator.serviceWorker.controller &&
+          !sessionStorage.getItem(
+            "wt-sw-coop-reloaded"
+          )
+        ) {
+          sessionStorage.setItem(
+            "wt-sw-coop-reloaded",
+            "1"
+          );
+
+          navigator.serviceWorker.addEventListener(
+            "controllerchange",
+            () => {
+              window.location.reload();
+            },
+            { once: true }
+          );
+
+          setTimeout(() => {
+            if (
+              !navigator.serviceWorker.controller
+            ) {
+              window.location.reload();
+            }
+          }, 1200);
+        } else {
+          sessionStorage.removeItem(
+            "wt-sw-coop-reloaded"
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[WatchTogether] Service Worker 註冊失敗:",
+          error
+        );
+      }
+    });
+  })();
+  </script>
+
   <link rel="stylesheet" href="styles.css">
 </head>
 
