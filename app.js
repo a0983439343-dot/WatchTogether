@@ -523,6 +523,31 @@
     const chars =
       "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+    const values =
+      new Uint32Array(
+        12
+      );
+
+    if (
+      window.crypto?.getRandomValues
+    ) {
+      window.crypto.getRandomValues(
+        values
+      );
+    } else {
+      for (
+        let i = 0;
+        i < values.length;
+        i++
+      ) {
+        values[i] =
+          Math.floor(
+            Math.random() *
+            0xffffffff
+          );
+      }
+    }
+
     let result = "";
 
     for (
@@ -532,10 +557,8 @@
     ) {
       result +=
         chars[
-          Math.floor(
-            Math.random() *
-            chars.length
-          )
+          values[i] %
+          chars.length
         ];
     }
 
@@ -6006,7 +6029,7 @@
       )
     ) {
       throw new Error(
-        "房間碼必須是 6 碼"
+        "房間碼必須是 6 或 12 碼"
       );
     }
 
