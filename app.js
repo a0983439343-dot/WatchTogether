@@ -8032,6 +8032,12 @@
         ?.child("owner")
         .onDisconnect()
         .cancel();
+
+      await db.ref(
+        `roomMeta/${state.roomId}/owner`
+      )
+        .onDisconnect()
+        .cancel();
     } catch (_) {}
 
     return nextOwnerUid;
