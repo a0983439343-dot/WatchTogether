@@ -1,0 +1,36 @@
+name: Validate WatchTogether
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check app.js syntax
+        run: node --check app.js
+
+      - name: Validate JSON files
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8')); JSON.parse(require('fs').readFileSync('firebase.json','utf8')); console.log('JSON OK')"
+
+      - name: Check for exposed YouTube API key
+        run: |
+          if grep -Eq 'AIza[0-9A-Za-z_-]{20,}' app.js firebase-config.js workers/*.js; then
+            echo 'Detected a Google API key in frontend/source files.'
+            exit 1
+          fi
+
+      - name: Check for Popup API regression
+        run: |
+          if grep -Eq 'signInWithRedirect|linkWithRedirect' app.js; then
+            echo 'Unexpected Redirect Auth API detected.'
+            exit 1
+          fi
