@@ -2048,15 +2048,23 @@
         return null;
       }
 
+      /*
+       * Twitch Clip 可能出現兩種常見網址：
+       * 1. https://clips.twitch.tv/<slug>
+       * 2. https://www.twitch.tv/<channel>/clip/<slug>
+       *
+       * 官方嵌入使用 clip slug。
+       */
       if (
-        parts[0] === "videos" &&
-        parts[1]
+        url.hostname ===
+          "clips.twitch.tv" &&
+        parts[0]
       ) {
         return {
           type:
-            "video",
+            "clip",
           value:
-            parts[1]
+            parts[0]
         };
       }
 
@@ -2067,6 +2075,31 @@
         return {
           type:
             "clip",
+          value:
+            parts[1]
+        };
+      }
+
+      if (
+        parts.length >= 3 &&
+        parts[1] === "clip" &&
+        parts[2]
+      ) {
+        return {
+          type:
+            "clip",
+          value:
+            parts[2]
+        };
+      }
+
+      if (
+        parts[0] === "videos" &&
+        parts[1]
+      ) {
+        return {
+          type:
+            "video",
           value:
             parts[1]
         };
