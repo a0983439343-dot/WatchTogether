@@ -2236,9 +2236,6 @@
       );
     }
 
-    state.lastYoutubeSearchAt =
-      now;
-
     /*
      * YouTube API Key 永遠不放在瀏覽器。
      * 搜尋請求必須帶 Firebase Auth ID Token，
@@ -2299,6 +2296,14 @@
             "omit"
         }
       );
+
+    /*
+     * 只有真正送出搜尋後才開始冷卻計時。
+     * 驗證失敗、Token 失效或網路錯誤不應把使用者
+     * 鎖進下一次「搜尋太頻繁」。
+     */
+    state.lastYoutubeSearchAt =
+      Date.now();
 
     if (!response.ok) {
       let message =
@@ -8068,26 +8073,58 @@
   async function heartbeatMember() {
     if (
       !state.membersRef ||
-      !state.uid
+      !state.uid ||
+      state.leavingRoom ||
+      !state.wasMemberInRoom
     ) {
       return;
     }
 
     try {
-      await state.membersRef
-        .child(
+      const memberRef =
+        state.membersRef.child(
           state.uid
-        )
-        .update({
-          online:
-            true,
+        );
 
-          lastSeen:
-            firebase.database
-              .ServerValue
-              .TIMESTAMP
-        });
-    } catch (_) {}
+      const memberSnapshot =
+        await memberRef.once(
+          "value"
+        );
+
+      /*
+       * 房主踢人、主動離開、斷線重連的競速期間，
+       * 成員節點可能已經不存在。這時不要再寫入，
+       * 否則會被 members 的資料驗證規則拒絕。
+       */
+      if (
+        !memberSnapshot.exists() ||
+        state.leavingRoom
+      ) {
+        return;
+      }
+
+      await memberRef.update({
+        online:
+          true,
+
+        lastSeen:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP
+      });
+    } catch (error) {
+      /*
+       * 成員已被移除時不要製造無意義的 Firebase WARNING。
+       */
+      if (
+        !state.leavingRoom
+      ) {
+        console.warn(
+          "成員心跳更新失敗:",
+          error
+        );
+      }
+    }
   }
 
 
@@ -8330,13 +8367,22 @@
     );
 
     try {
+      /*
+       * 這裡不再對 members/{uid} 做最後一次 update。
+       * 主動離開與被踢時，該節點可能已經先被 remove()；
+       * 再 update 會觸發 members 的 .validate 而產生
+       * permission_denied。
+       */
       const memberRef =
-        state.membersRef?.child(state.uid || "");
-      if (memberRef && state.uid && state.membersRef) {
-        await memberRef.update({
-          online: false,
-          lastSeen: firebase.database.ServerValue.TIMESTAMP
-        });
+        state.membersRef?.child(
+          state.uid || ""
+        );
+
+      if (
+        memberRef &&
+        state.uid &&
+        state.membersRef
+      ) {
         await memberRef.onDisconnect().cancel();
       }
     } catch (_) {}
