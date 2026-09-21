@@ -2202,6 +2202,48 @@
     state.lastYoutubeSearchAt =
       now;
 
+    /*
+     * YouTube API Key 永遠不放在瀏覽器。
+     * 搜尋請求必須帶 Firebase Auth ID Token，
+     * 由 Worker 驗證登入身分後才代呼叫 YouTube Data API。
+     */
+    let searchUser =
+      auth?.currentUser ||
+      null;
+
+    if (
+      !searchUser &&
+      typeof ensureAnonymousAuth ===
+        "function"
+    ) {
+      searchUser =
+        await ensureAnonymousAuth();
+    }
+
+    if (!searchUser) {
+      throw new Error(
+        "登入狀態尚未準備完成，請稍候再搜尋"
+      );
+    }
+
+    let searchIdToken = "";
+
+    try {
+      searchIdToken =
+        await searchUser.getIdToken(
+          false
+        );
+    } catch (tokenError) {
+      console.error(
+        "取得 YouTube 搜尋驗證 Token 失敗:",
+        tokenError
+      );
+
+      throw new Error(
+        "登入驗證失敗，請重新整理頁面後再試"
+      );
+    }
+
     const response =
       await fetch(
         url.toString(),
@@ -2210,7 +2252,11 @@
             "GET",
           headers: {
             Accept:
-              "application/json"
+              "application/json",
+
+            Authorization:
+              "Bearer " +
+              searchIdToken
           },
           credentials:
             "omit"
