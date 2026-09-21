@@ -271,6 +271,8 @@
 
     kickedLocally: false,
 
+    leavingRoom: false,
+
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -7907,21 +7909,20 @@
       $("changeSourceBtn");
 
     if (changeSourceButton) {
-      const actualOwner =
+      const canChangeSource =
         Boolean(
           state.roomId &&
-          state.room?.owner &&
-          state.room.owner ===
-            state.uid
+          state.uid &&
+          state.room
         );
 
       changeSourceButton.disabled =
-        !actualOwner;
+        !canChangeSource;
 
       changeSourceButton.title =
-        actualOwner
-          ? ""
-          : "只有房主可以更換影片";
+        canChangeSource
+          ? "所有房間成員都可以更換影片"
+          : "目前尚未進入房間";
     }
 
     [
@@ -8275,6 +8276,13 @@
       return;
     }
 
+    /*
+     * 先標記為主動離開，避免 members value listener
+     * 在 remove() 瞬間把正常離開誤判成「被踢」。
+     */
+    state.leavingRoom =
+      true;
+
     if (
       state.isOwner
     ) {
@@ -8377,6 +8385,9 @@
       ) + 1;
 
     state.kickedLocally =
+      false;
+
+    state.leavingRoom =
       false;
 
     history.replaceState(
@@ -8598,6 +8609,7 @@
           if (
             state.wasMemberInRoom &&
             state.uid &&
+            !state.leavingRoom &&
             !Object.prototype.hasOwnProperty.call(
               members,
               state.uid
@@ -8997,12 +9009,28 @@
     video,
     options = {}
   ) {
-    if (!state.isOwner) {
-      throw new Error("只有房主可以更換影片");
+    if (!state.uid || !state.roomId || !state.room || !state.membersRef) {
+      throw new Error("目前不在房間內");
     }
 
-    if (!state.uid) {
-      throw new Error("目前不在房間內");
+    /*
+     * 選擇 / 更換影片是房間成員權限。
+     * 播放、暫停、跳轉等控制仍由房主負責。
+     */
+    let isCurrentMember = false;
+
+    try {
+      const memberSnapshot =
+        await state.membersRef
+          .child(state.uid)
+          .once("value");
+
+      isCurrentMember =
+        memberSnapshot.exists();
+    } catch (_) {}
+
+    if (!isCurrentMember) {
+      throw new Error("你已不在這個房間");
     }
     if (
       !video?.id &&
