@@ -6054,6 +6054,14 @@
         randomRoomCode();
     }
 
+    /*
+     * 建立房間時先不要寫 video。
+     *
+     * 新版 RTDB Rules 會在房間尚未存在時檢查子節點權限；
+     * 初始 video:null 沒有必要，而且會讓 video 子節點的
+     * owner-only write 條件在同一次建立操作中互相衝突。
+     * 進房後再由房主選擇影片即可。
+     */
     const room = {
       owner:
         state.uid,
@@ -6062,10 +6070,7 @@
         roomName,
 
       sourceType:
-        sourceType,
-
-      video:
-        null
+        sourceType
     };
 
     await db
@@ -6081,8 +6086,11 @@
     state.roomId =
       roomId;
 
-    state.room =
-      room;
+    state.room = {
+      ...room,
+      video:
+        null
+    };
 
     state.isOwner =
       true;
