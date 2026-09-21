@@ -19,6 +19,6 @@ window.FIREBASE_CONFIG = {
  * 留空時會使用 Dailymotion 官方 default Player iframe。
  */
 window.WATCHTOGETHER_CONFIG = {
-  youtubeSearchProxyUrl: "",
+  youtubeSearchProxyUrl: "https://watchtogether-youtube-search.a0983439343.workers.dev",
   dailymotionPlayerId: ""
 };
