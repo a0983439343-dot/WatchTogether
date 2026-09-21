@@ -2,26 +2,51 @@
  * WatchTogether - YouTube Search Proxy
  *
  * Deploy this file as a Cloudflare Worker.
- * Add a Worker secret:
- *   YOUTUBE_API_KEY=<new YouTube Data API key>
  *
- * Optional Worker variable:
+ * Required Worker secrets / variables:
+ *   YOUTUBE_API_KEY=<new YouTube Data API key>
+ *   FIREBASE_PROJECT_ID=watchtogether-3f4f9
  *   ALLOWED_ORIGIN=https://a0983439343-dot.github.io
  *
  * The browser NEVER receives the YouTube API key.
+ *
+ * The Worker requires a Firebase Auth ID token and verifies it
+ * against Google's Secure Token certificates before allowing
+ * a YouTube API request.
  */
 
 const DEFAULT_ALLOWED_ORIGIN =
   "https://a0983439343-dot.github.io";
 
+const DEFAULT_FIREBASE_PROJECT_ID =
+  "watchtogether-3f4f9";
+
 const CACHE_TTL_SECONDS = 30;
 const RATE_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT = 20;
+const IP_RATE_LIMIT = 20;
+const USER_RATE_LIMIT = 12;
+const MAX_QUERY_LENGTH = 100;
+const MAX_RESULTS = 25;
 
 const ipBuckets =
   new Map();
 
-function corsHeaders(origin, allowedOrigin) {
+const userBuckets =
+  new Map();
+
+const keyCache =
+  new Map();
+
+const certCache =
+  {
+    expiresAt: 0,
+    certs: null
+  };
+
+function corsHeaders(
+  origin,
+  allowedOrigin
+) {
   const allowed =
     allowedOrigin === "*"
       ? "*"
@@ -30,10 +55,17 @@ function corsHeaders(origin, allowedOrigin) {
         : allowedOrigin;
 
   return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Accept, Content-Type",
-    "Vary": "Origin"
+    "Access-Control-Allow-Origin":
+      allowed,
+
+    "Access-Control-Allow-Methods":
+      "GET, OPTIONS",
+
+    "Access-Control-Allow-Headers":
+      "Accept, Authorization, Content-Type",
+
+    "Vary":
+      "Origin"
   };
 }
 
@@ -41,15 +73,21 @@ function jsonResponse(
   body,
   status = 200,
   origin = "",
-  allowedOrigin = DEFAULT_ALLOWED_ORIGIN
+  allowedOrigin =
+    DEFAULT_ALLOWED_ORIGIN
 ) {
   return new Response(
     JSON.stringify(body),
     {
       status,
+
       headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Content-Type":
+          "application/json; charset=utf-8",
+
+        "Cache-Control":
+          "no-store",
+
         ...corsHeaders(
           origin,
           allowedOrigin
@@ -59,43 +97,384 @@ function jsonResponse(
   );
 }
 
-function parseIsoDuration(value) {
-  const text =
-    String(value || "");
+function base64UrlToBytes(
+  value
+) {
+  const normalized =
+    String(value || "")
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
 
+  const padded =
+    normalized +
+    "=".repeat(
+      (4 -
+        (normalized.length %
+          4)) %
+        4
+    );
+
+  const binary =
+    atob(padded);
+
+  const bytes =
+    new Uint8Array(
+      binary.length
+    );
+
+  for (
+    let i = 0;
+    i < binary.length;
+    i++
+  ) {
+    bytes[i] =
+      binary.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+function decodeBase64UrlJson(
+  value
+) {
+  const bytes =
+    base64UrlToBytes(value);
+
+  const text =
+    new TextDecoder().decode(
+      bytes
+    );
+
+  return JSON.parse(text);
+}
+
+function pemToArrayBuffer(
+  pem
+) {
+  const base64 =
+    String(pem || "")
+      .replace(
+        /-----BEGIN CERTIFICATE-----/g,
+        ""
+      )
+      .replace(
+        /-----END CERTIFICATE-----/g,
+        ""
+      )
+      .replace(
+        /\s+/g,
+        ""
+      );
+
+  const binary =
+    atob(base64);
+
+  const bytes =
+    new Uint8Array(
+      binary.length
+    );
+
+  for (
+    let i = 0;
+    i < binary.length;
+    i++
+  ) {
+    bytes[i] =
+      binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
+
+function parseMaxAge(
+  cacheControl
+) {
   const match =
-    text.match(
-      /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/
+    String(
+      cacheControl || ""
+    ).match(
+      /max-age=(\\d+)/
     );
 
   if (!match) {
-    return 0;
+    return 3600;
   }
 
-  return (
-    Number(match[1] || 0) * 3600 +
-    Number(match[2] || 0) * 60 +
-    Number(match[3] || 0)
+  return Math.max(
+    300,
+    Math.min(
+      21600,
+      Number(
+        match[1]
+      )
+    )
   );
 }
 
-async function isRateLimited(ip) {
+async function getGoogleCerts() {
+  const now =
+    Date.now();
+
+  if (
+    certCache.certs &&
+    now <
+      certCache.expiresAt
+  ) {
+    return certCache.certs;
+  }
+
+  const response =
+    await fetch(
+      "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      "無法取得 Firebase 驗證憑證"
+    );
+  }
+
+  const certs =
+    await response.json();
+
+  certCache.certs =
+    certs;
+
+  certCache.expiresAt =
+    now +
+    parseMaxAge(
+      response.headers.get(
+        "Cache-Control"
+      )
+    ) *
+      1000;
+
+  return certs;
+}
+
+async function getVerifyKey(
+  kid
+) {
+  if (
+    keyCache.has(kid)
+  ) {
+    return keyCache.get(
+      kid
+    );
+  }
+
+  const certs =
+    await getGoogleCerts();
+
+  const pem =
+    certs?.[kid];
+
+  if (!pem) {
+    certCache.expiresAt =
+      0;
+
+    const refreshed =
+      await getGoogleCerts();
+
+    if (!refreshed?.[kid]) {
+      throw new Error(
+        "Firebase 驗證憑證不存在"
+      );
+    }
+
+    return getVerifyKey(
+      kid
+    );
+  }
+
+  const key =
+    await crypto.subtle.importKey(
+      "spki",
+      pemToArrayBuffer(
+        pem
+      ),
+      {
+        name:
+          "RSASSA-PKCS1-v1_5",
+        hash:
+          "SHA-256"
+      },
+      false,
+      [
+        "verify"
+      ]
+    );
+
+  keyCache.set(
+    kid,
+    key
+  );
+
+  return key;
+}
+
+async function verifyFirebaseIdToken(
+  token,
+  projectId
+) {
+  if (!token) {
+    return null;
+  }
+
+  const parts =
+    token.split(".");
+
+  if (
+    parts.length !== 3
+  ) {
+    throw new Error(
+      "Firebase Token 格式錯誤"
+    );
+  }
+
+  const header =
+    decodeBase64UrlJson(
+      parts[0]
+    );
+
+  const payload =
+    decodeBase64UrlJson(
+      parts[1]
+    );
+
+  if (
+    header?.alg !==
+      "RS256" ||
+    !header?.kid
+  ) {
+    throw new Error(
+      "Firebase Token 演算法錯誤"
+    );
+  }
+
+  const now =
+    Math.floor(
+      Date.now() / 1000
+    );
+
+  if (
+    !payload?.sub ||
+    typeof payload.sub !==
+      "string" ||
+    payload.sub.length >
+      128
+  ) {
+    throw new Error(
+      "Firebase Token 使用者錯誤"
+    );
+  }
+
+  if (
+    payload.aud !==
+      projectId
+  ) {
+    throw new Error(
+      "Firebase Token 專案錯誤"
+    );
+  }
+
+  if (
+    payload.iss !==
+      "https://securetoken.google.com/" +
+        projectId
+  ) {
+    throw new Error(
+      "Firebase Token 發行者錯誤"
+    );
+  }
+
+  if (
+    typeof payload.exp !==
+      "number" ||
+    payload.exp <= now
+  ) {
+    throw new Error(
+      "Firebase Token 已過期"
+    );
+  }
+
+  if (
+    typeof payload.iat !==
+      "number" ||
+    payload.iat >
+      now + 120
+  ) {
+    throw new Error(
+      "Firebase Token 時間錯誤"
+    );
+  }
+
+  const verifyKey =
+    await getVerifyKey(
+      header.kid
+    );
+
+  const encoder =
+    new TextEncoder();
+
+  const data =
+    encoder.encode(
+      parts[0] +
+        "." +
+        parts[1]
+    );
+
+  const signature =
+    base64UrlToBytes(
+      parts[2]
+    );
+
+  const valid =
+    await crypto.subtle.verify(
+      {
+        name:
+          "RSASSA-PKCS1-v1_5"
+      },
+      verifyKey,
+      signature,
+      data
+    );
+
+  if (!valid) {
+    throw new Error(
+      "Firebase Token 簽章驗證失敗"
+    );
+  }
+
+  return payload;
+}
+
+function isRateLimited(
+  bucketMap,
+  key,
+  limit
+) {
   const now =
     Date.now();
 
   const record =
-    ipBuckets.get(ip);
+    bucketMap.get(
+      key
+    );
 
   if (
     !record ||
-    now - record.start >=
+    now -
+      record.start >=
       RATE_WINDOW_MS
   ) {
-    ipBuckets.set(
-      ip,
+    bucketMap.set(
+      key,
       {
-        start: now,
-        count: 1
+        start:
+          now,
+        count:
+          1
       }
     );
 
@@ -106,14 +485,52 @@ async function isRateLimited(ip) {
 
   return (
     record.count >
-    RATE_LIMIT
+    limit
+  );
+}
+
+function parseIsoDuration(
+  value
+) {
+  const text =
+    String(
+      value || ""
+    );
+
+  const match =
+    text.match(
+      /^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/
+    );
+
+  if (!match) {
+    return 0;
+  }
+
+  return (
+    Number(
+      match[1] || 0
+    ) *
+      3600 +
+    Number(
+      match[2] || 0
+    ) *
+      60 +
+    Number(
+      match[3] || 0
+    )
   );
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(
+    request,
+    env,
+    ctx
+  ) {
     const url =
-      new URL(request.url);
+      new URL(
+        request.url
+      );
 
     const origin =
       request.headers.get(
@@ -133,7 +550,8 @@ export default {
       return new Response(
         null,
         {
-          status: 204,
+          status:
+            204,
           headers:
             corsHeaders(
               origin,
@@ -177,6 +595,58 @@ export default {
       );
     }
 
+    const authorization =
+      request.headers.get(
+        "Authorization"
+      ) || "";
+
+    const tokenMatch =
+      authorization.match(
+        /^Bearer\\s+(.+)$/i
+      );
+
+    if (!tokenMatch) {
+      return jsonResponse(
+        {
+          error: {
+            message:
+              "缺少登入驗證"
+          }
+        },
+        401,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    const projectId =
+      String(
+        env.FIREBASE_PROJECT_ID ||
+        DEFAULT_FIREBASE_PROJECT_ID
+      ).trim();
+
+    let firebaseUser = null;
+
+    try {
+      firebaseUser =
+        await verifyFirebaseIdToken(
+          tokenMatch[1],
+          projectId
+        );
+    } catch (error) {
+      return jsonResponse(
+        {
+          error: {
+            message:
+              "登入驗證失敗"
+          }
+        },
+        401,
+        origin,
+        allowedOrigin
+      );
+    }
+
     const apiKey =
       String(
         env.YOUTUBE_API_KEY ||
@@ -204,8 +674,15 @@ export default {
       "unknown";
 
     if (
-      await isRateLimited(
-        ip
+      isRateLimited(
+        ipBuckets,
+        ip,
+        IP_RATE_LIMIT
+      ) ||
+      isRateLimited(
+        userBuckets,
+        firebaseUser.sub,
+        USER_RATE_LIMIT
       )
     ) {
       return jsonResponse(
@@ -223,14 +700,15 @@ export default {
 
     const query =
       String(
-        url.searchParams.get("q") ||
-        ""
+        url.searchParams.get(
+          "q"
+        ) || ""
       ).trim();
 
     if (
       !query ||
       query.length >
-        100
+        MAX_QUERY_LENGTH
     ) {
       return jsonResponse(
         {
@@ -245,18 +723,27 @@ export default {
       );
     }
 
-    const maxResults =
-      Math.min(
-        25,
-        Math.max(
-          1,
-          Number(
-            url.searchParams.get(
-              "maxResults"
-            ) || 25
-          )
-        )
+    const requestedMaxResults =
+      Number(
+        url.searchParams.get(
+          "maxResults"
+        ) || MAX_RESULTS
       );
+
+    const maxResults =
+      Number.isFinite(
+        requestedMaxResults
+      )
+        ? Math.min(
+            MAX_RESULTS,
+            Math.max(
+              1,
+              Math.floor(
+                requestedMaxResults
+              )
+            )
+          )
+        : MAX_RESULTS;
 
     const pageToken =
       String(
@@ -270,11 +757,25 @@ export default {
 
     const cacheKey =
       new Request(
-        url.toString(),
-        {
-          method:
-            "GET"
-        }
+        "https://cache.watchtogether.local/youtube-search?" +
+          new URLSearchParams({
+            q:
+              query,
+            maxResults:
+              String(
+                maxResults
+              ),
+            regionCode:
+              "TW",
+            relevanceLanguage:
+              "zh-Hant",
+            safeSearch:
+              "moderate",
+            videoEmbeddable:
+              "true",
+            pageToken:
+              pageToken
+          }).toString()
       );
 
     const cached =
@@ -286,68 +787,68 @@ export default {
       return cached;
     }
 
-    const youtubeUrl =
+    const youtubeSearchUrl =
       new URL(
         "https://www.googleapis.com/youtube/v3/search"
       );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "part",
       "snippet"
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "q",
       query
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "type",
       "video"
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "maxResults",
       String(
         maxResults
       )
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "regionCode",
       "TW"
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "relevanceLanguage",
       "zh-Hant"
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "safeSearch",
       "moderate"
     );
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "videoEmbeddable",
       "true"
     );
 
     if (pageToken) {
-      youtubeUrl.searchParams.set(
+      youtubeSearchUrl.searchParams.set(
         "pageToken",
         pageToken
       );
     }
 
-    youtubeUrl.searchParams.set(
+    youtubeSearchUrl.searchParams.set(
       "key",
       apiKey
     );
 
     const response =
       await fetch(
-        youtubeUrl.toString()
+        youtubeSearchUrl.toString()
       );
 
     if (!response.ok) {
@@ -382,26 +883,119 @@ export default {
         ? data.items
         : [];
 
+    const ids =
+      items
+        .map(
+          (item) =>
+            item?.id?.videoId
+        )
+        .filter(Boolean);
+
+    let detailsById =
+      {};
+
+    if (ids.length) {
+      const detailsUrl =
+        new URL(
+          "https://www.googleapis.com/youtube/v3/videos"
+        );
+
+      detailsUrl.searchParams.set(
+        "part",
+        "contentDetails,statistics"
+      );
+
+      detailsUrl.searchParams.set(
+        "id",
+        ids.join(",")
+      );
+
+      detailsUrl.searchParams.set(
+        "key",
+        apiKey
+      );
+
+      const detailsResponse =
+        await fetch(
+          detailsUrl.toString()
+        );
+
+      if (
+        detailsResponse.ok
+      ) {
+        const detailsData =
+          await detailsResponse.json();
+
+        for (
+          const item of
+            Array.isArray(
+              detailsData?.items
+            )
+              ? detailsData.items
+              : []
+        ) {
+          detailsById[
+            item.id
+          ] =
+            item;
+        }
+      }
+    }
+
     const result = {
       items:
         items.map(
           (item) => {
             const id =
-              item?.id?.videoId;
+              item?.id?.videoId ||
+              "";
 
-            const snippet =
-              item?.snippet ||
+            const detail =
+              detailsById[id] ||
+              {};
+
+            const statistics =
+              detail.statistics ||
+              {};
+
+            const contentDetails =
+              detail.contentDetails ||
               {};
 
             return {
               id: {
                 videoId:
-                  id || ""
+                  id
               },
-              snippet
+
+              snippet:
+                item?.snippet ||
+                {},
+
+              viewCount:
+                Number(
+                  statistics.viewCount ||
+                    0
+                ),
+
+              likeCount:
+                Number(
+                  statistics.likeCount ||
+                    0
+                ),
+
+              duration:
+                contentDetails.duration ||
+                "",
+
+              durationSeconds:
+                parseIsoDuration(
+                  contentDetails.duration
+                )
             };
           }
         ),
+
       nextPageToken:
         data?.nextPageToken ||
         ""
@@ -413,12 +1007,16 @@ export default {
           result
         ),
         {
-          status: 200,
+          status:
+            200,
+
           headers: {
             "Content-Type":
               "application/json; charset=utf-8",
+
             "Cache-Control":
               `public, max-age=${CACHE_TTL_SECONDS}`,
+
             ...corsHeaders(
               origin,
               allowedOrigin
