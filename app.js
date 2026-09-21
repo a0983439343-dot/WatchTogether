@@ -8163,27 +8163,17 @@
       candidates[0][0];
 
     /*
-     * Multi-location update：
-     * 房間與房間 metadata 同步轉移，
-     * 避免新房主看到舊 owner。
+     * roomMeta 只是建立房間時的索引。
+     * 真正的房主只以 rooms/{roomId}/owner 為準，
+     * 因此轉移房主時只更新 rooms。
      */
-    await db.ref().update({
-      [`rooms/${state.roomId}/owner`]:
-        nextOwnerUid,
-
-      [`roomMeta/${state.roomId}/owner`]:
-        nextOwnerUid
-    });
+    await state.roomRef
+      .child("owner")
+      .set(nextOwnerUid);
 
     try {
       await state.roomRef
         ?.child("owner")
-        .onDisconnect()
-        .cancel();
-
-      await db.ref(
-        `roomMeta/${state.roomId}/owner`
-      )
         .onDisconnect()
         .cancel();
     } catch (_) {}
@@ -8237,12 +8227,6 @@
     try {
       await state.roomRef
         .child("owner")
-        .onDisconnect()
-        .set(nextOwnerUid);
-
-      await db.ref(
-        `roomMeta/${state.roomId}/owner`
-      )
         .onDisconnect()
         .set(nextOwnerUid);
     } catch (error) {
