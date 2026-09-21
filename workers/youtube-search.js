@@ -148,26 +148,20 @@ function decodeBase64UrlJson(
   return JSON.parse(text);
 }
 
-function pemToArrayBuffer(
-  pem
-) {
-  const base64 =
-    String(pem || "")
-      .replace(
-        /-----BEGIN CERTIFICATE-----/g,
-        ""
-      )
-      .replace(
-        /-----END CERTIFICATE-----/g,
-        ""
-      )
-      .replace(
-        /\s+/g,
-        ""
-      );
+function base64UrlToUint8Array(value) {
+  const normalized =
+    String(value || "")
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+  const padded =
+    normalized +
+    "=".repeat(
+      (4 - (normalized.length % 4)) % 4
+    );
 
   const binary =
-    atob(base64);
+    atob(padded);
 
   const bytes =
     new Uint8Array(
@@ -183,17 +177,15 @@ function pemToArrayBuffer(
       binary.charCodeAt(i);
   }
 
-  return bytes.buffer;
+  return bytes;
 }
 
-function parseMaxAge(
-  cacheControl
-) {
+function parseMaxAge(cacheControl) {
   const match =
     String(
       cacheControl || ""
     ).match(
-      /max-age=(\\d+)/
+      /max-age=(\d+)/
     );
 
   if (!match) {
@@ -204,14 +196,12 @@ function parseMaxAge(
     300,
     Math.min(
       21600,
-      Number(
-        match[1]
-      )
+      Number(match[1])
     )
   );
 }
 
-async function getGoogleCerts() {
+async function getGoogleJwks() {
   const now =
     Date.now();
 
@@ -225,20 +215,22 @@ async function getGoogleCerts() {
 
   const response =
     await fetch(
-      "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+      "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
     );
 
   if (!response.ok) {
     throw new Error(
-      "無法取得 Firebase 驗證憑證"
+      "無法取得 Firebase 公開金鑰"
     );
   }
 
-  const certs =
+  const data =
     await response.json();
 
   certCache.certs =
-    certs;
+    Array.isArray(data?.keys)
+      ? data.keys
+      : [];
 
   certCache.expiresAt =
     now +
@@ -249,7 +241,80 @@ async function getGoogleCerts() {
     ) *
       1000;
 
-  return certs;
+  return certCache.certs;
+}
+
+async function getVerifyKey(kid) {
+  if (
+    keyCache.has(kid)
+  ) {
+    return keyCache.get(
+      kid
+    );
+  }
+
+  const jwks =
+    await getGoogleJwks();
+
+  let jwk =
+    jwks.find(
+      (item) =>
+        item?.kid === kid
+    );
+
+  if (!jwk) {
+    certCache.expiresAt =
+      0;
+
+    const refreshed =
+      await getGoogleJwks();
+
+    jwk =
+      refreshed.find(
+        (item) =>
+          item?.kid === kid
+      );
+  }
+
+  if (!jwk) {
+    throw new Error(
+      "Firebase 公開金鑰不存在"
+    );
+  }
+
+  const key =
+    await crypto.subtle.importKey(
+      "jwk",
+      {
+        kty:
+          "RSA",
+        n:
+          jwk.n,
+        e:
+          jwk.e,
+        alg:
+          "RS256",
+        use:
+          "sig"
+      },
+      {
+        name:
+          "RSASSA-PKCS1-v1_5",
+        hash:
+          "SHA-256"
+      },
+      false,
+      [
+        "verify"
+      ]
+    );
+
+  keyCache.set(
+    kid,
+    key
+  );
+
+  return key;
 }
 
 async function getVerifyKey(
@@ -402,10 +467,23 @@ async function verifyFirebaseIdToken(
     typeof payload.iat !==
       "number" ||
     payload.iat >
-      now + 120
+      now + 120 ||
+    payload.iat <= 0
   ) {
     throw new Error(
-      "Firebase Token 時間錯誤"
+      "Firebase Token 核發時間錯誤"
+    );
+  }
+
+  if (
+    typeof payload.auth_time !==
+      "number" ||
+    payload.auth_time >
+      now + 120 ||
+    payload.auth_time <= 0
+  ) {
+    throw new Error(
+      "Firebase Token 驗證時間錯誤"
     );
   }
 
