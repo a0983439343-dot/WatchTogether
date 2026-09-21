@@ -266,6 +266,8 @@ async function getVerifyKey(kid) {
     certCache.expiresAt =
       0;
 
+    keyCache.clear();
+
     const refreshed =
       await getGoogleJwks();
 
@@ -297,67 +299,6 @@ async function getVerifyKey(kid) {
         use:
           "sig"
       },
-      {
-        name:
-          "RSASSA-PKCS1-v1_5",
-        hash:
-          "SHA-256"
-      },
-      false,
-      [
-        "verify"
-      ]
-    );
-
-  keyCache.set(
-    kid,
-    key
-  );
-
-  return key;
-}
-
-async function getVerifyKey(
-  kid
-) {
-  if (
-    keyCache.has(kid)
-  ) {
-    return keyCache.get(
-      kid
-    );
-  }
-
-  const certs =
-    await getGoogleCerts();
-
-  const pem =
-    certs?.[kid];
-
-  if (!pem) {
-    certCache.expiresAt =
-      0;
-
-    const refreshed =
-      await getGoogleCerts();
-
-    if (!refreshed?.[kid]) {
-      throw new Error(
-        "Firebase 驗證憑證不存在"
-      );
-    }
-
-    return getVerifyKey(
-      kid
-    );
-  }
-
-  const key =
-    await crypto.subtle.importKey(
-      "spki",
-      pemToArrayBuffer(
-        pem
-      ),
       {
         name:
           "RSASSA-PKCS1-v1_5",
