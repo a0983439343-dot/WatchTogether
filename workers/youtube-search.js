@@ -518,7 +518,7 @@ function parseIsoDuration(
 
   const match =
     text.match(
-      /^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/
+      /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/
     );
 
   if (!match) {
@@ -621,7 +621,7 @@ export default {
 
     const tokenMatch =
       authorization.match(
-        /^Bearer\\s+(.+)$/i
+        /^Bearer\s+(.+)$/i
       );
 
     if (!tokenMatch) {
