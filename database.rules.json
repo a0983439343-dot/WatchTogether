@@ -33,7 +33,7 @@
         ".read": "auth != null && data.child(auth.uid).exists()",
         "$uid": {
           ".read": "auth != null && (auth.uid === $uid || root.child('members').child($roomId).child(auth.uid).exists())",
-          ".write": "auth != null && root.child('rooms').child($roomId).exists() && ((auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()) || (auth.uid === $uid && !newData.exists() && !root.child('kicked').child($roomId).child(auth.uid).exists()) || (auth.uid === $uid && root.child('kicked').child($roomId).child(auth.uid).exists() === false))",
+          ".write": "auth != null && root.child('rooms').child($roomId).exists() && ((auth.uid === $uid && !root.child('kicked').child($roomId).child(auth.uid).exists()) || (auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))",
           ".validate": "!newData.exists() || (newData.hasChildren(['name','joinedAt','online','lastSeen']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('joinedAt').isNumber() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('lastSeen').val() <= now + 30000 && newData.child('joinedAt').val() <= now + 30000)",
           "$other": {
             ".validate": false
