@@ -7883,7 +7883,7 @@
           : "👥 成員";
     }
 
-    const controlSupported =
+    const playbackControlSupported =
       [
         "youtube",
         "vimeo",
@@ -7893,11 +7893,28 @@
         state.playerType
       );
 
+    /*
+     * 更換影片不是播放器控制。
+     * 房主即使尚未選影片，或目前平台是外部平台，
+     * 也必須能打開影片選擇視窗。
+     */
+    const changeSourceButton =
+      $("changeSourceBtn");
+
+    if (changeSourceButton) {
+      changeSourceButton.disabled =
+        !state.isOwner;
+
+      changeSourceButton.title =
+        state.isOwner
+          ? ""
+          : "只有房主可以更換影片";
+    }
+
     [
       "playPauseBtn",
       "backBtn",
       "forwardBtn",
-      "changeSourceBtn",
       "playQueueNowBtn"
     ].forEach((id) => {
       const button =
@@ -7909,12 +7926,12 @@
 
       button.disabled =
         !state.isOwner ||
-        !controlSupported;
+        !playbackControlSupported;
 
       if (!state.isOwner) {
         button.title =
           "只有房主可以控制播放";
-      } else if (!controlSupported) {
+      } else if (!playbackControlSupported) {
         button.title =
           "此平台目前不支援本站播放控制";
       } else {
