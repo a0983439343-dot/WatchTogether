@@ -6027,6 +6027,17 @@
         .trim() ||
       "一起看";
 
+    const selectedSourceType =
+      String(
+        $("sourceTypeInput")?.value ||
+        "youtube"
+      ).trim();
+
+    const sourceType =
+      PLATFORMS[selectedSourceType]
+        ? selectedSourceType
+        : "youtube";
+
     let roomId =
       randomRoomCode();
 
@@ -6051,7 +6062,7 @@
         roomName,
 
       sourceType:
-        "youtube",
+        sourceType,
 
       video:
         null
