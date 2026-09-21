@@ -6038,6 +6038,12 @@
         ? selectedSourceType
         : "youtube";
 
+    if (!state.uid || !auth?.currentUser) {
+      throw new Error(
+        "Firebase 登入狀態尚未準備完成，請重新整理後再試"
+      );
+    }
+
     let roomId =
       randomRoomCode();
 
@@ -6055,12 +6061,11 @@
     }
 
     /*
-     * 建立房間時先不要寫 video。
+     * 分開建立 rooms 與 roomMeta。
      *
-     * 新版 RTDB Rules 會在房間尚未存在時檢查子節點權限；
-     * 初始 video:null 沒有必要，而且會讓 video 子節點的
-     * owner-only write 條件在同一次建立操作中互相衝突。
-     * 進房後再由房主選擇影片即可。
+     * 不使用 root.update() 一次寫兩個不同權限節點，
+     * 避免 Realtime Database Rules 在多路徑寫入時把整筆
+     * 操作判定為 permission_denied。
      */
     const room = {
       owner:
@@ -6073,19 +6078,65 @@
         sourceType
     };
 
-    await db
-      .ref()
-      .update({
-        [`rooms/${roomId}`]: room,
-        [`roomMeta/${roomId}`]: {
-          owner: state.uid,
-          name: roomName
-        }
-      });
+    try {
+      await db
+        .ref(
+          `rooms/${roomId}`
+        )
+        .set(room);
+    } catch (error) {
+      console.error(
+        "建立 rooms 節點失敗:",
+        error
+      );
+
+      throw new Error(
+        "建立房間失敗：Firebase 不允許建立 rooms 資料"
+      );
+    }
+
+    try {
+      await db
+        .ref(
+          `roomMeta/${roomId}`
+        )
+        .set({
+          owner:
+            state.uid,
+
+          name:
+            roomName
+        });
+    } catch (error) {
+      console.error(
+        "建立 roomMeta 節點失敗:",
+        error
+      );
+
+      /*
+       * roomMeta 建立失敗時清掉剛建立的房間，
+       * 避免留下沒有邀請入口的孤兒房間。
+       */
+      try {
+        await db
+          .ref(
+            `rooms/${roomId}`
+          )
+          .remove();
+      } catch (_) {}
+
+      throw new Error(
+        "建立房間失敗：Firebase 不允許建立房間索引"
+      );
+    }
 
     state.roomId =
       roomId;
 
+    /*
+     * 本地狀態可以保留 video:null，
+     * 但資料庫目前不要建立 rooms/{roomId}/video。
+     */
     state.room = {
       ...room,
       video:
@@ -6105,7 +6156,6 @@
 
     await enterRoom();
   }
-
 
   /*
    * =========================================================
