@@ -194,6 +194,8 @@
 
     membersListenerAttached: false,
 
+    roomOwnerListenerAttached: false,
+
     chatListenerAttached: false,
 
     queueListenerAttached: false,
@@ -6213,15 +6215,18 @@
       roomId;
 
     state.room = {
-      owner: metaSnapshot.val()?.owner || null,
+      /*
+       * roomMeta 只負責確認房間存在與提供名稱。
+       * 真正 owner 必須以 rooms/{roomId}/owner 為準。
+       */
+      owner: null,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
       video: null
     };
 
     state.isOwner =
-      state.room.owner ===
-      state.uid;
+      false;
 
     state.kickedLocally =
       false;
@@ -7902,11 +7907,19 @@
       $("changeSourceBtn");
 
     if (changeSourceButton) {
+      const actualOwner =
+        Boolean(
+          state.roomId &&
+          state.room?.owner &&
+          state.room.owner ===
+            state.uid
+        );
+
       changeSourceButton.disabled =
-        !state.isOwner;
+        !actualOwner;
 
       changeSourceButton.title =
-        state.isOwner
+        actualOwner
           ? ""
           : "只有房主可以更換影片";
     }
@@ -8388,6 +8401,62 @@
    * =========================================================
    */
 
+  function attachRoomOwnerListener() {
+    if (
+      !state.roomRef ||
+      state.roomOwnerListenerAttached
+    ) {
+      return;
+    }
+
+    state.roomRef
+      .child("owner")
+      .on(
+        "value",
+        (snapshot) => {
+          if (
+            !state.roomId ||
+            !state.uid
+          ) {
+            return;
+          }
+
+          const ownerUid =
+            snapshot.val() ||
+            null;
+
+          if (state.room) {
+            state.room.owner =
+              ownerUid;
+          }
+
+          const nextIsOwner =
+            ownerUid ===
+            state.uid;
+
+          if (
+            state.isOwner !==
+            nextIsOwner
+          ) {
+            state.isOwner =
+              nextIsOwner;
+
+            updateRoomOwnerUI();
+
+            if (
+              state.isOwner
+            ) {
+              void reconcileRoomTimeline();
+            }
+          }
+        }
+      );
+
+    state.roomOwnerListenerAttached =
+      true;
+  }
+
+
   async function enterRoom() {
     attachServerClockSync();
     showView(
@@ -8450,6 +8519,7 @@
       state.uid;
 
     updateRoomOwnerUI();
+    attachRoomOwnerListener();
 
     if ($("roomTitle")) {
       $("roomTitle").textContent =
@@ -9295,6 +9365,9 @@
       state.roomRef
         ?.child("video")
         .off();
+      state.roomRef
+        ?.child("owner")
+        .off();
       playbackSyncRef()?.off();
       stopPlaybackSeekDetector();
     } catch (_) {}
@@ -9361,6 +9434,9 @@
       0;
 
     state.membersListenerAttached =
+      false;
+
+    state.roomOwnerListenerAttached =
       false;
 
     state.chatListenerAttached =
