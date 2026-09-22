@@ -20,5 +20,6 @@ window.FIREBASE_CONFIG = {
  */
 window.WATCHTOGETHER_CONFIG = {
   youtubeSearchProxyUrl: "https://watchtogether-youtube-search.a0983439343.workers.dev",
+  youtubeStreamProxyUrl: "",
   dailymotionPlayerId: ""
 };
