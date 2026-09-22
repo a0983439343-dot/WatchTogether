@@ -9,17 +9,8 @@ window.FIREBASE_CONFIG = {
   measurementId: "G-VZXG2CRVE0"
 };
 
-
-/*
- * 公開前端設定。
- * youtubeSearchProxyUrl 是 Cloudflare Worker 的公開網址，
- * 不要把 YouTube API Key 放進這裡。
- *
- * dailymotionPlayerId 為可選的自訂 Dailymotion Player ID。
- * 留空時會使用 Dailymotion 官方 default Player iframe。
- */
 window.WATCHTOGETHER_CONFIG = {
   youtubeSearchProxyUrl: "https://watchtogether-youtube-search.a0983439343.workers.dev",
-  youtubeStreamProxyUrl: "",
+  youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   dailymotionPlayerId: ""
 };
