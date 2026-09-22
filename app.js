@@ -2326,6 +2326,9 @@
 
               Authorization:
                 "Bearer " +
+                searchIdToken,
+
+              "X-Firebase-ID-Token":
                 searchIdToken
             },
             credentials:
@@ -2366,6 +2369,9 @@
 
                 Authorization:
                   "Bearer " +
+                  searchIdToken,
+
+                "X-Firebase-ID-Token":
                   searchIdToken
               },
               credentials:
