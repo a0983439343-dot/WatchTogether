@@ -210,6 +210,8 @@
     youtubeNativeListenersAttached: false,
     youtubeNativeVideoElement: null,
     youtubeNativeEventHandlers: null,
+    youtubeNativeSuppressEvent: "",
+    youtubeNativeSuppressUntil: 0,
 
     youtubeLoading: false,
 
@@ -3845,6 +3847,8 @@
     state.youtubeNativeListenersAttached = false;
     state.youtubeNativeVideoElement = null;
     state.youtubeNativeEventHandlers = null;
+    state.youtubeNativeSuppressEvent = "";
+    state.youtubeNativeSuppressUntil = 0;
   }
 
   function markYoutubeNativeUserGesture(kind = "") {
@@ -3857,7 +3861,24 @@
       Date.now() + 1400;
   }
 
-  function nativeYoutubeActionAllowed() {
+  function suppressYoutubeNativeEvent(
+    kind,
+    durationMs = 300
+  ) {
+    state.youtubeNativeSuppressEvent =
+      String(kind || "");
+
+    state.youtubeNativeSuppressUntil =
+      Date.now() +
+      Math.max(
+        0,
+        Number(durationMs) || 0
+      );
+  }
+
+  function nativeYoutubeActionAllowed(
+    kind = ""
+  ) {
     if (
       !state.isOwner ||
       !state.playerReady ||
@@ -3868,7 +3889,28 @@
       return false;
     }
 
-    const now = Date.now();
+    const now =
+      Date.now();
+
+    if (
+      String(state.youtubeNativeSuppressEvent || "") ===
+        String(kind || "") &&
+      now <
+        Number(
+          state.youtubeNativeSuppressUntil || 0
+        )
+    ) {
+      return false;
+    }
+
+    if (
+      now >
+      Number(
+        state.playbackUserActionUntil || 0
+      )
+    ) {
+      return false;
+    }
 
     if (
       Number(state.playbackIgnoreStateChanges || 0) > 0 &&
@@ -3907,12 +3949,7 @@
       return false;
     }
 
-    return (
-      now <=
-      Number(
-        state.playbackUserActionUntil || 0
-      )
-    );
+    return true;
   }
 
   function attachYoutubeNativeEvents(videoElement) {
@@ -3972,7 +4009,7 @@
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
 
-        if (nativeYoutubeActionAllowed()) {
+        if (nativeYoutubeActionAllowed("play")) {
           state.playbackAwaitingActualStart = false;
           clearTimeout(
             state.playbackActualStartTimer
@@ -4036,7 +4073,7 @@
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
 
-        if (nativeYoutubeActionAllowed()) {
+        if (nativeYoutubeActionAllowed("pause")) {
           const position =
             Number(videoElement.currentTime) || 0;
 
@@ -4095,7 +4132,7 @@
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
 
-        if (nativeYoutubeActionAllowed()) {
+        if (nativeYoutubeActionAllowed("seek")) {
           void (async () => {
             try {
               const position =
@@ -4896,6 +4933,9 @@
         if (muteForAutoplay) {
           state.player.mute();
         }
+        suppressYoutubeNativeEvent(
+          "play"
+        );
         await state.player.playVideo();
       }
 
@@ -4936,6 +4976,9 @@
         state.playerType ===
         "youtube"
       ) {
+        suppressYoutubeNativeEvent(
+          "pause"
+        );
         state.player.pauseVideo();
       }
 
