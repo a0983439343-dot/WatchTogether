@@ -6,6 +6,10 @@ const HOST = "0.0.0.0";
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const cache = new Map();
 const CACHE_TTL_MS = 90_000;
+const SEARCH_CACHE_TTL_MS = 30_000;
+const MAX_SEARCH_RESULTS = 25;
+const MAX_SEARCH_BATCH = 50;
+const SEARCH_TIMEOUT_MS = 30_000;
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, {
@@ -20,6 +24,22 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
 
 function youtubeUrl(videoId) {
   return "https://www.youtube.com/watch?v=" + encodeURIComponent(videoId);
+}
+
+function parseSearchPage(pageToken) {
+  const page = Number(pageToken || "1");
+  if (!Number.isInteger(page) || page < 1 || page > 2) {
+    return 1;
+  }
+  return page;
+}
+
+function makeSearchCacheKey(query, maxResults, page) {
+  return JSON.stringify({
+    query,
+    maxResults,
+    page
+  });
 }
 
 function getStreamUrl(videoId) {
@@ -97,6 +117,232 @@ function getStreamUrl(videoId) {
   });
 }
 
+function runYoutubeSearch(query, maxResults, page) {
+  const cacheKey = makeSearchCacheKey(
+    query,
+    maxResults,
+    page
+  );
+
+  const cached = cache.get("search:" + cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return Promise.resolve(cached.data);
+  }
+
+  return new Promise((resolve, reject) => {
+    const start = page === 2 ? maxResults + 1 : 1;
+    const end = page === 2 ? MAX_SEARCH_BATCH : maxResults;
+
+    const args = [
+      "--no-warnings",
+      "--no-progress",
+      "--skip-download",
+      "--dump-single-json",
+      "--flat-playlist",
+      "--playlist-start",
+      String(start),
+      "--playlist-end",
+      String(end),
+      "--socket-timeout",
+      "20",
+      "--js-runtimes",
+      "node",
+      "ytsearch" + String(MAX_SEARCH_BATCH) + ":" + query
+    ];
+
+    const child = spawn("yt-dlp", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: "1"
+      }
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", chunk => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", chunk => {
+      stderr += chunk.toString();
+    });
+
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("YouTube search timeout"));
+    }, SEARCH_TIMEOUT_MS);
+
+    child.on("error", error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+
+    child.on("close", code => {
+      clearTimeout(timer);
+
+      if (code !== 0) {
+        const details = stderr.trim().slice(-1600);
+        reject(new Error(details || "YouTube search failed"));
+        return;
+      }
+
+      let data;
+      try {
+        data = JSON.parse(stdout);
+      } catch (_) {
+        reject(new Error("YouTube search returned invalid data"));
+        return;
+      }
+
+      const entries = Array.isArray(data?.entries)
+        ? data.entries
+        : [];
+
+      const items = entries
+        .map(entry => {
+          const id =
+            entry?.id ||
+            (typeof entry?.url === "string" && VIDEO_ID_RE.test(entry.url)
+              ? entry.url
+              : "");
+
+          if (!VIDEO_ID_RE.test(id)) {
+            return null;
+          }
+
+          const duration = Number(entry?.duration || 0);
+          const viewCount = Number(entry?.view_count || 0);
+
+          return {
+            id: {
+              videoId: id
+            },
+            snippet: {
+              title: entry?.title || "未命名影片",
+              description: entry?.description || "",
+              channelTitle:
+                entry?.channel ||
+                entry?.uploader ||
+                "YouTube",
+              publishedAt: entry?.upload_date
+                ? String(entry.upload_date).replace(
+                    /^(\d{4})(\d{2})(\d{2})$/,
+                    "$1-$2-$3T00:00:00Z"
+                  )
+                : "",
+              thumbnails: {
+                default: {
+                  url:
+                    entry?.thumbnail ||
+                    "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
+                  width: 120,
+                  height: 90
+                },
+                medium: {
+                  url:
+                    entry?.thumbnail ||
+                    "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
+                  width: 320,
+                  height: 180
+                },
+                high: {
+                  url:
+                    entry?.thumbnail ||
+                    "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
+                  width: 480,
+                  height: 360
+                }
+              }
+            },
+            viewCount: Number.isFinite(viewCount) ? viewCount : 0,
+            likeCount: 0,
+            duration: Number.isFinite(duration)
+              ? "PT" + Math.floor(duration) + "S"
+              : "",
+            durationSeconds: Number.isFinite(duration)
+              ? duration
+              : 0
+          };
+        })
+        .filter(Boolean)
+        .slice(0, maxResults);
+
+      const result = {
+        items,
+        nextPageToken:
+          page === 1 && entries.length >= maxResults
+            ? "2"
+            : ""
+      };
+
+      cache.set("search:" + cacheKey, {
+        data: result,
+        expiresAt: Date.now() + SEARCH_CACHE_TTL_MS
+      });
+
+      resolve(result);
+    });
+  });
+}
+
+async function handleSearch(req, res, url) {
+  const query = String(
+    url.searchParams.get("q") || ""
+  ).trim();
+
+  if (!query || query.length > 100) {
+    send(res, 400, JSON.stringify({
+      error: {
+        message: "搜尋關鍵字格式錯誤"
+      }
+    }));
+    return;
+  }
+
+  const requested = Number(
+    url.searchParams.get("maxResults") || MAX_SEARCH_RESULTS
+  );
+
+  const maxResults = Number.isFinite(requested)
+    ? Math.min(
+        MAX_SEARCH_RESULTS,
+        Math.max(1, Math.floor(requested))
+      )
+    : MAX_SEARCH_RESULTS;
+
+  const page = parseSearchPage(
+    url.searchParams.get("pageToken")
+  );
+
+  try {
+    const result = await runYoutubeSearch(
+      query,
+      maxResults,
+      page
+    );
+
+    send(
+      res,
+      200,
+      JSON.stringify(result)
+    );
+  } catch (error) {
+    console.error(
+      "[search]",
+      query,
+      error?.message || error
+    );
+
+    send(res, 502, JSON.stringify({
+      error: {
+        message: "YouTube 搜尋失敗"
+      }
+    }));
+  }
+}
+
 async function handleStream(req, res, videoId) {
   try {
     const url = await getStreamUrl(videoId);
@@ -129,13 +375,28 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const url = new URL(req.url, "http://" + (req.headers.host || "localhost"));
+  const url = new URL(
+    req.url,
+    "http://" + (req.headers.host || "localhost")
+  );
 
   if (url.pathname === "/health") {
     send(res, 200, JSON.stringify({
       ok: true,
       service: "watchtogether-youtube-proxy"
     }));
+    return;
+  }
+
+  if (url.pathname === "/search") {
+    if (req.method !== "GET") {
+      send(res, 405, JSON.stringify({
+        error: "method_not_allowed"
+      }));
+      return;
+    }
+
+    handleSearch(req, res, url);
     return;
   }
 
