@@ -4,7 +4,7 @@ ENV NODE_ENV=production
 ENV PATH="/root/.deno/bin:/opt/ytvenv/bin:$PATH"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg curl ca-certificates \
+  && apt-get install -y --no-install-recommends python3 python3-venv curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/ytvenv \
