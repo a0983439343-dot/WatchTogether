@@ -35,6 +35,7 @@
   const YOUTUBE_SEARCH_PAGE_SIZE = 25;
   const YOUTUBE_MAX_SEARCH_PAGES = 2;
   const YOUTUBE_SEARCH_COOLDOWN_MS = 1500;
+  const LAST_ROOM_STORAGE_KEY = "wt_last_room_id";
 
   const PLATFORMS = {
     youtube: {
@@ -600,6 +601,51 @@
       location.pathname +
       "?room=" +
       encodeURIComponent(roomId)
+    );
+  }
+
+
+  function getSavedRoomId() {
+    const value =
+      localStorage.getItem(
+        LAST_ROOM_STORAGE_KEY
+      );
+
+    if (
+      !value ||
+      !/^(?:[A-Z0-9]{6}|[A-Z0-9]{12})$/.test(
+        value
+      )
+    ) {
+      return "";
+    }
+
+    return value.toUpperCase();
+  }
+
+
+  function saveRoomId(roomId) {
+    const normalized =
+      String(roomId || "")
+        .trim()
+        .toUpperCase();
+
+    if (
+      /^(?:[A-Z0-9]{6}|[A-Z0-9]{12})$/.test(
+        normalized
+      )
+    ) {
+      localStorage.setItem(
+        LAST_ROOM_STORAGE_KEY,
+        normalized
+      );
+    }
+  }
+
+
+  function clearSavedRoomId() {
+    localStorage.removeItem(
+      LAST_ROOM_STORAGE_KEY
     );
   }
 
@@ -2289,12 +2335,12 @@
 
     if (!response) {
       console.error(
-        "YouTube 搜尋 Worker 連線失敗:",
+        "YouTube 搜尋 Render 服務連線失敗:",
         fetchError
       );
 
       throw new Error(
-        "YouTube 搜尋服務無法連線，請確認搜尋 Worker 已部署最新版本"
+        "YouTube 搜尋服務無法連線，請確認 Render 搜尋服務已部署最新版本"
       );
     }
 
@@ -6518,6 +6564,7 @@
     );
 
     await enterRoom();
+    saveRoomId(roomId);
   }
 
   /*
@@ -6604,6 +6651,7 @@
     );
 
     await enterRoom();
+    saveRoomId(roomId);
   }
 
 
@@ -8747,6 +8795,8 @@
 
     state.leavingRoom =
       false;
+
+    clearSavedRoomId();
 
     history.replaceState(
       {},
@@ -11015,8 +11065,15 @@
 
       setupEvents();
 
-      const roomId =
+      const urlRoomId =
         getRoomIdFromUrl();
+
+      const savedRoomId =
+        getSavedRoomId();
+
+      const roomId =
+        urlRoomId ||
+        savedRoomId;
 
       if (roomId) {
         try {
@@ -11027,6 +11084,16 @@
           console.error(
             error
           );
+
+          if (
+            !urlRoomId &&
+            /房間已不存在|找不到這個房間|你已被房主移出/.test(
+              error?.message ||
+              ""
+            )
+          ) {
+            clearSavedRoomId();
+          }
 
           history.replaceState(
             {},
