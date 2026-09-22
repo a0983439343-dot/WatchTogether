@@ -194,8 +194,6 @@
 
     membersListenerAttached: false,
 
-    roomOwnerListenerAttached: false,
-
     chatListenerAttached: false,
 
     queueListenerAttached: false,
@@ -2298,9 +2296,7 @@
       );
 
     /*
-     * 只有真正送出搜尋後才開始冷卻計時。
-     * 驗證失敗、Token 失效或網路錯誤不應把使用者
-     * 鎖進下一次「搜尋太頻繁」。
+     * 只有實際送出搜尋後才開始冷卻計時。
      */
     state.lastYoutubeSearchAt =
       Date.now();
@@ -6222,18 +6218,15 @@
       roomId;
 
     state.room = {
-      /*
-       * roomMeta 只負責確認房間存在與提供名稱。
-       * 真正 owner 必須以 rooms/{roomId}/owner 為準。
-       */
-      owner: null,
+      owner: metaSnapshot.val()?.owner || null,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
       video: null
     };
 
     state.isOwner =
-      false;
+      state.room.owner ===
+      state.uid;
 
     state.kickedLocally =
       false;
@@ -7895,7 +7888,7 @@
           : "👥 成員";
     }
 
-    const playbackControlSupported =
+    const controlSupported =
       [
         "youtube",
         "vimeo",
@@ -7905,11 +7898,6 @@
         state.playerType
       );
 
-    /*
-     * 更換影片不是播放器控制。
-     * 房主即使尚未選影片，或目前平台是外部平台，
-     * 也必須能打開影片選擇視窗。
-     */
     const changeSourceButton =
       $("changeSourceBtn");
 
@@ -7945,12 +7933,12 @@
 
       button.disabled =
         !state.isOwner ||
-        !playbackControlSupported;
+        !controlSupported;
 
       if (!state.isOwner) {
         button.title =
           "只有房主可以控制播放";
-      } else if (!playbackControlSupported) {
+      } else if (!controlSupported) {
         button.title =
           "此平台目前不支援本站播放控制";
       } else {
@@ -8091,11 +8079,6 @@
           "value"
         );
 
-      /*
-       * 房主踢人、主動離開、斷線重連的競速期間，
-       * 成員節點可能已經不存在。這時不要再寫入，
-       * 否則會被 members 的資料驗證規則拒絕。
-       */
       if (
         !memberSnapshot.exists() ||
         state.leavingRoom
@@ -8113,12 +8096,7 @@
             .TIMESTAMP
       });
     } catch (error) {
-      /*
-       * 成員已被移除時不要製造無意義的 Firebase WARNING。
-       */
-      if (
-        !state.leavingRoom
-      ) {
+      if (!state.leavingRoom) {
         console.warn(
           "成員心跳更新失敗:",
           error
@@ -8313,10 +8291,6 @@
       return;
     }
 
-    /*
-     * 先標記為主動離開，避免 members value listener
-     * 在 remove() 瞬間把正常離開誤判成「被踢」。
-     */
     state.leavingRoom =
       true;
 
@@ -8367,12 +8341,6 @@
     );
 
     try {
-      /*
-       * 這裡不再對 members/{uid} 做最後一次 update。
-       * 主動離開與被踢時，該節點可能已經先被 remove()；
-       * 再 update 會觸發 members 的 .validate 而產生
-       * permission_denied。
-       */
       const memberRef =
         state.membersRef?.child(
           state.uid || ""
@@ -8458,62 +8426,6 @@
    * =========================================================
    */
 
-  function attachRoomOwnerListener() {
-    if (
-      !state.roomRef ||
-      state.roomOwnerListenerAttached
-    ) {
-      return;
-    }
-
-    state.roomRef
-      .child("owner")
-      .on(
-        "value",
-        (snapshot) => {
-          if (
-            !state.roomId ||
-            !state.uid
-          ) {
-            return;
-          }
-
-          const ownerUid =
-            snapshot.val() ||
-            null;
-
-          if (state.room) {
-            state.room.owner =
-              ownerUid;
-          }
-
-          const nextIsOwner =
-            ownerUid ===
-            state.uid;
-
-          if (
-            state.isOwner !==
-            nextIsOwner
-          ) {
-            state.isOwner =
-              nextIsOwner;
-
-            updateRoomOwnerUI();
-
-            if (
-              state.isOwner
-            ) {
-              void reconcileRoomTimeline();
-            }
-          }
-        }
-      );
-
-    state.roomOwnerListenerAttached =
-      true;
-  }
-
-
   async function enterRoom() {
     attachServerClockSync();
     showView(
@@ -8576,7 +8488,6 @@
       state.uid;
 
     updateRoomOwnerUI();
-    attachRoomOwnerListener();
 
     if ($("roomTitle")) {
       $("roomTitle").textContent =
@@ -9059,10 +8970,6 @@
       throw new Error("目前不在房間內");
     }
 
-    /*
-     * 選擇 / 更換影片是房間成員權限。
-     * 播放、暫停、跳轉等控制仍由房主負責。
-     */
     let isCurrentMember = false;
 
     try {
@@ -9078,6 +8985,7 @@
     if (!isCurrentMember) {
       throw new Error("你已不在這個房間");
     }
+
     if (
       !video?.id &&
       !video?.url
@@ -9439,9 +9347,6 @@
       state.roomRef
         ?.child("video")
         .off();
-      state.roomRef
-        ?.child("owner")
-        .off();
       playbackSyncRef()?.off();
       stopPlaybackSeekDetector();
     } catch (_) {}
@@ -9508,9 +9413,6 @@
       0;
 
     state.membersListenerAttached =
-      false;
-
-    state.roomOwnerListenerAttached =
       false;
 
     state.chatListenerAttached =
