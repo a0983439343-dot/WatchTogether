@@ -10,7 +10,7 @@ window.FIREBASE_CONFIG = {
 };
 
 window.WATCHTOGETHER_CONFIG = {
-  youtubeSearchProxyUrl: "https://watchtogether-youtube-search.a0983439343.workers.dev",
+  youtubeSearchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   dailymotionPlayerId: ""
 };
