@@ -130,15 +130,24 @@ function runYoutubeSearch(query, maxResults, page) {
   }
 
   return new Promise((resolve, reject) => {
-    const start = page === 2 ? maxResults + 1 : 1;
-    const end = page === 2 ? MAX_SEARCH_BATCH : maxResults;
+    const start =
+      page === 2
+        ? maxResults + 1
+        : 1;
+
+    const end =
+      page === 2
+        ? MAX_SEARCH_BATCH
+        : maxResults;
 
     const args = [
+      "--quiet",
       "--no-warnings",
       "--no-progress",
       "--skip-download",
-      "--dump-single-json",
       "--flat-playlist",
+      "--dump-json",
+      "--ignore-errors",
       "--playlist-start",
       String(start),
       "--playlist-end",
@@ -147,6 +156,8 @@ function runYoutubeSearch(query, maxResults, page) {
       "20",
       "--js-runtimes",
       "node",
+      "--extractor-args",
+      "youtube:player_client=web,web_embedded,mweb",
       "ytsearch" + String(MAX_SEARCH_BATCH) + ":" + query
     ];
 
@@ -182,97 +193,152 @@ function runYoutubeSearch(query, maxResults, page) {
     child.on("close", code => {
       clearTimeout(timer);
 
-      if (code !== 0) {
-        const details = stderr.trim().slice(-1600);
-        reject(new Error(details || "YouTube search failed"));
-        return;
+      const lines = stdout
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const entries = [];
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+
+          if (
+            entry &&
+            typeof entry === "object"
+          ) {
+            entries.push(entry);
+          }
+        } catch (_) {}
       }
 
-      let data;
-      try {
-        data = JSON.parse(stdout);
-      } catch (_) {
-        reject(new Error("YouTube search returned invalid data"));
+      if (
+        code !== 0 &&
+        entries.length === 0
+      ) {
+        const details =
+          stderr.trim().slice(-1600);
+
+        reject(
+          new Error(
+            details ||
+            "YouTube search failed"
+          )
+        );
+
         return;
       }
-
-      const entries = Array.isArray(data?.entries)
-        ? data.entries
-        : [];
 
       const items = entries
         .map(entry => {
-          const id =
+          const rawId =
             entry?.id ||
-            (typeof entry?.url === "string" && VIDEO_ID_RE.test(entry.url)
-              ? entry.url
-              : "");
+            entry?.url ||
+            "";
+
+          const id =
+            String(rawId || "").trim();
 
           if (!VIDEO_ID_RE.test(id)) {
             return null;
           }
 
-          const duration = Number(entry?.duration || 0);
-          const viewCount = Number(entry?.view_count || 0);
+          const duration =
+            Number(entry?.duration || 0);
+
+          const viewCount =
+            Number(entry?.view_count || 0);
+
+          const thumbnail =
+            entry?.thumbnail ||
+            "https://i.ytimg.com/vi/" +
+              id +
+              "/hqdefault.jpg";
 
           return {
             id: {
               videoId: id
             },
             snippet: {
-              title: entry?.title || "未命名影片",
-              description: entry?.description || "",
+              title:
+                entry?.title ||
+                "未命名影片",
+              description:
+                entry?.description ||
+                "",
               channelTitle:
                 entry?.channel ||
                 entry?.uploader ||
+                entry?.channel_id ||
                 "YouTube",
-              publishedAt: entry?.upload_date
-                ? String(entry.upload_date).replace(
-                    /^(\d{4})(\d{2})(\d{2})$/,
-                    "$1-$2-$3T00:00:00Z"
-                  )
-                : "",
+              publishedAt:
+                entry?.upload_date
+                  ? String(entry.upload_date).replace(
+                      /^(\d{4})(\d{2})(\d{2})$/,
+                      "$1-$2-$3T00:00:00Z"
+                    )
+                  : "",
+              liveBroadcastContent:
+                entry?.live_status === "is_live"
+                  ? "live"
+                  : "none",
               thumbnails: {
                 default: {
-                  url:
-                    entry?.thumbnail ||
-                    "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
+                  url: thumbnail,
                   width: 120,
                   height: 90
                 },
                 medium: {
-                  url:
-                    entry?.thumbnail ||
-                    "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
+                  url: thumbnail,
                   width: 320,
                   height: 180
                 },
                 high: {
-                  url:
-                    entry?.thumbnail ||
-                    "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
+                  url: thumbnail,
                   width: 480,
                   height: 360
+                },
+                maxres: {
+                  url: thumbnail,
+                  width: 1280,
+                  height: 720
                 }
               }
             },
-            viewCount: Number.isFinite(viewCount) ? viewCount : 0,
+            viewCount:
+              Number.isFinite(viewCount)
+                ? viewCount
+                : 0,
             likeCount: 0,
-            duration: Number.isFinite(duration)
-              ? "PT" + Math.floor(duration) + "S"
-              : "",
-            durationSeconds: Number.isFinite(duration)
-              ? duration
-              : 0
+            duration:
+              Number.isFinite(duration)
+                ? "PT" +
+                  Math.floor(duration) +
+                  "S"
+                : "",
+            durationSeconds:
+              Number.isFinite(duration)
+                ? duration
+                : 0
           };
         })
         .filter(Boolean)
+        .filter(
+          (item, index, array) =>
+            array.findIndex(
+              candidate =>
+                candidate.id.videoId ===
+                item.id.videoId
+            ) === index
+        )
         .slice(0, maxResults);
 
       const result = {
         items,
         nextPageToken:
-          page === 1 && entries.length >= maxResults
+          page === 1 &&
+          entries.length >= maxResults
             ? "2"
             : ""
       };
