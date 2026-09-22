@@ -1651,7 +1651,8 @@
       !state.roomId ||
       !state.membersRef ||
       !state.uid ||
-      !state.wasMemberInRoom
+      !state.wasMemberInRoom ||
+      state.leavingRoom
     ) {
       return;
     }
@@ -1662,30 +1663,26 @@
           state.uid
         );
 
-      const snapshot =
-        await memberRef.once(
-          "value"
-        );
+      await memberRef.transaction(
+        (current) => {
+          if (
+            !current ||
+            state.leavingRoom
+          ) {
+            return;
+          }
 
-      if (
-        !snapshot.exists() ||
-        state.leavingRoom
-      ) {
-        return;
-      }
-
-      await memberRef.update({
-        name:
-          state.memberName,
-
-        online:
-          true,
-
-        lastSeen:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP
-      });
+          return {
+            ...current,
+            name:
+              state.memberName,
+            online:
+              true,
+            lastSeen:
+              Date.now()
+          };
+        }
+      );
     } catch (error) {
       if (!state.leavingRoom) {
         console.warn(
@@ -2302,7 +2299,7 @@
       );
     }
 
-    const response =
+    let response =
       await fetch(
         url.toString(),
         {
@@ -2314,6 +2311,9 @@
 
             Authorization:
               "Bearer " +
+              searchIdToken,
+
+            "X-Firebase-ID-Token":
               searchIdToken
           },
           credentials:
@@ -2322,10 +2322,50 @@
       );
 
     /*
-     * 只有實際送出搜尋後才開始冷卻計時。
+     * 401 代表 Worker 沒拿到可用 token 或 token 已失效。
+     * 強制刷新一次 Firebase ID Token 再重試，避免卡死。
      */
-    state.lastYoutubeSearchAt =
-      Date.now();
+    if (
+      response.status === 401
+    ) {
+      try {
+        searchIdToken =
+          await searchUser.getIdToken(
+            true
+          );
+
+        response =
+          await fetch(
+            url.toString(),
+            {
+              method:
+                "GET",
+              headers: {
+                Accept:
+                  "application/json",
+
+                Authorization:
+                  "Bearer " +
+                  searchIdToken,
+
+                "X-Firebase-ID-Token":
+                  searchIdToken
+              },
+              credentials:
+                "omit"
+            }
+          );
+      } catch (_) {}
+    }
+
+    /*
+     * 只有成功請求才啟動前端冷卻。
+     * 401 認證問題不能把使用者鎖進「搜尋太頻繁」。
+     */
+    if (response.ok) {
+      state.lastYoutubeSearchAt =
+        Date.now();
+    }
 
     if (!response.ok) {
       let message =
@@ -8086,50 +8126,12 @@
 
 
   async function heartbeatMember() {
-    if (
-      !state.membersRef ||
-      !state.uid ||
-      state.leavingRoom ||
-      !state.wasMemberInRoom
-    ) {
-      return;
-    }
-
-    try {
-      const memberRef =
-        state.membersRef.child(
-          state.uid
-        );
-
-      const memberSnapshot =
-        await memberRef.once(
-          "value"
-        );
-
-      if (
-        !memberSnapshot.exists() ||
-        state.leavingRoom
-      ) {
-        return;
-      }
-
-      await memberRef.update({
-        online:
-          true,
-
-        lastSeen:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP
-      });
-    } catch (error) {
-      if (!state.leavingRoom) {
-        console.warn(
-          "成員心跳更新失敗:",
-          error
-        );
-      }
-    }
+    /*
+     * 保留此函式名稱相容舊呼叫點，但不再對 members/{uid}
+     * 做週期性 update。Firebase onDisconnect().remove() 已負責
+     * 斷線清理，避免 partial update 與成員移除發生競速。
+     */
+    return;
   }
 
 
@@ -8617,11 +8619,13 @@
       state.memberHeartbeatTimer
     );
 
+    /*
+     * 成員在線狀態不再靠 60 秒 partial update 維持。
+     * 成員加入時建立完整節點，斷線時由 onDisconnect().remove()
+     * 移除節點；這樣可以避免踢人/斷線競速造成 permission_denied。
+     */
     state.memberHeartbeatTimer =
-      setInterval(
-        heartbeatMember,
-        60000
-      );
+      null;
 
     attachPlaybackSyncListener();
 
