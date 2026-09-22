@@ -32,8 +32,21 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     (async () => {
       try {
+        /*
+         * 導覽頁永遠不要吃舊 HTTP cache。
+         * 否則 GitHub Pages 更新 index.html 後，
+         * 仍可能載入舊版 app.js 版本號。
+         */
         const response =
-          await fetch(request);
+          await fetch(
+            new Request(
+              request,
+              {
+                cache:
+                  "no-store"
+              }
+            )
+          );
 
         const headers =
           new Headers(
