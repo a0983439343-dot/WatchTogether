@@ -35,6 +35,10 @@ function getStreamUrl(videoId) {
       "--no-progress",
       "--skip-download",
       "--get-url",
+      "--js-runtimes",
+      "node",
+      "--socket-timeout",
+      "20",
       "-f",
       "b[ext=mp4]/b",
       youtubeUrl(videoId)
@@ -78,7 +82,7 @@ function getStreamUrl(videoId) {
         .find(line => /^https?:\/\//i.test(line));
 
       if (code !== 0 || !url) {
-        const details = stderr.trim().slice(-1200);
+        const details = stderr.trim().slice(-1600);
         reject(new Error(details || "yt-dlp failed"));
         return;
       }
@@ -96,6 +100,7 @@ function getStreamUrl(videoId) {
 async function handleStream(req, res, videoId) {
   try {
     const url = await getStreamUrl(videoId);
+
     res.writeHead(302, {
       Location: url,
       "Access-Control-Allow-Origin": "*",
