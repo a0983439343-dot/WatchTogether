@@ -6220,15 +6220,18 @@
       roomId;
 
     state.room = {
-      owner: metaSnapshot.val()?.owner || null,
+      /*
+       * roomMeta 只負責確認房間存在與提供名稱。
+       * 真正 owner 必須以 rooms/{roomId}/owner 為準。
+       */
+      owner: null,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
       video: null
     };
 
     state.isOwner =
-      state.room.owner ===
-      state.uid;
+      false;
 
     state.kickedLocally =
       false;
