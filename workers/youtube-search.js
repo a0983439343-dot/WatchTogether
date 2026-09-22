@@ -62,7 +62,7 @@ function corsHeaders(
       "GET, OPTIONS",
 
     "Access-Control-Allow-Headers":
-      "Accept, Authorization, Content-Type",
+      "Accept, Authorization, Content-Type, X-Firebase-ID-Token",
 
     "Vary":
       "Origin"
@@ -619,12 +619,21 @@ export default {
         "Authorization"
       ) || "";
 
+    const fallbackToken =
+      request.headers.get(
+        "X-Firebase-ID-Token"
+      ) || "";
+
     const tokenMatch =
       authorization.match(
         /^Bearer\s+(.+)$/i
       );
 
-    if (!tokenMatch) {
+    const firebaseIdToken =
+      tokenMatch?.[1]?.trim() ||
+      fallbackToken.trim();
+
+    if (!firebaseIdToken) {
       return jsonResponse(
         {
           error: {
@@ -649,7 +658,7 @@ export default {
     try {
       firebaseUser =
         await verifyFirebaseIdToken(
-          tokenMatch[1],
+          firebaseIdToken,
           projectId
         );
     } catch (error) {
