@@ -1648,17 +1648,33 @@
 
   async function updateCurrentMemberName() {
     if (
+      !state.roomId ||
       !state.membersRef ||
-      !state.uid
+      !state.uid ||
+      !state.wasMemberInRoom
     ) {
       return;
     }
 
-    await state.membersRef
-      .child(
-        state.uid
-      )
-      .update({
+    try {
+      const memberRef =
+        state.membersRef.child(
+          state.uid
+        );
+
+      const snapshot =
+        await memberRef.once(
+          "value"
+        );
+
+      if (
+        !snapshot.exists() ||
+        state.leavingRoom
+      ) {
+        return;
+      }
+
+      await memberRef.update({
         name:
           state.memberName,
 
@@ -1670,6 +1686,14 @@
             .ServerValue
             .TIMESTAMP
       });
+    } catch (error) {
+      if (!state.leavingRoom) {
+        console.warn(
+          "Firebase 成員名稱同步失敗:",
+          error
+        );
+      }
+    }
   }
 
 
@@ -8043,17 +8067,15 @@
       state.wasMemberInRoom =
         true;
 
+      /*
+       * 斷線時直接移除自己的成員節點。
+       * 這樣即使房主先踢人 / 使用者先離開，
+       * 也不會在節點已不存在時再次 update 而觸發
+       * members 的 .validate permission_denied。
+       */
       memberRef
         .onDisconnect()
-        .update({
-          online:
-            false,
-
-          lastSeen:
-            firebase.database
-              .ServerValue
-              .TIMESTAMP
-        });
+        .remove();
     } catch (error) {
       console.warn(
         "成員狀態寫入失敗:",
@@ -8302,14 +8324,25 @@
     if (
       state.isOwner
     ) {
-      const nextOwner =
-        await transferOwnershipBeforeLeave();
+      try {
+        const nextOwner =
+          await transferOwnershipBeforeLeave();
 
-      if (!nextOwner) {
+        if (!nextOwner) {
+          /*
+           * 房內沒有其他成員時，不做錯誤的 owner 刪除，
+           * 只離開目前頁面。房間資料會保留。
+           */
+        }
+      } catch (error) {
         /*
-         * 房內沒有其他成員時，不做錯誤的 owner 刪除，
-         * 只離開目前頁面。房間資料會保留。
+         * 房主轉移失敗不能阻止使用者離開。
+         * 讓成員先正常退出，避免卡在房間頁。
          */
+        console.warn(
+          "離開房間時轉移房主失敗:",
+          error
+        );
       }
     }
 
@@ -8386,7 +8419,19 @@
     state.roomId =
       null;
 
+    state.roomRef =
+      null;
+
+    state.membersRef =
+      null;
+
     state.kickedRef =
+      null;
+
+    state.chatRef =
+      null;
+
+    state.queueRef =
       null;
 
     state.room =
