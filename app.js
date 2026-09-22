@@ -2600,7 +2600,7 @@
    */
 
   function renderSearchResults(
-    results
+    results = state.searchResults
   ) {
     const container =
       $("modalVideoSearchResults");
