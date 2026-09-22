@@ -2299,33 +2299,44 @@
       );
     }
 
-    let response =
-      await fetch(
-        url.toString(),
-        {
-          method:
-            "GET",
-          headers: {
-            Accept:
-              "application/json",
+    let response = null;
+    let fetchError = null;
 
-            Authorization:
-              "Bearer " +
-              searchIdToken,
+    try {
+      response =
+        await fetch(
+          url.toString(),
+          {
+            method:
+              "GET",
+            headers: {
+              Accept:
+                "application/json",
 
-            "X-Firebase-ID-Token":
-              searchIdToken
-          },
-          credentials:
-            "omit"
-        }
-      );
+              Authorization:
+                "Bearer " +
+                searchIdToken
+            },
+            credentials:
+              "omit",
+
+            mode:
+              "cors",
+
+            redirect:
+              "error"
+          }
+        );
+    } catch (error) {
+      fetchError = error;
+    }
 
     /*
      * 401 代表 Worker 沒拿到可用 token 或 token 已失效。
      * 強制刷新一次 Firebase ID Token 再重試，避免卡死。
      */
     if (
+      !response ||
       response.status === 401
     ) {
       try {
@@ -2355,7 +2366,22 @@
                 "omit"
             }
           );
-      } catch (_) {}
+      } catch (retryError) {
+        if (!fetchError) {
+          fetchError = retryError;
+        }
+      }
+    }
+
+    if (!response) {
+      console.error(
+        "YouTube 搜尋 Worker 連線失敗:",
+        fetchError
+      );
+
+      throw new Error(
+        "YouTube 搜尋服務無法連線，請確認搜尋 Worker 已部署最新版本"
+      );
     }
 
     /*
