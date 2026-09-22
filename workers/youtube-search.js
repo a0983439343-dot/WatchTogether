@@ -45,7 +45,8 @@ const certCache =
 
 function corsHeaders(
   origin,
-  allowedOrigin
+  allowedOrigin,
+  requestedHeaders = ""
 ) {
   const allowed =
     allowedOrigin === "*"
@@ -53,6 +54,10 @@ function corsHeaders(
       : origin === allowedOrigin
         ? origin
         : allowedOrigin;
+
+  const allowHeaders =
+    String(requestedHeaders || "").trim() ||
+    "Accept, Authorization, Content-Type, X-Firebase-ID-Token";
 
   return {
     "Access-Control-Allow-Origin":
@@ -62,10 +67,13 @@ function corsHeaders(
       "GET, OPTIONS",
 
     "Access-Control-Allow-Headers":
-      "Accept, Authorization, Content-Type, X-Firebase-ID-Token",
+      allowHeaders,
+
+    "Access-Control-Max-Age":
+      "86400",
 
     "Vary":
-      "Origin"
+      "Origin, Access-Control-Request-Headers"
   };
 }
 
@@ -574,9 +582,31 @@ export default {
           headers:
             corsHeaders(
               origin,
-              allowedOrigin
+              allowedOrigin,
+              request.headers.get(
+                "Access-Control-Request-Headers"
+              ) || ""
             )
         }
+      );
+    }
+
+    if (
+      request.method ===
+        "GET" &&
+      url.pathname ===
+        "/health"
+    ) {
+      return jsonResponse(
+        {
+          ok:
+            true,
+          service:
+            "watchtogether-youtube-search"
+        },
+        200,
+        origin,
+        allowedOrigin
       );
     }
 
