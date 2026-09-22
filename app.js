@@ -7890,7 +7890,7 @@
           : "👥 成員";
     }
 
-    const controlSupported =
+    const playbackControlSupported =
       [
         "youtube",
         "vimeo",
@@ -7935,12 +7935,12 @@
 
       button.disabled =
         !state.isOwner ||
-        !controlSupported;
+        !playbackControlSupported;
 
       if (!state.isOwner) {
         button.title =
           "只有房主可以控制播放";
-      } else if (!controlSupported) {
+      } else if (!playbackControlSupported) {
         button.title =
           "此平台目前不支援本站播放控制";
       } else {
