@@ -2268,121 +2268,23 @@
       );
     }
 
-    /*
-     * YouTube API Key 永遠不放在瀏覽器。
-     * 搜尋請求必須帶 Firebase Auth ID Token，
-     * 由 Worker 驗證登入身分後才代呼叫 YouTube Data API。
-     */
-    let searchUser =
-      auth?.currentUser ||
-      null;
-
-    if (
-      !searchUser &&
-      typeof ensureAnonymousAuth ===
-        "function"
-    ) {
-      searchUser =
-        await ensureAnonymousAuth();
-    }
-
-    if (!searchUser) {
-      throw new Error(
-        "登入狀態尚未準備完成，請稍候再搜尋"
-      );
-    }
-
-    let searchIdToken = "";
-
-    try {
-      searchIdToken =
-        await searchUser.getIdToken(
-          false
-        );
-    } catch (tokenError) {
-      console.error(
-        "取得 YouTube 搜尋驗證 Token 失敗:",
-        tokenError
-      );
-
-      throw new Error(
-        "登入驗證失敗，請重新整理頁面後再試"
-      );
-    }
-
     let response = null;
     let fetchError = null;
 
     try {
-      response =
-        await fetch(
-          url.toString(),
-          {
-            method:
-              "GET",
-            headers: {
-              Accept:
-                "application/json",
-
-              Authorization:
-                "Bearer " +
-                searchIdToken,
-
-              "X-Firebase-ID-Token":
-                searchIdToken
-            },
-            credentials:
-              "omit",
-
-            mode:
-              "cors",
-
-          }
-        );
+      response = await fetch(
+        url.toString(),
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json"
+          },
+          credentials: "omit",
+          mode: "cors"
+        }
+      );
     } catch (error) {
       fetchError = error;
-    }
-
-    /*
-     * 401 代表 Worker 沒拿到可用 token 或 token 已失效。
-     * 強制刷新一次 Firebase ID Token 再重試，避免卡死。
-     */
-    if (
-      !response ||
-      response.status === 401
-    ) {
-      try {
-        searchIdToken =
-          await searchUser.getIdToken(
-            true
-          );
-
-        response =
-          await fetch(
-            url.toString(),
-            {
-              method:
-                "GET",
-              headers: {
-                Accept:
-                  "application/json",
-
-                Authorization:
-                  "Bearer " +
-                  searchIdToken,
-
-                "X-Firebase-ID-Token":
-                  searchIdToken
-              },
-              credentials:
-                "omit"
-            }
-          );
-      } catch (retryError) {
-        if (!fetchError) {
-          fetchError = retryError;
-        }
-      }
     }
 
     if (!response) {
