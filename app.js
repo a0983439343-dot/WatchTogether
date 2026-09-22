@@ -2323,8 +2323,6 @@
             mode:
               "cors",
 
-            redirect:
-              "error"
           }
         );
     } catch (error) {
