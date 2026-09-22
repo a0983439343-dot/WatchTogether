@@ -4679,13 +4679,11 @@
     }
 
     try {
-      if (
-        type === "youtube" &&
-        window.YT?.PlayerState
-      ) {
+      if (type === "youtube") {
         return (
-          player.getPlayerState() ===
-          YT.PlayerState.PLAYING
+          Number(
+            player.getPlayerState()
+          ) === 1
         );
       }
 
@@ -4898,7 +4896,7 @@
         if (muteForAutoplay) {
           state.player.mute();
         }
-        state.player.playVideo();
+        await state.player.playVideo();
       }
 
       if (
@@ -5323,30 +5321,32 @@
       return;
     }
 
-    const initial =
-      $("youtubePlayer");
+    const videoElement =
+      $("directVideo");
 
-    if (!initial) {
+    if (!videoElement) {
       throw new Error(
-        "找不到 youtubePlayer"
+        "找不到 directVideo"
+      );
+    }
+
+    if (!YOUTUBE_STREAM_PROXY_URL) {
+      throw new Error(
+        "尚未設定 YOUTUBE_STREAM_PROXY_URL"
       );
     }
 
     if (
       state.playerReady &&
       state.player &&
-      state.playerType ===
-        "youtube" &&
-      state.currentVideoId ===
-        videoId
+      state.playerType === "youtube" &&
+      state.currentVideoId === videoId
     ) {
       forceDirectVideoVisible();
 
       if (autoplay) {
-        try {
-          state.player.mute();
-          state.player.playVideo();
-        } catch (_) {}
+        videoElement.muted = true;
+        await playPlayer();
       }
 
       return;
@@ -5354,8 +5354,7 @@
 
     if (
       state.youtubeLoading &&
-      state.youtubeRequestedId ===
-        videoId
+      state.youtubeRequestedId === videoId
     ) {
       return;
     }
@@ -5366,134 +5365,65 @@
     const token =
       ++state.youtubeBuildToken;
 
-    /*
-     * YT API 尚未準備好。
-     */
-    if (
-      !window.YT ||
-      typeof window.YT.Player !==
-        "function"
-    ) {
-      state.youtubeLoading =
-        false;
-
-      initial.classList.remove(
-        "hidden"
-      );
-
-      $("playerPlaceholder")
-        ?.classList.remove(
-          "hidden"
-        );
-
-      if (
-        $("playerPlaceholder")
-      ) {
-        $("playerPlaceholder")
-          .textContent =
-          "YouTube 播放器載入中…";
-      }
-
-      return;
-    }
-
     state.youtubeLoading =
       true;
 
     try {
-      if (
-        state.player &&
-        state.playerType ===
-          "youtube"
-      ) {
-        const old =
-          state.player;
-
-        state.player =
-          null;
-
-        state.playerReady =
-          false;
-
-        state.playerType =
-          null;
-
-        try {
-          old.destroy?.();
-        } catch (_) {}
-      } else if (state.player) {
+      if (state.player) {
         await destroyCurrentPlayer();
       }
 
       if (
-        state.youtubeBuildToken !==
-          token ||
-        state.youtubeRequestedId !==
-          videoId
+        state.youtubeBuildToken !== token ||
+        state.youtubeRequestedId !== videoId
       ) {
         return;
       }
 
-      let container =
-        $("youtubePlayer");
+      hidePlayers();
 
-      if (!container) {
-        throw new Error(
-          "找不到 youtubePlayer"
-        );
-      }
+      forceDirectVideoVisible();
 
-      if (
-        container.tagName ===
-        "IFRAME"
-      ) {
-        const replacement =
-          document.createElement(
-            "div"
-          );
+      videoElement.controls =
+        true;
 
-        replacement.id =
-          "youtubePlayer";
+      videoElement.playsInline =
+        true;
 
-        replacement.className =
-          "youtube-player";
+      videoElement.preload =
+        "metadata";
 
-        container.replaceWith(
-          replacement
-        );
+      videoElement.autoplay =
+        false;
 
-        container =
-          replacement;
-      }
+      videoElement.muted =
+        Boolean(autoplay);
 
-      hidePlayers(true);
+      try {
+        videoElement.pause();
+        videoElement.removeAttribute("src");
+        videoElement.load();
+      } catch (_) {}
 
-      container.classList.remove(
-        "hidden"
+      attachYoutubeNativeEvents(
+        videoElement
       );
 
-      container.style.display =
-        "block";
+      const streamUrl =
+        YOUTUBE_STREAM_PROXY_URL +
+        "/stream?v=" +
+        encodeURIComponent(
+          videoId
+        );
 
-      container.style.visibility =
-        "visible";
-
-      container.style.opacity =
-        "1";
-
-      container.style.width =
-        "100%";
-
-      container.style.height =
-        "100%";
-
-      $("playerPlaceholder")
-        ?.classList.add(
-          "hidden"
+      const player =
+        createYoutubeNativePlayer(
+          videoElement,
+          videoId
         );
 
       state.player =
-        null;
+        player;
 
       state.playerReady =
         false;
@@ -5507,363 +5437,180 @@
       state.currentVideoUrl =
         null;
 
-      const player =
-        new YT.Player(
-          "youtubePlayer",
-          {
-            videoId,
-
-            width:
-              "100%",
-
-            height:
-              "100%",
-
-            playerVars: {
-              autoplay:
-                autoplay ? 1 : 0,
-
-              controls:
-                1,
-
-              playsinline:
-                1,
-
-              rel:
-                0,
-
-              modestbranding:
-                1,
-
-              enablejsapi:
-                1,
-
-              origin:
-                location.origin
-            },
-
-            events: {
-              onReady:
-                async (event) => {
-                  if (
-                    state.youtubeBuildToken !==
-                      token ||
-                    state.youtubeRequestedId !==
-                      videoId
-                  ) {
-                    try {
-                      event.target.destroy?.();
-                    } catch (_) {}
-
-                    return;
-                  }
-
-                  state.player =
-                    event.target;
-
-                  state.playerReady =
-                    true;
-
-                  state.playerType =
-                    "youtube";
-
-                  state.currentVideoId =
-                    videoId;
-
-                  state.currentVideoUrl =
-                    null;
-
-                  forceDirectVideoVisible();
-
-                  $("playerPlaceholder")
-                    ?.classList.add(
-                      "hidden"
-                    );
-
-                  try {
-                    event.target.setVolume(
-                      100
-                    );
-                  } catch (_) {}
-
-                  if ($("syncStatus")) {
-                    $("syncStatus")
-                      .textContent =
-                      "影片已載入";
-                  }
-
-                  updateTimeUI();
-
-                  forceDirectVideoVisible();
-
-                  startLocalTimeUpdate();
-
-                  setTimeout(async () => {
-                    try {
-                      const ref = playbackSyncRef();
-                      const snapshot = ref ? await ref.once("value") : null;
-                      const eventData = snapshot?.val?.() || null;
-                      const sameVideo =
-                        eventData &&
-                        String(eventData.videoId || "") === String(videoId);
-
-                      if (sameVideo) {
-                        rememberRoomTimeline(eventData);
-                        await applyRemotePlaybackEvent(eventData, true);
-                      } else if (state.isOwner && autoplay) {
-                        const playerState =
-                          typeof event.target.getPlayerState === "function"
-                            ? event.target.getPlayerState()
-                            : YT.PlayerState.UNSTARTED;
-
-                        if (playerState === YT.PlayerState.PLAYING) {
-                          const actualPosition = await asyncCurrentPosition();
-                          await writePlaybackCommand(
-                            "play",
-                            actualPosition,
-                            true,
-                            playbackClockNow()
-                          );
-                        } else {
-                          state.playbackAwaitingActualStart = true;
-                          clearTimeout(state.playbackActualStartTimer);
-                          state.playbackActualStartTimer = setTimeout(async () => {
-                            state.playbackActualStartTimer = null;
-                            if (!state.playbackAwaitingActualStart || state.playbackApplyingRemote) return;
-                            state.playbackAwaitingActualStart = false;
-                            try {
-                              if (await asyncIsPlaying()) {
-                                const actualPosition = await asyncCurrentPosition();
-                                await writePlaybackCommand(
-                                  "play",
-                                  actualPosition,
-                                  true,
-                                  playbackClockNow()
-                                );
-                              }
-                            } catch (_) {}
-                          }, 600);
-                          await playPlayer();
-                        }
-                      } else {
-                        await applyPlayerPosition(0);
-                        await pausePlayer();
-                      }
-
-                      startPlaybackSeekDetector();
-                    } catch (error) {
-                      console.warn("播放器就緒後同步失敗:", error);
-                    }
-                  }, 250);
-
-
-                  setTimeout(
-                    forceYoutubeVisible,
-                    100
-                  );
-
-                  setTimeout(
-                    forceYoutubeVisible,
-                    500
-                  );
-
-                  setTimeout(
-                    forceYoutubeVisible,
-                    1200
-                  );
-                },
-
-              onStateChange:
-                async (event) => {
-                  if (
-                    state.youtubeBuildToken !== token ||
-                    state.player !== event.target
-                  ) {
-                    return;
-                  }
-
-                  forceDirectVideoVisible();
-
-                  const now = Date.now();
-                  const data = event.data;
-
-                  if (data === YT.PlayerState.BUFFERING) {
-                    state.playbackIsBuffering = true;
-                    state.playbackTransientStateUntil = 0;
-                    state.playbackLastPlayerState = "buffering";
-                    state.playbackLastObservedPosition =
-                      await asyncCurrentPosition().catch(() => null);
-                    updateTimeUI();
-                    return;
-                  }
-
-                  if (data === YT.PlayerState.PLAYING) {
-                    state.playbackIsBuffering = false;
-                    state.playbackTransientStateUntil = 0;
-                    state.playbackReadyAt = Math.min(
-                      Number(state.playbackReadyAt || 0),
-                      now + 120
-                    );
-                    state.playbackLastPlayerState = "playing";
-                    state.playbackLastObservedPosition =
-                      await asyncCurrentPosition().catch(() => null);
-
-                    if (
-                      state.playbackAwaitingActualStart &&
-                      !state.playbackApplyingRemote
-                    ) {
-                      state.playbackAwaitingActualStart = false;
-                      clearTimeout(state.playbackActualStartTimer);
-                      state.playbackActualStartTimer = null;
-                      setTimeout(async () => {
-                        try {
-                          if (
-                            state.youtubeBuildToken !== token ||
-                            state.player !== event.target ||
-                            state.playbackApplyingRemote
-                          ) {
-                            return;
-                          }
-                          const position = await asyncCurrentPosition();
-                          publishPlaybackEvent(
-                            "play",
-                            position,
-                            true,
-                            playbackClockNow()
-                          );
-                          await reconcileRoomTimeline();
-                        } catch (error) {
-                          console.warn(
-                            "實際播放時間校準失敗:",
-                            error
-                          );
-                        }
-                      }, 0);
-                    } else if (
-                      !state.playbackApplyingRemote &&
-                      Date.now() >= Number(state.playbackUserActionUntil || 0)
-                    ) {
-                      setTimeout(async () => {
-                        try {
-                          if (
-                            state.youtubeBuildToken !== token ||
-                            state.player !== event.target ||
-                            state.playbackApplyingRemote
-                          ) {
-                            return;
-                          }
-
-                          const position =
-                            await asyncCurrentPosition();
-
-                          publishPlaybackEvent(
-                            "play",
-                            position,
-                            true,
-                            playbackClockNow()
-                          );
-
-                          await reconcileRoomTimeline();
-                        } catch (error) {
-                          console.warn(
-                            "YouTube 播放狀態同步失敗:",
-                            error
-                          );
-                        }
-                      }, 0);
-                    } else {
-                      setTimeout(() => {
-                        if (
-                          state.youtubeBuildToken === token &&
-                          state.player === event.target &&
-                          !state.playbackApplyingRemote
-                        ) {
-                          void reconcileRoomTimeline();
-                        }
-                      }, 0);
-                    }
-
-                    updateTimeUI();
-                    return;
-                  }
-
-                  if (data === YT.PlayerState.PAUSED) {
-                    state.playbackIsBuffering = false;
-                    state.playbackTransientStateUntil = 0;
-                    state.playbackLastPlayerState = "paused";
-                    state.playbackLastObservedPosition =
-                      await asyncCurrentPosition().catch(() => null);
-
-                    if (
-                      !state.playbackApplyingRemote &&
-                      Date.now() >= Number(state.playbackUserActionUntil || 0)
-                    ) {
-                      const position =
-                        Number(state.playbackLastObservedPosition);
-
-                      const issuedAt =
-                        playbackClockNow();
-
-                      const effectiveAt =
-                        issuedAt +
-                        getControlLeadMs();
-
-                      publishPlaybackEvent(
-                        "pause",
-                        Number.isFinite(position)
-                          ? position
-                          : 0,
-                        false,
-                        issuedAt,
-                        effectiveAt
-                      );
-                    }
-
-                    updateTimeUI();
-                    return;
-                  }
-
-                  if (data === YT.PlayerState.ENDED) {
-                    state.playbackIsBuffering = false;
-                    state.playbackTransientStateUntil = 0;
-                    state.playbackLastPlayerState = "ended";
-                    if (state.isOwner) {
-                      setTimeout(
-                        async () => {
-                          await playNextQueueItem();
-                        },
-                        300
-                      );
-                    }
-                  }
-
-                  updateTimeUI();
-                },
-              onError:
-                (event) => {
-                  console.error(
-                    "YouTube player error:",
-                    event
-                  );
-
-                  if ($("syncStatus")) {
-                    $("syncStatus")
-                      .textContent =
-                      "YouTube 播放器錯誤";
-                  }
-
-                  toast(
-                    "這支 YouTube 影片無法嵌入播放"
-                  );
-                }
-            }
-          }
+      $("playerPlaceholder")
+        ?.classList.remove(
+          "hidden"
         );
 
-      void player;
+      if ($("playerPlaceholder")) {
+        $("playerPlaceholder")
+          .textContent =
+          "YouTube 串流載入中…";
+      }
+
+      let initialized =
+        false;
+
+      const initialize =
+        async () => {
+          if (initialized) {
+            return;
+          }
+
+          if (
+            state.youtubeBuildToken !== token ||
+            state.youtubeRequestedId !== videoId ||
+            state.player !== player
+          ) {
+            return;
+          }
+
+          initialized =
+            true;
+
+          state.playerReady =
+            true;
+
+          state.playerType =
+            "youtube";
+
+          state.currentVideoId =
+            videoId;
+
+          state.currentVideoUrl =
+            null;
+
+          forceDirectVideoVisible();
+
+          $("playerPlaceholder")
+            ?.classList.add(
+              "hidden"
+            );
+
+          if ($("syncStatus")) {
+            $("syncStatus")
+              .textContent =
+              "影片已載入";
+          }
+
+          updateTimeUI();
+
+          startLocalTimeUpdate();
+
+          setTimeout(
+            async () => {
+              try {
+                const ref =
+                  playbackSyncRef();
+
+                const snapshot =
+                  ref
+                    ? await ref.once("value")
+                    : null;
+
+                const eventData =
+                  snapshot?.val?.() ||
+                  null;
+
+                const sameVideo =
+                  eventData &&
+                  String(
+                    eventData.videoId || ""
+                  ) ===
+                  String(videoId);
+
+                if (sameVideo) {
+                  rememberRoomTimeline(
+                    eventData
+                  );
+
+                  await applyRemotePlaybackEvent(
+                    eventData,
+                    true
+                  );
+                } else if (
+                  state.isOwner &&
+                  autoplay
+                ) {
+                  state.playbackAwaitingActualStart =
+                    true;
+
+                  clearTimeout(
+                    state.playbackActualStartTimer
+                  );
+
+                  state.playbackActualStartTimer =
+                    setTimeout(
+                      async () => {
+                        state.playbackActualStartTimer =
+                          null;
+
+                        if (
+                          !state.playbackAwaitingActualStart ||
+                          state.playbackApplyingRemote
+                        ) {
+                          return;
+                        }
+
+                        state.playbackAwaitingActualStart =
+                          false;
+
+                        try {
+                          if (
+                            await asyncIsPlaying()
+                          ) {
+                            const actualPosition =
+                              await asyncCurrentPosition();
+
+                            await writePlaybackCommand(
+                              "play",
+                              actualPosition,
+                              true,
+                              playbackClockNow()
+                            );
+                          }
+                        } catch (_) {}
+                      },
+                      600
+                    );
+
+                  videoElement.muted =
+                    true;
+
+                  await playPlayer();
+                } else {
+                  await applyPlayerPosition(
+                    0
+                  );
+
+                  await pausePlayer();
+                }
+
+                startPlaybackSeekDetector();
+              } catch (error) {
+                console.warn(
+                  "原生影片就緒後同步失敗:",
+                  error
+                );
+              }
+            },
+            250
+          );
+        };
+
+      videoElement.addEventListener(
+        "loadedmetadata",
+        initialize,
+        { once: true }
+      );
+
+      videoElement.src =
+        streamUrl;
+
+      videoElement.load();
     } catch (error) {
       console.error(
-        "YouTube 播放器建立失敗:",
+        "YouTube 原生播放器建立失敗:",
         error
       );
 
@@ -5879,6 +5626,19 @@
       state.currentVideoId =
         null;
 
+      state.currentVideoUrl =
+        null;
+
+      try {
+        videoElement.removeAttribute(
+          "src"
+        );
+
+        videoElement.load();
+      } catch (_) {}
+
+      detachYoutubeNativeEvents();
+
       hidePlayers();
 
       showPlayerElement(
@@ -5887,19 +5647,17 @@
 
       toast(
         error.message ||
-        "YouTube 播放器建立失敗"
+        "YouTube 原生播放器建立失敗"
       );
     } finally {
       if (
-        state.youtubeBuildToken ===
-        token
+        state.youtubeBuildToken === token
       ) {
         state.youtubeLoading =
           false;
       }
     }
   }
-
 
   /*
    * =========================================================
@@ -10543,6 +10301,10 @@
           const wasPlaying =
             await asyncIsPlaying();
 
+          markLocalPlaybackIntent(
+            "seek"
+          );
+
           await applyPlayerPosition(
             target
           );
@@ -10594,6 +10356,10 @@
 
           const wasPlaying =
             await asyncIsPlaying();
+
+          markLocalPlaybackIntent(
+            "seek"
+          );
 
           await applyPlayerPosition(
             target
@@ -11356,36 +11122,7 @@
    * =========================================================
    */
 
-  window.onYouTubeIframeAPIReady =
-    () => {
-      state.youtubeReady =
-        true;
 
-      const video =
-        state.room?.video;
-
-      if (
-        video &&
-        (
-          video.platform ===
-            "youtube" ||
-          !video.platform
-        ) &&
-        video.id
-      ) {
-        const id =
-          getYoutubeId(
-            video.id
-          );
-
-        if (id) {
-          void buildYoutubePlayer(
-            id,
-            state.isOwner
-          );
-        }
-      }
-    };
 
 
   /*
