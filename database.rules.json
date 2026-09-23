@@ -89,14 +89,14 @@
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid && newData.exists()",
-        ".validate": "newData.hasChildren(['displayName','publicCode','avatarEmoji','theme','notifications']) && newData.child('displayName').isString() && newData.child('displayName').val().length > 0 && newData.child('displayName').val().length <= 30 && newData.child('publicCode').isString() && newData.child('publicCode').val().length === 8 && newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length > 0 && newData.child('avatarEmoji').val().length <= 4 && newData.child('theme').isString() && (newData.child('theme').val() === 'aurora' || newData.child('theme').val() === 'cyber' || newData.child('theme').val() === 'paper' || newData.child('theme').val() === 'terminal' || newData.child('theme').val() === 'sakura' || newData.child('theme').val() === 'ocean' || newData.child('theme').val() === 'sunset' || newData.child('theme').val() === 'mono') && newData.child('notifications').isBoolean() && (!newData.child('createdAt').exists() || newData.child('createdAt').isNumber())"
+        ".validate": "newData.hasChildren(['displayName','publicCode','avatarEmoji','theme','notifications']) && newData.child('displayName').isString() && newData.child('displayName').val().length > 0 && newData.child('displayName').val().length <= 30 && newData.child('publicCode').isString() && newData.child('publicCode').val().length === 6 && newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length > 0 && newData.child('avatarEmoji').val().length <= 4 && newData.child('theme').isString() && (newData.child('theme').val() === 'aurora' || newData.child('theme').val() === 'cyber' || newData.child('theme').val() === 'paper' || newData.child('theme').val() === 'terminal' || newData.child('theme').val() === 'sakura' || newData.child('theme').val() === 'ocean' || newData.child('theme').val() === 'sunset' || newData.child('theme').val() === 'mono' || newData.child('theme').val() === 'glass' || newData.child('theme').val() === 'retro' || newData.child('theme').val() === 'forest' || newData.child('theme').val() === 'blueprint') && newData.child('notifications').isBoolean() && (!newData.child('createdAt').exists() || newData.child('createdAt').isNumber())"
       }
     },
     "profileCodes": {
       "$code": {
-        ".read": "auth != null && $code.length === 8",
-        ".write": "auth != null && $code.length === 8 && newData.isString() && newData.val() === auth.uid && (!data.exists() || data.val() === auth.uid)",
-        ".validate": "newData.isString() && newData.val() === auth.uid && $code.length === 8"
+        ".read": "auth != null && $code.length === 6",
+        ".write": "auth != null && $code.length === 6 && newData.isString() && newData.val() === auth.uid && (!data.exists() || data.val() === auth.uid)",
+        ".validate": "newData.isString() && newData.val() === auth.uid && $code.length === 6"
       }
     },
     "friendRequests": {
@@ -104,7 +104,7 @@
         "$requesterUid": {
           ".read": "auth != null && (auth.uid === $targetUid || auth.uid === $requesterUid)",
           ".write": "auth != null && (( !data.exists() && newData.exists() && auth.uid === $requesterUid ) || (!newData.exists() && (auth.uid === $targetUid || auth.uid === $requesterUid)))",
-          ".validate": "!newData.exists() || (newData.hasChildren(['uid','name','fromName','createdAt']) && newData.child('uid').val() === $requesterUid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('fromName').isString() && newData.child('fromName').val().length > 0 && newData.child('fromName').val().length <= 30 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 60000 && newData.child('createdAt').val() >= now - 120000 && (!newData.child('fromCode').exists() || (newData.child('fromCode').isString() && newData.child('fromCode').val().length <= 8)) && (!newData.child('avatarEmoji').exists() || (newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length <= 4)))"
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid','name','fromName','createdAt']) && newData.child('uid').val() === $requesterUid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('fromName').isString() && newData.child('fromName').val().length > 0 && newData.child('fromName').val().length <= 30 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 60000 && newData.child('createdAt').val() >= now - 120000 && (!newData.child('fromCode').exists() || (newData.child('fromCode').isString() && newData.child('fromCode').val().length <= 6)) && (!newData.child('avatarEmoji').exists() || (newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length <= 4)))"
         }
       }
     },
