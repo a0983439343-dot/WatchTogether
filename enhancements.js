@@ -666,7 +666,7 @@ function buildSettingsModal() {
     '</div>';
   document.body.appendChild(modal);
 
-  $("wtSettingsClose").addEventListener("click",function(){ closeModal("wtSettingsModal"); });
+  $("wtSettingsClose").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); });
   $("wtSaveProfileBtn").addEventListener("click",saveProfile);
   $("wtCopyFriendCodeBtn").addEventListener("click",copyFriendCode);
   $("wtNotificationToggle").addEventListener("change",async function(event){
@@ -780,7 +780,7 @@ function buildInfoModal() {
   modal.innerHTML =
     '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div class="wt-panel-title" id="wtInfoTitle">說明</div><button class="wt-close-btn" id="wtInfoClose" type="button">×</button></div><div id="wtInfoBody" class="wt-legal"></div></div>';
   document.body.appendChild(modal);
-  $("wtInfoClose").addEventListener("click",function(){ closeModal("wtInfoModal"); });
+  $("wtInfoClose").addEventListener("click",function(){ wt.closeModal("wtInfoModal"); });
 }
 
 function openInfo(kind) {
@@ -798,7 +798,7 @@ function openInfo(kind) {
       "<p>請勿使用網站進行騷擾、冒充他人、垃圾訊息或大量自動化請求。</p>" +
       "<p>不同影片平台的嵌入與同步能力可能不同，網站會依官方播放器能力處理。</p>";
   }
-  openModal("wtInfoModal");
+  wt.openModal("wtInfoModal");
 }
 
 function buildReportModal() {
@@ -813,7 +813,7 @@ function buildReportModal() {
     '<div class="wt-form-row"><label for="wtReportDetails">問題描述</label><textarea id="wtReportDetails" maxlength="2000" placeholder="請描述問題。"></textarea></div>' +
     '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtReportCancel" type="button">取消</button><button class="wt-action-btn primary" id="wtReportSend" type="button">送出回報</button></div><div class="wt-small" id="wtReportHint"></div></div>';
   document.body.appendChild(modal);
-  $("wtReportClose").addEventListener("click",function(){ closeModal("wtReportModal"); });
+  $("wtReportClose").addEventListener("click",function(){ wt.closeModal("wtReportModal"); });
   $("wtReportCancel").addEventListener("click",function(){ closeModal("wtReportModal"); });
   $("wtReportSend").addEventListener("click",sendReport);
 }
@@ -849,12 +849,12 @@ function openSettings() {
   renderProfile();
   renderThemes();
   renderFavorites();
-  openModal("wtSettingsModal");
+  wt.openModal("wtSettingsModal");
 }
 
 function openReport() {
   buildReportModal();
-  openModal("wtReportModal");
+  wt.openModal("wtReportModal");
 }
 
 function setupSettingsExtras() {
