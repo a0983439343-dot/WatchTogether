@@ -871,3 +871,405 @@ wt.loadProfile = loadProfile;
 wt.renderFavorites = renderFavorites;
 
 })();
+
+(() => {
+"use strict";
+var wt = window.WT_ENHANCEMENTS;
+if (!wt) return;
+var $ = wt.$;
+var ROOM_RE = wt.ROOM_RE;
+var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
+
+function notify(title,body) {
+  if (localStorage.getItem(wt.KEYS.notifications) === "0") return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (document.visibilityState === "visible") return;
+  try {
+    new Notification(title,{body:body,icon:"./icon.svg",tag:"watchtogether"});
+  } catch (_) {}
+}
+
+async function isLoggedUser() {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) {
+    wt.toast("Google 登入後才能使用好友與私聊");
+    return false;
+  }
+  return true;
+}
+
+async function isFriend(uid) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous || !uid) return false;
+  var snapshot = await wt.db.ref("friendships/" + user.uid + "/" + uid).once("value").catch(function(){ return null; });
+  return Boolean(snapshot && snapshot.exists());
+}
+
+async function addFriendByCode(code) {
+  if (!(await isLoggedUser())) return;
+  var user = wt.auth.currentUser;
+  code = String(code || "").trim().toUpperCase();
+  if (!FRIEND_CODE_RE.test(code)) throw new Error("好友代碼必須是 8 碼英數字");
+
+  var codeSnapshot = await wt.db.ref("profileCodes/" + code).once("value");
+  var targetUid = String(codeSnapshot.val() || "");
+  if (!targetUid) throw new Error("找不到這個好友代碼");
+  if (targetUid === user.uid) throw new Error("不能加自己為好友");
+
+  if (await isFriend(targetUid)) throw new Error("你們已經是好友");
+
+  var requestRef = wt.db.ref("friendRequests/" + targetUid + "/" + user.uid);
+  var existing = await requestRef.once("value");
+  if (existing.exists()) throw new Error("好友邀請已經送出");
+
+  var profile = wt.state.profile || {};
+  await requestRef.set({
+    uid:user.uid,
+    name:String(profile.displayName || wt.currentName()).slice(0,30),
+    avatarEmoji:String(profile.avatarEmoji || wt.currentAvatar()).slice(0,4),
+    fromName:String(profile.displayName || wt.currentName()).slice(0,30),
+    fromCode:String(profile.publicCode || ""),
+    createdAt:wt.serverTs()
+  });
+  wt.toast("好友邀請已送出");
+}
+
+async function acceptFriend(uid) {
+  if (!(await isLoggedUser())) return;
+  var user = wt.auth.currentUser;
+  var requestRef = wt.db.ref("friendRequests/" + user.uid + "/" + uid);
+  var request = (await requestRef.once("value")).val();
+  if (!request) throw new Error("這個好友邀請已不存在");
+
+  var updates = {};
+  updates["friendships/" + user.uid + "/" + uid] = {since:wt.serverTs()};
+  updates["friendships/" + uid + "/" + user.uid] = {since:wt.serverTs()};
+  updates["friendRequests/" + user.uid + "/" + uid] = null;
+  await wt.db.ref().update(updates);
+  wt.toast("已新增好友");
+}
+
+async function declineFriend(uid) {
+  if (!(await isLoggedUser())) return;
+  var user = wt.auth.currentUser;
+  await wt.db.ref("friendRequests/" + user.uid + "/" + uid).remove();
+  wt.toast("已拒絕好友邀請");
+}
+
+async function removeFriend(uid) {
+  if (!(await isLoggedUser())) return;
+  var user = wt.auth.currentUser;
+  if (!window.confirm("確定要刪除這位好友嗎？")) return;
+  var updates = {};
+  updates["friendships/" + user.uid + "/" + uid] = null;
+  updates["friendships/" + uid + "/" + user.uid] = null;
+  await wt.db.ref().update(updates);
+  if (wt.state.selectedFriendUid === uid) {
+    wt.state.selectedFriendUid = "";
+    wt.state.selectedFriendProfile = null;
+    stopDmListener();
+    renderPrivateMessages({});
+    updatePrivateHeader();
+  }
+  wt.toast("好友已刪除");
+}
+
+async function loadFriends() {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) {
+    wt.state.friends = {};
+    renderFriends();
+    return;
+  }
+  var snapshot = await wt.db.ref("friendships/" + user.uid).once("value").catch(function(){ return null; });
+  var ids = Object.keys(snapshot && snapshot.val() || {});
+  var pairs = await Promise.all(ids.map(async function(uid){
+    var profile = (await wt.db.ref("profiles/" + uid).once("value").catch(function(){ return null; })).val() || {};
+    return [uid,profile];
+  }));
+  wt.state.friends = Object.fromEntries(pairs);
+  renderFriends();
+}
+
+function listenRequests() {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) return;
+  var ref = wt.db.ref("friendRequests/" + user.uid);
+  ref.off();
+  ref.on("value",function(snapshot){
+    var next = snapshot.val() || {};
+    var previousIds = Object.keys(wt.state.requests || {});
+    wt.state.requests = next;
+    renderRequests();
+    Object.entries(next).forEach(function(pair){
+      if (!previousIds.includes(pair[0])) {
+        var request = pair[1] || {};
+        void notify(
+          "WatchTogether 新好友邀請",
+          String(request.fromName || request.name || "有人") + " 想加你為好友"
+        );
+      }
+    });
+    updateFriendBadge();
+  });
+}
+
+function updateFriendBadge() {
+  var count = Object.keys(wt.state.requests || {}).length;
+  var buttons = [$("wtFriendsBtn"),$("wtHomeFriends")];
+  buttons.forEach(function(button){
+    if (!button) return;
+    button.textContent = count > 0 ? "👥 好友 · " + count : "👥 好友";
+  });
+}
+
+function buildFriendsModal() {
+  if ($("wtFriendsModal")) return;
+  var modal = document.createElement("div");
+  modal.id = "wtFriendsModal";
+  modal.className = "wt-modal hidden";
+  modal.setAttribute("aria-hidden","true");
+  modal.innerHTML =
+    '<div class="wt-modal-card">' +
+      '<div class="wt-modal-header"><div><div class="wt-panel-title">好友與私聊</div><div class="wt-small">用 8 碼好友代碼加好友，私聊只允許對話雙方讀取。</div></div><button class="wt-close-btn" id="wtFriendsClose" type="button">×</button></div>' +
+      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="8" placeholder="輸入 8 碼好友代碼" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
+      '<div class="wt-friends-layout">' +
+        '<aside class="wt-friends-sidebar">' +
+          '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">好友</span><span id="wtFriendCount" class="wt-small">0</span></div>' +
+          '<div id="wtFriendsList" style="display:grid;gap:7px;margin-top:10px;"></div>' +
+          '<div class="wt-section-title" style="margin-top:18px;"><span class="wt-panel-title" style="font-size:15px;">好友邀請</span></div>' +
+          '<div id="wtFriendRequests" class="wt-request-list"></div>' +
+        '</aside>' +
+        '<section class="wt-friends-main">' +
+          '<div class="wt-private-head"><div><div class="wt-panel-title" id="wtPrivateTitle" style="font-size:15px;">選擇好友開始私聊</div><div class="wt-small" id="wtPrivateSubtitle">可以傳文字或貼圖。</div></div><button class="wt-mini-btn danger" id="wtRemoveFriendBtn" type="button" disabled>刪除好友</button></div>' +
+          '<div id="wtPrivateMessages" class="wt-private-messages"></div>' +
+          '<form id="wtPrivateForm" class="wt-private-form"><div class="wt-room-sticker-wrap"><button id="wtPrivateStickerBtn" class="wt-mini-btn" type="button">😊</button><div id="wtPrivateStickerPicker" class="wt-sticker-picker hidden"></div></div><input id="wtPrivateInput" class="wt-private-input" maxlength="300" placeholder="傳送私訊…" autocomplete="off"><button class="wt-action-btn primary" type="submit">送出</button></form>' +
+        '</section>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  $("wtFriendsClose").addEventListener("click",function(){ wt.closeModal("wtFriendsModal"); });
+  $("wtAddFriendBtn").addEventListener("click",async function(){
+    try {
+      await addFriendByCode($("wtFriendCodeInput").value);
+      $("wtFriendCodeInput").value = "";
+    } catch (error) { wt.toast(error && error.message || "加好友失敗"); }
+  });
+  $("wtFriendCodeInput").addEventListener("input",function(event){
+    event.target.value = String(event.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);
+  });
+  $("wtFriendCodeInput").addEventListener("keydown",function(event){
+    if (event.key === "Enter") {
+      event.preventDefault();
+      $("wtAddFriendBtn").click();
+    }
+  });
+  $("wtRemoveFriendBtn").addEventListener("click",async function(){
+    if (!wt.state.selectedFriendUid) return;
+    try { await removeFriend(wt.state.selectedFriendUid); } catch (error) { wt.toast(error && error.message || "刪除好友失敗"); }
+  });
+  $("wtPrivateStickerBtn").addEventListener("click",function(event){
+    event.preventDefault();
+    $("wtPrivateStickerPicker").classList.toggle("hidden");
+  });
+  $("wtPrivateForm").addEventListener("submit",async function(event){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    try {
+      await sendPrivateText($("wtPrivateInput").value);
+      $("wtPrivateInput").value = "";
+    } catch (error) { wt.toast(error && error.message || "私訊送出失敗"); }
+  });
+  buildStickerPicker("wtPrivateStickerPicker",function(sticker){ void sendPrivateSticker(sticker); });
+}
+
+function buildStickerPicker(id,onSelect) {
+  var box = $(id);
+  if (!box || box.dataset.wtBuilt) return;
+  box.innerHTML = wt.STICKERS.map(function(sticker){
+    return '<button class="wt-sticker-btn" data-wt-sticker="' + esc(sticker) + '" type="button">' + esc(sticker) + '</button>';
+  }).join("");
+  box.querySelectorAll("[data-wt-sticker]").forEach(function(button){
+    button.addEventListener("click",function(){ onSelect(button.dataset.wtSticker); });
+  });
+  box.dataset.wtBuilt = "1";
+}
+
+function renderRequests() {
+  var box = $("wtFriendRequests");
+  if (!box) return;
+  var entries = Object.entries(wt.state.requests || {});
+  if (!entries.length) {
+    box.innerHTML = '<div class="wt-small">目前沒有新的好友邀請。</div>';
+    return;
+  }
+  box.innerHTML = entries.map(function(pair){
+    var uid = pair[0];
+    var request = pair[1] || {};
+    return '<div class="wt-request-card"><div class="wt-profile-head"><div class="wt-avatar-sm">' + esc(request.avatarEmoji || String(request.fromName || "🙂").slice(0,1)) + '</div><div class="wt-profile-text"><div class="wt-profile-name" style="font-size:13px;">' + esc(request.fromName || request.name || "玩家") + '</div><div class="wt-small">' + esc(request.fromCode || "") + '</div></div></div><div class="wt-card-actions" style="margin-top:8px;justify-content:flex-start;"><button class="wt-mini-btn primary" data-wt-accept="' + esc(uid) + '" type="button">接受</button><button class="wt-mini-btn" data-wt-decline="' + esc(uid) + '" type="button">拒絕</button></div></div>';
+  }).join("");
+  box.querySelectorAll("[data-wt-accept]").forEach(function(btn){
+    btn.addEventListener("click",async function(){
+      try { await acceptFriend(btn.dataset.wtAccept); } catch (error) { wt.toast(error && error.message || "接受邀請失敗"); }
+    });
+  });
+  box.querySelectorAll("[data-wt-decline]").forEach(function(btn){
+    btn.addEventListener("click",async function(){
+      try { await declineFriend(btn.dataset.wtDecline); } catch (error) { wt.toast(error && error.message || "拒絕邀請失敗"); }
+    });
+  });
+}
+
+function renderFriends() {
+  var box = $("wtFriendsList");
+  if (!box) return;
+  var entries = Object.entries(wt.state.friends || {});
+  if ($("wtFriendCount")) $("wtFriendCount").textContent = String(entries.length);
+  if ($("wtMyFriendCode")) $("wtMyFriendCode").textContent = wt.state.profile && wt.state.profile.publicCode ? "我的好友代碼：" + wt.state.profile.publicCode : "Google 登入後會建立好友代碼";
+  if (!entries.length) {
+    box.innerHTML = '<div class="wt-small">還沒有好友。把 8 碼好友代碼給朋友即可互加。</div>';
+    return;
+  }
+  box.innerHTML = entries.map(function(pair){
+    var uid = pair[0], profile = pair[1] || {};
+    return '<button class="wt-friend-card' + (wt.state.selectedFriendUid === uid ? ' active' : '') + '" data-wt-friend="' + esc(uid) + '" type="button"><div class="wt-avatar-sm">' + esc(profile.avatarEmoji || String(profile.displayName || "🙂").slice(0,1)) + '</div><div class="wt-friend-info"><strong>' + esc(profile.displayName || "玩家") + '</strong><span>' + esc(profile.publicCode || "好友") + '</span></div></button>';
+  }).join("");
+  box.querySelectorAll("[data-wt-friend]").forEach(function(button){
+    button.addEventListener("click",function(){ void selectFriend(button.dataset.wtFriend); });
+  });
+  updateFriendBadge();
+}
+
+function privateId(a,b) {
+  return [String(a),String(b)].sort().join("_");
+}
+
+function stopDmListener() {
+  try { wt.state.dmMessagesRef && wt.state.dmMessagesRef.off(); } catch (_) {}
+  wt.state.dmMessagesRef = null;
+}
+
+async function ensureConversation(friendUid) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) throw new Error("Google 登入後才能私聊");
+  if (!(await isFriend(friendUid))) throw new Error("只有好友可以私聊");
+  var id = privateId(user.uid,friendUid);
+  var ref = wt.db.ref("conversations/" + id);
+  var snapshot = await ref.once("value");
+  if (!snapshot.exists()) {
+    var pair = [user.uid,friendUid].sort();
+    await ref.set({userA:pair[0],userB:pair[1],createdAt:wt.serverTs()});
+  }
+  return id;
+}
+
+function startDmListener() {
+  stopDmListener();
+  var user = wt.auth.currentUser;
+  var friendUid = wt.state.selectedFriendUid;
+  if (!user || user.isAnonymous || !friendUid) return;
+  var id = privateId(user.uid,friendUid);
+  var ref = wt.db.ref("conversations/" + id + "/messages").limitToLast(100);
+  wt.state.dmMessagesRef = ref;
+  ref.on("value",function(snapshot){ renderPrivateMessages(snapshot.val() || {}); });
+}
+
+function updatePrivateHeader() {
+  var title = $("wtPrivateTitle");
+  var subtitle = $("wtPrivateSubtitle");
+  var remove = $("wtRemoveFriendBtn");
+  if (!title || !subtitle) return;
+  if (!wt.state.selectedFriendUid || !wt.state.selectedFriendProfile) {
+    title.textContent = "選擇好友開始私聊";
+    subtitle.textContent = "可以傳文字或貼圖。";
+    if (remove) remove.disabled = true;
+    return;
+  }
+  title.textContent = wt.state.selectedFriendProfile.displayName || "好友";
+  subtitle.textContent = "好友代碼：" + String(wt.state.selectedFriendProfile.publicCode || "");
+  if (remove) remove.disabled = false;
+}
+
+async function selectFriend(uid) {
+  if (!wt.state.friends[uid]) return;
+  wt.state.selectedFriendUid = uid;
+  wt.state.selectedFriendProfile = wt.state.friends[uid];
+  renderFriends();
+  updatePrivateHeader();
+  renderPrivateMessages({});
+  startDmListener();
+}
+
+function renderPrivateMessages(messages) {
+  var box = $("wtPrivateMessages");
+  if (!box) return;
+  var user = wt.auth.currentUser;
+  var list = Object.entries(messages || {}).map(function(pair){
+    return Object.assign({id:pair[0]},pair[1] || {});
+  }).sort(function(a,b){ return Number(a.createdAt||0)-Number(b.createdAt||0); });
+  if (!list.length) {
+    box.innerHTML = '<div class="wt-small">還沒有訊息，先打個招呼吧 👋</div>';
+    return;
+  }
+  box.innerHTML = list.map(function(message){
+    var self = String(message.uid||"") === String(user && user.uid || "");
+    var body = message.type === "sticker" ? '<div class="wt-sticker">' + esc(message.sticker || "😊") + '</div>' : '<div class="wt-message-text">' + esc(message.text || "") + '</div>';
+    return '<div class="wt-message' + (self ? ' self' : '') + '"><div class="wt-message-top"><span class="wt-message-name">' + esc(message.name || "玩家") + '</span><span class="wt-message-time">' + esc(formatDate(message.createdAt)) + '</span></div>' + body + (self ? '<button class="wt-message-delete" data-wt-dm-delete="' + esc(message.id) + '" type="button">刪除訊息</button>' : '') + '</div>';
+  }).join("");
+  box.querySelectorAll("[data-wt-dm-delete]").forEach(function(button){
+    button.addEventListener("click",async function(){
+      if (!user || !wt.state.selectedFriendUid) return;
+      var id = privateId(user.uid,wt.state.selectedFriendUid);
+      try { await wt.db.ref("conversations/" + id + "/messages/" + button.dataset.wtDmDelete).remove(); } catch (error) { wt.toast(error && error.message || "刪除訊息失敗"); }
+    });
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function formatDate(value) {
+  var date = new Date(Number(value)||0);
+  if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return "";
+  return date.toLocaleString("zh-TW",{year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+}
+
+async function sendPrivateText(text) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
+  text = String(text || "").trim().slice(0,300);
+  if (!text) return;
+  var id = await ensureConversation(wt.state.selectedFriendUid);
+  await wt.db.ref("conversations/" + id + "/messages").push({
+    uid:user.uid,name:wt.currentName(),type:"text",text:text,createdAt:wt.serverTs()
+  });
+}
+
+async function sendPrivateSticker(sticker) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
+  var id = await ensureConversation(wt.state.selectedFriendUid);
+  await wt.db.ref("conversations/" + id + "/messages").push({
+    uid:user.uid,name:wt.currentName(),type:"sticker",sticker:String(sticker || "😊").slice(0,4),createdAt:wt.serverTs()
+  });
+  $("wtPrivateStickerPicker").classList.add("hidden");
+}
+
+function openFriends() {
+  buildFriendsModal();
+  if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
+  openModal("wtFriendsModal");
+  void loadFriends();
+  listenRequests();
+  renderFriends();
+  renderRequests();
+  updatePrivateHeader();
+}
+
+wt.isFriend = isFriend;
+wt.addFriendByCode = addFriendByCode;
+wt.openFriends = openFriends;
+wt.renderFriends = renderFriends;
+wt.listenRequests = listenRequests;
+wt.stopDmListener = stopDmListener;
+
+})();
