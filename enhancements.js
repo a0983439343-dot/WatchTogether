@@ -1755,6 +1755,14 @@ async function setupRoom(id) {
   }
 
   wt.state.roomVideoRef.on("value",function(snapshot){
+    if (
+      setupToken !== Number(wt.state.roomSetupToken || 0) ||
+      wt.state.roomSetupId !== id ||
+      roomId() !== id
+    ) {
+      return;
+    }
+
     var video = snapshot.val();
     if (video && video.id) wt.rememberVideo(video);
   });
