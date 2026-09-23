@@ -898,6 +898,13 @@ async function addFriendByCode(code) {
 
   if (await isFriend(targetUid)) throw new Error("你們已經是好友");
 
+  var incomingRef = wt.db.ref("friendRequests/" + user.uid + "/" + targetUid);
+  var incoming = await incomingRef.once("value");
+  if (incoming.exists()) {
+    await acceptFriend(targetUid);
+    return;
+  }
+
   var requestRef = wt.db.ref("friendRequests/" + targetUid + "/" + user.uid);
   var existing = await requestRef.once("value");
   if (existing.exists()) throw new Error("好友邀請已經送出");
@@ -922,9 +929,11 @@ async function acceptFriend(uid) {
   if (!request) throw new Error("這個好友邀請已不存在");
 
   var updates = {};
-  updates["friendships/" + user.uid + "/" + uid] = {since:wt.serverTs()};
-  updates["friendships/" + uid + "/" + user.uid] = {since:wt.serverTs()};
+  var since = wt.serverTs();
+  updates["friendships/" + user.uid + "/" + uid] = {since:since};
+  updates["friendships/" + uid + "/" + user.uid] = {since:since};
   updates["friendRequests/" + user.uid + "/" + uid] = null;
+  updates["friendRequests/" + uid + "/" + user.uid] = null;
   await wt.db.ref().update(updates);
   wt.toast("已新增好友");
 }
@@ -943,6 +952,8 @@ async function removeFriend(uid) {
   var updates = {};
   updates["friendships/" + user.uid + "/" + uid] = null;
   updates["friendships/" + uid + "/" + user.uid] = null;
+  updates["friendRequests/" + user.uid + "/" + uid] = null;
+  updates["friendRequests/" + uid + "/" + user.uid] = null;
   await wt.db.ref().update(updates);
   if (wt.state.selectedFriendUid === uid) {
     wt.state.selectedFriendUid = "";
