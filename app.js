@@ -541,7 +541,7 @@
 
     const values =
       new Uint32Array(
-        12
+        6
       );
 
     if (
@@ -568,7 +568,7 @@
 
     for (
       let i = 0;
-      i < 12;
+      i < 6;
       i++
     ) {
       result +=
