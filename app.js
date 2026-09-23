@@ -9116,8 +9116,7 @@
     [
       "playPauseBtn",
       "backBtn",
-      "forwardBtn",
-      "playQueueNowBtn"
+      "forwardBtn"
     ].forEach((id) => {
       const button =
         $(id);
@@ -9126,21 +9125,50 @@
         return;
       }
 
-      button.disabled =
-        !state.isOwner ||
-        !playbackControlSupported;
+      const canControl =
+        Boolean(
+          state.roomId &&
+          state.uid &&
+          state.wasMemberInRoom &&
+          state.playerReady &&
+          state.player &&
+          playbackControlSupported
+        );
 
-      if (!state.isOwner) {
-        button.title =
-          "只有房主可以控制播放";
-      } else if (!playbackControlSupported) {
+      button.disabled =
+        !canControl;
+
+      if (!playbackControlSupported) {
         button.title =
           "此平台目前不支援本站播放控制";
+      } else if (!state.isOwner) {
+        button.title =
+          "送出控制請求，由房主執行";
       } else {
         button.title =
           "";
       }
     });
+
+    const queueButton =
+      $("playQueueNowBtn");
+
+    if (queueButton) {
+      queueButton.disabled =
+        !state.isOwner ||
+        !playbackControlSupported;
+
+      if (!state.isOwner) {
+        queueButton.title =
+          "只有房主可以立即播放待播放清單";
+      } else if (!playbackControlSupported) {
+        queueButton.title =
+          "此平台目前不支援本站播放控制";
+      } else {
+        queueButton.title =
+          "";
+      }
+    }
   }
 
 
