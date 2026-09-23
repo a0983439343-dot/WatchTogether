@@ -6514,7 +6514,23 @@
             state.uid,
 
           name:
-            roomName
+            roomName,
+
+          settings: {
+            locked:
+              false,
+
+            maxMembers:
+              2,
+
+            controlMode:
+              "host"
+          },
+
+          createdAt:
+            firebase.database
+              .ServerValue
+              .TIMESTAMP
         });
     } catch (error) {
       console.error(
@@ -6603,6 +6619,79 @@
     ) {
       throw new Error(
         "找不到這個房間"
+      );
+    }
+
+    const metaData =
+      metaSnapshot.val() ||
+      {};
+
+    const metaSettings =
+      metaData.settings ||
+      {};
+
+    const maxMembers =
+      Math.max(
+        2,
+        Math.min(
+          10,
+          Number(
+            metaSettings.maxMembers ||
+            2
+          )
+        )
+      );
+
+    const currentMemberSnapshot =
+      await db
+        .ref(
+          `members/${roomId}/${state.uid}`
+        )
+        .once("value");
+
+    const roomMembersSnapshot =
+      await db
+        .ref(
+          `members/${roomId}`
+        )
+        .once("value");
+
+    const isExistingMember =
+      currentMemberSnapshot.exists();
+
+    const existingMemberCount =
+      Object.keys(
+        roomMembersSnapshot.val() ||
+        {}
+      ).length;
+
+    const isRoomOwner =
+      String(
+        metaData.owner ||
+        ""
+      ) ===
+      String(
+        state.uid ||
+        ""
+      );
+
+    if (
+      !isRoomOwner &&
+      !isExistingMember &&
+      metaSettings.locked === true
+    ) {
+      throw new Error(
+        "這個房間目前已鎖定，暫停新成員加入"
+      );
+    }
+
+    if (
+      !isRoomOwner &&
+      !isExistingMember &&
+      existingMemberCount >= maxMembers
+    ) {
+      throw new Error(
+        "這個房間已達人數上限"
       );
     }
 
