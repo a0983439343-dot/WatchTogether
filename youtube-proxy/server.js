@@ -1,5 +1,6 @@
 const http = require("node:http");
 const { spawn } = require("node:child_process");
+const { Readable } = require("node:stream");
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -19,6 +20,10 @@ const SEARCH_LIMIT_PER_IP = 30;
 const STREAM_LIMIT_PER_IP = 120;
 const MAX_ACTIVE_SEARCHES = 3;
 const MAX_ACTIVE_STREAMS = 6;
+const YT_STREAM_USER_AGENT =
+  process.env.YT_STREAM_USER_AGENT ||
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+const YT_STREAM_REFERER = "https://www.youtube.com/";
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
@@ -154,7 +159,11 @@ function getStreamUrl(videoId, forceRefresh = false) {
       "--socket-timeout",
       "20",
       "-f",
-      "b[ext=mp4]/b",
+      "best[ext=mp4]/best",
+      "--add-headers",
+      "User-Agent:" + YT_STREAM_USER_AGENT,
+      "--add-headers",
+      "Referer:" + YT_STREAM_REFERER,
       youtubeUrl(videoId)
     ];
 
@@ -563,38 +572,266 @@ async function handleSearch(req, res, url) {
   }
 }
 
+function getUpstreamHeaders(req) {
+  const headers = {
+    "User-Agent": YT_STREAM_USER_AGENT,
+    "Referer": YT_STREAM_REFERER,
+    "Accept": "*/*",
+    "Accept-Encoding": "identity"
+  };
+
+  if (req.headers.range) {
+    headers.Range = String(req.headers.range);
+  }
+
+  return headers;
+}
+
+async function fetchUpstreamStream(url, req) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, 25_000);
+
+  try {
+    return await fetch(url, {
+      method: req.method === "HEAD" ? "HEAD" : "GET",
+      headers: getUpstreamHeaders(req),
+      redirect: "follow",
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function setStreamResponseHeaders(res, upstream) {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
+    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Cache-Control": "no-store"
+  };
+
+  for (const name of [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "etag",
+    "last-modified"
+  ]) {
+    const value = upstream.headers.get(name);
+    if (value) {
+      headers[name] = value;
+    }
+  }
+
+  res.writeHead(upstream.status, headers);
+}
+
 async function handleStream(req, res, videoId) {
   const requestUrl = new URL(req.url, "http://localhost");
-  const forceRefresh = requestUrl.searchParams.has("refresh");
-  const ip = getClientIp(req);
-  if (!allowRate(ip, "stream", STREAM_LIMIT_PER_IP)) {
-    send(res, 429, JSON.stringify({error:"rate_limited",message:"播放請求過於頻繁，請稍後再試"}));
-    return;
-  }
-  if (activeStreams >= MAX_ACTIVE_STREAMS) {
-    send(res, 503, JSON.stringify({error:"stream_busy",message:"播放服務目前忙碌，請稍後再試"}));
-    return;
-  }
-  activeStreams += 1;
-  try {
-    const url = await getStreamUrl(videoId, forceRefresh);
+  let forceRefresh =
+    requestUrl.searchParams.has("refresh");
 
-    res.writeHead(302, {
-      Location: url,
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-      "Access-Control-Allow-Headers": "Range,Content-Type",
-      "Cache-Control": "no-store"
-    });
-    res.end();
+  const ip = getClientIp(req);
+
+  if (!allowRate(ip, "stream", STREAM_LIMIT_PER_IP)) {
+    send(
+      res,
+      429,
+      JSON.stringify({
+        error: "rate_limited",
+        message: "播放請求過於頻繁，請稍後再試"
+      })
+    );
+    return;
+  }
+
+  if (activeStreams >= MAX_ACTIVE_STREAMS) {
+    send(
+      res,
+      503,
+      JSON.stringify({
+        error: "stream_busy",
+        message: "播放服務目前忙碌，請稍後再試"
+      })
+    );
+    return;
+  }
+
+  activeStreams += 1;
+
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    activeStreams = Math.max(
+      0,
+      activeStreams - 1
+    );
+  };
+
+  let upstream = null;
+  let bodyStream = null;
+
+  try {
+    let url =
+      await getStreamUrl(
+        videoId,
+        forceRefresh
+      );
+
+    upstream =
+      await fetchUpstreamStream(
+        url,
+        req
+      );
+
+    if (
+      (upstream.status === 403 ||
+        upstream.status === 410) &&
+      !forceRefresh
+    ) {
+      cache.delete(videoId);
+      forceRefresh = true;
+
+      try {
+        await upstream.body?.cancel();
+      } catch (_) {}
+
+      url =
+        await getStreamUrl(
+          videoId,
+          true
+        );
+
+      upstream =
+        await fetchUpstreamStream(
+          url,
+          req
+        );
+    }
+
+    if (
+      !upstream.ok &&
+      upstream.status !== 206
+    ) {
+      let details = "";
+      try {
+        details =
+          await upstream.text();
+      } catch (_) {}
+
+      throw new Error(
+        "upstream_http_" +
+        String(upstream.status) +
+        (details
+          ? ":" + details.slice(0, 300)
+          : "")
+      );
+    }
+
+    if (
+      req.method === "HEAD"
+    ) {
+      setStreamResponseHeaders(
+        res,
+        upstream
+      );
+
+      try {
+        await upstream.body?.cancel();
+      } catch (_) {}
+
+      res.end();
+      release();
+      return;
+    }
+
+    if (!upstream.body) {
+      throw new Error(
+        "upstream_stream_body_missing"
+      );
+    }
+
+    setStreamResponseHeaders(
+      res,
+      upstream
+    );
+
+    bodyStream =
+      Readable.fromWeb(
+        upstream.body
+      );
+
+    const cleanup = () => {
+      try {
+        bodyStream?.destroy();
+      } catch (_) {}
+
+      release();
+    };
+
+    req.once("aborted", cleanup);
+    req.once("close", cleanup);
+    res.once("close", cleanup);
+    res.once("finish", cleanup);
+
+    bodyStream.once(
+      "error",
+      error => {
+        console.error(
+          "[stream-body]",
+          videoId,
+          error?.message || error
+        );
+
+        if (!res.destroyed) {
+          try {
+            res.destroy(error);
+          } catch (_) {}
+        }
+
+        cleanup();
+      }
+    );
+
+    bodyStream.pipe(res);
   } catch (error) {
-    console.error("[stream]", videoId, error?.message || error);
-    send(res, 502, JSON.stringify({
-      error: "youtube_stream_unavailable",
-      message: "Unable to resolve a playable YouTube stream right now."
-    }));
-  } finally {
-    activeStreams = Math.max(0, activeStreams - 1);
+    release();
+
+    try {
+      bodyStream?.destroy();
+    } catch (_) {}
+
+    try {
+      upstream?.body?.cancel();
+    } catch (_) {}
+
+    console.error(
+      "[stream]",
+      videoId,
+      error?.message || error
+    );
+
+    if (!res.headersSent) {
+      send(
+        res,
+        502,
+        JSON.stringify({
+          error:
+            "youtube_stream_unavailable",
+          message:
+            "Unable to relay a playable YouTube stream right now."
+        })
+      );
+    } else if (!res.destroyed) {
+      try {
+        res.destroy();
+      } catch (_) {}
+    }
   }
 }
 
