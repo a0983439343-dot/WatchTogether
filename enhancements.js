@@ -679,8 +679,8 @@ function buildSettingsModal() {
   });
   $("wtRequestNotificationBtn").addEventListener("click",requestNotifications);
   $("wtInstallPwaBtn").addEventListener("click",installPwa);
-  $("wtOpenStatusBtn").addEventListener("click",function(){ closeModal("wtSettingsModal"); wt.openStatus(); });
-  $("wtOpenReportBtn").addEventListener("click",function(){ closeModal("wtSettingsModal"); wt.openReport(); });
+  $("wtOpenStatusBtn").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); wt.openStatus(); });
+  $("wtOpenReportBtn").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); wt.openReport(); });
   $("wtOpenPrivacyBtn").addEventListener("click",function(){ wt.openInfo("privacy"); });
   $("wtOpenTermsBtn").addEventListener("click",function(){ wt.openInfo("terms"); });
 
@@ -814,7 +814,7 @@ function buildReportModal() {
     '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtReportCancel" type="button">取消</button><button class="wt-action-btn primary" id="wtReportSend" type="button">送出回報</button></div><div class="wt-small" id="wtReportHint"></div></div>';
   document.body.appendChild(modal);
   $("wtReportClose").addEventListener("click",function(){ wt.closeModal("wtReportModal"); });
-  $("wtReportCancel").addEventListener("click",function(){ closeModal("wtReportModal"); });
+  $("wtReportCancel").addEventListener("click",function(){ wt.closeModal("wtReportModal"); });
   $("wtReportSend").addEventListener("click",sendReport);
 }
 
@@ -838,7 +838,7 @@ async function sendReport() {
     $("wtReportDetails").value = "";
     $("wtReportHint").textContent = "已送出問題回報。";
     toast("問題回報已送出");
-    setTimeout(function(){ closeModal("wtReportModal"); },500);
+    setTimeout(function(){ wt.closeModal("wtReportModal"); },500);
   } catch (error) {
     $("wtReportHint").textContent = error && error.message || "回報失敗";
   }
