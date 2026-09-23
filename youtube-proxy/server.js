@@ -10,6 +10,45 @@ const SEARCH_CACHE_TTL_MS = 120_000;
 const MAX_SEARCH_RESULTS = 25;
 const MAX_SEARCH_BATCH = 25;
 const SEARCH_TIMEOUT_MS = 18_000;
+const RATE_WINDOW_MS = 60_000;
+const SEARCH_LIMIT_PER_IP = 30;
+const STREAM_LIMIT_PER_IP = 120;
+const MAX_ACTIVE_SEARCHES = 3;
+const MAX_ACTIVE_STREAMS = 6;
+const rateBuckets = new Map();
+let activeSearches = 0;
+let activeStreams = 0;
+
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || String(req.socket?.remoteAddress || "unknown");
+}
+
+function allowRate(ip, key, limit) {
+  const now = Date.now();
+  const bucketKey = key + ":" + ip;
+  const bucket = rateBuckets.get(bucketKey);
+  if (!bucket || now - bucket.startedAt >= RATE_WINDOW_MS) {
+    rateBuckets.set(bucketKey, {startedAt: now, count: 1});
+    return true;
+  }
+  if (bucket.count >= limit) {
+    return false;
+  }
+  bucket.count += 1;
+  return true;
+}
+
+function cleanupRateBuckets() {
+  const now = Date.now();
+  for (const [key, bucket] of rateBuckets) {
+    if (now - bucket.startedAt >= RATE_WINDOW_MS * 2) {
+      rateBuckets.delete(key);
+    }
+  }
+}
+
+setInterval(cleanupRateBuckets, RATE_WINDOW_MS).unref();
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, {
@@ -354,6 +393,17 @@ function runYoutubeSearch(query, maxResults, page) {
 }
 
 async function handleSearch(req, res, url) {
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "search", SEARCH_LIMIT_PER_IP)) {
+    send(res, 429, JSON.stringify({error:{message:"搜尋請求過於頻繁，請稍後再試"}}));
+    return;
+  }
+  if (activeSearches >= MAX_ACTIVE_SEARCHES) {
+    send(res, 503, JSON.stringify({error:{message:"搜尋服務目前忙碌，請稍後再試"}}));
+    return;
+  }
+  activeSearches += 1;
+
   const query = String(
     url.searchParams.get("q") || ""
   ).trim();
@@ -406,10 +456,22 @@ async function handleSearch(req, res, url) {
         message: "YouTube 搜尋失敗"
       }
     }));
+  } finally {
+    activeSearches = Math.max(0, activeSearches - 1);
   }
 }
 
 async function handleStream(req, res, videoId) {
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "stream", STREAM_LIMIT_PER_IP)) {
+    send(res, 429, JSON.stringify({error:"rate_limited",message:"播放請求過於頻繁，請稍後再試"}));
+    return;
+  }
+  if (activeStreams >= MAX_ACTIVE_STREAMS) {
+    send(res, 503, JSON.stringify({error:"stream_busy",message:"播放服務目前忙碌，請稍後再試"}));
+    return;
+  }
+  activeStreams += 1;
   try {
     const url = await getStreamUrl(videoId);
 
@@ -427,6 +489,8 @@ async function handleStream(req, res, videoId) {
       error: "youtube_stream_unavailable",
       message: "Unable to resolve a playable YouTube stream right now."
     }));
+  } finally {
+    activeStreams = Math.max(0, activeStreams - 1);
   }
 }
 
