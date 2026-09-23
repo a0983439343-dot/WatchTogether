@@ -6493,6 +6493,64 @@
           `rooms/${roomId}`
         )
         .set(room);
+
+      await db
+        .ref(
+          `roomMeta/${roomId}`
+        )
+        .set({
+          owner:
+            state.uid,
+          name:
+            roomName,
+          settings: {
+            locked:
+              false,
+            maxMembers:
+              2,
+            controlMode:
+              "host"
+          },
+          createdAt:
+            firebase.database.ServerValue.TIMESTAMP
+        });
+
+      const selectedVideo =
+        window.WT_ENHANCEMENTS?.state?.createVideo ||
+        null;
+
+      if (
+        selectedVideo &&
+        selectedVideo.id
+      ) {
+        await db
+          .ref(
+            `rooms/${roomId}/video`
+          )
+          .set({
+            id:
+              String(
+                selectedVideo.id
+              ),
+            platform:
+              "youtube",
+            title:
+              String(
+                selectedVideo.title ||
+                "未命名影片"
+              ).slice(0, 200),
+            thumbnail:
+              String(
+                selectedVideo.thumbnail ||
+                ""
+              ).slice(0, 2000),
+            channel:
+              String(
+                selectedVideo.channel ||
+                "YouTube"
+              ).slice(0, 100)
+          });
+      }
     } catch (error) {
       console.error(
         "建立 rooms 節點失敗:",
@@ -6622,6 +6680,21 @@
       );
     }
 
+    const roomOwnerSnapshot =
+      await db
+        .ref(
+          `rooms/${roomId}/owner`
+        )
+        .once("value");
+
+    if (
+      !roomOwnerSnapshot.exists()
+    ) {
+      throw new Error(
+        "這個房間資料不完整"
+      );
+    }
+
     const metaData =
       metaSnapshot.val() ||
       {};
@@ -6629,6 +6702,12 @@
     const metaSettings =
       metaData.settings ||
       {};
+
+    const actualOwnerUid =
+      String(
+        roomOwnerSnapshot.val() ||
+        ""
+      );
 
     const maxMembers =
       Math.max(
@@ -6666,10 +6745,7 @@
       ).length;
 
     const isRoomOwner =
-      String(
-        metaData.owner ||
-        ""
-      ) ===
+      actualOwnerUid ===
       String(
         state.uid ||
         ""
@@ -8501,7 +8577,7 @@
       !state.membersRef ||
       !state.uid
     ) {
-      return;
+      return false;
     }
 
     const memberRef =
@@ -8511,7 +8587,7 @@
 
     if (await isMemberKicked()) {
       await leaveRoomLocally("你已被房主移出房間");
-      return;
+      return false;
     }
 
     try {
@@ -8533,23 +8609,34 @@
             .TIMESTAMP
       });
 
+      await memberRef
+        .onDisconnect()
+        .remove();
+
+      const confirmed =
+        await memberRef
+          .once("value")
+          .catch(
+            () => null
+          );
+
+      if (!confirmed?.exists()) {
+        console.warn(
+          "成員節點建立後無法確認"
+        );
+        return false;
+      }
+
       state.wasMemberInRoom =
         true;
 
-      /*
-       * 斷線時直接移除自己的成員節點。
-       * 這樣即使房主先踢人 / 使用者先離開，
-       * 也不會在節點已不存在時再次 update 而觸發
-       * members 的 .validate permission_denied。
-       */
-      memberRef
-        .onDisconnect()
-        .remove();
+      return true;
     } catch (error) {
       console.warn(
         "成員狀態寫入失敗:",
         error
       );
+      return false;
     }
   }
 
@@ -8749,6 +8836,20 @@
       return;
     }
 
+    const leftRoomId =
+      String(
+        state.roomId || ""
+      );
+
+    const leftRoomName =
+      String(
+        state.room?.name ||
+        $("roomTitle")?.textContent ||
+        "一起看"
+      )
+        .trim() ||
+      "一起看";
+
     state.leavingRoom =
       true;
 
@@ -8885,18 +8986,6 @@
     state.leavingRoom =
       false;
 
-    const leftRoomId =
-      state.roomId;
-
-    const leftRoomName =
-      String(
-        state.room?.name ||
-        $("roomTitle")?.textContent ||
-        "一起看"
-      )
-        .trim() ||
-      "一起看";
-
     if (
       leftRoomId &&
       window.WT_ENHANCEMENTS?.rememberRoom
@@ -9029,9 +9118,21 @@
       return;
     }
 
-    await markMemberOnline();
+    const memberReady =
+      await markMemberOnline();
 
-    if (state.kickedLocally) {
+    if (
+      !memberReady ||
+      state.kickedLocally
+    ) {
+      if (
+        !state.kickedLocally &&
+        state.roomId
+      ) {
+        await leaveRoomLocally(
+          "加入房間失敗，請重新嘗試"
+        );
+      }
       return;
     }
 
