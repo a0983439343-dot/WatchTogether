@@ -474,6 +474,8 @@ wt.toast = toast;
 wt.createRoomWithVideo = createRoomWithVideo;
 wt.currentName = currentName;
 wt.currentAvatar = currentAvatar;
+wt.roomLink = roomLink;
+wt.ensureTopbar = ensureTopbar;
 wt.esc = esc;
 wt.randomCode = randomCode;
 wt.roomIdFromUrl = roomIdFromUrl;
@@ -496,6 +498,15 @@ if (!wt) return;
 
 var $ = wt.$ || function(id){ return document.getElementById(id); };
 wt.$ = $;
+var toast = wt.toast;
+var readJson = wt.readJson;
+var writeJson = wt.writeJson;
+var roomIdFromUrl = wt.roomIdFromUrl;
+var randomCode = wt.randomCode;
+var esc = wt.esc;
+var openModal = wt.openModal;
+var closeModal = wt.closeModal;
+var serverTs = wt.serverTs;
 
 function ensurePublicCode(profile) {
   if (profile && FRIEND_CODE_RE.test(String(profile.publicCode || "").toUpperCase())) {
@@ -877,6 +888,7 @@ wt.renderFavorites = renderFavorites;
 var wt = window.WT_ENHANCEMENTS;
 if (!wt) return;
 var $ = wt.$;
+var roomLink = wt.roomLink;
 var ROOM_RE = wt.ROOM_RE;
 var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
 
@@ -1859,7 +1871,7 @@ function setupRoomObserver() {
 function setupMain() {
   if (wt.state.initialized) return;
   wt.state.initialized = true;
-  ensureTopbar();
+  wt.ensureTopbar();
   if (typeof wt.renderHome === "function") wt.renderHome();
   wt.createRoomCaptureReady && wt.createRoomCaptureReady();
   setupCreateCapture();
