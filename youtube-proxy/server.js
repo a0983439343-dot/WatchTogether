@@ -6,10 +6,10 @@ const HOST = "0.0.0.0";
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const cache = new Map();
 const CACHE_TTL_MS = 90_000;
-const SEARCH_CACHE_TTL_MS = 30_000;
+const SEARCH_CACHE_TTL_MS = 120_000;
 const MAX_SEARCH_RESULTS = 25;
-const MAX_SEARCH_BATCH = 50;
-const SEARCH_TIMEOUT_MS = 30_000;
+const MAX_SEARCH_BATCH = 25;
+const SEARCH_TIMEOUT_MS = 18_000;
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, {
