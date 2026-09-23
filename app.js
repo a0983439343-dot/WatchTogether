@@ -281,6 +281,7 @@
     controlRequestProcessing: false,
     controlRequestQueue: [],
     controlRequestLastAt: 0,
+    ownerFailoverSequence: 0,
 
     timeUiRequestId: 0,
 
@@ -1780,6 +1781,88 @@
     } catch (_) {
       return {};
     }
+  }
+
+  async function enforceRoomCapacity() {
+    if (
+      !state.roomId ||
+      !state.membersRef ||
+      !state.uid ||
+      state.isOwner
+    ) {
+      return true;
+    }
+
+    const roomId = String(state.roomId);
+    const uid = String(state.uid);
+
+    let maxMembers = 2;
+
+    try {
+      const metaSnapshot =
+        await db.ref(
+          "roomMeta/" + roomId
+        ).once("value");
+
+      const settings =
+        metaSnapshot.val()?.settings || {};
+
+      maxMembers = Math.max(
+        2,
+        Math.min(
+          10,
+          Number(settings.maxMembers || 2)
+        )
+      );
+    } catch (_) {}
+
+    const members =
+      await getMembersOnce();
+
+    const entries =
+      Object.entries(members || {})
+        .filter(
+          ([memberUid, member]) =>
+            Boolean(memberUid) &&
+            member &&
+            typeof member === "object"
+        )
+        .sort(
+          ([uidA, memberA], [uidB, memberB]) =>
+            Number(memberA?.joinedAt || 0) -
+              Number(memberB?.joinedAt || 0) ||
+            String(uidA).localeCompare(
+              String(uidB)
+            )
+        );
+
+    const ownIndex =
+      entries.findIndex(
+        ([memberUid]) =>
+          String(memberUid) === uid
+      );
+
+    if (
+      ownIndex < 0 ||
+      ownIndex < maxMembers
+    ) {
+      return ownIndex >= 0;
+    }
+
+    try {
+      await state.membersRef
+        .child(uid)
+        .onDisconnect()
+        .cancel();
+    } catch (_) {}
+
+    try {
+      await state.membersRef
+        .child(uid)
+        .remove();
+    } catch (_) {}
+
+    return false;
   }
 
 
@@ -9624,8 +9707,26 @@
       return null;
     }
 
+    const roomIdAtTransfer =
+      String(state.roomId);
+    const roomRefAtTransfer =
+      state.roomRef;
+    const oldOwnerUid =
+      String(state.uid);
+
+    state.ownerFailoverSequence =
+      Number(state.ownerFailoverSequence || 0) + 1;
+
     const members =
       await getMembersOnce();
+
+    if (
+      String(state.roomId || "") !== roomIdAtTransfer ||
+      state.roomRef !== roomRefAtTransfer ||
+      String(state.uid || "") !== oldOwnerUid
+    ) {
+      return null;
+    }
 
     const candidates =
       Object.entries(
@@ -9666,12 +9767,34 @@
      * 真正的房主只以 rooms/{roomId}/owner 為準，
      * 因此轉移房主時只更新 rooms。
      */
-    await state.roomRef
-      .child("owner")
-      .set(nextOwnerUid);
+    const result =
+      await roomRefAtTransfer
+        .child("owner")
+        .transaction(
+          currentOwner => {
+            if (
+              String(currentOwner || "") !==
+              oldOwnerUid
+            ) {
+              return;
+            }
+
+            if (
+              !members?.[nextOwnerUid]
+            ) {
+              return;
+            }
+
+            return nextOwnerUid;
+          }
+        );
+
+    if (!result.committed) {
+      return null;
+    }
 
     try {
-      await state.roomRef
+      await roomRefAtTransfer
         ?.child("owner")
         .onDisconnect()
         .cancel();
@@ -9691,8 +9814,36 @@
       return;
     }
 
+    const sequence =
+      Number(state.ownerFailoverSequence || 0) + 1;
+
+    state.ownerFailoverSequence =
+      sequence;
+
+    const roomIdAtSchedule =
+      String(state.roomId);
+
+    const roomRefAtSchedule =
+      state.roomRef;
+
+    const ownerUidAtSchedule =
+      String(state.uid);
+
     const members =
       await getMembersOnce();
+
+    if (
+      sequence !==
+        Number(state.ownerFailoverSequence || 0) ||
+      String(state.roomId || "") !==
+        roomIdAtSchedule ||
+      state.roomRef !== roomRefAtSchedule ||
+      String(state.uid || "") !==
+        ownerUidAtSchedule ||
+      !state.isOwner
+    ) {
+      return;
+    }
 
     const candidates =
       Object.entries(
@@ -9724,7 +9875,7 @@
       candidates[0][0];
 
     try {
-      await state.roomRef
+      await roomRefAtSchedule
         .child("owner")
         .onDisconnect()
         .set(nextOwnerUid);
@@ -10079,6 +10230,17 @@
       state.roomId &&
       state.uid
     ) {
+      const capacityOk =
+        await enforceRoomCapacity();
+
+      if (!capacityOk) {
+        await leaveRoomLocally(
+          "這個房間剛好已達人數上限"
+        );
+        return;
+      }
+
+
       try {
         const currentOwnerUid =
           String(
