@@ -1,20 +1,15 @@
 FROM node:24-bookworm-slim
 
 ENV NODE_ENV=production
-ENV PATH="/root/.deno/bin:/opt/ytvenv/bin:$PATH"
+ENV PATH="/opt/ytvenv/bin:$PATH"
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg curl ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update   && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates   && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m venv /opt/ytvenv \
-  && /opt/ytvenv/bin/pip install --no-cache-dir -U "yt-dlp[default]"
-
-RUN curl -fsSL https://deno.land/install.sh | sh
+RUN python3 -m venv /opt/ytvenv   && /opt/ytvenv/bin/pip install --no-cache-dir -U "yt-dlp[default]"
 
 WORKDIR /app
 
-COPY package.json ./
-COPY server.js ./
+COPY package.json ./package.json
+COPY server.js ./server.js
 
 CMD ["node", "server.js"]
