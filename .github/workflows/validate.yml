@@ -67,7 +67,13 @@ jobs:
           if (/numChildren\s*\(/.test(rules)) throw new Error('Unsupported numChildren() remains in Firebase rules.');
           if (/YT\.Player|youtube\.com\/iframe_api/.test(app + enh)) throw new Error('Legacy YouTube IFrame API remains.');
           if (/randomCode\(12\)|length\s*={2,3}\s*12|randomCode\(8\)|length\s*={2,3}\s*8/.test(app + enh)) throw new Error('Legacy room/friend code length remains.');
-          if (!index.includes('app.js?v=20260923-formal-v7') || !index.includes('enhancements.js?v=20260923-formal-v7')) throw new Error('Frontend asset versions are not aligned.');
-          if (!sw.includes('wt-shell-20260923-v7')) throw new Error('Service worker cache version is not aligned.');
+          const appVersion = index.match(/app\\.js\\?v=([^"'&]+)/)?.[1];
+          const enhVersion = index.match(/enhancements\\.js\\?v=([^"'&]+)/)?.[1];
+          const cssVersion = index.match(/enhancements\\.css\\?v=([^"'&]+)/)?.[1];
+          const swVersion = index.match(/sw\\.js\\?v=([^"'&]+)/)?.[1];
+          const cacheVersion = sw.match(/wt-shell-(20260923-v[^"\\s]+)/)?.[1];
+
+          if (!appVersion || appVersion !== enhVersion || appVersion !== cssVersion || appVersion !== swVersion) throw new Error('Frontend asset versions are not aligned.');
+          if (cacheVersion !== appVersion.replace('formal-', '')) throw new Error('Service worker cache version is not aligned.');
           console.log('Synchronized room control architecture checks OK');
           NODE
