@@ -1,6 +1,8 @@
 const CACHE_NAME = "wt-shell-20260923-v1";
 const ASSETS = [
   "./",
+  "./styles.css",
+  "./app.js",
   "./enhancements.css",
   "./enhancements.js",
   "./firebase-config.js",
@@ -47,18 +49,23 @@ self.addEventListener("fetch", event => {
           if (response.ok) {
             try {
               const source = await response.text();
+              const isAppPage = source.includes('id="homeView"') && source.includes('WatchTogether');
               const version = "20260923-formal-v1";
-              const withHead = source.replace(
-                "</head>",
-                '<meta name="theme-color" content="#0b1020">' +
-                '<link rel="manifest" href="./manifest.webmanifest?v=' + version + '">' +
-                '<link rel="stylesheet" href="./enhancements.css?v=' + version + '">' +
-                "</head>"
-              );
-              body = withHead.replace(
-                "</body>",
-                '<script src="./enhancements.js?v=' + version + '"></script></body>'
-              );
+              if (isAppPage) {
+                const withHead = source.replace(
+                  "</head>",
+                  '<meta name="theme-color" content="#0b1020">' +
+                  '<link rel="manifest" href="./manifest.webmanifest?v=' + version + '">' +
+                  '<link rel="stylesheet" href="./enhancements.css?v=' + version + '">' +
+                  "</head>"
+                );
+                body = withHead.replace(
+                  "</body>",
+                  '<script src="./enhancements.js?v=' + version + '"></script></body>'
+                );
+              } else {
+                body = source;
+              }
               headers.delete("content-length");
               headers.delete("content-encoding");
               headers.set("content-type","text/html; charset=utf-8");
@@ -77,9 +84,11 @@ self.addEventListener("fetch", event => {
             const headers = new Headers(cached.headers);
             headers.set("Cross-Origin-Opener-Policy","same-origin-allow-popups");
             const version = "20260923-formal-v1";
-            const body = source
-              .replace("</head>",'<meta name="theme-color" content="#0b1020"><link rel="manifest" href="./manifest.webmanifest?v='+version+'"><link rel="stylesheet" href="./enhancements.css?v='+version+'"></head>')
-              .replace("</body>",'<script src="./enhancements.js?v='+version+'"></script></body>');
+            const body = source.includes('id="homeView"') && source.includes("WatchTogether")
+              ? source
+                  .replace("</head>",'<meta name="theme-color" content="#0b1020"><link rel="manifest" href="./manifest.webmanifest?v='+version+'"><link rel="stylesheet" href="./enhancements.css?v='+version+'"></head>')
+                  .replace("</body>",'<script src="./enhancements.js?v='+version+'"></script></body>')
+              : source;
             headers.delete("content-length");
             return new Response(body,{status:200,headers:headers});
           }
@@ -93,7 +102,7 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
   if (url.origin === self.location.origin) {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request).then(cached => cached || Response.error()))
+      fetch(request).catch(() => caches.match(request,{ignoreSearch:true}).then(cached => cached || Response.error()))
     );
   }
 });
