@@ -35,7 +35,7 @@
         "$uid": {
           ".read": "auth != null && $roomId.length === 6 && (auth.uid === $uid || root.child('members').child($roomId).child(auth.uid).exists())",
           ".write": "auth != null && $roomId.length === 6 && root.child('rooms').child($roomId).exists() && ((auth.uid === $uid && data.exists()) || (auth.uid === $uid && !data.exists() && root.child('kicked').child($roomId).child($uid).val() !== true && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomMeta').child($roomId).child('settings').child('locked').val() !== true) && true) || (auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))",
-          ".validate": "!newData.exists() || (newData.hasChildren(['name','joinedAt','online','lastSeen']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('joinedAt').isNumber() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && (!newData.child('avatarEmoji').exists() || (newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length <= 4)))"
+          ".validate": "!newData.exists() || (newData.hasChildren(['name','joinedAt','online','lastSeen']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('joinedAt').isNumber() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && (!newData.child('avatarEmoji').exists() || (newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length <= 4)) && (!newData.child('publicCode').exists() || (newData.child('publicCode').isString() && newData.child('publicCode').val().length === 6 && newData.child('publicCode').val() === root.child('profiles').child(auth.uid).child('publicCode').val())))"
         }
       }
     },
@@ -88,7 +88,7 @@
     },
     "profiles": {
       "$uid": {
-        ".read": "auth != null",
+        ".read": "auth != null && (auth.uid === $uid || root.child('friendships').child($uid).child(auth.uid).exists() || root.child('friendships').child(auth.uid).child($uid).exists())",
         ".write": "auth != null && auth.uid === $uid && newData.exists()",
         ".validate": "newData.hasChildren(['displayName','publicCode','avatarEmoji','theme','notifications']) && newData.child('displayName').isString() && newData.child('displayName').val().length > 0 && newData.child('displayName').val().length <= 30 && newData.child('publicCode').isString() && newData.child('publicCode').val().length === 6 && newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length > 0 && newData.child('avatarEmoji').val().length <= 4 && newData.child('theme').isString() && (newData.child('theme').val() === 'aurora' || newData.child('theme').val() === 'cyber' || newData.child('theme').val() === 'paper' || newData.child('theme').val() === 'terminal' || newData.child('theme').val() === 'sakura' || newData.child('theme').val() === 'ocean' || newData.child('theme').val() === 'sunset' || newData.child('theme').val() === 'mono' || newData.child('theme').val() === 'glass' || newData.child('theme').val() === 'retro' || newData.child('theme').val() === 'forest' || newData.child('theme').val() === 'blueprint') && newData.child('notifications').isBoolean() && (!newData.child('createdAt').exists() || newData.child('createdAt').isNumber())"
       }
