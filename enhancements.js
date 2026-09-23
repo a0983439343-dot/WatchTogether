@@ -1474,14 +1474,16 @@ function ensureRoomChat(room) {
 }
 
 function ensureRoomToolbar() {
-  var meta = document.querySelector("#roomView .room-meta");
+  var meta = document.querySelector(".room-meta");
   if (!meta) return;
+
   var items = [
     ["wtShareRoomBtn","↗ 分享",shareRoom],
     ["wtQrRoomBtn","▦ QR",openQr],
     ["wtRoomSettingsBtn","⚙ 房間設定",openRoomSettings]
   ];
-  items.forEach(function(item){
+
+  items.forEach(function(item) {
     if ($(item[0])) return;
     var button = document.createElement("button");
     button.id = item[0];
@@ -1491,6 +1493,35 @@ function ensureRoomToolbar() {
     button.addEventListener("click",item[2]);
     meta.appendChild(button);
   });
+
+  var actions = document.querySelector("#roomView .room-actions");
+  if (actions && !$("wtPipBtn")) {
+    var pip = document.createElement("button");
+    pip.id = "wtPipBtn";
+    pip.className = "secondary-btn";
+    pip.type = "button";
+    pip.textContent = "▣ 畫中畫";
+    pip.addEventListener("click",async function() {
+      var video = document.getElementById("directVideo");
+      if (!(video instanceof HTMLVideoElement)) {
+        toast("目前影片來源不支援畫中畫");
+        return;
+      }
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+          return;
+        }
+        if (!document.pictureInPictureEnabled || typeof video.requestPictureInPicture !== "function") {
+          throw new Error("這個瀏覽器不支援畫中畫");
+        }
+        await video.requestPictureInPicture();
+      } catch (error) {
+        toast(error && error.message || "無法開啟畫中畫");
+      }
+    });
+    actions.appendChild(pip);
+  }
 }
 
 async function shareRoom() {
