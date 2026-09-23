@@ -1602,6 +1602,10 @@ function stopRoomEnhancements() {
 
 function observeRoom() {
   var id = roomId();
+  if (id) {
+    ensureRoomToolbar();
+    ensureRoomChat(id);
+  }
   if (id !== wt.state.roomId) {
     if (wt.state.roomId && !id) {
       var oldId = wt.state.roomId;
@@ -1861,7 +1865,6 @@ function setupMain() {
   installListener();
   setupStickerOutsideClick();
   setupAuthListeners();
-  setupBodyObserver();
   setupRoomObserver();
   window.addEventListener("pageshow",function(){ try { wt.observeRoom(); } catch (_) {} });
   window.addEventListener("popstate",function(){ try { wt.observeRoom(); } catch (_) {} });
