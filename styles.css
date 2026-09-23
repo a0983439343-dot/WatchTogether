@@ -1965,3 +1965,60 @@ select:focus {
     min-height: 0;
   }
 }
+
+
+/* Mobile landscape: video left, chat fixed right */
+@media (orientation: landscape) and (max-width: 900px) and (max-height: 700px) {
+  .room-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 34vw) !important;
+    grid-template-areas: "watch side" !important;
+    align-items: stretch !important;
+  }
+
+  .room-layout > .watch-panel,
+  .room-layout > .main-panel,
+  .room-layout .watch-panel {
+    grid-area: watch !important;
+    min-width: 0 !important;
+  }
+
+  .room-layout > .side-column,
+  .room-layout .side-column {
+    grid-area: side !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: calc(100svh - 16px) !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .room-layout .side-column .chat-panel {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  .room-layout .side-column .chat-messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .room-layout .side-column .members-panel,
+  .room-layout .side-column .queue-panel {
+    flex: 0 0 auto !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+}
