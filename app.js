@@ -11234,15 +11234,22 @@
             return;
           }
 
-          if (!state.isOwner) {
-            toast("只有房主可以控制播放");
-            return;
-          }
+          const playing =
+             await asyncIsPlaying();
 
-          const playing = await asyncIsPlaying();
-          const position = await asyncCurrentPosition();
+           const position =
+             await asyncCurrentPosition();
 
-          try {
+           if (!state.isOwner) {
+             await requestPlaybackControl(
+               playing ? "pause" : "play",
+               position,
+               !playing
+             );
+             return;
+           }
+
+           try {
             markLocalPlaybackIntent(playing ? "pause" : "play");
             if (playing) {
               state.playbackAwaitingActualStart = false;
