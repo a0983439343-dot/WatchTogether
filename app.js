@@ -7013,7 +7013,70 @@
       )}`
     );
 
-    await enterRoom();
+    try {
+      await enterRoom();
+    } catch (error) {
+      try {
+        await db
+          .ref("members/" + roomId + "/" + state.uid)
+          .onDisconnect()
+          .cancel();
+      } catch (_) {}
+
+      try {
+        await db
+          .ref("members/" + roomId + "/" + state.uid)
+          .remove();
+      } catch (_) {}
+
+      try {
+        await db
+          .ref("roomMeta/" + roomId)
+          .remove();
+      } catch (_) {}
+
+      try {
+        await db
+          .ref("rooms/" + roomId)
+          .remove();
+      } catch (_) {}
+
+      try {
+        disconnectRoomListeners();
+      } catch (_) {}
+
+      ++state.youtubeBuildToken;
+      state.youtubeRequestedId = null;
+      state.youtubeLoading = false;
+
+      try {
+        await destroyCurrentPlayer();
+      } catch (_) {}
+
+      state.roomId = null;
+      state.roomRef = null;
+      state.membersRef = null;
+      state.kickedRef = null;
+      state.chatRef = null;
+      state.queueRef = null;
+      state.room = null;
+      state.isOwner = false;
+      state.wasMemberInRoom = false;
+      state.kickedLocally = false;
+      state.leavingRoom = false;
+
+      history.replaceState(
+        {},
+        "",
+        location.pathname
+      );
+
+      showView("home");
+      throw new Error(
+        error?.message ||
+        "房間建立後進入房間失敗"
+      );
+    }
 
     if (
       selectedVideo &&
