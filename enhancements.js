@@ -474,6 +474,16 @@ wt.toast = toast;
 wt.createRoomWithVideo = createRoomWithVideo;
 wt.currentName = currentName;
 wt.currentAvatar = currentAvatar;
+wt.esc = esc;
+wt.randomCode = randomCode;
+wt.roomIdFromUrl = roomIdFromUrl;
+wt.serverTs = serverTs;
+wt.readJson = readJson;
+wt.writeJson = writeJson;
+wt.openModal = openModal;
+wt.closeModal = closeModal;
+wt.ROOM_RE = ROOM_RE;
+wt.FRIEND_CODE_RE = FRIEND_CODE_RE;
 
 applyTheme(currentTheme());
 
