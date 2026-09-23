@@ -5,8 +5,12 @@ const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const cache = new Map();
+const streamInflight = new Map();
+const searchInflight = new Map();
 const CACHE_TTL_MS = 90_000;
 const SEARCH_CACHE_TTL_MS = 120_000;
+const MAX_CACHE_ENTRIES = 500;
+const CACHE_CLEANUP_INTERVAL_MS = 60_000;
 const MAX_SEARCH_RESULTS = 25;
 const MAX_SEARCH_BATCH = 25;
 const SEARCH_TIMEOUT_MS = 18_000;
@@ -50,6 +54,45 @@ function cleanupRateBuckets() {
 
 setInterval(cleanupRateBuckets, RATE_WINDOW_MS).unref();
 
+function cleanupCache() {
+  const now = Date.now();
+
+  for (const [key, value] of cache) {
+    if (
+      !value ||
+      Number(value.expiresAt || 0) <= now
+    ) {
+      cache.delete(key);
+    }
+  }
+
+  if (cache.size > MAX_CACHE_ENTRIES) {
+    const entries =
+      [...cache.entries()]
+        .sort(
+          (a, b) =>
+            Number(a[1]?.expiresAt || 0) -
+            Number(b[1]?.expiresAt || 0)
+        );
+
+    const removeCount =
+      cache.size - MAX_CACHE_ENTRIES;
+
+    for (
+      let i = 0;
+      i < removeCount;
+      i++
+    ) {
+      cache.delete(entries[i][0]);
+    }
+  }
+}
+
+setInterval(
+  cleanupCache,
+  CACHE_CLEANUP_INTERVAL_MS
+).unref();
+
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, {
     "Content-Type": type,
@@ -83,11 +126,23 @@ function makeSearchCacheKey(query, maxResults, page) {
 
 function getStreamUrl(videoId, forceRefresh = false) {
   const cached = cache.get(videoId);
-  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+
+  if (
+    !forceRefresh &&
+    cached &&
+    cached.expiresAt > Date.now()
+  ) {
     return Promise.resolve(cached.url);
   }
 
-  return new Promise((resolve, reject) => {
+  if (
+    !forceRefresh &&
+    streamInflight.has(videoId)
+  ) {
+    return streamInflight.get(videoId);
+  }
+
+  const request = new Promise((resolve, reject) => {
     const args = [
       "--no-playlist",
       "--no-warnings",
@@ -154,6 +209,24 @@ function getStreamUrl(videoId, forceRefresh = false) {
       resolve(url);
     });
   });
+
+  if (!forceRefresh) {
+    streamInflight.set(
+      videoId,
+      request
+    );
+
+    request.finally(() => {
+      if (
+        streamInflight.get(videoId) ===
+        request
+      ) {
+        streamInflight.delete(videoId);
+      }
+    }).catch(() => {});
+  }
+
+  return request;
 }
 
 function runYoutubeSearch(query, maxResults, page) {
@@ -164,11 +237,21 @@ function runYoutubeSearch(query, maxResults, page) {
   );
 
   const cached = cache.get("search:" + cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
+
+  if (
+    cached &&
+    cached.expiresAt > Date.now()
+  ) {
     return Promise.resolve(cached.data);
   }
 
-  return new Promise((resolve, reject) => {
+  if (
+    searchInflight.has(cacheKey)
+  ) {
+    return searchInflight.get(cacheKey);
+  }
+
+  const request = new Promise((resolve, reject) => {
     const start =
       page === 2
         ? maxResults + 1
@@ -390,6 +473,24 @@ function runYoutubeSearch(query, maxResults, page) {
       resolve(result);
     });
   });
+
+  searchInflight.set(
+    cacheKey,
+    request
+  );
+
+  request.finally(() => {
+    if (
+      searchInflight.get(cacheKey) ===
+      request
+    ) {
+      searchInflight.delete(
+        cacheKey
+      );
+    }
+  }).catch(() => {});
+
+  return request;
 }
 
 async function handleSearch(req, res, url) {
