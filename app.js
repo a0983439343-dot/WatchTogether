@@ -9307,6 +9307,7 @@
             return `
               <div
                 class="member"
+                data-member-uid="\${escapeHtml(uid)}"
               >
 
                 <div
