@@ -16,7 +16,7 @@ var KEYS = wt.KEYS = {
 };
 
 var ROOM_RE = /^[A-Z0-9]{6}$/;
-var FRIEND_CODE_RE = /^[A-Z0-9]{8}$/;
+var FRIEND_CODE_RE = /^[A-Z0-9]{6}$/;
 var THEMES = wt.THEMES = [
   {id:"aurora",name:"Aurora",desc:"流光玻璃、柔和層次、寬鬆留白"},
   {id:"cyber",name:"Cyber Grid",desc:"網格背景、切角卡片、霓虹結構"},
@@ -25,7 +25,11 @@ var THEMES = wt.THEMES = [
   {id:"sakura",name:"Sakura",desc:"柔和櫻花構圖、不對稱圓角"},
   {id:"ocean",name:"Ocean",desc:"深海層次、流體光暈、海浪式分區"},
   {id:"sunset",name:"Sunset",desc:"暖夕陽、斜角卡片、編輯風構圖"},
-  {id:"mono",name:"Mono",desc:"黑白硬邊、極簡排版、紙卡陰影"}
+  {id:"mono",name:"Mono",desc:"黑白硬邊、極簡排版、紙卡陰影"},
+  {id:"glass",name:"Glass Room",desc:"透明玻璃、浮層面板、柔焦深度"},
+  {id:"retro",name:"Retro Tape",desc:"復古錄影帶、顆粒紋理、老電視比例感"},
+  {id:"forest",name:"Forest",desc:"森林紙張、木質層次、自然不規則分區"},
+  {id:"blueprint",name:"Blueprint",desc:"工程藍圖、標註線、技術文件風格"}
 ];
 
 var STICKERS = wt.STICKERS = [
@@ -342,7 +346,7 @@ function renderRecentRooms() {
 function renderHomeHistory() {
   var box = $("wtHomeHistory");
   if (!box) return;
-  var list = historyList().slice(0,8);
+  var list = historyList().slice(0,6);
   if (!list.length) {
     box.innerHTML = '<div class="wt-card-section" style="grid-column:1/-1;"><div class="wt-small">開始播放影片後，最近觀看會顯示在這裡。</div></div>';
     return;
@@ -512,23 +516,24 @@ var closeModal = wt.closeModal;
 var serverTs = wt.serverTs;
 var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
 
-function ensurePublicCode(profile) {
-  if (profile && FRIEND_CODE_RE.test(String(profile.publicCode || "").toUpperCase())) {
-    return Promise.resolve(String(profile.publicCode).toUpperCase());
+async function ensurePublicCode(profile) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) throw new Error("Google 登入後才能建立好友代碼");
+  var existing = String(profile && profile.publicCode || "").trim().toUpperCase();
+  if (FRIEND_CODE_RE.test(existing)) {
+    return existing;
   }
-  return (async function(){
-    for (var attempt=0;attempt<24;attempt++) {
-      var code = randomCode(8);
-      var ref = wt.db.ref("profileCodes/" + code);
-      var result = await ref.transaction(function(value){
-        return value === null ? wt.auth.currentUser.uid : value;
-      });
-      if (result.committed && String(result.snapshot.val()) === String(wt.auth.currentUser.uid)) {
-        return code;
-      }
+  for (var attempt=0;attempt<32;attempt++) {
+    var code = randomCode(6);
+    var ref = wt.db.ref("profileCodes/" + code);
+    var result = await ref.transaction(function(value){
+      return value === null ? user.uid : value;
+    });
+    if (result.committed && String(result.snapshot.val()) === String(user.uid)) {
+      return code;
     }
-    throw new Error("好友代碼建立失敗");
-  })();
+  }
+  throw new Error("好友代碼建立失敗"); 
 }
 
 async function loadProfile(user) {
@@ -542,6 +547,7 @@ async function loadProfile(user) {
   var ref = wt.db.ref("profiles/" + user.uid);
   var snapshot = await ref.once("value");
   var old = snapshot.val() || {};
+  var oldCode = String(old.publicCode || "").trim().toUpperCase();
   var code = await ensurePublicCode(old);
   var localName = String(localStorage.getItem("wt_name") || "").trim();
   var displayName = String(old.displayName || localName || user.displayName || "玩家").trim().slice(0,30) || "玩家";
@@ -556,6 +562,9 @@ async function loadProfile(user) {
     updatedAt:wt.serverTs()
   };
   await ref.update(profile);
+  if (oldCode && oldCode !== code) {
+    try { await wt.db.ref("profileCodes/" + oldCode).remove(); } catch (_) {}
+  }
   await wt.db.ref("profileCodes/" + code).set(user.uid);
   wt.state.profile = Object.assign({},old,profile);
   localStorage.setItem("wt_name",displayName);
@@ -925,7 +934,7 @@ async function addFriendByCode(code) {
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   code = String(code || "").trim().toUpperCase();
-  if (!FRIEND_CODE_RE.test(code)) throw new Error("好友代碼必須是 8 碼英數字");
+  if (!FRIEND_CODE_RE.test(code)) throw new Error("好友代碼必須是 6 碼英數字");
 
   var codeSnapshot = await wt.db.ref("profileCodes/" + code).once("value");
   var targetUid = String(codeSnapshot.val() || "");
@@ -1047,8 +1056,8 @@ function buildFriendsModal() {
   modal.setAttribute("aria-hidden","true");
   modal.innerHTML =
     '<div class="wt-modal-card">' +
-      '<div class="wt-modal-header"><div><div class="wt-panel-title">好友與私聊</div><div class="wt-small">用 8 碼好友代碼加好友，私聊只允許對話雙方讀取。</div></div><button class="wt-close-btn" id="wtFriendsClose" type="button">×</button></div>' +
-      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="8" placeholder="輸入 8 碼好友代碼" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
+      '<div class="wt-modal-header"><div><div class="wt-panel-title">好友與私聊</div><div class="wt-small">用 6 碼好友代碼加好友，私聊只允許對話雙方讀取。</div></div><button class="wt-close-btn" id="wtFriendsClose" type="button">×</button></div>' +
+      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="8" placeholder="輸入 6 碼好友代碼" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
       '<div class="wt-friends-layout">' +
         '<aside class="wt-friends-sidebar">' +
           '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">好友</span><span id="wtFriendCount" class="wt-small">0</span></div>' +
@@ -1073,7 +1082,7 @@ function buildFriendsModal() {
     } catch (error) { wt.toast(error && error.message || "加好友失敗"); }
   });
   $("wtFriendCodeInput").addEventListener("input",function(event){
-    event.target.value = String(event.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);
+    event.target.value = String(event.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
   });
   $("wtFriendCodeInput").addEventListener("keydown",function(event){
     if (event.key === "Enter") {
@@ -1144,7 +1153,7 @@ function renderFriends() {
   if ($("wtFriendCount")) $("wtFriendCount").textContent = String(entries.length);
   if ($("wtMyFriendCode")) $("wtMyFriendCode").textContent = wt.state.profile && wt.state.profile.publicCode ? "我的好友代碼：" + wt.state.profile.publicCode : "Google 登入後會建立好友代碼";
   if (!entries.length) {
-    box.innerHTML = '<div class="wt-small">還沒有好友。把 8 碼好友代碼給朋友即可互加。</div>';
+    box.innerHTML = '<div class="wt-small">還沒有好友。把 6 碼好友代碼給朋友即可互加。</div>';
     return;
   }
   box.innerHTML = entries.map(function(pair){
@@ -1452,37 +1461,15 @@ function ensureRoomChat(room) {
     var submit = form.querySelector('button[type="submit"]');
     var wrap = document.createElement("div");
     wrap.className = "wt-room-sticker-wrap";
-    wrap.innerHTML = '<button id="wtRoomStickerBtn" class="wt-mini-btn" type="button">😊</button><div id="wtRoomStickerPicker" class="wt-sticker-picker hidden"></div>';
+    wrap.innerHTML = '<button id="wtRoomStickerBtn" class="wt-mini-btn" type="button" aria-label="貼圖"><span aria-hidden="true">😊</span></button><div id="wtRoomStickerPicker" class="wt-sticker-picker hidden"></div>';
     form.insertBefore(wrap,submit || null);
     $("wtRoomStickerBtn").addEventListener("click",function(event){
       event.preventDefault();
+      event.stopPropagation();
       $("wtRoomStickerPicker").classList.toggle("hidden");
     });
     buildStickerPicker("wtRoomStickerPicker",function(sticker){ void sendRoomSticker(sticker); });
-
-    form.addEventListener("submit",async function(event){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      try {
-        await sendRoomText($("chatInput") && $("chatInput").value || "");
-        if ($("chatInput")) $("chatInput").value = "";
-      } catch (error) {
-        wt.toast(error && error.message || "訊息送出失敗");
-      }
-    },true);
-
     form.dataset.wtFormalChat = "1";
-  }
-
-  var id = roomId();
-  if (!id) return;
-
-  if (!wt.state.roomChatRef || wt.state.roomChatRef._wtRoomId !== id) {
-    try { wt.state.roomChatRef && wt.state.roomChatRef.off(); } catch (_) {}
-    var ref = wt.db.ref("chat/" + id).limitToLast(100);
-    ref._wtRoomId = id;
-    wt.state.roomChatRef = ref;
-    ref.on("value",function(snapshot){ renderRoomChat(snapshot.val() || {}); });
   }
 }
 
@@ -1678,12 +1665,19 @@ function enhanceRoomMembers() {
 
 async function setupRoom(id) {
   if (!id) return;
+  if (wt.state.roomSetupId === id) return;
+
+  wt.state.roomSetupId = id;
   buildRoomModals();
   ensureRoomToolbar();
   ensureRoomChat(id);
 
   var metaSnapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
-  if (!metaSnapshot || !metaSnapshot.exists()) return;
+  if (!metaSnapshot || !metaSnapshot.exists()) {
+    if (wt.state.roomSetupId === id) wt.state.roomSetupId = "";
+    return;
+  }
+
   var meta = metaSnapshot.val() || {};
   wt.state.roomMeta = meta;
   wt.rememberRoom(id,meta.name || "一起看");
@@ -1702,6 +1696,9 @@ function stopRoomEnhancements() {
   wt.state.roomChatRef = null;
   wt.state.roomVideoRef = null;
   wt.state.roomMeta = null;
+  wt.state.roomSetupId = "";
+  wt.state.roomLastObservedId = "";
+  wt.state.roomLastObservedName = "";
 }
 
 function observeRoom() {
@@ -1711,19 +1708,37 @@ function observeRoom() {
     ensureRoomChat(id);
     enhanceRoomMembers();
   }
+
   if (id !== wt.state.roomId) {
     if (wt.state.roomId && !id) {
       var oldId = wt.state.roomId;
       var oldName = String($("roomTitle") && $("roomTitle").textContent || "一起看").trim();
       wt.rememberRoom(oldId,oldName || "一起看");
+      wt.state.roomLastObservedId = "";
+      wt.state.roomLastObservedName = "";
       stopRoomEnhancements();
     }
+
     wt.state.roomId = id;
-    if (id) void setupRoom(id);
+
+    if (id) {
+      wt.state.roomLastObservedId = id;
+      wt.state.roomLastObservedName = "";
+      void setupRoom(id);
+    }
   }
+
   if (id) {
     var title = String($("roomTitle") && $("roomTitle").textContent || "").trim();
-    if (title && title !== "一起看") wt.rememberRoom(id,title);
+    if (
+      title &&
+      title !== "一起看" &&
+      (wt.state.roomLastObservedId !== id || wt.state.roomLastObservedName !== title)
+    ) {
+      wt.state.roomLastObservedId = id;
+      wt.state.roomLastObservedName = title;
+      wt.rememberRoom(id,title);
+    }
   } else {
     wt.renderHome();
   }
@@ -1979,11 +1994,12 @@ function setupRoomCode() {
 }
 
 function setupRoomObserver() {
-  setInterval(function(){
+  if (wt.state.roomObserverTimer) return;
+  wt.state.roomObserverTimer = setInterval(function(){
     try { wt.observeRoom(); } catch (error) { console.warn("Room enhancement observer",error); }
-  },600);
+  },1000);
   setTimeout(function(){ try { wt.observeRoom(); } catch (_) {} },200);
-  setTimeout(function(){ try { wt.observeRoom(); } catch (_) {} },1000);
+  setTimeout(function(){ try { wt.observeRoom(); } catch (_) {} },1200);
 }
 
 function setupMain() {
@@ -2000,6 +2016,32 @@ function setupMain() {
   setupStickerOutsideClick();
   setupAuthListeners();
   setupRoomObserver();
+
+  window.addEventListener("online",function(){
+    if ($("authStatus")) $("authStatus").textContent = "已連線";
+    wt.toast("網路已恢復，正在重新同步…");
+    try { wt.observeRoom(); } catch (_) {}
+  });
+
+  window.addEventListener("offline",function(){
+    if ($("authStatus")) $("authStatus").textContent = "離線";
+    wt.toast("網路連線中斷");
+  });
+
+  window.addEventListener("keydown",function(event){
+    var target = event.target;
+    var tag = String(target && target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable) return;
+    if (!wt.state.roomId) return;
+    if (event.code === "KeyF") {
+      var btn = document.getElementById("fullscreenBtn");
+      if (btn) { event.preventDefault(); btn.click(); }
+    } else if (event.code === "KeyM") {
+      var volume = document.getElementById("volumeInput");
+      if (volume) { event.preventDefault(); volume.value = volume.value > 0 ? 0 : 1; volume.dispatchEvent(new Event("input",{bubbles:true})); }
+    }
+  });
+
   window.addEventListener("pageshow",function(){ try { wt.observeRoom(); } catch (_) {} });
   window.addEventListener("popstate",function(){ try { wt.observeRoom(); } catch (_) {} });
 }
@@ -2113,25 +2155,69 @@ async function searchHome(query) {
 function bindHomeSearch() {
   var input = $("videoSearchInput");
   var button = $("searchVideoBtn");
+  var hint = $("searchHint");
   if (!input || !button || input.dataset.wtFastSearch) return;
 
+  function getQueryHistory() {
+    var list = wt.readJson("wt_search_history_v1",[]);
+    if (!Array.isArray(list)) return [];
+    return list.map(function(item){ return String(item || "").trim(); }).filter(function(item){ return item.length >= 2; }).slice(0,8);
+  }
+
+  function saveQuery(query) {
+    query = String(query || "").trim();
+    if (query.length < 2) return;
+    var list = getQueryHistory().filter(function(item){ return item !== query; });
+    list.unshift(query);
+    wt.writeJson("wt_search_history_v1",list.slice(0,8));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    if (!hint) return;
+    var list = getQueryHistory();
+    if (!list.length) {
+      hint.textContent = "停止輸入約 350ms 後會自動搜尋。";
+      return;
+    }
+    hint.innerHTML =
+      '<span class="muted">最近搜尋：</span> ' +
+      list.map(function(item){
+        return '<button type="button" class="wt-search-history-chip" data-wt-history-query="' + wt.esc(item) + '">' + wt.esc(item) + '</button>';
+      }).join(" ");
+    hint.querySelectorAll("[data-wt-history-query]").forEach(function(chip){
+      chip.addEventListener("click",function(){
+        input.value = chip.dataset.wtHistoryQuery || "";
+        void run();
+      });
+    });
+  }
+
+  var runSerial = 0;
   async function run() {
     var query = String(input.value || "").trim();
     if (query.length < 2) {
       renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
+      renderHistory();
       return;
     }
+
+    var serial = ++runSerial;
     button.disabled = true;
     button.textContent = "搜尋中…";
     renderHomeSearchMessage("正在搜尋…");
+
     try {
       await searchHome(query);
+      if (serial === runSerial) saveQuery(query);
     } catch (error) {
       if (error && error.name === "AbortError") return;
-      renderHomeSearchMessage(error && error.message || "搜尋失敗");
+      if (serial === runSerial) renderHomeSearchMessage(error && error.message || "搜尋失敗");
     } finally {
-      button.disabled = false;
-      button.textContent = "搜尋";
+      if (serial === runSerial) {
+        button.disabled = false;
+        button.textContent = "搜尋";
+      }
     }
   }
 
@@ -2147,17 +2233,27 @@ function bindHomeSearch() {
     var value = String(input.value || "").trim();
     if (value.length < 2) {
       renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
+      renderHistory();
       return;
     }
-    searchTimer = setTimeout(function(){ void run(); },450);
+    searchTimer = setTimeout(function(){ void run(); },350);
   });
   $("clearSelectedVideoBtn") && $("clearSelectedVideoBtn").addEventListener("click",function(){
     wt.state.createVideo = null;
     if ($("selectedVideoCard")) $("selectedVideoCard").classList.add("hidden");
     if ($("videoSearchInput")) $("videoSearchInput").value = "";
     if ($("videoSearchResults")) $("videoSearchResults").innerHTML = "";
+    renderHistory();
   });
+  input.addEventListener("focus",renderHistory);
+  renderHistory();
   input.dataset.wtFastSearch = "1";
+
+  var config = window.WATCHTOGETHER_CONFIG || {};
+  var warmUrl = String(config.youtubeSearchProxyUrl || "").replace(//search/?$/,"/health");
+  if (warmUrl) {
+    fetch(warmUrl,{method:"GET",cache:"no-store",credentials:"omit"}).catch(function(){});
+  }
 }
 
 var oldCreate = null;
