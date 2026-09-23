@@ -39,62 +39,15 @@ self.addEventListener("fetch", event => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      (async () => {
-        try {
-          const response = await fetch(new Request(request,{cache:"no-store"}));
-          const headers = new Headers(response.headers);
-          headers.set("Cross-Origin-Opener-Policy","same-origin-allow-popups");
-          let body = response.body;
-
-          if (response.ok) {
-            try {
-              const source = await response.text();
-              const isAppPage = source.includes('id="homeView"') && source.includes('WatchTogether');
-              const version = "20260923-formal-v1";
-              if (isAppPage) {
-                const withHead = source.replace(
-                  "</head>",
-                  '<meta name="theme-color" content="#0b1020">' +
-                  '<link rel="manifest" href="./manifest.webmanifest?v=' + version + '">' +
-                  '<link rel="stylesheet" href="./enhancements.css?v=' + version + '">' +
-                  "</head>"
-                );
-                body = withHead.replace(
-                  "</body>",
-                  '<script src="./enhancements.js?v=' + version + '"></script></body>'
-                );
-              } else {
-                body = source;
-              }
-              headers.delete("content-length");
-              headers.delete("content-encoding");
-              headers.set("content-type","text/html; charset=utf-8");
-            } catch (_) {}
-          }
-
-          return new Response(body,{
-            status:response.status,
-            statusText:response.statusText,
-            headers:headers
-          });
-        } catch (_) {
-          const cached = await caches.match(request);
-          if (cached) {
-            const source = await cached.text();
-            const headers = new Headers(cached.headers);
-            headers.set("Cross-Origin-Opener-Policy","same-origin-allow-popups");
-            const version = "20260923-formal-v1";
-            const body = source.includes('id="homeView"') && source.includes("WatchTogether")
-              ? source
-                  .replace("</head>",'<meta name="theme-color" content="#0b1020"><link rel="manifest" href="./manifest.webmanifest?v='+version+'"><link rel="stylesheet" href="./enhancements.css?v='+version+'"></head>')
-                  .replace("</body>",'<script src="./enhancements.js?v='+version+'"></script></body>')
-              : source;
-            headers.delete("content-length");
-            return new Response(body,{status:200,headers:headers});
-          }
-          return fetch(request);
-        }
-      })()
+      fetch(new Request(request,{cache:"no-store"})).then(response => {
+        const headers = new Headers(response.headers);
+        headers.set("Cross-Origin-Opener-Policy","same-origin-allow-popups");
+        return new Response(response.body,{
+          status:response.status,
+          statusText:response.statusText,
+          headers:headers
+        });
+      }).catch(() => caches.match(request,{ignoreSearch:true}).then(cached => cached || fetch(request)))
     );
     return;
   }
