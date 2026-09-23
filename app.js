@@ -8885,6 +8885,30 @@
     state.leavingRoom =
       false;
 
+    const leftRoomId =
+      state.roomId;
+
+    const leftRoomName =
+      String(
+        state.room?.name ||
+        $("roomTitle")?.textContent ||
+        "一起看"
+      )
+        .trim() ||
+      "一起看";
+
+    if (
+      leftRoomId &&
+      window.WT_ENHANCEMENTS?.rememberRoom
+    ) {
+      try {
+        window.WT_ENHANCEMENTS.rememberRoom(
+          leftRoomId,
+          leftRoomName
+        );
+      } catch (_) {}
+    }
+
     clearSavedRoomId();
 
     history.replaceState(
@@ -9431,17 +9455,18 @@
 
   function renderChat(messages) {
     const list =
-      Object.values(
+      Object.entries(
         messages || {}
-      ).sort(
-        (a, b) =>
-          Number(
-            a.createdAt || 0
-          ) -
-          Number(
-            b.createdAt || 0
-          )
-      );
+      )
+        .map(([id, message]) => ({
+          id,
+          ...(message || {})
+        }))
+        .sort(
+          (a, b) =>
+            Number(a.createdAt || 0) -
+            Number(b.createdAt || 0)
+        );
 
     if (!$("chatMessages")) {
       return;
@@ -9467,27 +9492,94 @@
       .innerHTML =
       list
         .map(
-          (message) => `
-            <div
-              class="message"
-            >
+          (message) => {
+            const isSticker =
+              message?.type === "sticker";
 
-              <b>
-                ${escapeHtml(
-                  message?.name ||
-                  "玩家"
-                )}
-              </b>
+            const body =
+              isSticker
+                ? `
+                  <div
+                    class="wt-sticker"
+                    aria-label="貼圖"
+                  >
+                    ${escapeHtml(
+                      message?.sticker ||
+                      "😊"
+                    )}
+                  </div>
+                `
+                : `
+                  <p>
+                    ${escapeHtml(
+                      message?.text ||
+                      ""
+                    )}
+                  </p>
+                `;
 
-              <p>
-                ${escapeHtml(
-                  message?.text ||
-                  ""
-                )}
-              </p>
+            const isOwnMessage =
+              Boolean(
+                state.uid &&
+                message?.uid &&
+                String(message.uid) ===
+                  String(state.uid)
+              );
 
-            </div>
-          `
+            const deleteButton =
+              isOwnMessage
+                ? `
+                  <button
+                    type="button"
+                    class="wt-message-delete"
+                    data-chat-delete="${escapeHtml(
+                      message.id
+                    )}"
+                  >
+                    刪除訊息
+                  </button>
+                `
+                : "";
+
+            return `
+              <div
+                class="message wt-message${isOwnMessage ? " self" : ""}"
+              >
+                <div
+                  class="wt-message-top"
+                >
+                  <b
+                    class="wt-message-name"
+                  >
+                    ${escapeHtml(
+                      message?.name ||
+                      "玩家"
+                    )}
+                  </b>
+                  <span
+                    class="wt-message-time"
+                  >
+                    ${escapeHtml(
+                      message?.createdAt
+                        ? new Date(
+                            Number(message.createdAt)
+                          ).toLocaleTimeString(
+                            "zh-TW",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            }
+                          )
+                        : ""
+                    )}
+                  </span>
+                </div>
+
+                ${body}
+                ${deleteButton}
+              </div>
+            `;
+          }
         )
         .join("");
 
@@ -9496,6 +9588,49 @@
 
     box.scrollTop =
       box.scrollHeight;
+
+    box
+      .querySelectorAll(
+        "[data-chat-delete]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              if (
+                !state.chatRef ||
+                !state.uid
+              ) {
+                return;
+              }
+
+              try {
+                await state.chatRef
+                  .child(
+                    button.dataset
+                      .chatDelete
+                  )
+                  .remove();
+
+                toast(
+                  "訊息已刪除"
+                );
+              } catch (error) {
+                console.error(
+                  "刪除聊天室訊息失敗:",
+                  error
+                );
+
+                toast(
+                  error?.message ||
+                  "刪除訊息失敗"
+                );
+              }
+            }
+          );
+        }
+      );
   }
 
 
