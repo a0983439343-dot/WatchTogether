@@ -46,11 +46,4 @@ jobs:
 
       - name: Check six-character room code implementation
         run: |
-          if ! grep -Eq 'new Uint32Array\([[:space:]]*6[[:space:]]*\)' app.js; then
-            echo 'Six-character room code generator check failed.'
-            exit 1
-          fi
-          if grep -Eq '6 或 12|12 碼房間|A-Z0-9\{12\}' app.js index.html enhancements.js; then
-            echo 'Legacy 12-character room code validation detected.'
-            exit 1
-          fi
+          node -e "const fs=require('fs'); const app=fs.readFileSync('app.js','utf8'); const all=['app.js','index.html','enhancements.js'].map(f=>fs.readFileSync(f,'utf8')).join('\n'); if(!/new Uint32Array\\(\\s*6\\s*\\)/s.test(app)){throw new Error('Six-character room code generator check failed.')} if(/6 或 12|12 碼房間|A-Z0-9\\{12\\}/.test(all)){throw new Error('Legacy 12-character room code validation detected.')} console.log('Six-character room code checks OK')"
