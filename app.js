@@ -9430,7 +9430,21 @@
     }
 
     try {
-      await memberRef.set({
+      let publicProfile = null;
+
+      if (
+        auth?.currentUser &&
+        !auth.currentUser.isAnonymous
+      ) {
+        publicProfile = (
+          await db
+            .ref("profiles/" + state.uid)
+            .once("value")
+            .catch(() => null)
+        )?.val?.() || null;
+      }
+
+      const memberData = {
         name:
           state.memberName,
 
@@ -9446,7 +9460,29 @@
           firebase.database
             .ServerValue
             .TIMESTAMP
-      });
+      };
+
+      const publicCode =
+        String(
+          publicProfile?.publicCode || ""
+        )
+          .trim()
+          .toUpperCase();
+
+      const avatarEmoji =
+        String(
+          publicProfile?.avatarEmoji || ""
+        ).slice(0, 4);
+
+      if (/^[A-Z0-9]{6}$/.test(publicCode)) {
+        memberData.publicCode = publicCode;
+      }
+
+      if (avatarEmoji) {
+        memberData.avatarEmoji = avatarEmoji;
+      }
+
+      await memberRef.set(memberData);
 
       await memberRef
         .onDisconnect()
@@ -10402,7 +10438,12 @@
             return `
               <div
                 class="member"
-                data-member-uid="\${escapeHtml(uid)}"
+                data-member-uid="${escapeHtml(uid)}"
+                data-member-public-code="${escapeHtml(
+                  String(member?.publicCode || "")
+                    .trim()
+                    .toUpperCase()
+                )}"
               >
 
                 <div
