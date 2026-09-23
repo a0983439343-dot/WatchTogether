@@ -7546,12 +7546,12 @@
         cancelScheduledRemotePause();
         await pausePlayer();
         const actualPosition = await asyncCurrentPosition();
-        publishPlaybackEvent("pause", actualPosition, false, issuedAt, effectiveAt);
+        await publishPlaybackEvent("pause", actualPosition, false, issuedAt, effectiveAt);
       } else if (action === "seek") {
         const wasPlaying = await asyncIsPlaying();
         markLocalPlaybackIntent("seek");
         await applyPlayerPosition(position);
-        publishPlaybackEvent("seek", position, wasPlaying, playbackClockNow());
+        await publishPlaybackEvent("seek", position, wasPlaying, playbackClockNow());
       } else {
         cancelScheduledLocalPause();
         cancelScheduledRemotePause();
@@ -7564,7 +7564,7 @@
           try {
             if (await asyncIsPlaying()) {
               const actualPosition = await asyncCurrentPosition();
-              publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
+              await publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
             }
           } catch (_) {}
         }, 600);
@@ -8415,7 +8415,7 @@
     const normalized = action === "pause" ? "pause" : action === "seek" ? "seek" : "play";
     markLocalPlaybackIntent(normalized);
 
-    void (async () => {
+    return (async () => {
       try {
         let finalPosition = Number(position);
         if (!Number.isFinite(finalPosition)) finalPosition = await asyncCurrentPosition();
