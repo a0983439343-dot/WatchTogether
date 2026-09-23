@@ -34,7 +34,7 @@
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 25;
   const YOUTUBE_MAX_SEARCH_PAGES = 2;
-  const YOUTUBE_SEARCH_COOLDOWN_MS = 1500;
+  const YOUTUBE_SEARCH_COOLDOWN_MS = 650;
   const LAST_ROOM_STORAGE_KEY = "wt_last_room_id";
 
   const PLATFORMS = {
@@ -613,7 +613,7 @@
 
     if (
       !value ||
-      !/^(?:[A-Z0-9]{6}|[A-Z0-9]{12})$/.test(
+      !/^[A-Z0-9]{6}$/g.test(
         value
       )
     ) {
@@ -631,7 +631,7 @@
         .toUpperCase();
 
     if (
-      /^(?:[A-Z0-9]{6}|[A-Z0-9]{12})$/.test(
+      /^[A-Z0-9]{6}$/.test(
         normalized
       )
     ) {
@@ -6582,12 +6582,12 @@
         .toUpperCase();
 
     if (
-      !/^(?:[A-Z0-9]{6}|[A-Z0-9]{12})$/.test(
+      !/^[A-Z0-9]{6}$/.test(
         roomId
       )
     ) {
       throw new Error(
-        "房間碼必須是 6 或 12 碼"
+        "房間碼必須是 6 碼"
       );
     }
 
@@ -10766,6 +10766,57 @@
               ?.click();
           }
         }
+      );
+
+    /*
+     * REALTIME YOUTUBE SEARCH
+     */
+    let wtRealtimeYoutubeSearchTimer = null;
+
+    $("modalVideoSearchInput")
+      ?.addEventListener(
+        "input",
+        () => {
+          clearTimeout(
+            wtRealtimeYoutubeSearchTimer
+          );
+
+          const value =
+            $("modalVideoSearchInput")
+              ?.value
+              ?.trim() ||
+            "";
+
+          if (
+            value.length < 2
+          ) {
+            return;
+          }
+
+          wtRealtimeYoutubeSearchTimer =
+            setTimeout(
+              () => {
+                const button =
+                  $("modalSearchVideoBtn");
+
+                if (
+                  !button ||
+                  button.disabled
+                ) {
+                  return;
+                }
+
+                button.click();
+              },
+              520
+            );
+        }
+      );
+
+    $("modalVideoSearchInput")
+      ?.setAttribute(
+        "data-wt-realtime-youtube-search",
+        "1"
       );
 
 
