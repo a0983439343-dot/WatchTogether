@@ -374,72 +374,29 @@ function renderHomeActivity() {
 }
 
 async function createRoomWithVideo(video) {
-  var user = auth.currentUser;
-  if (!user) throw new Error("登入狀態尚未準備完成");
-  var roomId = randomCode(6);
-  while ((await db.ref("roomMeta/" + roomId).once("value")).exists()) roomId = randomCode(6);
-  var name = String(video && video.title || "一起看").slice(0,40);
-  var room = {owner:user.uid,name:name,sourceType:String(video && video.platform || "youtube")};
-  var meta = {
-    owner:user.uid,
-    name:name,
-    settings:{locked:false,maxMembers:2,controlMode:"host"},
-    createdAt:serverTs()
-  };
-  await db.ref("rooms/" + roomId).set(room);
-  try {
-    await db.ref("roomMeta/" + roomId).set(meta);
-    if (video && video.id) {
-      var rv = {id:String(video.id),platform:String(video.platform || "youtube"),title:String(video.title || "未命名影片"),thumbnail:String(video.thumbnail || ""),channel:String(video.channel || "")};
-      if (video.url) rv.url = String(video.url);
-      if (video.twitchType) rv.twitchType = String(video.twitchType);
-      await db.ref("rooms/" + roomId + "/video").set(rv);
-    }
-  } catch (error) {
-    await db.ref("rooms/" + roomId).remove().catch(function(){});
-    await db.ref("roomMeta/" + roomId).remove().catch(function(){});
-    throw error;
-  }
-  rememberRoom(roomId,name);
-  location.href = roomLink(roomId);
-}
-
-async function createRoomCapture(event) {
-  if (event.target !== $("createRoomBtn")) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  var button = $("createRoomBtn");
-  var user = auth.currentUser;
-  if (!user) {
-    toast("登入狀態尚未準備完成");
+  if (!video || !video.id) {
+    toast("沒有可建立的影片");
     return;
   }
-  button.disabled = true;
-  var roomName = String($("roomNameInput") && $("roomNameInput").value || "一起看").trim().slice(0,40) || "一起看";
-  var sourceType = String($("sourceTypeInput") && $("sourceTypeInput").value || "youtube");
-  var roomId = randomCode(6);
-  while ((await db.ref("roomMeta/" + roomId).once("value")).exists()) roomId = randomCode(6);
-  var room = {owner:user.uid,name:roomName,sourceType:sourceType};
-  var meta = {owner:user.uid,name:roomName,settings:{locked:false,maxMembers:2,controlMode:"host"},createdAt:serverTs()};
+
+  if (
+    !window.WT_CORE ||
+    typeof window.WT_CORE.createRoomWithVideo !== "function"
+  ) {
+    toast("核心房間功能尚未準備完成，請稍後再試");
+    return;
+  }
+
   try {
-    await db.ref("rooms/" + roomId).set(room);
-    await db.ref("roomMeta/" + roomId).set(meta);
-    rememberRoom(roomId,roomName);
-    location.href = roomLink(roomId);
+    await window.WT_CORE.createRoomWithVideo(video);
   } catch (error) {
-    await db.ref("rooms/" + roomId).remove().catch(function(){});
-    await db.ref("roomMeta/" + roomId).remove().catch(function(){});
-    button.disabled = false;
     toast(error && error.message || "建立房間失敗");
   }
 }
+function createRoomCapture() {}
 
-function setupCreateCapture() {
-  var button = $("createRoomBtn");
-  if (!button || button.dataset.wtCreateCapture) return;
-  button.addEventListener("click",createRoomCapture,true);
-  button.dataset.wtCreateCapture = "1";
-}
+function setupCreateCapture() {}
+
 
 function setupRoomCodeInput() {
   var input = $("joinCodeInput");
