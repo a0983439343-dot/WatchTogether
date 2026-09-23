@@ -177,6 +177,7 @@
     currentVideoUrl: null,
 
     localTimer: null,
+    queueNextTimer: null,
 
     memberHeartbeatTimer: null,
 
@@ -3393,6 +3394,8 @@
 
 
   async function playQueueItem(queueId) {
+    cancelScheduledQueuePlayback();
+
     if (!state.isOwner) {
       throw new Error("只有房主可以播放待播放清單");
     }
@@ -3696,7 +3699,14 @@
   }
 
 
+  function cancelScheduledQueuePlayback() {
+    clearTimeout(state.queueNextTimer);
+    state.queueNextTimer = null;
+  }
+
   async function playNextQueueItem() {
+    cancelScheduledQueuePlayback();
+
     if (!state.isOwner) {
       return false;
     }
@@ -4433,12 +4443,34 @@
           state.isOwner &&
           !state.playbackApplyingRemote
         ) {
-          setTimeout(
-            async () => {
-              await playNextQueueItem();
-            },
-            300
-          );
+          cancelScheduledQueuePlayback();
+
+          const roomIdAtEnd =
+            String(state.roomId || "");
+          const playerAtEnd =
+            state.player;
+          const videoIdAtEnd =
+            String(state.currentVideoId || "");
+
+          state.queueNextTimer =
+            setTimeout(
+              async () => {
+                state.queueNextTimer = null;
+
+                if (
+                  String(state.roomId || "") !== roomIdAtEnd ||
+                  state.player !== playerAtEnd ||
+                  String(state.currentVideoId || "") !== videoIdAtEnd ||
+                  !state.isOwner ||
+                  state.leavingRoom
+                ) {
+                  return;
+                }
+
+                await playNextQueueItem();
+              },
+              300
+            );
         }
       },
 
@@ -7408,6 +7440,7 @@
   async function handleRoomVideo(
     video
   ) {
+    cancelScheduledQueuePlayback();
     cancelScheduledLocalPause();
     cancelScheduledRemotePause();
     cancelScheduledRemotePlay();
@@ -11151,6 +11184,8 @@
    */
 
   function disconnectRoomListeners() {
+    cancelScheduledQueuePlayback();
+
     if (db && state.playbackServerClockHandler) {
       db.ref('.info/serverTimeOffset').off('value', state.playbackServerClockHandler);
       state.playbackServerClockHandler = null;
