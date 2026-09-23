@@ -17,3 +17,6 @@
 
 聊天室、待播放清單與播放同步已從 `rooms/{roomId}` 拆到獨立節點，避免房間根節點的讀取權限意外放開私人資料。影片切換與待播放清單的「播放下一部」由房主執行，Firebase Rules 也會再次檢查。
 
+
+
+CI final verification marker 2026-09-23.
