@@ -1646,6 +1646,7 @@ async function saveRoomSettings() {
   }
   var updates = {};
   updates["rooms/" + id + "/name"] = name;
+  updates["roomMeta/" + id + "/owner"] = user.uid;
   updates["roomMeta/" + id + "/name"] = name;
   updates["roomMeta/" + id + "/settings"] = {locked:locked,maxMembers:maxMembers,controlMode:"host"};
   try {
