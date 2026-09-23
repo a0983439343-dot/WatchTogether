@@ -478,3 +478,386 @@ wt.currentAvatar = currentAvatar;
 applyTheme(currentTheme());
 
 })();
+
+(() => {
+"use strict";
+var wt = window.WT_ENHANCEMENTS;
+if (!wt) return;
+
+var $ = wt.$ || function(id){ return document.getElementById(id); };
+wt.$ = $;
+
+function ensurePublicCode(profile) {
+  if (profile && FRIEND_CODE_RE.test(String(profile.publicCode || "").toUpperCase())) {
+    return Promise.resolve(String(profile.publicCode).toUpperCase());
+  }
+  return (async function(){
+    for (var attempt=0;attempt<24;attempt++) {
+      var code = randomCode(8);
+      var ref = wt.db.ref("profileCodes/" + code);
+      var result = await ref.transaction(function(value){
+        return value === null ? wt.auth.currentUser.uid : value;
+      });
+      if (result.committed && String(result.snapshot.val()) === String(wt.auth.currentUser.uid)) {
+        return code;
+      }
+    }
+    throw new Error("好友代碼建立失敗");
+  })();
+}
+
+async function loadProfile(user) {
+  if (!user || user.isAnonymous) {
+    wt.state.profile = null;
+    wt.applyTheme(localStorage.getItem(wt.KEYS.theme) || "aurora");
+    renderProfile();
+    return null;
+  }
+
+  var ref = wt.db.ref("profiles/" + user.uid);
+  var snapshot = await ref.once("value");
+  var old = snapshot.val() || {};
+  var code = await ensurePublicCode(old);
+  var localName = String(localStorage.getItem("wt_name") || "").trim();
+  var displayName = String(old.displayName || localName || user.displayName || "玩家").trim().slice(0,30) || "玩家";
+  var theme = wt.THEMES.some(function(x){ return x.id === old.theme; }) ? old.theme : (localStorage.getItem(wt.KEYS.theme) || "aurora");
+  var profile = {
+    displayName:displayName,
+    publicCode:code,
+    avatarEmoji:String(old.avatarEmoji || "🙂").slice(0,4) || "🙂",
+    theme:theme,
+    notifications:old.notifications !== false,
+    createdAt:old.createdAt || wt.serverTs(),
+    updatedAt:wt.serverTs()
+  };
+  await ref.update(profile);
+  await wt.db.ref("profileCodes/" + code).set(user.uid);
+  wt.state.profile = Object.assign({},old,profile);
+  localStorage.setItem("wt_name",displayName);
+  localStorage.setItem(wt.KEYS.notifications,profile.notifications ? "1" : "0");
+  wt.applyTheme(theme);
+  renderProfile();
+  return wt.state.profile;
+}
+
+function renderProfile() {
+  var profile = wt.state.profile;
+  var name = $("wtProfileName");
+  var code = $("wtProfileCodeText");
+  var avatar = $("wtProfileAvatar");
+  var input = $("wtNicknameInput");
+  var avatarInput = $("wtAvatarInput");
+  var note = $("wtNotificationToggle");
+  var hint = $("wtProfileHint");
+
+  if (name) name.textContent = profile && profile.displayName || wt.currentName();
+  if (code) code.textContent = profile && profile.publicCode ? "好友代碼：" + profile.publicCode : "訪客模式";
+  if (avatar) avatar.textContent = profile && profile.avatarEmoji || wt.currentAvatar();
+  if (input) input.value = profile && profile.displayName || wt.currentName();
+  if (avatarInput) avatarInput.value = profile && profile.avatarEmoji || wt.currentAvatar();
+  if (note) note.checked = localStorage.getItem(wt.KEYS.notifications) !== "0";
+  if (hint) {
+    hint.textContent = wt.state.user && !wt.state.user.isAnonymous
+      ? "好友代碼可提供給朋友，不需要公開 Email。"
+      : "Google 登入後才能使用好友與私聊功能。";
+  }
+}
+
+function renderThemes() {
+  var grid = $("wtThemeGrid");
+  if (!grid) return;
+  var active = wt.currentTheme();
+  grid.innerHTML = wt.THEMES.map(function(theme){
+    var icon = theme.id === "cyber" ? "▦" : theme.id === "paper" ? "▤" : theme.id === "terminal" ? ">" :
+      theme.id === "sakura" ? "✿" : theme.id === "ocean" ? "≋" : theme.id === "sunset" ? "◒" : theme.id === "mono" ? "■" : "✦";
+    return '<button class="wt-theme-card' + (active === theme.id ? ' active' : '') + '" data-wt-theme="' + esc(theme.id) + '" type="button">' +
+      '<span style="font-size:20px;">' + icon + '</span>' +
+      '<strong>' + esc(theme.name) + '</strong>' +
+      '<span>' + esc(theme.desc) + '</span></button>';
+  }).join("");
+
+  grid.querySelectorAll("[data-wt-theme]").forEach(function(button){
+    button.addEventListener("click",async function(){
+      var theme = button.dataset.wtTheme;
+      wt.applyTheme(theme);
+      if (wt.state.user && !wt.state.user.isAnonymous) {
+        await wt.db.ref("profiles/" + wt.state.user.uid).update({theme:theme,updatedAt:wt.serverTs()}).catch(function(){});
+        if (wt.state.profile) wt.state.profile.theme = theme;
+      }
+      renderThemes();
+      toast("主題已切換");
+    });
+  });
+}
+
+function renderFavorites() {
+  var box = $("wtFavoritesList");
+  if (!box) return;
+  var map = readJson(wt.KEYS.favorites,{});
+  var list = Object.values(map || {}).sort(function(a,b){ return Number(b.updatedAt||0)-Number(a.updatedAt||0); }).slice(0,20);
+  if (!list.length) {
+    box.innerHTML = '<div class="wt-small">目前沒有收藏影片。</div>';
+    return;
+  }
+  box.innerHTML = list.map(function(video){
+    return '<div class="wt-room-card"><div class="wt-room-card-main"><div class="wt-room-card-title">' + esc(video.title) + '</div><div class="wt-room-card-meta">' + esc(video.platform) + ' · ' + esc(video.channel || "") + '</div></div>' +
+      '<div class="wt-card-actions"><button class="wt-mini-btn primary" data-wt-favorite-room="' + esc(video.key) + '" type="button">建立房間</button><button class="wt-mini-btn danger" data-wt-favorite-remove="' + esc(video.key) + '" type="button">取消收藏</button></div></div>';
+  }).join("");
+
+  box.querySelectorAll("[data-wt-favorite-room]").forEach(function(button){
+    button.addEventListener("click",function(){
+      var video = list.find(function(item){ return item.key === button.dataset.wtFavoriteRoom; });
+      if (video) void wt.createRoomWithVideo(video);
+    });
+  });
+  box.querySelectorAll("[data-wt-favorite-remove]").forEach(function(button){
+    button.addEventListener("click",function(){
+      var map2 = readJson(wt.KEYS.favorites,{});
+      delete map2[button.dataset.wtFavoriteRemove];
+      writeJson(wt.KEYS.favorites,map2);
+      renderFavorites();
+      wt.renderHome();
+      toast("已取消收藏");
+    });
+  });
+}
+
+function buildSettingsModal() {
+  if ($("wtSettingsModal")) return;
+
+  var modal = document.createElement("div");
+  modal.id = "wtSettingsModal";
+  modal.className = "wt-modal hidden";
+  modal.setAttribute("aria-hidden","true");
+  modal.innerHTML =
+    '<div class="wt-modal-card">' +
+      '<div class="wt-modal-header"><div><div class="wt-panel-title">帳號與設定</div><div class="wt-small">個人資料、主題、通知、收藏與網站工具</div></div><button class="wt-close-btn" id="wtSettingsClose" type="button">×</button></div>' +
+      '<div class="wt-settings-grid">' +
+        '<section class="wt-card-section">' +
+          '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">個人資料</span></div>' +
+          '<div class="wt-profile-head" style="margin-top:13px;"><div class="wt-avatar-lg" id="wtProfileAvatar">🙂</div><div class="wt-profile-text"><div class="wt-profile-name" id="wtProfileName">玩家</div><div class="wt-profile-code" id="wtProfileCodeText">訪客模式</div></div></div>' +
+          '<div class="wt-form-row"><label for="wtNicknameInput">暱稱</label><input id="wtNicknameInput" maxlength="30" autocomplete="off"></div>' +
+          '<div class="wt-form-row"><label for="wtAvatarInput">頭像 Emoji</label><input id="wtAvatarInput" maxlength="4" autocomplete="off" placeholder="🙂"></div>' +
+          '<div class="wt-settings-actions"><button class="wt-action-btn primary" id="wtSaveProfileBtn" type="button">儲存個人資料</button><button class="wt-action-btn" id="wtCopyFriendCodeBtn" type="button">複製好友代碼</button></div>' +
+          '<div class="wt-small" id="wtProfileHint" style="margin-top:10px;"></div>' +
+        '</section>' +
+        '<section class="wt-card-section">' +
+          '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">通知與網站</span></div>' +
+          '<div class="wt-form-row"><label><input id="wtNotificationToggle" type="checkbox" style="margin-right:7px;"> 顯示好友與私聊通知</label></div>' +
+          '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtRequestNotificationBtn" type="button">允許瀏覽器通知</button><button class="wt-action-btn" id="wtInstallPwaBtn" type="button">安裝 WatchTogether</button></div>' +
+          '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtOpenStatusBtn" type="button">📡 狀態中心</button><button class="wt-action-btn" id="wtOpenReportBtn" type="button">🐛 回報問題</button></div>' +
+        '</section>' +
+      '</div>' +
+      '<section class="wt-card-section" style="margin-top:18px;"><div class="wt-section-title"><div><div class="wt-panel-title" style="font-size:15px;">主題</div><div class="wt-small">不是只換顏色：不同主題會改變字體、卡片形狀、背景、排版氣質與陰影。</div></div></div><div class="wt-theme-grid" id="wtThemeGrid"></div></section>' +
+      '<section class="wt-card-section" style="margin-top:18px;"><div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">收藏影片</span><span class="wt-small">本機收藏</span></div><div id="wtFavoritesList" style="display:grid;gap:9px;margin-top:12px;"></div></section>' +
+      '<section class="wt-card-section" style="margin-top:18px;"><div class="wt-settings-actions"><button class="wt-action-btn" id="wtOpenPrivacyBtn" type="button">隱私說明</button><button class="wt-action-btn" id="wtOpenTermsBtn" type="button">使用規範</button></div></section>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  $("wtSettingsClose").addEventListener("click",function(){ closeModal("wtSettingsModal"); });
+  $("wtSaveProfileBtn").addEventListener("click",saveProfile);
+  $("wtCopyFriendCodeBtn").addEventListener("click",copyFriendCode);
+  $("wtNotificationToggle").addEventListener("change",async function(event){
+    var enabled = Boolean(event.target.checked);
+    localStorage.setItem(wt.KEYS.notifications,enabled ? "1" : "0");
+    if (wt.state.user && !wt.state.user.isAnonymous) {
+      await wt.db.ref("profiles/" + wt.state.user.uid).update({notifications:enabled,updatedAt:wt.serverTs()}).catch(function(){});
+      if (wt.state.profile) wt.state.profile.notifications = enabled;
+    }
+  });
+  $("wtRequestNotificationBtn").addEventListener("click",requestNotifications);
+  $("wtInstallPwaBtn").addEventListener("click",installPwa);
+  $("wtOpenStatusBtn").addEventListener("click",function(){ closeModal("wtSettingsModal"); wt.openStatus(); });
+  $("wtOpenReportBtn").addEventListener("click",function(){ closeModal("wtSettingsModal"); wt.openReport(); });
+  $("wtOpenPrivacyBtn").addEventListener("click",function(){ wt.openInfo("privacy"); });
+  $("wtOpenTermsBtn").addEventListener("click",function(){ wt.openInfo("terms"); });
+
+  renderThemes();
+  renderProfile();
+  renderFavorites();
+}
+
+async function saveProfile() {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) {
+    toast("Google 登入後才能儲存公開個人資料");
+    return;
+  }
+  var name = String($("wtNicknameInput").value || "").trim().slice(0,30);
+  var avatar = String($("wtAvatarInput").value || "🙂").trim().slice(0,4) || "🙂";
+  if (!name) {
+    toast("暱稱不能是空白");
+    return;
+  }
+  try { await user.updateProfile({displayName:name}); } catch (_) {}
+  localStorage.setItem("wt_name",name);
+  var profile = {
+    displayName:name,
+    avatarEmoji:avatar,
+    theme:wt.currentTheme(),
+    notifications:localStorage.getItem(wt.KEYS.notifications) !== "0",
+    updatedAt:wt.serverTs()
+  };
+  await wt.db.ref("profiles/" + user.uid).update(profile);
+  wt.state.profile = Object.assign({},wt.state.profile || {},profile);
+  await updateCurrentRoomMember(name,avatar);
+  renderProfile();
+  wt.renderHome();
+  toast("個人資料已更新");
+}
+
+async function updateCurrentRoomMember(name,avatar) {
+  var room = roomIdFromUrl();
+  var user = wt.auth.currentUser;
+  if (!room || !user) return;
+  var ref = wt.db.ref("members/" + room + "/" + user.uid);
+  var snapshot = await ref.once("value").catch(function(){ return null; });
+  if (!snapshot || !snapshot.exists()) return;
+  await ref.update({name:name,avatarEmoji:avatar,lastSeen:wt.serverTs(),online:true}).catch(function(){});
+}
+
+async function copyFriendCode() {
+  var code = wt.state.profile && wt.state.profile.publicCode;
+  if (!code) {
+    toast("Google 登入後才有好友代碼");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(code);
+    toast("好友代碼已複製");
+  } catch (_) {
+    toast(code);
+  }
+}
+
+async function requestNotifications() {
+  if (!("Notification" in window)) {
+    toast("瀏覽器不支援通知");
+    return;
+  }
+  try {
+    var permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      localStorage.setItem(wt.KEYS.notifications,"1");
+      toast("瀏覽器通知已允許");
+    } else {
+      localStorage.setItem(wt.KEYS.notifications,"0");
+      toast("通知權限未開啟");
+    }
+  } catch (error) {
+    toast(error && error.message || "通知設定失敗");
+  }
+}
+
+async function installPwa() {
+  if (wt.state.pwaPrompt) {
+    wt.state.pwaPrompt.prompt();
+    try { await wt.state.pwaPrompt.userChoice; } catch (_) {}
+    wt.state.pwaPrompt = null;
+    return;
+  }
+  toast("iPhone 可用 Safari 的「加入主畫面」；支援安裝的瀏覽器會在選單提供安裝。");
+}
+
+function buildInfoModal() {
+  if ($("wtInfoModal")) return;
+  var modal = document.createElement("div");
+  modal.id = "wtInfoModal";
+  modal.className = "wt-modal hidden";
+  modal.setAttribute("aria-hidden","true");
+  modal.innerHTML =
+    '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div class="wt-panel-title" id="wtInfoTitle">說明</div><button class="wt-close-btn" id="wtInfoClose" type="button">×</button></div><div id="wtInfoBody" class="wt-legal"></div></div>';
+  document.body.appendChild(modal);
+  $("wtInfoClose").addEventListener("click",function(){ closeModal("wtInfoModal"); });
+}
+
+function openInfo(kind) {
+  buildInfoModal();
+  if (kind === "privacy") {
+    $("wtInfoTitle").textContent = "隱私說明";
+    $("wtInfoBody").innerHTML =
+      "<p>Google 登入由 Firebase Authentication 管理。公開社交資料只有暱稱、頭像與好友代碼；不把 Email 顯示在好友搜尋裡。</p>" +
+      "<p>最近房間、觀看紀錄、收藏、主題與通知偏好保留在目前裝置的瀏覽器中。</p>" +
+      "<p>房間聊天、好友關係、好友邀請與私聊訊息由 Firebase Realtime Database 儲存，Rules 會限制存取範圍。</p>";
+  } else {
+    $("wtInfoTitle").textContent = "使用規範";
+    $("wtInfoBody").innerHTML =
+      "<p>請遵守影片來源平台的服務條款，只分享你有權觀看或分享的內容。</p>" +
+      "<p>請勿使用網站進行騷擾、冒充他人、垃圾訊息或大量自動化請求。</p>" +
+      "<p>不同影片平台的嵌入與同步能力可能不同，網站會依官方播放器能力處理。</p>";
+  }
+  openModal("wtInfoModal");
+}
+
+function buildReportModal() {
+  if ($("wtReportModal")) return;
+  var modal = document.createElement("div");
+  modal.id = "wtReportModal";
+  modal.className = "wt-modal hidden";
+  modal.setAttribute("aria-hidden","true");
+  modal.innerHTML =
+    '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div><div class="wt-panel-title">回報問題</div><div class="wt-small">自動附上裝置、房間與發生時間。</div></div><button class="wt-close-btn" id="wtReportClose" type="button">×</button></div>' +
+    '<div class="wt-form-row"><label for="wtReportCategory">問題類型</label><select id="wtReportCategory"><option value="playback">播放 / 同步</option><option value="search">YouTube 搜尋</option><option value="room">房間</option><option value="chat">好友 / 聊天</option><option value="account">登入 / 帳號</option><option value="ui">畫面 / 手機</option><option value="other">其他</option></select></div>' +
+    '<div class="wt-form-row"><label for="wtReportDetails">問題描述</label><textarea id="wtReportDetails" maxlength="2000" placeholder="請描述問題。"></textarea></div>' +
+    '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtReportCancel" type="button">取消</button><button class="wt-action-btn primary" id="wtReportSend" type="button">送出回報</button></div><div class="wt-small" id="wtReportHint"></div></div>';
+  document.body.appendChild(modal);
+  $("wtReportClose").addEventListener("click",function(){ closeModal("wtReportModal"); });
+  $("wtReportCancel").addEventListener("click",function(){ closeModal("wtReportModal"); });
+  $("wtReportSend").addEventListener("click",sendReport);
+}
+
+async function sendReport() {
+  var user = wt.auth.currentUser;
+  var details = String($("wtReportDetails").value || "").trim().slice(0,2000);
+  if (!details) {
+    $("wtReportHint").textContent = "請先描述問題。";
+    return;
+  }
+  try {
+    await wt.db.ref("reports").push({
+      uid:user && user.uid || "",
+      category:String($("wtReportCategory").value || "other"),
+      details:details,
+      roomId:roomIdFromUrl(),
+      page:location.href.slice(0,1000),
+      userAgent:navigator.userAgent.slice(0,500),
+      createdAt:wt.serverTs()
+    });
+    $("wtReportDetails").value = "";
+    $("wtReportHint").textContent = "已送出問題回報。";
+    toast("問題回報已送出");
+    setTimeout(function(){ closeModal("wtReportModal"); },500);
+  } catch (error) {
+    $("wtReportHint").textContent = error && error.message || "回報失敗";
+  }
+}
+
+function openSettings() {
+  buildSettingsModal();
+  renderProfile();
+  renderThemes();
+  renderFavorites();
+  openModal("wtSettingsModal");
+}
+
+function openReport() {
+  buildReportModal();
+  openModal("wtReportModal");
+}
+
+function setupSettingsExtras() {
+  buildSettingsModal();
+  buildInfoModal();
+  buildReportModal();
+}
+
+wt.readJson = readJson;
+wt.writeJson = writeJson;
+wt.roomIdFromUrl = roomIdFromUrl;
+wt.openSettings = openSettings;
+wt.openReport = openReport;
+wt.openInfo = openInfo;
+wt.loadProfile = loadProfile;
+wt.renderFavorites = renderFavorites;
+
+})();
