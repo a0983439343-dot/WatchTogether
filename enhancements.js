@@ -507,6 +507,7 @@ var esc = wt.esc;
 var openModal = wt.openModal;
 var closeModal = wt.closeModal;
 var serverTs = wt.serverTs;
+var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
 
 function ensurePublicCode(profile) {
   if (profile && FRIEND_CODE_RE.test(String(profile.publicCode || "").toUpperCase())) {
