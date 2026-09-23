@@ -55,6 +55,9 @@ var state = wt.state = {
   roomMembersRef:null,
   pwaPrompt:null,
   roomId:"",
+  authStateSequence:0,
+  friendListenerToken:0,
+  roomSetupToken:0,
   initialized:false
 };
 
@@ -499,6 +502,20 @@ async function loadProfile(user) {
   var old = snapshot.val() || {};
   var oldCode = String(old.publicCode || "").trim().toUpperCase();
   var code = await ensurePublicCode(old);
+
+  if (!isCurrentAuthUser(user)) {
+    if (code && code !== oldCode && FRIEND_CODE_RE.test(code)) {
+      try {
+        var reservedRef = wt.db.ref("profileCodes/" + code);
+        var reservedSnapshot = await reservedRef.once("value");
+        if (String(reservedSnapshot.val() || "") === String(user.uid)) {
+          await reservedRef.remove();
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   var localName = String(localStorage.getItem("wt_name") || "").trim();
   var displayName = String(old.displayName || localName || user.displayName || "玩家").trim().slice(0,30) || "玩家";
   var theme = wt.THEMES.some(function(x){ return x.id === old.theme; }) ? old.theme : (localStorage.getItem(wt.KEYS.theme) || "aurora");
@@ -512,6 +529,11 @@ async function loadProfile(user) {
     updatedAt:wt.serverTs()
   };
   await ref.update(profile);
+
+  if (!isCurrentAuthUser(user)) {
+    return null;
+  }
+
   if (oldCode && oldCode !== code) {
     try {
       var oldCodeRef = wt.db.ref("profileCodes/" + oldCode);
@@ -527,6 +549,16 @@ async function loadProfile(user) {
   wt.applyTheme(theme);
   renderProfile();
   return wt.state.profile;
+}
+
+function isCurrentAuthUser(user) {
+  var current = wt.auth.currentUser;
+  return Boolean(
+    current &&
+    user &&
+    String(current.uid) === String(user.uid) &&
+    Boolean(current.isAnonymous) === Boolean(user.isAnonymous)
+  );
 }
 
 function renderProfile() {
@@ -1662,13 +1694,17 @@ function enhanceRoomMembers() {
     button.textContent = "加好友";
     button.style.marginLeft = "6px";
     button.addEventListener("click",async function(){
-      var profile = (await wt.db.ref("profiles/" + uid).once("value").catch(function(){ return null; })).val() || {};
-      if (!profile.publicCode) {
-        wt.toast("對方尚未啟用好友功能");
+      var code = String(
+        member.dataset.memberPublicCode || ""
+      ).trim().toUpperCase();
+
+      if (!FRIEND_CODE_RE.test(code)) {
+        wt.toast("對方目前沒有可用的好友代碼");
         return;
       }
+
       try {
-        await wt.addFriendByCode(profile.publicCode);
+        await wt.addFriendByCode(code);
       } catch (error) {
         wt.toast(error && error.message || "加好友失敗");
       }
@@ -1681,12 +1717,24 @@ async function setupRoom(id) {
   if (!id) return;
   if (wt.state.roomSetupId === id) return;
 
+  var setupToken = Number(wt.state.roomSetupToken || 0) + 1;
+  wt.state.roomSetupToken = setupToken;
   wt.state.roomSetupId = id;
+
   buildRoomModals();
   ensureRoomToolbar();
   ensureRoomChat(id);
 
   var metaSnapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
+
+  if (
+    setupToken !== Number(wt.state.roomSetupToken || 0) ||
+    wt.state.roomSetupId !== id ||
+    roomId() !== id
+  ) {
+    return;
+  }
+
   if (!metaSnapshot || !metaSnapshot.exists()) {
     if (wt.state.roomSetupId === id) wt.state.roomSetupId = "";
     return;
@@ -1698,6 +1746,14 @@ async function setupRoom(id) {
 
   try { wt.state.roomVideoRef && wt.state.roomVideoRef.off(); } catch (_) {}
   wt.state.roomVideoRef = wt.db.ref("rooms/" + id + "/video");
+  if (
+    setupToken !== Number(wt.state.roomSetupToken || 0) ||
+    wt.state.roomSetupId !== id ||
+    roomId() !== id
+  ) {
+    return;
+  }
+
   wt.state.roomVideoRef.on("value",function(snapshot){
     var video = snapshot.val();
     if (video && video.id) wt.rememberVideo(video);
@@ -1705,6 +1761,7 @@ async function setupRoom(id) {
 }
 
 function stopRoomEnhancements() {
+  wt.state.roomSetupToken = Number(wt.state.roomSetupToken || 0) + 1;
   try { wt.state.roomChatRef && wt.state.roomChatRef.off(); } catch (_) {}
   try { wt.state.roomVideoRef && wt.state.roomVideoRef.off(); } catch (_) {}
   wt.state.roomChatRef = null;
@@ -1901,12 +1958,23 @@ function setupFriendsLiveListener() {
   }
   var ref = wt.db.ref("friendships/" + user.uid);
   wt.state.friendRef = ref;
+  var listenerToken = Number(wt.state.friendListenerToken || 0) + 1;
+  wt.state.friendListenerToken = listenerToken;
+
   ref.on("value",async function(snapshot){
     var ids = Object.keys(snapshot.val() || {});
     var pairs = await Promise.all(ids.map(async function(uid){
       var p = (await wt.db.ref("profiles/" + uid).once("value").catch(function(){ return null; })).val() || {};
       return [uid,p];
     }));
+
+    if (
+      listenerToken !== Number(wt.state.friendListenerToken || 0) ||
+      !isCurrentAuthUser(user)
+    ) {
+      return;
+    }
+
     wt.state.friends = Object.fromEntries(pairs);
     if (typeof wt.renderFriends === "function") wt.renderFriends();
   });
@@ -1914,14 +1982,29 @@ function setupFriendsLiveListener() {
 
 function setupAuthListeners() {
   wt.auth.onAuthStateChanged(function(user){
+    var sequence = Number(wt.state.authStateSequence || 0) + 1;
+    wt.state.authStateSequence = sequence;
     wt.state.user = user || null;
+
     if (user && !user.isAnonymous) {
       void wt.loadProfile(user).then(function(){
+        if (
+          sequence !== Number(wt.state.authStateSequence || 0) ||
+          !isCurrentAuthUser(user)
+        ) {
+          return;
+        }
+
         wt.listenRequests();
         setupFriendsLiveListener();
         if (typeof wt.renderFriends === "function") wt.renderFriends();
       }).catch(function(error){
-        console.warn("WatchTogether profile setup failed",error);
+        if (
+          sequence === Number(wt.state.authStateSequence || 0) &&
+          isCurrentAuthUser(user)
+        ) {
+          console.warn("WatchTogether profile setup failed",error);
+        }
       });
     } else {
       wt.stopDmListener && wt.stopDmListener();
