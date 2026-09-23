@@ -49,6 +49,7 @@ var state = wt.state = {
   dmReadsRef:null,
   dmReads:{},
   lastDmMarkedAt:0,
+  requestRef:null,
   roomChatRef:null,
   roomVideoRef:null,
   roomMembersRef:null,
@@ -519,21 +520,36 @@ var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
 async function ensurePublicCode(profile) {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous) throw new Error("Google 登入後才能建立好友代碼");
+
+  async function reserve(code) {
+    if (!FRIEND_CODE_RE.test(code)) return false;
+    try {
+      var ref = wt.db.ref("profileCodes/" + code);
+      var result = await ref.transaction(function(value){
+        if (value === null || String(value) === String(user.uid)) {
+          return user.uid;
+        }
+        return;
+      });
+      return Boolean(result.committed && String(result.snapshot.val()) === String(user.uid));
+    } catch (_) {
+      return false;
+    }
+  }
+
   var existing = String(profile && profile.publicCode || "").trim().toUpperCase();
-  if (FRIEND_CODE_RE.test(existing)) {
+  if (FRIEND_CODE_RE.test(existing) && await reserve(existing)) {
     return existing;
   }
-  for (var attempt=0;attempt<32;attempt++) {
+
+  for (var attempt=0;attempt<64;attempt++) {
     var code = randomCode(6);
-    var ref = wt.db.ref("profileCodes/" + code);
-    var result = await ref.transaction(function(value){
-      return value === null ? user.uid : value;
-    });
-    if (result.committed && String(result.snapshot.val()) === String(user.uid)) {
+    if (await reserve(code)) {
       return code;
     }
   }
-  throw new Error("好友代碼建立失敗"); 
+
+  throw new Error("好友代碼建立失敗");
 }
 
 async function loadProfile(user) {
@@ -563,9 +579,14 @@ async function loadProfile(user) {
   };
   await ref.update(profile);
   if (oldCode && oldCode !== code) {
-    try { await wt.db.ref("profileCodes/" + oldCode).remove(); } catch (_) {}
+    try {
+      var oldCodeRef = wt.db.ref("profileCodes/" + oldCode);
+      var oldCodeSnapshot = await oldCodeRef.once("value");
+      if (String(oldCodeSnapshot.val() || "") === String(user.uid)) {
+        await oldCodeRef.remove();
+      }
+    } catch (_) {}
   }
-  await wt.db.ref("profileCodes/" + code).set(user.uid);
   wt.state.profile = Object.assign({},old,profile);
   localStorage.setItem("wt_name",displayName);
   localStorage.setItem(wt.KEYS.notifications,profile.notifications ? "1" : "0");
@@ -953,7 +974,7 @@ async function addFriendByCode(code) {
     name:String(profile.displayName || wt.currentName()).slice(0,30),
     avatarEmoji:String(profile.avatarEmoji || wt.currentAvatar()).slice(0,4),
     fromName:String(profile.displayName || wt.currentName()).slice(0,30),
-    fromCode:String(profile.publicCode || ""),
+    fromCode:String(profile.publicCode || "").slice(0,6),
     createdAt:wt.serverTs()
   });
   wt.toast("好友邀請已送出");
@@ -1016,11 +1037,22 @@ async function loadFriends() {
   renderFriends();
 }
 
+function stopRequestListener() {
+  try { wt.state.requestRef && wt.state.requestRef.off(); } catch (_) {}
+  wt.state.requestRef = null;
+}
+
 function listenRequests() {
+  stopRequestListener();
   var user = wt.auth.currentUser;
-  if (!user || user.isAnonymous) return;
+  if (!user || user.isAnonymous) {
+    wt.state.requests = {};
+    renderRequests();
+    updateFriendBadge();
+    return;
+  }
   var ref = wt.db.ref("friendRequests/" + user.uid);
-  ref.off();
+  wt.state.requestRef = ref;
   ref.on("value",function(snapshot){
     var next = snapshot.val() || {};
     var previousIds = Object.keys(wt.state.requests || {});
@@ -1057,7 +1089,7 @@ function buildFriendsModal() {
   modal.innerHTML =
     '<div class="wt-modal-card">' +
       '<div class="wt-modal-header"><div><div class="wt-panel-title">好友與私聊</div><div class="wt-small">用 6 碼好友代碼加好友，私聊只允許對話雙方讀取。</div></div><button class="wt-close-btn" id="wtFriendsClose" type="button">×</button></div>' +
-      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="8" placeholder="輸入 6 碼好友代碼" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
+      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="6" minlength="6" placeholder="輸入 6 碼好友代碼" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
       '<div class="wt-friends-layout">' +
         '<aside class="wt-friends-sidebar">' +
           '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">好友</span><span id="wtFriendCount" class="wt-small">0</span></div>' +
@@ -1354,6 +1386,7 @@ wt.addFriendByCode = addFriendByCode;
 wt.openFriends = openFriends;
 wt.renderFriends = renderFriends;
 wt.listenRequests = listenRequests;
+wt.stopRequestListener = stopRequestListener;
 wt.stopDmListener = stopDmListener;
 
 })();
@@ -1619,9 +1652,11 @@ async function openRoomSettings() {
   var id = roomId();
   var user = wt.auth.currentUser;
   if (!id || !user) return;
-  var snapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
-  var meta = snapshot && snapshot.val();
-  if (!meta || String(meta.owner || "") !== String(user.uid)) {
+  var metaSnapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
+  var roomSnapshot = await wt.db.ref("rooms/" + id + "/owner").once("value").catch(function(){ return null; });
+  var meta = metaSnapshot && metaSnapshot.val();
+  var actualOwner = String(roomSnapshot && roomSnapshot.val() || "");
+  if (!meta || actualOwner !== String(user.uid)) {
     wt.toast("只有房主可以修改房間設定");
     return;
   }
@@ -1637,9 +1672,11 @@ async function saveRoomSettings() {
   var id = roomId();
   var user = wt.auth.currentUser;
   if (!id || !user) return;
-  var snapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
-  var meta = snapshot && snapshot.val();
-  if (!meta || String(meta.owner || "") !== String(user.uid)) {
+  var metaSnapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
+  var roomSnapshot = await wt.db.ref("rooms/" + id + "/owner").once("value").catch(function(){ return null; });
+  var meta = metaSnapshot && metaSnapshot.val();
+  var actualOwner = String(roomSnapshot && roomSnapshot.val() || "");
+  if (!meta || actualOwner !== String(user.uid)) {
     wt.toast("只有房主可以修改房間設定");
     return;
   }
@@ -1942,6 +1979,7 @@ function setupAuthListeners() {
       });
     } else {
       wt.stopDmListener && wt.stopDmListener();
+      stopRequestListener();
       try { wt.state.friendRef && wt.state.friendRef.off(); } catch (_) {}
       wt.state.friendRef = null;
       wt.state.profile = null;
@@ -2287,52 +2325,8 @@ function bindHomeSearch() {
   }
 }
 
-var oldCreate = null;
-function upgradeCreateRoomCapture() {
-  var button = $("createRoomBtn");
-  if (!button || button.dataset.wtFormalCreateV2) return;
-  button.addEventListener("click",async function(event){
-    if (event.target !== button) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    var user = wt.auth.currentUser;
-    if (!user) {
-      wt.toast("登入狀態尚未完成");
-      return;
-    }
-    button.disabled = true;
-    var roomName = String($("roomNameInput") && $("roomNameInput").value || "一起看").trim().slice(0,40) || "一起看";
-    var sourceType = String($("sourceTypeInput") && $("sourceTypeInput").value || "youtube");
-    var id = wt.randomCode(6);
-    try {
-      while ((await wt.db.ref("roomMeta/" + id).once("value")).exists()) id = wt.randomCode(6);
-      await wt.db.ref("rooms/" + id).set({owner:user.uid,name:roomName,sourceType:sourceType});
-      await wt.db.ref("roomMeta/" + id).set({owner:user.uid,name:roomName,settings:{locked:false,maxMembers:2,controlMode:"host"},createdAt:wt.serverTs()});
-      var selected = wt.state.createVideo;
-      if (selected && selected.id) {
-        await wt.db.ref("rooms/" + id + "/video").set({
-          id:String(selected.id),
-          platform:"youtube",
-          title:String(selected.title || "未命名影片"),
-          thumbnail:String(selected.thumbnail || ""),
-          channel:String(selected.channel || "")
-        });
-      }
-      wt.rememberRoom(id,roomName);
-      location.href = location.origin + location.pathname + "?room=" + encodeURIComponent(id);
-    } catch (error) {
-      await wt.db.ref("rooms/" + id).remove().catch(function(){});
-      await wt.db.ref("roomMeta/" + id).remove().catch(function(){});
-      button.disabled = false;
-      wt.toast(error && error.message || "建立房間失敗");
-    }
-  },true);
-  button.dataset.wtFormalCreateV2 = "1";
-}
-
 function initSearchAndCreate() {
   bindHomeSearch();
-  upgradeCreateRoomCapture();
 }
 
 wt.state.createVideo = wt.state.createVideo || null;
