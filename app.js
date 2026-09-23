@@ -9485,6 +9485,43 @@
       state.room.owner ===
       state.uid;
 
+    if (
+      state.isOwner &&
+      state.roomId &&
+      state.uid
+    ) {
+      try {
+        const metaOwnerSnapshot =
+          await db
+            .ref(
+              `roomMeta/${state.roomId}/owner`
+            )
+            .once("value");
+
+        if (
+          String(
+            metaOwnerSnapshot.val() || ""
+          ) !==
+          String(
+            state.uid
+          )
+        ) {
+          await db
+            .ref(
+              `roomMeta/${state.roomId}/owner`
+            )
+            .set(
+              state.uid
+            );
+        }
+      } catch (error) {
+        console.warn(
+          "同步房主索引失敗:",
+          error
+        );
+      }
+    }
+
     updateRoomOwnerUI();
     attachRoomOwnerListener();
 
