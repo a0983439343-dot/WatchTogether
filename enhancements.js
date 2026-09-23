@@ -1341,7 +1341,7 @@ async function sendPrivateSticker(sticker) {
 function openFriends() {
   buildFriendsModal();
   if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
-  openModal("wtFriendsModal");
+  wt.openModal("wtFriendsModal");
   void loadFriends();
   listenRequests();
   renderFriends();
