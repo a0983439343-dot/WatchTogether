@@ -1596,7 +1596,6 @@ async function saveRoomSettings() {
   }
 }
 
-async 
 function enhanceRoomMembers() {
   var list = $("memberList");
   var user = wt.auth.currentUser;
@@ -1626,7 +1625,7 @@ function enhanceRoomMembers() {
   });
 }
 
-function setupRoom(id) {
+async function setupRoom(id) {
   if (!id) return;
   buildRoomModals();
   ensureRoomToolbar();
