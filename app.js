@@ -6865,14 +6865,59 @@
         )
         .set(room);
 
+      const ownerMemberRef =
+        db.ref(
+          `members/${roomId}/${state.uid}`
+        );
+
+      await ownerMemberRef.set({
+        name:
+          state.memberName,
+        joinedAt:
+          firebase.database.ServerValue.TIMESTAMP,
+        online:
+          true,
+        lastSeen:
+          firebase.database.ServerValue.TIMESTAMP
+      });
+
+      await ownerMemberRef
+        .onDisconnect()
+        .remove();
+
     } catch (error) {
       console.error(
-        "建立 rooms 節點失敗:",
+        "建立 rooms/房主成員節點失敗:",
         error
       );
 
+      try {
+        await db
+          .ref(
+            `members/${roomId}/${state.uid}`
+          )
+          .onDisconnect()
+          .cancel();
+      } catch (_) {}
+
+      try {
+        await db
+          .ref(
+            `members/${roomId}/${state.uid}`
+          )
+          .remove();
+      } catch (_) {}
+
+      try {
+        await db
+          .ref(
+            `rooms/${roomId}`
+          )
+          .remove();
+      } catch (_) {}
+
       throw new Error(
-        "建立房間失敗：Firebase 不允許建立 rooms 資料"
+        "建立房間失敗：Firebase 不允許建立房間資料"
       );
     }
 
@@ -6914,6 +6959,23 @@
        * roomMeta 建立失敗時清掉剛建立的房間，
        * 避免留下沒有邀請入口的孤兒房間。
        */
+      try {
+        await db
+          .ref(
+            `members/${roomId}/${state.uid}`
+          )
+          .onDisconnect()
+          .cancel();
+      } catch (_) {}
+
+      try {
+        await db
+          .ref(
+            `members/${roomId}/${state.uid}`
+          )
+          .remove();
+      } catch (_) {}
+
       try {
         await db
           .ref(
