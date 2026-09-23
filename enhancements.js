@@ -1880,3 +1880,207 @@ if (document.readyState === "loading") {
 }
 
 })();
+
+(() => {
+"use strict";
+var wt = window.WT_ENHANCEMENTS;
+if (!wt) return;
+var $ = wt.$;
+var searchTimer = null;
+var searchController = null;
+var searchVersion = 0;
+
+function normalizeSearchItem(item) {
+  var id = item && item.id && item.id.videoId || item && item.id || "";
+  id = String(id || "").trim();
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+  var snippet = item && item.snippet || {};
+  return {
+    id:id,
+    platform:"youtube",
+    title:String(snippet.title || "未命名影片"),
+    thumbnail:String(snippet.thumbnails && (snippet.thumbnails.medium && snippet.thumbnails.medium.url || snippet.thumbnails.high && snippet.thumbnails.high.url || snippet.thumbnails.default && snippet.thumbnails.default.url) || ""),
+    channel:String(snippet.channelTitle || "YouTube"),
+    publishedAt:String(snippet.publishedAt || ""),
+    viewCount:Number(item && item.viewCount || 0),
+    durationSeconds:Number(item && item.durationSeconds || 0)
+  };
+}
+
+function formatDuration(seconds) {
+  seconds = Math.max(0,Math.floor(Number(seconds)||0));
+  var h = Math.floor(seconds/3600);
+  var m = Math.floor((seconds%3600)/60);
+  var s = seconds%60;
+  if (h > 0) return h + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+  return m + ":" + String(s).padStart(2,"0");
+}
+
+function renderHomeSearchMessage(text) {
+  var box = $("videoSearchResults");
+  if (!box) return;
+  box.innerHTML = '<div class="wt-card-section"><div class="wt-small">' + wt.esc(text) + '</div></div>';
+}
+
+function renderHomeSearch(results) {
+  var box = $("videoSearchResults");
+  if (!box) return;
+  if (!results.length) {
+    renderHomeSearchMessage("找不到符合的影片。");
+    return;
+  }
+  box.innerHTML = results.map(function(video){
+    return '<button type="button" class="video-search-item" data-wt-home-video="' + wt.esc(video.id) + '" style="display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;width:100%;margin-top:8px;padding:8px;text-align:left;">' +
+      '<span style="display:block;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:#111827;">' +
+        (video.thumbnail ? '<img src="' + wt.esc(video.thumbnail) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">' : '') +
+      '</span>' +
+      '<span style="min-width:0;display:block;"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + wt.esc(video.title) + '</strong>' +
+      '<small class="muted" style="display:block;margin-top:4px;">' + wt.esc(video.channel) + (video.durationSeconds ? " · " + wt.esc(formatDuration(video.durationSeconds)) : "") + '</small></span>' +
+    '</button>';
+  }).join("");
+  box.querySelectorAll("[data-wt-home-video]").forEach(function(button){
+    button.addEventListener("click",function(){
+      var video = results.find(function(item){ return item.id === button.dataset.wtHomeVideo; });
+      if (!video) return;
+      wt.state.createVideo = video;
+      var card = $("selectedVideoCard");
+      if (card) card.classList.remove("hidden");
+      var title = $("selectedVideoTitle");
+      var meta = $("selectedVideoMeta");
+      var thumb = $("selectedVideoThumbnail");
+      if (title) title.textContent = video.title;
+      if (meta) meta.textContent = video.channel + (video.durationSeconds ? " · " + formatDuration(video.durationSeconds) : "");
+      if (thumb) {
+        thumb.innerHTML = video.thumbnail ? '<img src="' + wt.esc(video.thumbnail) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">' : "";
+      }
+      toast("已選擇影片，建立房間後會自動播放");
+    });
+  });
+}
+
+async function searchHome(query) {
+  var config = window.WATCHTOGETHER_CONFIG || {};
+  var base = String(config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/search");
+  if (!base) throw new Error("YouTube 搜尋服務未設定");
+  if (searchController) {
+    try { searchController.abort(); } catch (_) {}
+  }
+  searchController = new AbortController();
+  var version = ++searchVersion;
+  var url = base + "?q=" + encodeURIComponent(query) + "&maxResults=8&regionCode=TW&relevanceLanguage=zh-Hant&safeSearch=moderate";
+  var response = await fetch(url,{method:"GET",headers:{Accept:"application/json"},credentials:"omit",cache:"no-store",signal:searchController.signal});
+  if (!response.ok) throw new Error("YouTube 搜尋失敗");
+  var data = await response.json();
+  if (version !== searchVersion) return;
+  var results = Array.isArray(data.items) ? data.items.map(normalizeSearchItem).filter(Boolean) : [];
+  renderHomeSearch(results);
+}
+
+function bindHomeSearch() {
+  var input = $("videoSearchInput");
+  var button = $("searchVideoBtn");
+  if (!input || !button || input.dataset.wtFastSearch) return;
+
+  async function run() {
+    var query = String(input.value || "").trim();
+    if (query.length < 2) {
+      renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "搜尋中…";
+    renderHomeSearchMessage("正在搜尋…");
+    try {
+      await searchHome(query);
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      renderHomeSearchMessage(error && error.message || "搜尋失敗");
+    } finally {
+      button.disabled = false;
+      button.textContent = "搜尋";
+    }
+  }
+
+  button.addEventListener("click",function(){ void run(); });
+  input.addEventListener("keydown",function(event){
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void run();
+    }
+  });
+  input.addEventListener("input",function(){
+    clearTimeout(searchTimer);
+    var value = String(input.value || "").trim();
+    if (value.length < 2) {
+      renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
+      return;
+    }
+    searchTimer = setTimeout(function(){ void run(); },450);
+  });
+  $("clearSelectedVideoBtn") && $("clearSelectedVideoBtn").addEventListener("click",function(){
+    wt.state.createVideo = null;
+    if ($("selectedVideoCard")) $("selectedVideoCard").classList.add("hidden");
+    if ($("videoSearchInput")) $("videoSearchInput").value = "";
+    if ($("videoSearchResults")) $("videoSearchResults").innerHTML = "";
+  });
+  input.dataset.wtFastSearch = "1";
+}
+
+var oldCreate = null;
+function upgradeCreateRoomCapture() {
+  var button = $("createRoomBtn");
+  if (!button || button.dataset.wtFormalCreateV2) return;
+  button.addEventListener("click",async function(event){
+    if (event.target !== button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    var user = wt.auth.currentUser;
+    if (!user) {
+      wt.toast("登入狀態尚未完成");
+      return;
+    }
+    button.disabled = true;
+    var roomName = String($("roomNameInput") && $("roomNameInput").value || "一起看").trim().slice(0,40) || "一起看";
+    var sourceType = String($("sourceTypeInput") && $("sourceTypeInput").value || "youtube");
+    var id = wt.randomCode(6);
+    try {
+      while ((await wt.db.ref("roomMeta/" + id).once("value")).exists()) id = wt.randomCode(6);
+      await wt.db.ref("rooms/" + id).set({owner:user.uid,name:roomName,sourceType:sourceType});
+      await wt.db.ref("roomMeta/" + id).set({owner:user.uid,name:roomName,settings:{locked:false,maxMembers:2,controlMode:"host"},createdAt:wt.serverTs()});
+      var selected = wt.state.createVideo;
+      if (selected && selected.id) {
+        await wt.db.ref("rooms/" + id + "/video").set({
+          id:String(selected.id),
+          platform:"youtube",
+          title:String(selected.title || "未命名影片"),
+          thumbnail:String(selected.thumbnail || ""),
+          channel:String(selected.channel || "")
+        });
+      }
+      wt.rememberRoom(id,roomName);
+      location.href = location.origin + location.pathname + "?room=" + encodeURIComponent(id);
+    } catch (error) {
+      await wt.db.ref("rooms/" + id).remove().catch(function(){});
+      await wt.db.ref("roomMeta/" + id).remove().catch(function(){});
+      button.disabled = false;
+      wt.toast(error && error.message || "建立房間失敗");
+    }
+  },true);
+  button.dataset.wtFormalCreateV2 = "1";
+}
+
+function initSearchAndCreate() {
+  bindHomeSearch();
+  upgradeCreateRoomCapture();
+}
+
+wt.state.createVideo = wt.state.createVideo || null;
+
+var oldObserve = wt.observeRoom;
+wt.observeRoom = function(){
+  try { oldObserve(); } catch (_) {}
+  initSearchAndCreate();
+};
+
+initSearchAndCreate();
+})();
