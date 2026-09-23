@@ -11313,7 +11313,7 @@
           if (
             !state.playerReady ||
             !state.player ||
-            !state.isOwner ||
+            
             ![
               "youtube",
               "vimeo",
@@ -11337,7 +11337,16 @@
           const wasPlaying =
             await asyncIsPlaying();
 
-          markLocalPlaybackIntent(
+          if (!state.isOwner) {
+             await requestPlaybackControl(
+               "seek",
+               target,
+               wasPlaying
+             );
+             return;
+           }
+
+           markLocalPlaybackIntent(
             "seek"
           );
 
@@ -11366,7 +11375,7 @@
           if (
             !state.playerReady ||
             !state.player ||
-            !state.isOwner ||
+            
             ![
               "youtube",
               "vimeo",
@@ -11393,7 +11402,16 @@
           const wasPlaying =
             await asyncIsPlaying();
 
-          markLocalPlaybackIntent(
+          if (!state.isOwner) {
+             await requestPlaybackControl(
+               "seek",
+               target,
+               wasPlaying
+             );
+             return;
+           }
+
+           markLocalPlaybackIntent(
             "seek"
           );
 
