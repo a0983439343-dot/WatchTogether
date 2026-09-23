@@ -9238,6 +9238,20 @@
   async function leaveRoomLocally(
     reason = ""
   ) {
+    const leftRoomId =
+      String(
+        state.roomId || ""
+      );
+
+    const leftRoomName =
+      String(
+        state.room?.name ||
+        $("roomTitle")?.textContent ||
+        "一起看"
+      )
+        .trim() ||
+      "一起看";
+
     state.kickedLocally =
       true;
 
