@@ -10235,14 +10235,44 @@
       );
     }
 
+    const platformCandidate =
+      String(
+        video.platform ||
+        "youtube"
+      ).trim();
+
+    if (
+      !PLATFORMS[
+        platformCandidate
+      ]
+    ) {
+      throw new Error(
+        "不支援的影片平台"
+      );
+    }
+
     const platform =
-      video.platform ||
-      "youtube";
+      platformCandidate;
+
+    const normalizedVideoId =
+      String(
+        video.id ||
+        video.url ||
+        ""
+      ).trim();
+
+    if (!normalizedVideoId) {
+      throw new Error(
+        "影片缺少必要識別資訊"
+      );
+    }
 
     const roomVideo = {
       id:
-        video.id ||
-        null,
+        normalizedVideoId.slice(
+          0,
+          200
+        ),
 
       platform,
 
