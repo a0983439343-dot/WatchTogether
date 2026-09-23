@@ -4738,6 +4738,22 @@
       ) {
         old.destroy?.();
       }
+
+      if (
+        oldType === "bilibili" ||
+        oldType === "dailymotion-iframe" ||
+        oldType === "twitch-clip"
+      ) {
+        try {
+          old.src = "about:blank";
+        } catch (_) {}
+
+        try {
+          if (old.contentWindow) {
+            old.contentWindow.location.replace("about:blank");
+          }
+        } catch (_) {}
+      }
     } catch (_) {}
   }
 
