@@ -4730,6 +4730,10 @@
     const oldType =
       state.playerType;
 
+    if (oldType === "youtube") {
+      detachYoutubeNativeEvents();
+    }
+
     state.player =
       null;
 
@@ -7404,6 +7408,16 @@
   async function handleRoomVideo(
     video
   ) {
+    cancelScheduledLocalPause();
+    cancelScheduledRemotePause();
+    cancelScheduledRemotePlay();
+    cancelScheduledRemoteSeek();
+
+    clearTimeout(state.playbackLocalSeekTimer);
+    state.playbackLocalSeekTimer = null;
+    state.playbackLocalScheduledEventId = "";
+    state.playbackLocalControlUntil = 0;
+
     if (!video) {
       state.youtubeRequestedId =
         null;
@@ -8031,9 +8045,60 @@
         return;
       }
 
-      await applyPlayerPosition(
-        position
-      );
+      const currentPosition =
+        await asyncCurrentPosition().catch(
+          () => Number(position) || 0
+        );
+
+      const currentPlaying =
+        await asyncIsPlaying().catch(
+          () => false
+        );
+
+      const rate =
+        Math.max(
+          0.01,
+          Number(
+            state.playbackTimeline?.playbackRate ||
+            1
+          )
+        );
+
+      const effectiveClock =
+        Number(effectiveAt || 0) ||
+        playbackClockNow();
+
+      const elapsedSinceEffective =
+        Math.max(
+          0,
+          playbackClockNow() -
+            effectiveClock
+        ) / 1000;
+
+      const expectedLocalPosition =
+        currentPlaying
+          ? Math.max(
+              0,
+              Number(position) || 0
+            ) +
+            elapsedSinceEffective *
+              rate
+          : Number(position) || 0;
+
+      const shouldReanchor =
+        currentPlaying
+          ? currentPosition + 0.12 <
+            expectedLocalPosition
+          : Math.abs(
+              currentPosition -
+                expectedLocalPosition
+            ) >= 0.08;
+
+      if (shouldReanchor) {
+        await applyPlayerPosition(
+          expectedLocalPosition
+        );
+      }
 
       if (
         !eventId ||
