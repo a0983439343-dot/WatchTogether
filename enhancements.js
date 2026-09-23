@@ -1815,6 +1815,10 @@ function setupCreateCapture() {
       while ((await wt.db.ref("roomMeta/" + id).once("value")).exists()) id = wt.randomCode(6);
       await wt.db.ref("rooms/" + id).set({owner:user.uid,name:roomName,sourceType:sourceType});
       await wt.db.ref("roomMeta/" + id).set({owner:user.uid,name:roomName,settings:{locked:false,maxMembers:2,controlMode:"host"},createdAt:wt.serverTs()});
+      var selected = wt.state.createVideo;
+      if (selected && selected.id) {
+        await wt.db.ref("rooms/" + id + "/video").set({id:String(selected.id),platform:"youtube",title:String(selected.title || "未命名影片"),thumbnail:String(selected.thumbnail || ""),channel:String(selected.channel || "")});
+      }
       wt.rememberRoom(id,roomName);
       location.href = location.origin + location.pathname + "?room=" + encodeURIComponent(id);
     } catch (error) {
@@ -1953,7 +1957,7 @@ function renderHomeSearch(results) {
       if (thumb) {
         thumb.innerHTML = video.thumbnail ? '<img src="' + wt.esc(video.thumbnail) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">' : "";
       }
-      toast("已選擇影片，建立房間後會自動播放");
+      wt.toast("已選擇影片，建立房間後會自動播放");
     });
   });
 }
