@@ -3916,6 +3916,7 @@
 
     if (
       state.playerType !== "youtube" ||
+      !state.playerReady ||
       !state.player ||
       !videoElement ||
       !state.currentVideoId ||
