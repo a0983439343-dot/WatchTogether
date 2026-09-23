@@ -409,6 +409,7 @@ async function handleSearch(req, res, url) {
   ).trim();
 
   if (!query || query.length > 100) {
+    activeSearches = Math.max(0, activeSearches - 1);
     send(res, 400, JSON.stringify({
       error: {
         message: "搜尋關鍵字格式錯誤"
