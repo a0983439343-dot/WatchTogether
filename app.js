@@ -213,6 +213,10 @@
     youtubeNativeEventHandlers: null,
     youtubeNativeSuppressEvent: "",
     youtubeNativeSuppressUntil: 0,
+    youtubeStreamRefreshInFlight: false,
+    youtubeStreamRefreshAttempts: 0,
+    youtubeStreamRefreshWindowStartedAt: 0,
+    youtubeStreamStallTimer: null,
 
     youtubeLoading: false,
 
@@ -3906,6 +3910,238 @@
     return true;
   }
 
+  async function refreshYoutubeStreamIfNeeded(reason = "") {
+    const videoElement =
+      $("directVideo");
+
+    if (
+      state.playerType !== "youtube" ||
+      !state.player ||
+      !videoElement ||
+      !state.currentVideoId ||
+      state.youtubeStreamRefreshInFlight
+    ) {
+      return false;
+    }
+
+    const now =
+      Date.now();
+
+    if (
+      now -
+        Number(
+          state.youtubeStreamRefreshWindowStartedAt || 0
+        ) >
+      60000
+    ) {
+      state.youtubeStreamRefreshWindowStartedAt = now;
+      state.youtubeStreamRefreshAttempts = 0;
+    }
+
+    if (
+      Number(
+        state.youtubeStreamRefreshAttempts || 0
+      ) >= 2
+    ) {
+      return false;
+    }
+
+    const player =
+      state.player;
+
+    const videoId =
+      String(
+        state.currentVideoId || ""
+      );
+
+    const buildToken =
+      Number(
+        state.youtubeBuildToken || 0
+      );
+
+    const target =
+      Math.max(
+        0,
+        Number(
+          videoElement.currentTime || 0
+        )
+      );
+
+    const wasPlaying =
+      !videoElement.paused &&
+      !videoElement.ended;
+
+    const muted =
+      Boolean(
+        videoElement.muted
+      );
+
+    state.youtubeStreamRefreshAttempts =
+      Number(
+        state.youtubeStreamRefreshAttempts || 0
+      ) + 1;
+
+    state.youtubeStreamRefreshInFlight =
+      true;
+
+    state.playbackApplyingRemote =
+      true;
+
+    state.playbackTransientStateUntil =
+      now + 1000;
+
+    try {
+      const streamUrl =
+        YOUTUBE_STREAM_PROXY_URL +
+        "/stream?v=" +
+        encodeURIComponent(videoId) +
+        "&refresh=" +
+        String(now);
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "YouTube 串流重新連線中…";
+      }
+
+      await new Promise((resolve, reject) => {
+        let settled = false;
+
+        const finish = (
+          error = null
+        ) => {
+          if (settled) return;
+          settled = true;
+          videoElement.removeEventListener(
+            "loadedmetadata",
+            onLoaded
+          );
+          videoElement.removeEventListener(
+            "error",
+            onError
+          );
+          clearTimeout(timeout);
+          if (error) reject(error);
+          else resolve();
+        };
+
+        const onLoaded = async () => {
+          try {
+            if (
+              state.youtubeBuildToken !== buildToken ||
+              state.player !== player ||
+              state.playerType !== "youtube"
+            ) {
+              finish();
+              return;
+            }
+
+            videoElement.currentTime =
+              Number.isFinite(
+                videoElement.duration
+              )
+                ? Math.min(
+                    target,
+                    Math.max(
+                      0,
+                      Number(videoElement.duration) || 0
+                    )
+                  )
+                : target;
+
+            videoElement.muted =
+              muted;
+
+            if (wasPlaying) {
+              await videoElement.play();
+            } else {
+              videoElement.pause();
+            }
+
+            finish();
+          } catch (error) {
+            finish(error);
+          }
+        };
+
+        const onError = () => {
+          finish(
+            new Error(
+              "YouTube 串流重新連線失敗"
+            )
+          );
+        };
+
+        const timeout =
+          setTimeout(
+            () => finish(
+              new Error(
+                "YouTube 串流重新連線逾時"
+              )
+            ),
+            15000
+          );
+
+        videoElement.addEventListener(
+          "loadedmetadata",
+          onLoaded,
+          {once:true}
+        );
+
+        videoElement.addEventListener(
+          "error",
+          onError,
+          {once:true}
+        );
+
+        try {
+          videoElement.pause();
+          videoElement.src =
+            streamUrl;
+          videoElement.load();
+        } catch (error) {
+          finish(error);
+        }
+      });
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "YouTube 串流已重新連線";
+      }
+
+      state.playbackReadyAt =
+        Date.now() + 500;
+
+      state.playbackResumeRecoveryUntil =
+        Math.max(
+          Number(
+            state.playbackResumeRecoveryUntil || 0
+          ),
+          Date.now() + 1200
+        );
+
+      return true;
+    } catch (error) {
+      console.warn(
+        "YouTube 串流重新連線失敗:",
+        reason,
+        error
+      );
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "YouTube 串流連線失敗";
+      }
+
+      return false;
+    } finally {
+      state.playbackApplyingRemote =
+        false;
+
+      state.youtubeStreamRefreshInFlight =
+        false;
+    }
+  }
+
   function attachYoutubeNativeEvents(videoElement) {
     if (!videoElement) {
       return;
@@ -4177,29 +4413,74 @@
           videoElement.error
         );
 
-        if ($("syncStatus")) {
-          $("syncStatus").textContent =
-            "YouTube 串流播放錯誤";
+        void refreshYoutubeStreamIfNeeded("media-error")
+          .then((refreshed) => {
+            if (refreshed) {
+              updateTimeUI();
+              return;
+            }
+
+            if ($("syncStatus")) {
+              $("syncStatus").textContent =
+                "YouTube 串流播放錯誤";
+            }
+
+            const code =
+              Number(
+                videoElement.error?.code || 0
+              );
+
+            if (code === 2) {
+              toast("YouTube 串流網址無效");
+            } else if (code === 3) {
+              toast("YouTube 影片解碼失敗");
+            } else if (code === 4) {
+              toast(
+                "這支 YouTube 影片無法由目前的串流代理播放"
+              );
+            } else {
+              toast("YouTube 串流播放失敗");
+            }
+
+            updateTimeUI();
+          });
+      },
+
+      stalled: () => {
+        if (
+          state.youtubeNativeVideoElement !== videoElement
+        ) {
+          return;
         }
 
-        const code =
-          Number(
-            videoElement.error?.code || 0
-          );
+        clearTimeout(
+          state.youtubeStreamStallTimer
+        );
 
-        if (code === 2) {
-          toast("YouTube 串流網址無效");
-        } else if (code === 3) {
-          toast("YouTube 影片解碼失敗");
-        } else if (code === 4) {
-          toast(
-            "這支 YouTube 影片無法由目前的串流代理播放"
-          );
-        } else {
-          toast("YouTube 串流播放失敗");
-        }
+        state.youtubeStreamStallTimer =
+          setTimeout(
+            () => {
+              state.youtubeStreamStallTimer = null;
 
-        updateTimeUI();
+              if (
+                state.playerType !== "youtube" ||
+                state.player !== player ||
+                state.youtubeNativeVideoElement !== videoElement
+              ) {
+                return;
+              }
+
+              if (
+                videoElement.readyState < 3 &&
+                !videoElement.ended
+              ) {
+                void refreshYoutubeStreamIfNeeded(
+                  "media-stalled"
+                );
+              }
+            },
+            3500
+          );
       }
     };
 
@@ -4421,8 +4702,19 @@
       null;
 
     if (!old) {
+      clearTimeout(state.youtubeStreamStallTimer);
+      state.youtubeStreamStallTimer = null;
+      state.youtubeStreamRefreshInFlight = false;
+      state.youtubeStreamRefreshAttempts = 0;
+      state.youtubeStreamRefreshWindowStartedAt = 0;
       return;
     }
+
+    clearTimeout(state.youtubeStreamStallTimer);
+    state.youtubeStreamStallTimer = null;
+    state.youtubeStreamRefreshInFlight = false;
+    state.youtubeStreamRefreshAttempts = 0;
+    state.youtubeStreamRefreshWindowStartedAt = 0;
 
     try {
       if (
@@ -8389,6 +8681,19 @@
             playbackSyncRef();
 
           try {
+            const directVideo =
+              $("directVideo");
+
+            if (
+              state.playerType === "youtube" &&
+              state.player &&
+              directVideo?.error
+            ) {
+              await refreshYoutubeStreamIfNeeded(
+                "page-resume"
+              );
+            }
+
             if (ref) {
               const event =
                 (
