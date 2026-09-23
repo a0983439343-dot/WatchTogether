@@ -128,6 +128,13 @@
             ".write": "auth != null && ((root.child('conversations').child($conversationId).child('userA').val() === auth.uid || root.child('conversations').child($conversationId).child('userB').val() === auth.uid) && ((!data.exists() && newData.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && data.child('uid').val() === auth.uid)))",
             ".validate": "!newData.exists() || (newData.hasChildren(['uid','name','type','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('type').isString() && ((newData.child('type').val() === 'text' && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 300) || (newData.child('type').val() === 'sticker' && newData.child('sticker').isString() && newData.child('sticker').val().length > 0 && newData.child('sticker').val().length <= 4)) && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 60000 && newData.child('createdAt').val() >= now - 120000)"
           }
+        },
+        "reads": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || auth.uid === root.child('conversations').child($conversationId).child('userA').val() || auth.uid === root.child('conversations').child($conversationId).child('userB').val())",
+            ".write": "auth != null && auth.uid === $uid && (auth.uid === root.child('conversations').child($conversationId).child('userA').val() || auth.uid === root.child('conversations').child($conversationId).child('userB').val())",
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000 && newData.val() >= now - 31536000000"
+          }
         }
       }
     },
