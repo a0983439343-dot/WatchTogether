@@ -9699,10 +9699,11 @@
 
             updateRoomOwnerUI();
 
-            if (
-              state.isOwner
-            ) {
+            if (state.isOwner) {
+              attachPlaybackControlRequestListener();
               void reconcileRoomTimeline();
+            } else {
+              detachPlaybackControlRequestListener();
             }
           }
         }
@@ -9787,6 +9788,81 @@
       state.uid;
 
     if (
+      !state.isOwner &&
+      state.roomId &&
+      state.uid
+    ) {
+      try {
+        const currentOwnerUid =
+          String(
+            state.room.owner ||
+            ""
+          );
+
+        let ownerCanBeClaimed =
+          !currentOwnerUid;
+
+        if (
+          currentOwnerUid
+        ) {
+          const ownerMemberSnapshot =
+            await state.membersRef
+              .child(
+                currentOwnerUid
+              )
+              .once("value");
+
+          ownerCanBeClaimed =
+            !ownerMemberSnapshot.exists();
+        }
+
+        if (
+          ownerCanBeClaimed
+        ) {
+          const result =
+            await state.roomRef
+              .child("owner")
+              .transaction(
+                currentValue => {
+                  if (
+                    currentValue === null ||
+                    String(
+                      currentValue ||
+                      ""
+                    ) ===
+                    currentOwnerUid
+                  ) {
+                    return state.uid;
+                  }
+
+                  return;
+                }
+              );
+
+          if (
+            result.committed &&
+            String(
+              result.snapshot.val() ||
+              ""
+            ) ===
+            String(
+              state.uid
+            )
+          ) {
+            state.room.owner =
+              state.uid;
+            state.isOwner =
+              true;
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "空房房主接管失敗:",
+          error
+        );
+      }
+    }
+    if (
       state.isOwner &&
       state.roomId &&
       state.uid
@@ -9821,6 +9897,10 @@
           error
         );
       }
+    }
+
+    if (state.isOwner) {
+      attachPlaybackControlRequestListener();
     }
 
     updateRoomOwnerUI();
@@ -10878,6 +10958,7 @@
     state.playbackAwaitingActualStart = false;
     clearTimeout(state.playbackActualStartTimer);
     state.playbackActualStartTimer = null;
+     detachPlaybackControlRequestListener();
     cancelScheduledLocalPause();
     cancelScheduledRemotePause();
     cancelScheduledRemotePlay();
