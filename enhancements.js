@@ -1596,7 +1596,37 @@ async function saveRoomSettings() {
   }
 }
 
-async function setupRoom(id) {
+async 
+function enhanceRoomMembers() {
+  var list = $("memberList");
+  var user = wt.auth.currentUser;
+  if (!list || !user || user.isAnonymous) return;
+  list.querySelectorAll(".member[data-member-uid]").forEach(function(member){
+    var uid = String(member.dataset.memberUid || "");
+    if (!uid || uid === user.uid || member.querySelector("[data-wt-member-friend]")) return;
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "tiny-btn";
+    button.dataset.wtMemberFriend = uid;
+    button.textContent = "加好友";
+    button.style.marginLeft = "6px";
+    button.addEventListener("click",async function(){
+      var profile = (await wt.db.ref("profiles/" + uid).once("value").catch(function(){ return null; })).val() || {};
+      if (!profile.publicCode) {
+        wt.toast("對方尚未啟用好友功能");
+        return;
+      }
+      try {
+        await wt.addFriendByCode(profile.publicCode);
+      } catch (error) {
+        wt.toast(error && error.message || "加好友失敗");
+      }
+    });
+    member.appendChild(button);
+  });
+}
+
+function setupRoom(id) {
   if (!id) return;
   buildRoomModals();
   ensureRoomToolbar();
@@ -1629,6 +1659,7 @@ function observeRoom() {
   if (id) {
     ensureRoomToolbar();
     ensureRoomChat(id);
+    enhanceRoomMembers();
   }
   if (id !== wt.state.roomId) {
     if (wt.state.roomId && !id) {
@@ -1654,6 +1685,7 @@ wt.observeRoom = observeRoom;
 wt.setupRoom = setupRoom;
 wt.renderRoomChat = renderRoomChat;
 wt.sendRoomSticker = sendRoomSticker;
+wt.enhanceRoomMembers = enhanceRoomMembers;
 
 })();
 
