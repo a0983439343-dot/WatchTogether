@@ -1796,7 +1796,7 @@
     const roomId = String(state.roomId);
     const uid = String(state.uid);
 
-    let maxMembers = 2;
+    let maxMembers;
 
     try {
       const metaSnapshot =
@@ -1814,10 +1814,23 @@
           Number(settings.maxMembers || 2)
         )
       );
-    } catch (_) {}
+    } catch (_) {
+      return true;
+    }
 
-    const members =
-      await getMembersOnce();
+    let members;
+
+    try {
+      const memberSnapshot =
+        await state.membersRef.once(
+          "value"
+        );
+
+      members =
+        memberSnapshot.val() || {};
+    } catch (_) {
+      return true;
+    }
 
     const entries =
       Object.entries(members || {})
