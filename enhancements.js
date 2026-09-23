@@ -1965,46 +1965,10 @@ function ensureAllUi() {
   }
 }
 
-function setupCreateCapture() {
-  var button = $("createRoomBtn");
-  if (!button || button.dataset.wtCreateCapture) return;
-  button.addEventListener("click",async function(event){
-    if (event.target !== button) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    var user = wt.auth.currentUser;
-    if (!user) {
-      wt.toast("登入狀態尚未完成");
-      return;
-    }
-    button.disabled = true;
-    var roomName = String($("roomNameInput") && $("roomNameInput").value || "一起看").trim().slice(0,40) || "一起看";
-    var sourceType = String($("sourceTypeInput") && $("sourceTypeInput").value || "youtube");
-    var id = wt.randomCode(6);
-    try {
-      while ((await wt.db.ref("roomMeta/" + id).once("value")).exists()) id = wt.randomCode(6);
-      await wt.db.ref("rooms/" + id).set({owner:user.uid,name:roomName,sourceType:sourceType});
-      await wt.db.ref("roomMeta/" + id).set({owner:user.uid,name:roomName,settings:{locked:false,maxMembers:2,controlMode:"host"},createdAt:wt.serverTs()});
-      var selected = wt.state.createVideo;
-      if (selected && selected.id) {
-        await wt.db.ref("rooms/" + id + "/video").set({id:String(selected.id),platform:"youtube",title:String(selected.title || "未命名影片"),thumbnail:String(selected.thumbnail || ""),channel:String(selected.channel || "")});
-      }
-      wt.rememberRoom(id,roomName);
-      location.href = location.origin + location.pathname + "?room=" + encodeURIComponent(id);
-    } catch (error) {
-      await wt.db.ref("rooms/" + id).remove().catch(function(){});
-      await wt.db.ref("roomMeta/" + id).remove().catch(function(){});
-      button.disabled = false;
-      wt.toast(error && error.message || "建立房間失敗");
-    }
-  },true);
-  button.dataset.wtCreateCapture = "1";
-}
-
-function setupCreateCaptureReady() {
-  setupCreateCapture();
-}
+function setupCreateCapture() {}
+function setupCreateCaptureReady() {}
 wt.createRoomCaptureReady = setupCreateCaptureReady;
+
 
 function setupRoomCode() {
   var input = $("joinCodeInput");
@@ -2032,8 +1996,6 @@ function setupMain() {
   wt.state.initialized = true;
   wt.ensureTopbar();
   if (typeof wt.renderHome === "function") wt.renderHome();
-  wt.createRoomCaptureReady && wt.createRoomCaptureReady();
-  setupCreateCapture();
   setupRoomCode();
   buildStatusModal();
   if ($("wtInstallPwaBtn")) $("wtInstallPwaBtn").disabled = !wt.state.pwaPrompt;
