@@ -1407,7 +1407,7 @@ function ensureRoomChat(room) {
     var ref = wt.db.ref("chat/" + id).limitToLast(100);
     ref._wtRoomId = id;
     wt.state.roomChatRef = ref;
-    ref.on("value",function(snapshot"){ renderRoomChat(snapshot.val() || {}); });
+    ref.on("value",function(snapshot){ renderRoomChat(snapshot.val() || {}); });
   }
 }
 
