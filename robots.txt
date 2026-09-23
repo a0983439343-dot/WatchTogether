@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://a0983439343-dot.github.io/WatchTogether/sitemap.xml
