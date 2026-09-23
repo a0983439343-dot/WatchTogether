@@ -2281,7 +2281,7 @@ function bindHomeSearch() {
   input.dataset.wtFastSearch = "1";
 
   var config = window.WATCHTOGETHER_CONFIG || {};
-  var warmUrl = String(config.youtubeSearchProxyUrl || "").replace(//search/?$/,"/health");
+  var warmUrl = String(config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/health");
   if (warmUrl) {
     fetch(warmUrl,{method:"GET",cache:"no-store",credentials:"omit"}).catch(function(){});
   }
