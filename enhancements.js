@@ -1273,3 +1273,358 @@ wt.listenRequests = listenRequests;
 wt.stopDmListener = stopDmListener;
 
 })();
+
+(() => {
+"use strict";
+var wt = window.WT_ENHANCEMENTS;
+if (!wt) return;
+var $ = wt.$;
+
+function roomId() {
+  return wt.roomIdFromUrl();
+}
+
+function buildStickerPicker(id,onSelect) {
+  var box = $(id);
+  if (!box || box.dataset.wtBuilt) return;
+  box.innerHTML = wt.STICKERS.map(function(sticker){
+    return '<button class="wt-sticker-btn" data-wt-sticker="' + wt.esc(sticker) + '" type="button">' + wt.esc(sticker) + '</button>';
+  }).join("");
+  box.querySelectorAll("[data-wt-sticker]").forEach(function(button){
+    button.addEventListener("click",function(){ onSelect(button.dataset.wtSticker); });
+  });
+  box.dataset.wtBuilt = "1";
+}
+
+function roomMessageList(messages) {
+  return Object.entries(messages || {}).map(function(pair){
+    return Object.assign({id:pair[0]},pair[1] || {});
+  }).sort(function(a,b){ return Number(a.createdAt||0)-Number(b.createdAt||0); });
+}
+
+function renderRoomChat(messages) {
+  var box = $("chatMessages");
+  if (!box) return;
+  var user = wt.auth.currentUser;
+  var list = roomMessageList(messages);
+  if (!list.length) {
+    box.innerHTML = '<div class="wt-small" style="padding:12px;">開始聊天吧 👋</div>';
+    return;
+  }
+  box.innerHTML = list.map(function(message){
+    var self = String(message.uid||"") === String(user && user.uid || "");
+    var body = message.type === "sticker"
+      ? '<div class="wt-sticker">' + wt.esc(message.sticker || "😊") + '</div>'
+      : '<div class="wt-message-text">' + wt.esc(message.text || "") + '</div>';
+    var quick = '<div class="wt-inline" style="margin-top:6px;">' +
+      '<button class="wt-message-delete" data-wt-room-delete="' + wt.esc(message.id) + '" type="button">' + (self ? "刪除訊息" : "") + '</button>' +
+      '</div>';
+    return '<div class="wt-message' + (self ? ' self' : '') + '"><div class="wt-message-top"><span class="wt-message-name">' + wt.esc(message.name || "玩家") + '</span><span class="wt-message-time">' + wt.esc(formatDate(message.createdAt)) + '</span></div>' + body + (self ? quick : '') + '</div>';
+  }).join("");
+  box.querySelectorAll("[data-wt-room-delete]").forEach(function(button){
+    button.addEventListener("click",async function(){
+      var currentRoom = roomId();
+      if (!currentRoom) return;
+      try {
+        await wt.db.ref("chat/" + currentRoom + "/" + button.dataset.wtRoomDelete).remove();
+      } catch (error) {
+        wt.toast(error && error.message || "刪除訊息失敗");
+      }
+    });
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function formatDate(value) {
+  var date = new Date(Number(value)||0);
+  if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return "";
+  return date.toLocaleString("zh-TW",{hour:"2-digit",minute:"2-digit"});
+}
+
+async function sendRoomText(text) {
+  var user = wt.auth.currentUser;
+  var id = roomId();
+  text = String(text || "").trim().slice(0,300);
+  if (!user || !id || !text) return;
+  await wt.db.ref("chat/" + id).push({
+    uid:user.uid,
+    name:wt.currentName(),
+    type:"text",
+    text:text,
+    createdAt:wt.serverTs()
+  });
+}
+
+async function sendRoomSticker(sticker) {
+  var user = wt.auth.currentUser;
+  var id = roomId();
+  if (!user || !id) return;
+  await wt.db.ref("chat/" + id).push({
+    uid:user.uid,
+    name:wt.currentName(),
+    type:"sticker",
+    sticker:String(sticker || "😊").slice(0,4),
+    createdAt:wt.serverTs()
+  });
+  $("wtRoomStickerPicker").classList.add("hidden");
+}
+
+function ensureRoomChat(room) {
+  var form = $("chatForm");
+  if (!form) return;
+
+  if (!form.dataset.wtFormalChat) {
+    var submit = form.querySelector('button[type="submit"]');
+    var wrap = document.createElement("div");
+    wrap.className = "wt-room-sticker-wrap";
+    wrap.innerHTML = '<button id="wtRoomStickerBtn" class="wt-mini-btn" type="button">😊</button><div id="wtRoomStickerPicker" class="wt-sticker-picker hidden"></div>';
+    form.insertBefore(wrap,submit || null);
+    $("wtRoomStickerBtn").addEventListener("click",function(event){
+      event.preventDefault();
+      $("wtRoomStickerPicker").classList.toggle("hidden");
+    });
+    buildStickerPicker("wtRoomStickerPicker",function(sticker){ void sendRoomSticker(sticker); });
+
+    form.addEventListener("submit",async function(event){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      try {
+        await sendRoomText($("chatInput") && $("chatInput").value || "");
+        if ($("chatInput")) $("chatInput").value = "";
+      } catch (error) {
+        wt.toast(error && error.message || "訊息送出失敗");
+      }
+    },true);
+
+    form.dataset.wtFormalChat = "1";
+  }
+
+  var id = roomId();
+  if (!id) return;
+
+  if (!wt.state.roomChatRef || wt.state.roomChatRef._wtRoomId !== id) {
+    try { wt.state.roomChatRef && wt.state.roomChatRef.off(); } catch (_) {}
+    var ref = wt.db.ref("chat/" + id).limitToLast(100);
+    ref._wtRoomId = id;
+    wt.state.roomChatRef = ref;
+    ref.on("value",function(snapshot"){ renderRoomChat(snapshot.val() || {}); });
+  }
+}
+
+function ensureRoomToolbar() {
+  var meta = document.querySelector("#roomView .room-meta");
+  if (!meta) return;
+  var items = [
+    ["wtShareRoomBtn","↗ 分享",shareRoom],
+    ["wtQrRoomBtn","▦ QR",openQr],
+    ["wtRoomSettingsBtn","⚙ 房間設定",openRoomSettings]
+  ];
+  items.forEach(function(item){
+    if ($(item[0])) return;
+    var button = document.createElement("button");
+    button.id = item[0];
+    button.className = "tiny-btn";
+    button.type = "button";
+    button.textContent = item[1];
+    button.addEventListener("click",item[2]);
+    meta.appendChild(button);
+  });
+}
+
+async function shareRoom() {
+  var id = roomId();
+  if (!id) return;
+  var url = roomLink(id);
+  try {
+    if (navigator.share) {
+      await navigator.share({title:$("roomTitle") && $("roomTitle").textContent || "WatchTogether",text:"加入我的 WatchTogether 房間",url:url});
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    wt.toast("房間連結已複製");
+  } catch (_) {}
+}
+
+var qrPromise = null;
+
+function loadQr() {
+  if (window.QRCode && window.QRCode.toCanvas) return Promise.resolve();
+  if (qrPromise) return qrPromise;
+  qrPromise = new Promise(function(resolve,reject){
+    var old = document.querySelector('script[data-wt-qr="1"]');
+    if (old) {
+      var timer = setInterval(function(){
+        if (window.QRCode && window.QRCode.toCanvas) {
+          clearInterval(timer);
+          resolve();
+        }
+      },80);
+      setTimeout(function(){
+        clearInterval(timer);
+        if (window.QRCode && window.QRCode.toCanvas) resolve();
+        else reject(new Error("QR Code 載入逾時"));
+      },10000);
+      return;
+    }
+    var script = document.createElement("script");
+    script.dataset.wtQr = "1";
+    script.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js";
+    script.async = true;
+    script.onload = function(){ window.QRCode && window.QRCode.toCanvas ? resolve() : reject(new Error("QR Code 不可用")); };
+    script.onerror = function(){ reject(new Error("QR Code 載入失敗")); };
+    document.head.appendChild(script);
+  });
+  return qrPromise;
+}
+
+function buildRoomModals() {
+  if (!$("wtQrModal")) {
+    var qr = document.createElement("div");
+    qr.id = "wtQrModal";
+    qr.className = "wt-modal hidden";
+    qr.setAttribute("aria-hidden","true");
+    qr.innerHTML = '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div><div class="wt-panel-title">加入房間</div><div class="wt-small">掃描 QR Code 或輸入 6 碼房間碼。</div></div><button class="wt-close-btn" id="wtQrClose" type="button">×</button></div><div class="wt-qr"><canvas id="wtQrCanvas" width="280" height="280"></canvas></div><div class="wt-profile-code" id="wtQrCode" style="text-align:center;"></div><div class="wt-settings-actions"><button class="wt-action-btn primary" id="wtQrCopy" type="button">複製房間連結</button></div></div>';
+    document.body.appendChild(qr);
+    $("wtQrClose").addEventListener("click",function(){ wt.closeModal("wtQrModal"); });
+    $("wtQrCopy").addEventListener("click",shareRoom);
+  }
+
+  if (!$("wtRoomSettingsModal")) {
+    var settings = document.createElement("div");
+    settings.id = "wtRoomSettingsModal";
+    settings.className = "wt-modal hidden";
+    settings.setAttribute("aria-hidden","true");
+    settings.innerHTML = '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div><div class="wt-panel-title">房間設定</div><div class="wt-small">調整房間名稱、加入限制與播放權限。</div></div><button class="wt-close-btn" id="wtRoomSettingsClose" type="button">×</button></div>' +
+      '<div class="wt-form-row"><label for="wtRoomSettingName">房間名稱</label><input id="wtRoomSettingName" maxlength="40" autocomplete="off"></div>' +
+      '<div class="wt-form-row"><label for="wtRoomSettingMax">人數上限</label><select id="wtRoomSettingMax"><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option><option value="5">5 人</option><option value="6">6 人</option><option value="8">8 人</option><option value="10">10 人</option></select></div>' +
+      '<div class="wt-form-row"><label><input id="wtRoomSettingLocked" type="checkbox" style="margin-right:7px;"> 鎖定房間，禁止新成員加入</label></div>' +
+      '<div class="wt-form-row"><label>播放控制</label><select disabled><option>房主控制</option></select></div>' +
+      '<div class="wt-small" id="wtRoomSettingHint"></div><div class="wt-settings-actions"><button class="wt-action-btn" id="wtRoomSettingsCancel" type="button">取消</button><button class="wt-action-btn primary" id="wtRoomSettingsSave" type="button">儲存</button></div></div>';
+    document.body.appendChild(settings);
+    $("wtRoomSettingsClose").addEventListener("click",function(){ wt.closeModal("wtRoomSettingsModal"); });
+    $("wtRoomSettingsCancel").addEventListener("click",function(){ wt.closeModal("wtRoomSettingsModal"); });
+    $("wtRoomSettingsSave").addEventListener("click",saveRoomSettings);
+  }
+}
+
+async function openQr() {
+  var id = roomId();
+  if (!id) return;
+  buildRoomModals();
+  wt.openModal("wtQrModal");
+  try {
+    await loadQr();
+    await window.QRCode.toCanvas($("wtQrCanvas"),roomLink(id),{width:280,margin:2});
+    $("wtQrCode").textContent = id;
+  } catch (error) {
+    $("wtQrCode").textContent = id + "（QR 載入失敗）";
+  }
+}
+
+async function openRoomSettings() {
+  buildRoomModals();
+  var id = roomId();
+  var user = wt.auth.currentUser;
+  if (!id || !user) return;
+  var snapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
+  var meta = snapshot && snapshot.val();
+  if (!meta || String(meta.owner || "") !== String(user.uid)) {
+    wt.toast("只有房主可以修改房間設定");
+    return;
+  }
+  var settings = meta.settings || {};
+  $("wtRoomSettingName").value = String(meta.name || "一起看");
+  $("wtRoomSettingMax").value = String(settings.maxMembers || 2);
+  $("wtRoomSettingLocked").checked = settings.locked === true;
+  $("wtRoomSettingHint").textContent = "房間碼：" + id + " · 控制權限：房主";
+  wt.openModal("wtRoomSettingsModal");
+}
+
+async function saveRoomSettings() {
+  var id = roomId();
+  var user = wt.auth.currentUser;
+  if (!id || !user) return;
+  var snapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
+  var meta = snapshot && snapshot.val();
+  if (!meta || String(meta.owner || "") !== String(user.uid)) {
+    wt.toast("只有房主可以修改房間設定");
+    return;
+  }
+  var name = String($("wtRoomSettingName").value || "").trim().slice(0,40);
+  var maxMembers = Math.max(2,Math.min(10,Number($("wtRoomSettingMax").value || 2)));
+  var locked = $("wtRoomSettingLocked").checked === true;
+  if (!name) {
+    wt.toast("房間名稱不能是空白");
+    return;
+  }
+  var updates = {};
+  updates["rooms/" + id + "/name"] = name;
+  updates["roomMeta/" + id + "/name"] = name;
+  updates["roomMeta/" + id + "/settings"] = {locked:locked,maxMembers:maxMembers,controlMode:"host"};
+  try {
+    await wt.db.ref().update(updates);
+    if ($("roomTitle")) $("roomTitle").textContent = name;
+    wt.rememberRoom(id,name);
+    wt.closeModal("wtRoomSettingsModal");
+    wt.toast("房間設定已更新");
+  } catch (error) {
+    wt.toast(error && error.message || "房間設定儲存失敗");
+  }
+}
+
+async function setupRoom(id) {
+  if (!id) return;
+  buildRoomModals();
+  ensureRoomToolbar();
+  ensureRoomChat(id);
+
+  var metaSnapshot = await wt.db.ref("roomMeta/" + id).once("value").catch(function(){ return null; });
+  if (!metaSnapshot || !metaSnapshot.exists()) return;
+  var meta = metaSnapshot.val() || {};
+  wt.state.roomMeta = meta;
+  wt.rememberRoom(id,meta.name || "一起看");
+
+  try { wt.state.roomVideoRef && wt.state.roomVideoRef.off(); } catch (_) {}
+  wt.state.roomVideoRef = wt.db.ref("rooms/" + id + "/video");
+  wt.state.roomVideoRef.on("value",function(snapshot){
+    var video = snapshot.val();
+    if (video && video.id) wt.rememberVideo(video);
+  });
+}
+
+function stopRoomEnhancements() {
+  try { wt.state.roomChatRef && wt.state.roomChatRef.off(); } catch (_) {}
+  try { wt.state.roomVideoRef && wt.state.roomVideoRef.off(); } catch (_) {}
+  wt.state.roomChatRef = null;
+  wt.state.roomVideoRef = null;
+  wt.state.roomMeta = null;
+}
+
+function observeRoom() {
+  var id = roomId();
+  if (id !== wt.state.roomId) {
+    if (wt.state.roomId && !id) {
+      var oldId = wt.state.roomId;
+      var oldName = String($("roomTitle") && $("roomTitle").textContent || "一起看").trim();
+      wt.rememberRoom(oldId,oldName || "一起看");
+      stopRoomEnhancements();
+    }
+    wt.state.roomId = id;
+    if (id) void setupRoom(id);
+  }
+  if (id) {
+    var title = String($("roomTitle") && $("roomTitle").textContent || "").trim();
+    if (title && title !== "一起看") wt.rememberRoom(id,title);
+  } else {
+    wt.renderHome();
+  }
+}
+
+wt.openQr = openQr;
+wt.openRoomSettings = openRoomSettings;
+wt.observeRoom = observeRoom;
+wt.setupRoom = setupRoom;
+wt.renderRoomChat = renderRoomChat;
+wt.sendRoomSticker = sendRoomSticker;
+
+})();
