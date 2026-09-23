@@ -275,6 +275,12 @@
     playbackAwaitingActualStart: false,
     playbackActualStartTimer: null,
 
+    controlRequestRef: null,
+    controlRequestListenerAttached: false,
+    controlRequestProcessing: false,
+    controlRequestQueue: [],
+    controlRequestLastAt: 0,
+
     timeUiRequestId: 0,
 
     queue: {},
@@ -3834,6 +3840,27 @@
       );
   }
 
+  function nativeYoutubeGuestActionAllowed(
+    kind = ""
+  ) {
+    if (
+      state.isOwner ||
+      !state.playerReady ||
+      !state.player ||
+      state.playerType !== "youtube" ||
+      state.playbackApplyingRemote
+    ) {
+      return false;
+    }
+
+    const now = Date.now();
+    if (String(state.youtubeNativeSuppressEvent || "") === String(kind || "") && now < Number(state.youtubeNativeSuppressUntil || 0)) return false;
+    if (now > Number(state.playbackUserActionUntil || 0)) return false;
+    if (now < Number(state.playbackLocalControlUntil || 0)) return false;
+    if (now < Number(state.playbackLocalSeekSuppressUntil || 0)) return false;
+    return true;
+  }
+
   function nativeYoutubeActionAllowed(
     kind = ""
   ) {
@@ -4200,6 +4227,10 @@
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
 
+        if (!state.isOwner && nativeYoutubeGuestActionAllowed("play")) {
+          void requestPlaybackControl("play", Number(videoElement.currentTime) || 0, true);
+        }
+
         if (nativeYoutubeActionAllowed("play")) {
           state.playbackAwaitingActualStart = false;
           clearTimeout(
@@ -4264,6 +4295,10 @@
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
 
+        if (!state.isOwner && nativeYoutubeGuestActionAllowed("pause")) {
+          void requestPlaybackControl("pause", Number(videoElement.currentTime) || 0, false);
+        }
+
         if (nativeYoutubeActionAllowed("pause")) {
           const position =
             Number(videoElement.currentTime) || 0;
@@ -4322,6 +4357,14 @@
 
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
+
+        if (!state.isOwner && nativeYoutubeGuestActionAllowed("seek")) {
+          void requestPlaybackControl(
+            "seek",
+            Number(videoElement.currentTime) || 0,
+            !videoElement.paused && !videoElement.ended
+          );
+        }
 
         if (nativeYoutubeActionAllowed("seek")) {
           void (async () => {
@@ -7408,10 +7451,168 @@
     return db.ref(`playback/${state.roomId}`);
   }
 
+  function controlRequestsRef() {
+    if (!db || !state.roomId) return null;
+    return db.ref("controlRequests/" + state.roomId);
+  }
+
+  function detachPlaybackControlRequestListener() {
+    try { state.controlRequestRef?.off(); } catch (_) {}
+    state.controlRequestRef = null;
+    state.controlRequestListenerAttached = false;
+    state.controlRequestQueue = [];
+    state.controlRequestProcessing = false;
+  }
+
+  async function requestPlaybackControl(action, position = null, playing = null) {
+    if (state.isOwner || !state.roomId || !state.uid || !state.membersRef || !state.currentVideoId || !state.playerType) return false;
+    if (!["play", "pause", "seek"].includes(action)) return false;
+
+    const now = Date.now();
+    if (now - Number(state.controlRequestLastAt || 0) < 250) return false;
+
+    const memberSnapshot = await state.membersRef.child(state.uid).once("value").catch(() => null);
+    if (!memberSnapshot?.exists()) {
+      toast("你已不在這個房間");
+      return false;
+    }
+
+    const ref = controlRequestsRef();
+    if (!ref) return false;
+
+    let targetPosition = Number(position);
+    if (!Number.isFinite(targetPosition)) targetPosition = await asyncCurrentPosition();
+    targetPosition = Math.max(0, Math.min(86400, Number(targetPosition) || 0));
+
+    state.controlRequestLastAt = now;
+    if (action === "seek") state.playbackLocalSeekSuppressUntil = now + 1200;
+    else state.playbackLocalControlUntil = now + 1200;
+
+    try {
+      const child = ref.push();
+      await child.set({
+        uid: state.uid,
+        name: String(state.memberName || getMemberName()).slice(0, 30),
+        action: action,
+        position: targetPosition,
+        playing: typeof playing === "boolean" ? playing : action === "play",
+        videoId: String(state.currentVideoId),
+        platform: String(state.playerType),
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      return true;
+    } catch (error) {
+      state.controlRequestLastAt = 0;
+      console.warn("播放控制請求送出失敗:", error);
+      toast("播放控制請求送出失敗");
+      return false;
+    }
+  }
+
+  async function processPlaybackControlRequest(snapshot) {
+    if (!snapshot || !state.isOwner || !state.roomId || !state.membersRef) return;
+
+    const request = snapshot.val() || {};
+    const requesterUid = String(request.uid || "");
+
+    try {
+      const now = Date.now();
+      const createdAt = Number(request.createdAt || 0);
+      if (!createdAt || createdAt < now - 15000 || createdAt > now + 15000) return;
+      if (!requesterUid || requesterUid === String(state.uid)) return;
+
+      const requester = await state.membersRef.child(requesterUid).once("value").catch(() => null);
+      if (!requester?.exists()) return;
+
+      const action = String(request.action || "");
+      if (!["play", "pause", "seek"].includes(action)) return;
+
+      if (
+        String(request.videoId || "") !== String(state.currentVideoId || "") ||
+        String(request.platform || "") !== String(state.playerType || "")
+      ) return;
+
+      let position = Number(request.position);
+      if (!Number.isFinite(position)) position = await asyncCurrentPosition();
+      position = Math.max(0, Math.min(86400, Number(position) || 0));
+
+      if (action === "pause") {
+        const issuedAt = playbackClockNow();
+        const effectiveAt = issuedAt + getControlLeadMs();
+        state.playbackAwaitingActualStart = false;
+        clearTimeout(state.playbackActualStartTimer);
+        state.playbackActualStartTimer = null;
+        cancelScheduledLocalPause();
+        cancelScheduledRemotePause();
+        await pausePlayer();
+        const actualPosition = await asyncCurrentPosition();
+        publishPlaybackEvent("pause", actualPosition, false, issuedAt, effectiveAt);
+      } else if (action === "seek") {
+        const wasPlaying = await asyncIsPlaying();
+        markLocalPlaybackIntent("seek");
+        await applyPlayerPosition(position);
+        publishPlaybackEvent("seek", position, wasPlaying, playbackClockNow());
+      } else {
+        cancelScheduledLocalPause();
+        cancelScheduledRemotePause();
+        state.playbackAwaitingActualStart = true;
+        clearTimeout(state.playbackActualStartTimer);
+        state.playbackActualStartTimer = setTimeout(async () => {
+          state.playbackActualStartTimer = null;
+          if (!state.playbackAwaitingActualStart || state.playbackApplyingRemote || !state.isOwner) return;
+          state.playbackAwaitingActualStart = false;
+          try {
+            if (await asyncIsPlaying()) {
+              const actualPosition = await asyncCurrentPosition();
+              publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
+            }
+          } catch (_) {}
+        }, 600);
+        await playPlayer({muteForAutoplay: false});
+      }
+    } catch (error) {
+      console.warn("處理成員播放控制請求失敗:", error);
+    } finally {
+      try { await snapshot.ref.remove(); } catch (_) {}
+    }
+  }
+
+  async function drainPlaybackControlRequests() {
+    if (state.controlRequestProcessing) return;
+    state.controlRequestProcessing = true;
+    try {
+      while (state.isOwner && state.controlRequestQueue.length) {
+        const snapshot = state.controlRequestQueue.shift();
+        await processPlaybackControlRequest(snapshot);
+      }
+    } finally {
+      state.controlRequestProcessing = false;
+    }
+  }
+
+  function attachPlaybackControlRequestListener() {
+    if (!state.isOwner || !state.roomId || !state.uid) {
+      detachPlaybackControlRequestListener();
+      return;
+    }
+
+    const ref = controlRequestsRef();
+    if (!ref) return;
+    if (state.controlRequestListenerAttached && state.controlRequestRef) return;
+
+    detachPlaybackControlRequestListener();
+    const limited = ref.limitToLast(25);
+    limited.on("child_added", snapshot => {
+      state.controlRequestQueue.push(snapshot);
+      void drainPlaybackControlRequests();
+    });
+    state.controlRequestRef = limited;
+    state.controlRequestListenerAttached = true;
+  }
+
   function timelineKey(event) {
     return `${String(event?.platform || "")}:${String(event?.videoId || "")}`;
   }
-
   function getTimelinePosition(timeline, now = playbackClockNow()) {
     const base = Math.max(0, Number(timeline?.position) || 0);
     const anchor = Number(timeline?.issuedAt || 0);
