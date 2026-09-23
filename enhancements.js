@@ -393,11 +393,6 @@ async function createRoomWithVideo(video) {
     toast(error && error.message || "建立房間失敗");
   }
 }
-function createRoomCapture() {}
-
-function setupCreateCapture() {}
-
-
 function setupRoomCodeInput() {
   var input = $("joinCodeInput");
   if (!input || input.dataset.wtSixCode) return;
@@ -409,25 +404,7 @@ function setupRoomCodeInput() {
   input.dataset.wtSixCode = "1";
 }
 
-function setupPwaListener() {
-  window.addEventListener("beforeinstallprompt",function(event){
-    event.preventDefault();
-    state.pwaPrompt = event;
-    var btn = $("wtInstallPwaBtn");
-    if (btn) btn.disabled = false;
-  });
-  window.addEventListener("appinstalled",function(){
-    state.pwaPrompt = null;
-    toast("WatchTogether 已安裝");
-  });
-}
 
-function rememberCurrentRoomFromDom() {
-  var id = roomIdFromUrl();
-  if (!id) return;
-  var title = String($("roomTitle") && $("roomTitle").textContent || "").trim();
-  rememberRoom(id,title && title !== "一起看" ? title : "一起看");
-}
 
 wt.applyTheme = applyTheme;
 wt.currentTheme = currentTheme;
@@ -1948,12 +1925,6 @@ function setupAuthListeners() {
   });
 }
 
-function setupBodyObserver() {
-  var observer = new MutationObserver(function(){
-    ensureAllUi();
-  });
-  observer.observe(document.body,{childList:true,subtree:true});
-}
 
 function ensureAllUi() {
   if (typeof wt.renderHome === "function") wt.renderHome();
@@ -1964,10 +1935,6 @@ function ensureAllUi() {
     try { wt.setupRoom(wt.state.roomId); } catch (_) {}
   }
 }
-
-function setupCreateCapture() {}
-function setupCreateCaptureReady() {}
-wt.createRoomCaptureReady = setupCreateCaptureReady;
 
 
 function setupRoomCode() {
