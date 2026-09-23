@@ -1184,7 +1184,18 @@ function startDmListener() {
   var id = privateId(user.uid,friendUid);
   var ref = wt.db.ref("conversations/" + id + "/messages").limitToLast(100);
   wt.state.dmMessagesRef = ref;
-  ref.on("value",function(snapshot){ renderPrivateMessages(snapshot.val() || {}); });
+  ref.on("value",function(snapshot){
+    var messages = snapshot.val() || {};
+    renderPrivateMessages(messages);
+    var latest = Object.entries(messages).map(function(pair){ return Object.assign({id:pair[0]},pair[1] || {}); }).sort(function(a,b){ return Number(a.createdAt||0)-Number(b.createdAt||0); }).pop();
+    var latestKey = latest && latest.id || "";
+    if (latest && latestKey !== wt.state.lastDmMessageId && String(latest.uid || "") !== String(user.uid || "")) {
+      if (Number(latest.createdAt || 0) > Date.now() - 120000) {
+        notify("WatchTogether 私訊",String(latest.name || "好友") + "： " + (latest.type === "sticker" ? String(latest.sticker || "貼圖") : String(latest.text || "")));
+      }
+    }
+    if (latestKey) wt.state.lastDmMessageId = latestKey;
+  });
 }
 
 function updatePrivateHeader() {
@@ -1768,18 +1779,42 @@ function setupStickerOutsideClick() {
   });
 }
 
+function setupFriendsLiveListener() {
+  try { wt.state.friendRef && wt.state.friendRef.off(); } catch (_) {}
+  wt.state.friendRef = null;
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous) {
+    wt.state.friends = {};
+    return;
+  }
+  var ref = wt.db.ref("friendships/" + user.uid);
+  wt.state.friendRef = ref;
+  ref.on("value",async function(snapshot){
+    var ids = Object.keys(snapshot.val() || {});
+    var pairs = await Promise.all(ids.map(async function(uid){
+      var p = (await wt.db.ref("profiles/" + uid).once("value").catch(function(){ return null; })).val() || {};
+      return [uid,p];
+    }));
+    wt.state.friends = Object.fromEntries(pairs);
+    if (typeof wt.renderFriends === "function") wt.renderFriends();
+  });
+}
+
 function setupAuthListeners() {
   wt.auth.onAuthStateChanged(function(user){
     wt.state.user = user || null;
     if (user && !user.isAnonymous) {
       void wt.loadProfile(user).then(function(){
         wt.listenRequests();
+        setupFriendsLiveListener();
         if (typeof wt.renderFriends === "function") wt.renderFriends();
       }).catch(function(error){
         console.warn("WatchTogether profile setup failed",error);
       });
     } else {
       wt.stopDmListener && wt.stopDmListener();
+      try { wt.state.friendRef && wt.state.friendRef.off(); } catch (_) {}
+      wt.state.friendRef = null;
       wt.state.profile = null;
       wt.state.friends = {};
       wt.state.requests = {};
@@ -1797,7 +1832,7 @@ function setupBodyObserver() {
 
 function ensureAllUi() {
   if (typeof wt.renderHome === "function") wt.renderHome();
-  ensureTopbar();
+  wt.ensureTopbar();
   wt.createRoomCaptureReady && wt.createRoomCaptureReady();
   setupCreateCapture();
   setupRoomCode();
