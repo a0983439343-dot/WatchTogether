@@ -17,12 +17,18 @@ jobs:
       - name: Check app.js syntax
         run: node --check app.js
 
+      - name: Check enhancements.js syntax
+        run: node --check enhancements.js
+
+      - name: Check YouTube proxy syntax
+        run: node --check youtube-proxy/server.js
+
       - name: Check YouTube Worker syntax
         run: node --check workers/youtube-search.js
 
       - name: Validate JSON files
         run: |
-          node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8')); JSON.parse(require('fs').readFileSync('firebase.json','utf8')); console.log('JSON OK')"
+          node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8')); JSON.parse(require('fs').readFileSync('firebase.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8')); console.log('JSON OK')"
 
       - name: Check for exposed YouTube API key
         run: |
@@ -35,5 +41,16 @@ jobs:
         run: |
           if grep -Eq 'signInWithRedirect|linkWithRedirect' app.js; then
             echo 'Unexpected Redirect Auth API detected.'
+            exit 1
+          fi
+
+      - name: Check six-character room code implementation
+        run: |
+          if ! grep -Eq 'new Uint32Array\([[:space:]]*6[[:space:]]*\)' app.js; then
+            echo 'Six-character room code generator check failed.'
+            exit 1
+          fi
+          if grep -Eq '6 或 12|12 碼房間|A-Z0-9\{12\}' app.js index.html enhancements.js; then
+            echo 'Legacy 12-character room code validation detected.'
             exit 1
           fi
