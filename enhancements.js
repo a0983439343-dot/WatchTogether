@@ -2000,8 +2000,6 @@ function setupBodyObserver() {
 function ensureAllUi() {
   if (typeof wt.renderHome === "function") wt.renderHome();
   wt.ensureTopbar();
-  wt.createRoomCaptureReady && wt.createRoomCaptureReady();
-  setupCreateCapture();
   setupRoomCode();
   if (wt.openRoomSettings) wt.openRoomSettingsReady = true;
   if (wt.state.roomId) {
