@@ -820,3 +820,17 @@ body[data-wt-theme="terminal"] .wt-nav-btn {
     grid-template-columns: repeat(5, 42px);
   }
 }
+
+body[data-wt-theme="aurora"] {
+  --wt-radius: 22px;
+  background:
+    radial-gradient(circle at 8% 4%, rgba(125,211,252,.16), transparent 28%),
+    radial-gradient(circle at 92% 4%, rgba(167,139,250,.14), transparent 26%),
+    radial-gradient(circle at 48% 100%, rgba(96,165,250,.08), transparent 30%),
+    #080c18;
+}
+body[data-wt-theme="aurora"] .panel,
+body[data-wt-theme="aurora"] .wt-home-panel,
+body[data-wt-theme="aurora"] .wt-modal-card {
+  box-shadow: 0 22px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
+}
