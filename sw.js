@@ -1,81 +1,99 @@
-/*
- * WatchTogether GitHub Pages Auth compatibility
- *
- * Firebase Google Popup Auth 需要 opener 保留 popup window 參照。
- * GitHub Pages 無法直接設定 HTTP COOP header，因此由同源
- * Service Worker 對 HTML navigation 回應補上：
- *
- * Cross-Origin-Opener-Policy: same-origin-allow-popups
- */
+const CACHE_NAME = "wt-shell-20260923-v1";
+const ASSETS = [
+  "./",
+  "./enhancements.css",
+  "./enhancements.js",
+  "./firebase-config.js",
+  "./manifest.webmanifest",
+  "./icon.svg"
+];
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
+self.addEventListener("install", event => {
   event.waitUntil(
-    self.clients.claim()
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS).catch(() => {}))
+      .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  const request =
-    event.request;
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
+          .map(key => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
 
-  if (
-    request.method !== "GET" ||
-    request.mode !== "navigate"
-  ) {
+self.addEventListener("fetch", event => {
+  const request = event.request;
+
+  if (request.method !== "GET") {
     return;
   }
 
-  event.respondWith(
-    (async () => {
-      try {
-        /*
-         * 導覽頁永遠不要吃舊 HTTP cache。
-         * 否則 GitHub Pages 更新 index.html 後，
-         * 仍可能載入舊版 app.js 版本號。
-         */
-        const response =
-          await fetch(
-            new Request(
-              request,
-              {
-                cache:
-                  "no-store"
-              }
-            )
-          );
+  if (request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(new Request(request,{cache:"no-store"}));
+          const headers = new Headers(response.headers);
+          headers.set("Cross-Origin-Opener-Policy","same-origin-allow-popups");
+          let body = response.body;
 
-        const headers =
-          new Headers(
-            response.headers
-          );
-
-        headers.set(
-          "Cross-Origin-Opener-Policy",
-          "same-origin-allow-popups"
-        );
-
-        return new Response(
-          response.body,
-          {
-            status:
-              response.status,
-            statusText:
-              response.statusText,
-            headers
+          if (response.ok) {
+            try {
+              const source = await response.text();
+              const version = "20260923-formal-v1";
+              const withHead = source.replace(
+                "</head>",
+                '<meta name="theme-color" content="#0b1020">' +
+                '<link rel="manifest" href="./manifest.webmanifest?v=' + version + '">' +
+                '<link rel="stylesheet" href="./enhancements.css?v=' + version + '">' +
+                "</head>"
+              );
+              body = withHead.replace(
+                "</body>",
+                '<script src="./enhancements.js?v=' + version + '"></script></body>'
+              );
+              headers.delete("content-length");
+              headers.delete("content-encoding");
+              headers.set("content-type","text/html; charset=utf-8");
+            } catch (_) {}
           }
-        );
-      } catch (error) {
-        console.error(
-          "[WatchTogether SW] Navigation fetch failed:",
-          error
-        );
 
-        return fetch(request);
-      }
-    })()
-  );
+          return new Response(body,{
+            status:response.status,
+            statusText:response.statusText,
+            headers:headers
+          });
+        } catch (_) {
+          const cached = await caches.match(request);
+          if (cached) {
+            const source = await cached.text();
+            const headers = new Headers(cached.headers);
+            headers.set("Cross-Origin-Opener-Policy","same-origin-allow-popups");
+            const version = "20260923-formal-v1";
+            const body = source
+              .replace("</head>",'<meta name="theme-color" content="#0b1020"><link rel="manifest" href="./manifest.webmanifest?v='+version+'"><link rel="stylesheet" href="./enhancements.css?v='+version+'"></head>')
+              .replace("</body>",'<script src="./enhancements.js?v='+version+'"></script></body>');
+            headers.delete("content-length");
+            return new Response(body,{status:200,headers:headers});
+          }
+          return fetch(request);
+        }
+      })()
+    );
+    return;
+  }
+
+  const url = new URL(request.url);
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request).then(cached => cached || Response.error()))
+    );
+  }
 });
