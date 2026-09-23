@@ -42,6 +42,9 @@ var state = wt.state = {
   selectedFriendUid:"",
   selectedFriendProfile:null,
   dmMessagesRef:null,
+  dmReadsRef:null,
+  dmReads:{},
+  lastDmMarkedAt:0,
   roomChatRef:null,
   roomVideoRef:null,
   roomMembersRef:null,
@@ -1160,7 +1163,11 @@ function privateId(a,b) {
 
 function stopDmListener() {
   try { wt.state.dmMessagesRef && wt.state.dmMessagesRef.off(); } catch (_) {}
+  try { wt.state.dmReadsRef && wt.state.dmReadsRef.off(); } catch (_) {}
   wt.state.dmMessagesRef = null;
+  wt.state.dmReadsRef = null;
+  wt.state.dmReads = {};
+  wt.state.lastDmMarkedAt = 0;
 }
 
 async function ensureConversation(friendUid) {
@@ -1184,16 +1191,39 @@ function startDmListener() {
   if (!user || user.isAnonymous || !friendUid) return;
   var id = privateId(user.uid,friendUid);
   var ref = wt.db.ref("conversations/" + id + "/messages").limitToLast(100);
+  var readsRef = wt.db.ref("conversations/" + id + "/reads");
   wt.state.dmMessagesRef = ref;
+  wt.state.dmReadsRef = readsRef;
+
+  readsRef.on("value",function(snapshot){
+    wt.state.dmReads = snapshot.val() || {};
+    renderPrivateMessages(wt.state.dmMessages || {});
+  });
+
   ref.on("value",function(snapshot){
     var messages = snapshot.val() || {};
+    wt.state.dmMessages = messages;
     renderPrivateMessages(messages);
-    var latest = Object.entries(messages).map(function(pair){ return Object.assign({id:pair[0]},pair[1] || {}); }).sort(function(a,b){ return Number(a.createdAt||0)-Number(b.createdAt||0); }).pop();
+    markDmRead(messages);
+
+    var latest = Object.entries(messages).map(function(pair){
+      return Object.assign({id:pair[0]},pair[1] || {});
+    }).sort(function(a,b){
+      return Number(a.createdAt||0)-Number(b.createdAt||0);
+    }).pop();
+
     var latestKey = latest && latest.id || "";
-    if (latest && latestKey !== wt.state.lastDmMessageId && String(latest.uid || "") !== String(user.uid || "")) {
-      if (Number(latest.createdAt || 0) > Date.now() - 120000) {
-        notify("WatchTogether 私訊",String(latest.name || "好友") + "： " + (latest.type === "sticker" ? String(latest.sticker || "貼圖") : String(latest.text || "")));
-      }
+    if (
+      latest &&
+      latestKey !== wt.state.lastDmMessageId &&
+      String(latest.uid || "") !== String(user.uid || "") &&
+      Number(latest.createdAt || 0) > Date.now() - 120000
+    ) {
+      notify(
+        "WatchTogether 私訊",
+        String(latest.name || "好友") + "： " +
+        (latest.type === "sticker" ? String(latest.sticker || "貼圖") : String(latest.text || ""))
+      );
     }
     if (latestKey) wt.state.lastDmMessageId = latestKey;
   });
@@ -1225,7 +1255,26 @@ async function selectFriend(uid) {
   startDmListener();
 }
 
+function markDmRead(messages) {
+  var user = wt.auth.currentUser;
+  var friendUid = wt.state.selectedFriendUid;
+  if (!user || user.isAnonymous || !friendUid) return;
+  var list = Object.values(messages || {});
+  var latestIncoming = list.filter(function(item){
+    return String(item.uid || "") !== String(user.uid);
+  }).sort(function(a,b){
+    return Number(a.createdAt || 0)-Number(b.createdAt || 0);
+  }).pop();
+  var timestamp = Number(latestIncoming && latestIncoming.createdAt || 0);
+  if (!timestamp || timestamp <= Number(wt.state.dmReads[user.uid] || 0)) return;
+  if (timestamp <= wt.state.lastDmMarkedAt) return;
+  wt.state.lastDmMarkedAt = timestamp;
+  var id = privateId(user.uid,friendUid);
+  wt.db.ref("conversations/" + id + "/reads/" + user.uid).set(wt.serverTs()).catch(function(){});
+}
+
 function renderPrivateMessages(messages) {
+  wt.state.dmMessages = messages || {};
   var box = $("wtPrivateMessages");
   if (!box) return;
   var user = wt.auth.currentUser;
@@ -1239,7 +1288,9 @@ function renderPrivateMessages(messages) {
   box.innerHTML = list.map(function(message){
     var self = String(message.uid||"") === String(user && user.uid || "");
     var body = message.type === "sticker" ? '<div class="wt-sticker">' + esc(message.sticker || "😊") + '</div>' : '<div class="wt-message-text">' + esc(message.text || "") + '</div>';
-    return '<div class="wt-message' + (self ? ' self' : '') + '"><div class="wt-message-top"><span class="wt-message-name">' + esc(message.name || "玩家") + '</span><span class="wt-message-time">' + esc(formatDate(message.createdAt)) + '</span></div>' + body + (self ? '<button class="wt-message-delete" data-wt-dm-delete="' + esc(message.id) + '" type="button">刪除訊息</button>' : '') + '</div>';
+    var friendReadAt = Number(wt.state.dmReads[String(wt.state.selectedFriendUid || "")] || 0);
+    var mineRead = self && friendReadAt >= Number(message.createdAt || 0) ? '<span class="wt-message-time">已讀</span>' : "";
+    return '<div class="wt-message' + (self ? ' self' : '') + '"><div class="wt-message-top"><span class="wt-message-name">' + esc(message.name || "玩家") + '</span><span class="wt-message-time">' + esc(formatDate(message.createdAt)) + '</span>' + mineRead + '</div>' + body + (self ? '<button class="wt-message-delete" data-wt-dm-delete="' + esc(message.id) + '" type="button">刪除訊息</button>' : '') + '</div>';
   }).join("");
   box.querySelectorAll("[data-wt-dm-delete]").forEach(function(button){
     button.addEventListener("click",async function(){
