@@ -48,6 +48,7 @@ var state = wt.state = {
   dmMessagesRef:null,
   dmReadsRef:null,
   dmReads:{},
+  dmSelectionToken:0,
   lastDmMarkedAt:0,
   requestRef:null,
   roomChatRef:null,
@@ -1192,13 +1193,35 @@ async function ensureConversation(friendUid) {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous) throw new Error("Google 登入後才能私聊");
   if (!(await isFriend(friendUid))) throw new Error("只有好友可以私聊");
+
   var id = privateId(user.uid,friendUid);
   var ref = wt.db.ref("conversations/" + id);
-  var snapshot = await ref.once("value");
-  if (!snapshot.exists()) {
+
+  var snapshot = await ref.once("value").catch(function(){
+    return null;
+  });
+
+  if (!snapshot || !snapshot.exists()) {
     var pair = [user.uid,friendUid].sort();
-    await ref.set({userA:pair[0],userB:pair[1],createdAt:wt.serverTs()});
+    var created = {
+      userA:pair[0],
+      userB:pair[1],
+      createdAt:wt.serverTs()
+    };
+
+    try {
+      await ref.set(created);
+    } catch (error) {
+      var retry = await ref.once("value").catch(function(){
+        return null;
+      });
+
+      if (!retry || !retry.exists()) {
+        throw error;
+      }
+    }
   }
+
   return id;
 }
 
@@ -1265,12 +1288,45 @@ function updatePrivateHeader() {
 
 async function selectFriend(uid) {
   if (!wt.state.friends[uid]) return;
-  wt.state.selectedFriendUid = uid;
-  wt.state.selectedFriendProfile = wt.state.friends[uid];
+
+  var token =
+    Number(wt.state.dmSelectionToken || 0) + 1;
+
+  wt.state.dmSelectionToken =
+    token;
+
+  wt.state.selectedFriendUid =
+    uid;
+
+  wt.state.selectedFriendProfile =
+    wt.state.friends[uid];
+
+  stopDmListener();
+
   renderFriends();
   updatePrivateHeader();
   renderPrivateMessages({});
-  startDmListener();
+
+  try {
+    await ensureConversation(uid);
+
+    if (
+      token !== Number(wt.state.dmSelectionToken || 0) ||
+      String(wt.state.selectedFriendUid || "") !== String(uid) ||
+      !wt.auth.currentUser ||
+      wt.auth.currentUser.isAnonymous
+    ) {
+      return;
+    }
+
+    startDmListener();
+  } catch (error) {
+    if (
+      token === Number(wt.state.dmSelectionToken || 0)
+    ) {
+      wt.toast(error && error.message || "私聊初始化失敗");
+    }
+  }
 }
 
 function markDmRead(messages) {
