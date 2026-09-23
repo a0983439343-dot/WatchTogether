@@ -81,9 +81,9 @@ function makeSearchCacheKey(query, maxResults, page) {
   });
 }
 
-function getStreamUrl(videoId) {
+function getStreamUrl(videoId, forceRefresh = false) {
   const cached = cache.get(videoId);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
     return Promise.resolve(cached.url);
   }
 
@@ -463,6 +463,8 @@ async function handleSearch(req, res, url) {
 }
 
 async function handleStream(req, res, videoId) {
+  const requestUrl = new URL(req.url, "http://localhost");
+  const forceRefresh = requestUrl.searchParams.has("refresh");
   const ip = getClientIp(req);
   if (!allowRate(ip, "stream", STREAM_LIMIT_PER_IP)) {
     send(res, 429, JSON.stringify({error:"rate_limited",message:"播放請求過於頻繁，請稍後再試"}));
@@ -474,7 +476,7 @@ async function handleStream(req, res, videoId) {
   }
   activeStreams += 1;
   try {
-    const url = await getStreamUrl(videoId);
+    const url = await getStreamUrl(videoId, forceRefresh);
 
     res.writeHead(302, {
       Location: url,
