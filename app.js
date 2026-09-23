@@ -6494,63 +6494,6 @@
         )
         .set(room);
 
-      await db
-        .ref(
-          `roomMeta/${roomId}`
-        )
-        .set({
-          owner:
-            state.uid,
-          name:
-            roomName,
-          settings: {
-            locked:
-              false,
-            maxMembers:
-              2,
-            controlMode:
-              "host"
-          },
-          createdAt:
-            firebase.database.ServerValue.TIMESTAMP
-        });
-
-      const selectedVideo =
-        window.WT_ENHANCEMENTS?.state?.createVideo ||
-        null;
-
-      if (
-        selectedVideo &&
-        selectedVideo.id
-      ) {
-        await db
-          .ref(
-            `rooms/${roomId}/video`
-          )
-          .set({
-            id:
-              String(
-                selectedVideo.id
-              ),
-            platform:
-              "youtube",
-            title:
-              String(
-                selectedVideo.title ||
-                "未命名影片"
-              ).slice(0, 200),
-            thumbnail:
-              String(
-                selectedVideo.thumbnail ||
-                ""
-              ).slice(0, 2000),
-            channel:
-              String(
-                selectedVideo.channel ||
-                "YouTube"
-              ).slice(0, 100)
-          });
-      }
     } catch (error) {
       console.error(
         "建立 rooms 節點失敗:",
@@ -6638,6 +6581,52 @@
     );
 
     await enterRoom();
+
+    const selectedVideo =
+      window.WT_ENHANCEMENTS?.state?.createVideo ||
+      null;
+
+    if (
+      selectedVideo &&
+      selectedVideo.id &&
+      state.isOwner &&
+      state.roomId === roomId
+    ) {
+      try {
+        await changeVideo({
+          id:
+            String(
+              selectedVideo.id
+            ),
+          platform:
+            "youtube",
+          title:
+            String(
+              selectedVideo.title ||
+              "未命名影片"
+            ).slice(0, 200),
+          thumbnail:
+            String(
+              selectedVideo.thumbnail ||
+              ""
+            ).slice(0, 2000),
+          channel:
+            String(
+              selectedVideo.channel ||
+              "YouTube"
+            ).slice(0, 100)
+        });
+      } catch (error) {
+        console.warn(
+          "建立房間後套用已選影片失敗:",
+          error
+        );
+        toast(
+          "房間已建立，但自動載入已選影片失敗"
+        );
+      }
+    }
+
     saveRoomId(roomId);
   }
 
