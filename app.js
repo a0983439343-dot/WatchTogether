@@ -33,7 +33,7 @@
     ).trim();
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 25;
-  const YOUTUBE_MAX_SEARCH_PAGES = 2;
+  const YOUTUBE_MAX_SEARCH_PAGES = 1;
   const YOUTUBE_SEARCH_COOLDOWN_MS = 650;
   const LAST_ROOM_STORAGE_KEY = "wt_last_room_id";
 
@@ -613,7 +613,7 @@
 
     if (
       !value ||
-      !/^[A-Z0-9]{6}$/g.test(
+      !/^[A-Z0-9]{6}$/.test(
         value
       )
     ) {
