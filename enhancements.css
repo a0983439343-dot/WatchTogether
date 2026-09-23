@@ -834,3 +834,146 @@ body[data-wt-theme="aurora"] .wt-home-panel,
 body[data-wt-theme="aurora"] .wt-modal-card {
   box-shadow: 0 22px 70px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
 }
+
+
+.wt-search-history-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 3px 3px 0 0;
+  padding: 4px 9px;
+  border: 1px solid var(--wt-border);
+  border-radius: 999px;
+  background: rgba(255,255,255,.045);
+  color: var(--wt-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.wt-search-history-chip:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.085);
+}
+
+body[data-wt-theme="glass"] {
+  --wt-radius: 26px;
+  --wt-panel: rgba(19,28,48,.48);
+  --wt-panel-2: rgba(35,48,76,.35);
+  --wt-border: rgba(255,255,255,.16);
+  --wt-text: #f4f8ff;
+  --wt-muted: #aab9cf;
+  --wt-accent: #8be9fd;
+  --wt-accent-2: #c4a7ff;
+  background:
+    radial-gradient(circle at 15% 5%, rgba(139,233,253,.16), transparent 28%),
+    radial-gradient(circle at 88% 10%, rgba(196,167,255,.18), transparent 24%),
+    linear-gradient(140deg,#07101e,#111b31 48%,#090d18);
+}
+body[data-wt-theme="glass"] .panel,
+body[data-wt-theme="glass"] .wt-home-panel,
+body[data-wt-theme="glass"] .wt-modal-card {
+  backdrop-filter: blur(26px) saturate(135%);
+  -webkit-backdrop-filter: blur(26px) saturate(135%);
+  border-radius: 26px !important;
+  box-shadow: 0 30px 90px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.11) !important;
+}
+body[data-wt-theme="glass"] .topbar {
+  background: rgba(8,15,28,.52) !important;
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+body[data-wt-theme="retro"] {
+  --wt-radius: 8px;
+  --wt-panel: rgba(34,27,22,.94);
+  --wt-panel-2: rgba(52,39,30,.92);
+  --wt-border: rgba(246,211,156,.24);
+  --wt-text: #ffe8bc;
+  --wt-muted: #c5a878;
+  --wt-accent: #ffbf69;
+  --wt-accent-2: #ff7f66;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 4px),
+    radial-gradient(circle at 50% 0%, rgba(255,190,100,.12), transparent 42%),
+    #17110d;
+  color: #ffe8bc;
+  font-family: "Courier New", ui-monospace, monospace;
+}
+body[data-wt-theme="retro"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .35;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(255,191,105,.018) 6px 7px),
+    radial-gradient(circle at 20% 40%, rgba(255,255,255,.04), transparent 18%);
+}
+body[data-wt-theme="retro"] .panel,
+body[data-wt-theme="retro"] .wt-home-panel,
+body[data-wt-theme="retro"] .wt-modal-card {
+  border-radius: 8px !important;
+  box-shadow: 7px 7px 0 rgba(0,0,0,.24), 0 0 0 1px rgba(255,191,105,.04) !important;
+}
+body[data-wt-theme="retro"] button {
+  border-radius: 6px !important;
+}
+
+body[data-wt-theme="forest"] {
+  --wt-radius: 24px;
+  --wt-panel: rgba(20,34,25,.88);
+  --wt-panel-2: rgba(30,51,37,.82);
+  --wt-border: rgba(196,232,185,.16);
+  --wt-text: #f2f7ec;
+  --wt-muted: #afc4ac;
+  --wt-accent: #a7e68d;
+  --wt-accent-2: #74c69d;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(167,230,141,.12), transparent 24%),
+    radial-gradient(circle at 90% 20%, rgba(116,198,157,.14), transparent 26%),
+    linear-gradient(155deg,#08130d,#112319 50%,#07100b);
+}
+body[data-wt-theme="forest"] .panel,
+body[data-wt-theme="forest"] .wt-home-panel,
+body[data-wt-theme="forest"] .wt-modal-card {
+  border-radius: 30px 16px 24px 12px !important;
+  box-shadow: 0 24px 70px rgba(0,30,16,.30), inset 0 1px 0 rgba(224,255,215,.035) !important;
+}
+body[data-wt-theme="forest"] .wt-theme-card,
+body[data-wt-theme="forest"] .wt-room-card {
+  border-radius: 18px 9px 22px 13px !important;
+}
+
+body[data-wt-theme="blueprint"] {
+  --wt-radius: 7px;
+  --wt-panel: rgba(8,32,61,.90);
+  --wt-panel-2: rgba(11,46,84,.88);
+  --wt-border: rgba(148,206,255,.22);
+  --wt-text: #e8f4ff;
+  --wt-muted: #91b6d2;
+  --wt-accent: #84d8ff;
+  --wt-accent-2: #9bb7ff;
+  background:
+    linear-gradient(rgba(132,216,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(132,216,255,.05) 1px, transparent 1px),
+    linear-gradient(140deg,#061627,#082542 58%,#04111f);
+  background-size: 20px 20px,20px 20px,auto;
+  font-family: Inter, system-ui, sans-serif;
+}
+body[data-wt-theme="blueprint"] .panel,
+body[data-wt-theme="blueprint"] .wt-home-panel,
+body[data-wt-theme="blueprint"] .wt-modal-card {
+  border-radius: 7px !important;
+  border-width: 1px !important;
+  box-shadow: 0 0 0 1px rgba(132,216,255,.035), 12px 12px 0 rgba(3,19,36,.34) !important;
+}
+body[data-wt-theme="blueprint"] .panel-title,
+body[data-wt-theme="blueprint"] .wt-panel-title,
+body[data-wt-theme="blueprint"] .wt-room-code {
+  letter-spacing: .08em;
+}
+body[data-wt-theme="blueprint"] .wt-room-card,
+body[data-wt-theme="blueprint"] .wt-theme-card {
+  border-radius: 5px !important;
+}
