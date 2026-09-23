@@ -1628,3 +1628,252 @@ wt.renderRoomChat = renderRoomChat;
 wt.sendRoomSticker = sendRoomSticker;
 
 })();
+
+(() => {
+"use strict";
+var wt = window.WT_ENHANCEMENTS;
+if (!wt) return;
+var $ = wt.$;
+
+function buildStatusModal() {
+  if ($("wtStatusModal")) return;
+  var modal = document.createElement("div");
+  modal.id = "wtStatusModal";
+  modal.className = "wt-modal hidden";
+  modal.setAttribute("aria-hidden","true");
+  modal.innerHTML =
+    '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div><div class="wt-panel-title">系統狀態</div><div class="wt-small">網站服務與目前裝置狀態</div></div><button class="wt-close-btn" id="wtStatusClose" type="button">×</button></div>' +
+    '<div class="wt-status-grid" id="wtStatusGrid"></div>' +
+    '<div class="wt-settings-actions"><button class="wt-action-btn primary" id="wtStatusRefresh" type="button">重新檢查</button></div></div>';
+  document.body.appendChild(modal);
+  $("wtStatusClose").addEventListener("click",function(){ wt.closeModal("wtStatusModal"); });
+  $("wtStatusRefresh").addEventListener("click",runStatusChecks);
+}
+
+function statusRow(label,id) {
+  return '<div class="wt-status-row"><span>' + wt.esc(label) + '</span><strong id="' + id + '" class="wt-status-warn">檢查中…</strong></div>';
+}
+
+function setStatus(id,textValue,className) {
+  var el = $(id);
+  if (!el) return;
+  el.textContent = textValue;
+  el.className = className;
+}
+
+async function ping(url) {
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); },6000);
+  try {
+    return await fetch(url,{method:"GET",cache:"no-store",credentials:"omit",signal:controller.signal});
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runStatusChecks() {
+  buildStatusModal();
+  var box = $("wtStatusGrid");
+  if (!box) return;
+  box.innerHTML =
+    statusRow("網站","wtStatSite") +
+    statusRow("Firebase","wtStatFirebase") +
+    statusRow("YouTube Proxy","wtStatProxy") +
+    statusRow("Service Worker","wtStatSw") +
+    statusRow("通知","wtStatNotification") +
+    statusRow("登入","wtStatAuth");
+
+  setStatus("wtStatSite","🟢 正常","wt-status-good");
+
+  wt.db.ref(".info/connected").once("value").then(function(snapshot){
+    setStatus("wtStatFirebase",snapshot.val() === true ? "🟢 Online" : "🟡 尚未連線",snapshot.val() === true ? "wt-status-good" : "wt-status-warn");
+  }).catch(function(){ setStatus("wtStatFirebase","🔴 失敗","wt-status-bad"); });
+
+  var config = window.WATCHTOGETHER_CONFIG || {};
+  var proxy = String(config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/health");
+  if (!proxy) {
+    setStatus("wtStatProxy","🟡 未設定","wt-status-warn");
+  } else {
+    ping(proxy).then(function(response){
+      setStatus("wtStatProxy",response.ok ? "🟢 Online" : "🟡 HTTP " + response.status,response.ok ? "wt-status-good" : "wt-status-warn");
+    }).catch(function(){ setStatus("wtStatProxy","🟡 尚未回應","wt-status-warn"); });
+  }
+
+  setStatus("wtStatSw",navigator.serviceWorker && navigator.serviceWorker.controller ? "🟢 已啟用" : "🟡 等待更新",navigator.serviceWorker && navigator.serviceWorker.controller ? "wt-status-good" : "wt-status-warn");
+
+  if (!("Notification" in window)) {
+    setStatus("wtStatNotification","🟡 不支援","wt-status-warn");
+  } else if (Notification.permission === "granted") {
+    setStatus("wtStatNotification","🟢 已允許","wt-status-good");
+  } else if (Notification.permission === "denied") {
+    setStatus("wtStatNotification","🔴 已拒絕","wt-status-bad");
+  } else {
+    setStatus("wtStatNotification","🟡 未設定","wt-status-warn");
+  }
+
+  var user = wt.auth.currentUser;
+  setStatus("wtStatAuth",user ? (user.isAnonymous ? "🟢 訪客" : "🟢 Google") : "🔴 未登入",user ? "wt-status-good" : "wt-status-bad");
+}
+
+function openStatus() {
+  buildStatusModal();
+  wt.openModal("wtStatusModal");
+  void runStatusChecks();
+}
+
+function installListener() {
+  window.addEventListener("beforeinstallprompt",function(event){
+    event.preventDefault();
+    wt.state.pwaPrompt = event;
+    if ($("wtInstallPwaBtn")) $("wtInstallPwaBtn").disabled = false;
+  });
+  window.addEventListener("appinstalled",function(){
+    wt.state.pwaPrompt = null;
+    wt.toast("WatchTogether 已安裝");
+  });
+}
+
+async function installPwa() {
+  if (wt.state.pwaPrompt) {
+    wt.state.pwaPrompt.prompt();
+    try { await wt.state.pwaPrompt.userChoice; } catch (_) {}
+    wt.state.pwaPrompt = null;
+    return;
+  }
+  wt.toast("iPhone 可用 Safari 的「加入主畫面」；Android / Chrome 支援時可從瀏覽器選單安裝。");
+}
+
+function setupStickerOutsideClick() {
+  document.addEventListener("click",function(event){
+    document.querySelectorAll(".wt-sticker-picker:not(.hidden)").forEach(function(picker){
+      var parent = picker.parentElement;
+      if (!parent || !parent.contains(event.target)) picker.classList.add("hidden");
+    });
+  });
+}
+
+function setupAuthListeners() {
+  wt.auth.onAuthStateChanged(function(user){
+    wt.state.user = user || null;
+    if (user && !user.isAnonymous) {
+      void wt.loadProfile(user).then(function(){
+        wt.listenRequests();
+        if (typeof wt.renderFriends === "function") wt.renderFriends();
+      }).catch(function(error){
+        console.warn("WatchTogether profile setup failed",error);
+      });
+    } else {
+      wt.stopDmListener && wt.stopDmListener();
+      wt.state.profile = null;
+      wt.state.friends = {};
+      wt.state.requests = {};
+      wt.applyTheme(localStorage.getItem(wt.KEYS.theme) || "aurora");
+    }
+  });
+}
+
+function setupBodyObserver() {
+  var observer = new MutationObserver(function(){
+    ensureAllUi();
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
+}
+
+function ensureAllUi() {
+  if (typeof wt.renderHome === "function") wt.renderHome();
+  ensureTopbar();
+  wt.createRoomCaptureReady && wt.createRoomCaptureReady();
+  setupCreateCapture();
+  setupRoomCode();
+  if (wt.openRoomSettings) wt.openRoomSettingsReady = true;
+  if (wt.state.roomId) {
+    try { wt.setupRoom(wt.state.roomId); } catch (_) {}
+  }
+}
+
+function setupCreateCapture() {
+  var button = $("createRoomBtn");
+  if (!button || button.dataset.wtCreateCapture) return;
+  button.addEventListener("click",async function(event){
+    if (event.target !== button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    var user = wt.auth.currentUser;
+    if (!user) {
+      wt.toast("登入狀態尚未完成");
+      return;
+    }
+    button.disabled = true;
+    var roomName = String($("roomNameInput") && $("roomNameInput").value || "一起看").trim().slice(0,40) || "一起看";
+    var sourceType = String($("sourceTypeInput") && $("sourceTypeInput").value || "youtube");
+    var id = wt.randomCode(6);
+    try {
+      while ((await wt.db.ref("roomMeta/" + id).once("value")).exists()) id = wt.randomCode(6);
+      await wt.db.ref("rooms/" + id).set({owner:user.uid,name:roomName,sourceType:sourceType});
+      await wt.db.ref("roomMeta/" + id).set({owner:user.uid,name:roomName,settings:{locked:false,maxMembers:2,controlMode:"host"},createdAt:wt.serverTs()});
+      wt.rememberRoom(id,roomName);
+      location.href = location.origin + location.pathname + "?room=" + encodeURIComponent(id);
+    } catch (error) {
+      await wt.db.ref("rooms/" + id).remove().catch(function(){});
+      await wt.db.ref("roomMeta/" + id).remove().catch(function(){});
+      button.disabled = false;
+      wt.toast(error && error.message || "建立房間失敗");
+    }
+  },true);
+  button.dataset.wtCreateCapture = "1";
+}
+
+function setupCreateCaptureReady() {
+  setupCreateCapture();
+}
+wt.createRoomCaptureReady = setupCreateCaptureReady;
+
+function setupRoomCode() {
+  var input = $("joinCodeInput");
+  if (!input || input.dataset.wtSixCode) return;
+  input.maxLength = 6;
+  input.value = String(input.value || "").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+  input.placeholder = "輸入 6 碼房間碼";
+  input.addEventListener("input",function(){
+    input.value = String(input.value || "").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+  });
+  input.dataset.wtSixCode = "1";
+}
+
+function setupRoomObserver() {
+  setInterval(function(){
+    try { wt.observeRoom(); } catch (error) { console.warn("Room enhancement observer",error); }
+  },600);
+  setTimeout(function(){ try { wt.observeRoom(); } catch (_) {} },200);
+  setTimeout(function(){ try { wt.observeRoom(); } catch (_) {} },1000);
+}
+
+function setupMain() {
+  if (wt.state.initialized) return;
+  wt.state.initialized = true;
+  ensureTopbar();
+  if (typeof wt.renderHome === "function") wt.renderHome();
+  wt.createRoomCaptureReady && wt.createRoomCaptureReady();
+  setupCreateCapture();
+  setupRoomCode();
+  buildStatusModal();
+  if ($("wtInstallPwaBtn")) $("wtInstallPwaBtn").disabled = !wt.state.pwaPrompt;
+  installListener();
+  setupStickerOutsideClick();
+  setupAuthListeners();
+  setupBodyObserver();
+  setupRoomObserver();
+  window.addEventListener("pageshow",function(){ try { wt.observeRoom(); } catch (_) {} });
+  window.addEventListener("popstate",function(){ try { wt.observeRoom(); } catch (_) {} });
+}
+
+wt.openStatus = openStatus;
+wt.installPwa = installPwa;
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded",setupMain,{once:true});
+} else {
+  setupMain();
+}
+
+})();
