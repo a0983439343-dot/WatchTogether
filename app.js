@@ -6721,7 +6721,7 @@
    * =========================================================
    */
 
-  async function createRoom() {
+  async function createRoom(initialVideo = null) {
     const roomName =
       $("roomNameInput")
         ?.value
@@ -6734,10 +6734,19 @@
         "youtube"
       ).trim();
 
+    const selectedVideo =
+      initialVideo ||
+      window.WT_ENHANCEMENTS?.state?.createVideo ||
+      null;
+
     const sourceType =
-      PLATFORMS[selectedSourceType]
-        ? selectedSourceType
-        : "youtube";
+      selectedVideo?.id
+        ? "youtube"
+        : (
+            PLATFORMS[selectedSourceType]
+              ? selectedSourceType
+              : "youtube"
+          );
 
     if (!state.uid || !auth?.currentUser) {
       throw new Error(
@@ -6874,10 +6883,6 @@
 
     await enterRoom();
 
-    const selectedVideo =
-      window.WT_ENHANCEMENTS?.state?.createVideo ||
-      null;
-
     if (
       selectedVideo &&
       selectedVideo.id &&
@@ -6920,6 +6925,41 @@
     }
 
     saveRoomId(roomId);
+  }
+
+  async function createRoomWithVideo(video) {
+    if (
+      !video ||
+      !video.id
+    ) {
+      throw new Error(
+        "沒有可建立的影片"
+      );
+    }
+
+    return createRoom({
+      id:
+        String(
+          video.id
+        ),
+      platform:
+        "youtube",
+      title:
+        String(
+          video.title ||
+          "未命名影片"
+        ).slice(0,200),
+      thumbnail:
+        String(
+          video.thumbnail ||
+          ""
+        ).slice(0,2000),
+      channel:
+        String(
+          video.channel ||
+          "YouTube"
+        ).slice(0,100)
+    });
   }
 
   /*
@@ -11819,6 +11859,16 @@
    * PAGE UNLOAD
    * =========================================================
    */
+
+  window.WT_CORE =
+    window.WT_CORE ||
+    {};
+
+  window.WT_CORE.createRoom =
+    createRoom;
+
+  window.WT_CORE.createRoomWithVideo =
+    createRoomWithVideo;
 
   window.addEventListener(
     "beforeunload",
