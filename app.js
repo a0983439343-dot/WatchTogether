@@ -6741,10 +6741,20 @@
       null;
 
     const sourceType =
-      selectedVideo?.id
-        ? "youtube"
+      selectedVideo?.id &&
+      PLATFORMS[
+        String(
+          selectedVideo.platform ||
+          ""
+        )
+      ]
+        ? String(
+            selectedVideo.platform
+          )
         : (
-            PLATFORMS[selectedSourceType]
+            PLATFORMS[
+              selectedSourceType
+            ]
               ? selectedSourceType
               : "youtube"
           );
@@ -6891,16 +6901,29 @@
       state.roomId === roomId
     ) {
       try {
+        const selectedPlatform =
+          PLATFORMS[
+            String(
+              selectedVideo.platform ||
+              ""
+            )
+          ]
+            ? String(
+                selectedVideo.platform
+              )
+            : "youtube";
+
         await changeVideo({
           id:
             String(
               selectedVideo.id
             ),
           platform:
-            "youtube",
+            selectedPlatform,
           title:
             String(
               selectedVideo.title ||
+              PLATFORMS[selectedPlatform]?.name ||
               "未命名影片"
             ).slice(0, 200),
           thumbnail:
@@ -6911,8 +6934,25 @@
           channel:
             String(
               selectedVideo.channel ||
-              "YouTube"
-            ).slice(0, 100)
+              PLATFORMS[selectedPlatform]?.name ||
+              selectedPlatform
+            ).slice(0, 100),
+          ...(selectedVideo.url
+            ? {
+                url:
+                  String(
+                    selectedVideo.url
+                  ).slice(0, 2000)
+              }
+            : {}),
+          ...(selectedVideo.twitchType
+            ? {
+                twitchType:
+                  String(
+                    selectedVideo.twitchType
+                  )
+              }
+            : {})
         });
       } catch (error) {
         console.warn(
@@ -6938,16 +6978,28 @@
       );
     }
 
+    const platform =
+      PLATFORMS[
+        String(
+          video.platform ||
+          ""
+        )
+      ]
+        ? String(
+            video.platform
+          )
+        : "youtube";
+
     return createRoom({
       id:
         String(
           video.id
         ),
-      platform:
-        "youtube",
+      platform,
       title:
         String(
           video.title ||
+          PLATFORMS[platform]?.name ||
           "未命名影片"
         ).slice(0,200),
       thumbnail:
@@ -6958,8 +7010,25 @@
       channel:
         String(
           video.channel ||
-          "YouTube"
-        ).slice(0,100)
+          PLATFORMS[platform]?.name ||
+          platform
+        ).slice(0,100),
+      ...(video.url
+        ? {
+            url:
+              String(
+                video.url
+              ).slice(0,2000)
+          }
+        : {}),
+      ...(video.twitchType
+        ? {
+            twitchType:
+              String(
+                video.twitchType
+              )
+          }
+        : {})
     });
   }
 
