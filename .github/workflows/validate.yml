@@ -47,3 +47,27 @@ jobs:
       - name: Check six-character room code implementation
         run: |
           node -e "const fs=require('fs'); const app=fs.readFileSync('app.js','utf8'); const all=['app.js','index.html','enhancements.js'].map(f=>fs.readFileSync(f,'utf8')).join('\n'); if(!app.includes('new Uint32Array(\n        6\n      )')&&!/new Uint32Array\\(\\s*6\\s*\\)/s.test(app)){throw new Error('Six-character room code generator check failed.')} if(/6 或 12|12 碼房間|A-Z0-9\\{12\\}/.test(all)){throw new Error('Legacy 12-character room code validation detected.')} const e=fs.readFileSync('enhancements.js','utf8'); if(!e.includes('var FRIEND_CODE_RE = /^[A-Z0-9]{6}$/;')){throw new Error('Six-character friend code check failed.')} if(/FRIEND_CODE_RE.*\{8\}|8 碼好友代碼|好友代碼必須是 8/.test(e)){throw new Error('Legacy eight-character friend code detected.')} const rules=fs.readFileSync('database.rules.json','utf8'); if(/publicCode.*length === 8|\$code\.length === 8|fromCode.*length <= 8/.test(rules)){throw new Error('Legacy eight-character database rule detected.')} if(!/glass/.test(e)||!/retro/.test(e)||!/forest/.test(e)||!/blueprint/.test(e)){throw new Error('Formal theme IDs missing.')} console.log('Six-character room and friend code checks OK')"
+
+
+      - name: Check synchronized room control architecture
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const app = fs.readFileSync('app.js', 'utf8');
+          const enh = fs.readFileSync('enhancements.js', 'utf8');
+          const rules = fs.readFileSync('database.rules.json', 'utf8');
+          const index = fs.readFileSync('index.html', 'utf8');
+          const sw = fs.readFileSync('sw.js', 'utf8');
+
+          if (!app.includes('requestPlaybackControl(')) throw new Error('Member playback request function missing.');
+          if (!app.includes('attachPlaybackControlRequestListener(')) throw new Error('Owner control-request listener missing.');
+          if (!app.includes('空房房主接管失敗')) throw new Error('Vacant-room owner takeover flow missing.');
+          if (!rules.includes('"controlRequests"')) throw new Error('controlRequests rules missing.');
+          if (!rules.includes("root.child('members').child($roomId).child(auth.uid).exists()")) throw new Error('Owner takeover membership guard missing.');
+          if (/numChildren\s*\(/.test(rules)) throw new Error('Unsupported numChildren() remains in Firebase rules.');
+          if (/YT\.Player|youtube\.com\/iframe_api/.test(app + enh)) throw new Error('Legacy YouTube IFrame API remains.');
+          if (/randomCode\(12\)|length\s*={2,3}\s*12|randomCode\(8\)|length\s*={2,3}\s*8/.test(app + enh)) throw new Error('Legacy room/friend code length remains.');
+          if (!index.includes('app.js?v=20260923-formal-v7') || !index.includes('enhancements.js?v=20260923-formal-v7')) throw new Error('Frontend asset versions are not aligned.');
+          if (!sw.includes('wt-shell-20260923-v7')) throw new Error('Service worker cache version is not aligned.');
+          console.log('Synchronized room control architecture checks OK');
+          NODE
