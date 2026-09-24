@@ -24,6 +24,38 @@
 
     window.addEventListener("load", async () => {
       try {
+        const currentBuild = "20260924-formal-v21";
+
+        const registrations =
+          await navigator.serviceWorker.getRegistrations();
+
+        await Promise.all(
+          registrations
+            .filter(registration => {
+              const scriptURL =
+                registration.active?.scriptURL ||
+                registration.installing?.scriptURL ||
+                registration.waiting?.scriptURL ||
+                "";
+              return !scriptURL.includes(currentBuild);
+            })
+            .map(registration => registration.unregister())
+        );
+
+        if ("caches" in window) {
+          const cacheKeys = await caches.keys();
+
+          await Promise.all(
+            cacheKeys
+              .filter(
+                key =>
+                  key.startsWith("wt-shell-") &&
+                  key !== "wt-shell-20260924-v21"
+              )
+              .map(key => caches.delete(key))
+          );
+        }
+
         const registration =
           await navigator.serviceWorker.register(
             "./sw.js?v=20260924-formal-v21",
