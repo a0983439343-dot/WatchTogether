@@ -432,7 +432,25 @@ wt.openModal = openModal;
 wt.closeModal = closeModal;
 wt.ROOM_RE = ROOM_RE;
 wt.FRIEND_CODE_RE = FRIEND_CODE_RE;
-wt.isCurrentAuthUser = isCurrentAuthUser;
+
+function isCurrentAuthUser(user) {
+  var current =
+    wt.auth &&
+    wt.auth.currentUser;
+
+  return Boolean(
+    current &&
+    user &&
+    String(current.uid) ===
+      String(user.uid) &&
+    Boolean(current.isAnonymous) ===
+      Boolean(user.isAnonymous)
+  );
+}
+
+wt.isCurrentAuthUser =
+  isCurrentAuthUser;
+
 wt.rememberVideo = rememberVideo;
 
 applyTheme(currentTheme());
