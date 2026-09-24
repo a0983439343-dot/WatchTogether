@@ -120,7 +120,7 @@
     }
     const base = lower.split("-")[0];
     const match = SUPPORTED.find(locale => locale.split("-")[0].toLowerCase() === base);
-    return match || DEFAULT_LOCALE;
+    return match || null;
   }
 
   function detectLocale() {
@@ -214,7 +214,7 @@
   }
 
   function setLocale(locale, persist = true) {
-    const resolved = locale === "auto" ? detectLocale() : normalizeLocale(locale);
+    const resolved = locale === "auto" ? detectLocale() : (normalizeLocale(locale) || DEFAULT_LOCALE);
     currentLocale = resolved;
     document.documentElement.lang = resolved;
     document.documentElement.dir = resolved === "ar" ? "rtl" : "ltr";
