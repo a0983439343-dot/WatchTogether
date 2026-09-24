@@ -8641,7 +8641,7 @@
               await publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
             }
           } catch (_) {}
-        }, 600);
+        }, 100);
         await playPlayer({muteForAutoplay: false});
       }
     } catch (error) {
@@ -8766,6 +8766,59 @@
     state.playbackUserActionUntil = Date.now() + 900;
   }
 
+  async function applyOptimisticLocalPlaybackAction(
+    action,
+    position = null,
+    playing = null
+  ) {
+    if (
+      !state.playerReady ||
+      !state.player ||
+      !["youtube", "vimeo", "dailymotion", "twitch"].includes(state.playerType)
+    ) {
+      return false;
+    }
+
+    const normalized =
+      action === "pause"
+        ? "pause"
+        : action === "seek"
+          ? "seek"
+          : "play";
+
+    state.playbackSyncPhase = "user-action";
+    markLocalPlaybackIntent(normalized);
+    state.playbackLocalControlUntil = Date.now() + 1000;
+    state.playbackLocalSeekSuppressUntil = Date.now() + 1000;
+
+    try {
+      if (normalized === "seek") {
+        await applyPlayerPosition(position);
+        if (playing === true) {
+          const active = await asyncIsPlaying();
+          if (!active) await playPlayer();
+        } else if (playing === false) {
+          const active = await asyncIsPlaying();
+          if (active) await pausePlayer();
+        }
+      } else if (normalized === "pause") {
+        await pausePlayer();
+      } else {
+        await playPlayer();
+      }
+
+      state.playbackLastPosition =
+        await asyncCurrentPosition().catch(() => Number(position) || 0);
+      state.playbackLastPlaying =
+        await asyncIsPlaying().catch(() => normalized === "play");
+
+      return true;
+    } catch (error) {
+      console.warn("本機播放控制失敗:", error);
+      return false;
+    }
+  }
+
   function cancelPendingPausePublish() {
     clearTimeout(state.playbackPausePublishTimer);
     state.playbackPausePublishTimer = null;
@@ -8809,11 +8862,11 @@
     }
 
     return Math.max(
-      120,
+      80,
       Math.min(
-        360,
+        180,
         Math.round(
-          rtt * 0.9 + 55
+          rtt * 0.45 + 20
         )
       )
     );
@@ -9965,7 +10018,9 @@
         1.0;
 
       if (event.action === "pause") {
-        await pausePlayer();
+        if (await asyncIsPlaying()) {
+          await pausePlayer();
+        }
 
         const target = getTimelinePosition(
           { ...event, action: "pause" },
@@ -9985,9 +10040,10 @@
         if (Math.abs(current - expected) > 0.08) {
           await applyPlayerPosition(expected);
         }
-        if (event.playing === true) {
+        const seekPlaying = await asyncIsPlaying();
+        if (event.playing === true && !seekPlaying) {
           await playPlayer();
-        } else {
+        } else if (event.playing !== true && seekPlaying) {
           await pausePlayer();
         }
         await setPlaybackRateSafe(1);
@@ -10014,9 +10070,15 @@
         }
 
         if (event.playing === true && !state.playbackIsBuffering) {
-          await playPlayer();
+          const alreadyPlaying = await asyncIsPlaying();
+          if (!alreadyPlaying) {
+            await playPlayer();
+          }
         } else if (event.playing !== true) {
-          await pausePlayer();
+          const alreadyPlaying = await asyncIsPlaying();
+          if (alreadyPlaying) {
+            await pausePlayer();
+          }
         }
       }
 
@@ -13099,11 +13161,22 @@
              await asyncCurrentPosition();
 
            if (!state.isOwner) {
-             await requestPlaybackControl(
-               playing ? "pause" : "play",
+             const action =
+               playing ? "pause" : "play";
+
+             await applyOptimisticLocalPlaybackAction(
+               action,
                position,
                !playing
              );
+
+             void requestPlaybackControl(
+               action,
+               position,
+               !playing
+             );
+
+             updateTimeUI();
              return;
            }
 
@@ -13147,7 +13220,7 @@
                     publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
                   }
                 } catch (_) {}
-              }, 600);
+              }, 100);
               await playPlayer();
             }
           } catch (error) {
@@ -13196,13 +13269,21 @@
             await asyncIsPlaying();
 
           if (!state.isOwner) {
-             await requestPlaybackControl(
-               "seek",
-               target,
-               wasPlaying
-             );
-             return;
-           }
+            await applyOptimisticLocalPlaybackAction(
+              "seek",
+              target,
+              wasPlaying
+            );
+
+            void requestPlaybackControl(
+              "seek",
+              target,
+              wasPlaying
+            );
+
+            updateTimeUI();
+            return;
+          }
 
            markLocalPlaybackIntent(
             "seek"
@@ -13261,13 +13342,21 @@
             await asyncIsPlaying();
 
           if (!state.isOwner) {
-             await requestPlaybackControl(
-               "seek",
-               target,
-               wasPlaying
-             );
-             return;
-           }
+            await applyOptimisticLocalPlaybackAction(
+              "seek",
+              target,
+              wasPlaying
+            );
+
+            void requestPlaybackControl(
+              "seek",
+              target,
+              wasPlaying
+            );
+
+            updateTimeUI();
+            return;
+          }
 
            markLocalPlaybackIntent(
             "seek"
