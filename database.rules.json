@@ -22,6 +22,27 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['id','platform','title','thumbnail','channel']) && newData.child('id').isString() && newData.child('id').val().length <= 200 && newData.child('platform').isString() && (newData.child('platform').val() === 'youtube' || newData.child('platform').val() === 'vimeo' || newData.child('platform').val() === 'dailymotion' || newData.child('platform').val() === 'bilibili' || newData.child('platform').val() === 'twitch' || newData.child('platform').val() === 'netflix' || newData.child('platform').val() === 'crunchyroll' || newData.child('platform').val() === 'disneyplus' || newData.child('platform').val() === 'primevideo' || newData.child('platform').val() === 'appletv' || newData.child('platform').val() === 'max' || newData.child('platform').val() === 'hulu' || newData.child('platform').val() === 'paramount' || newData.child('platform').val() === 'peacock') && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 200 && newData.child('thumbnail').isString() && newData.child('thumbnail').val().length <= 2000 && newData.child('channel').isString() && newData.child('channel').val().length <= 100 && (!newData.child('url').exists() || (newData.child('url').isString() && newData.child('url').val().length <= 2000)) && (!newData.child('twitchType').exists() || (newData.child('twitchType').isString() && (newData.child('twitchType').val() === 'channel' || newData.child('twitchType').val() === 'video' || newData.child('twitchType').val() === 'clip'))))",
           "$other": {
             ".validate": false
+          },
+          "id": {
+            ".validate": true
+          },
+          "platform": {
+            ".validate": true
+          },
+          "title": {
+            ".validate": true
+          },
+          "thumbnail": {
+            ".validate": true
+          },
+          "channel": {
+            ".validate": true
+          },
+          "url": {
+            ".validate": true
+          },
+          "twitchType": {
+            ".validate": true
           }
         },
         "$other": {
@@ -47,6 +68,24 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['uid','name','type','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('type').isString() && ((newData.child('type').val() === 'text' && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 300) || (newData.child('type').val() === 'sticker' && newData.child('sticker').isString() && newData.child('sticker').val().length > 0 && newData.child('sticker').val().length <= 4)) && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 60000 && newData.child('createdAt').val() >= now - 120000)",
           "$other": {
             ".validate": false
+          },
+          "uid": {
+            ".validate": true
+          },
+          "name": {
+            ".validate": true
+          },
+          "type": {
+            ".validate": true
+          },
+          "createdAt": {
+            ".validate": true
+          },
+          "text": {
+            ".validate": true
+          },
+          "sticker": {
+            ".validate": true
           }
         }
       }
@@ -59,6 +98,36 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['id','platform','title','thumbnail','channel','addedBy','addedByName','addedAt']) && newData.child('id').isString() && newData.child('id').val().length > 0 && newData.child('id').val().length <= 200 && newData.child('platform').isString() && (newData.child('platform').val() === 'youtube' || newData.child('platform').val() === 'vimeo' || newData.child('platform').val() === 'dailymotion' || newData.child('platform').val() === 'bilibili' || newData.child('platform').val() === 'twitch' || newData.child('platform').val() === 'netflix' || newData.child('platform').val() === 'crunchyroll' || newData.child('platform').val() === 'disneyplus' || newData.child('platform').val() === 'primevideo' || newData.child('platform').val() === 'appletv' || newData.child('platform').val() === 'max' || newData.child('platform').val() === 'hulu' || newData.child('platform').val() === 'paramount' || newData.child('platform').val() === 'peacock') && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 200 && newData.child('thumbnail').isString() && newData.child('thumbnail').val().length <= 2000 && newData.child('channel').isString() && newData.child('channel').val().length <= 100 && newData.child('addedBy').isString() && newData.child('addedBy').val() === auth.uid && newData.child('addedByName').isString() && newData.child('addedByName').val().length > 0 && newData.child('addedByName').val().length <= 30 && newData.child('addedAt').isNumber() && newData.child('addedAt').val() <= now + 30000 && (!newData.child('url').exists() || (newData.child('url').isString() && newData.child('url').val().length <= 2000)) && (!newData.child('twitchType').exists() || (newData.child('twitchType').isString() && (newData.child('twitchType').val() === 'channel' || newData.child('twitchType').val() === 'video' || newData.child('twitchType').val() === 'clip'))))",
           "$other": {
             ".validate": false
+          },
+          "id": {
+            ".validate": true
+          },
+          "platform": {
+            ".validate": true
+          },
+          "title": {
+            ".validate": true
+          },
+          "thumbnail": {
+            ".validate": true
+          },
+          "channel": {
+            ".validate": true
+          },
+          "addedBy": {
+            ".validate": true
+          },
+          "addedByName": {
+            ".validate": true
+          },
+          "addedAt": {
+            ".validate": true
+          },
+          "url": {
+            ".validate": true
+          },
+          "twitchType": {
+            ".validate": true
           }
         }
       }
@@ -147,6 +216,30 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['uid','name','action','position','playing','videoId','platform','createdAt']) && newData.child('uid').isString() && newData.child('uid').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('action').isString() && (newData.child('action').val() === 'play' || newData.child('action').val() === 'pause' || newData.child('action').val() === 'seek') && newData.child('position').isNumber() && newData.child('position').val() >= 0 && newData.child('position').val() <= 86400 && newData.child('playing').isBoolean() && newData.child('videoId').isString() && newData.child('videoId').val().length > 0 && newData.child('videoId').val().length <= 200 && newData.child('platform').isString() && (newData.child('platform').val() === 'youtube' || newData.child('platform').val() === 'vimeo' || newData.child('platform').val() === 'dailymotion' || newData.child('platform').val() === 'twitch') && newData.child('createdAt').isNumber() && newData.child('createdAt').val() >= now - 15000 && newData.child('createdAt').val() <= now + 15000)",
           "$other": {
             ".validate": false
+          },
+          "uid": {
+            ".validate": true
+          },
+          "name": {
+            ".validate": true
+          },
+          "action": {
+            ".validate": true
+          },
+          "position": {
+            ".validate": true
+          },
+          "playing": {
+            ".validate": true
+          },
+          "videoId": {
+            ".validate": true
+          },
+          "platform": {
+            ".validate": true
+          },
+          "createdAt": {
+            ".validate": true
           }
         }
       }
