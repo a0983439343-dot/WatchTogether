@@ -4053,7 +4053,7 @@
       return;
     }
 
-    forceYoutubePlayerVisible();
+    forceDirectVideoVisible();
   }
 
   function detachYoutubeNativeEvents() {
