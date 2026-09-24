@@ -6419,6 +6419,10 @@
         player.setVolume(100);
       } catch (_) {}
 
+      try {
+        await detectYoutubeFineRateSupport();
+      } catch (_) {}
+
       const handleStateChange =
         async (event) => {
           if (
@@ -9784,6 +9788,7 @@
     state.playbackApplyingRemoteEventId = eventId;
     state.playbackApplyingRemote = true;
     state.playbackPendingRecovery = true;
+    state.playbackSyncPhase = "initializing";
 
     state.playbackInitialHardSyncUntil = now + 1400;
     state.playbackInitialHardSyncEventId = eventId;
@@ -11729,8 +11734,6 @@
       await handleRoomVideo(
         initialVideo
       );
-      await applyLatestRoomPlaybackState();
-      startPlaybackSeekDetector();
     } else {
       hidePlayers();
 
