@@ -8363,6 +8363,9 @@
       state.playbackAwaitingActualStart = false;
       clearTimeout(state.playbackActualStartTimer);
       state.playbackActualStartTimer = null;
+      state.playbackInitialHardSyncUntil = 0;
+      state.playbackInitialHardSyncEventId = "";
+      state.playbackInitialHardSyncAt = 0;
       state.playbackAdGuardUntil = 0;
       state.playbackTransientStateUntil = 0;
       state.playbackLastPlayerState = null;
@@ -9967,9 +9970,6 @@
     state.playbackAwaitingActualStart = false;
     clearTimeout(state.playbackActualStartTimer);
     state.playbackActualStartTimer = null;
-    state.playbackInitialHardSyncUntil = 0;
-    state.playbackInitialHardSyncEventId = "";
-    state.playbackInitialHardSyncAt = 0;
   }
 
   async function reconcileRoomTimeline() {
