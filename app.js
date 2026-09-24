@@ -11200,16 +11200,18 @@
     }
 
     /*
-     * 只同步「目前是哪部影片」。
-     * 絕對不寫 rooms/{room}/state。
+     * Realtime Database rules 對 rooms/{roomId}
+     * 的父層 .write 僅允許建立 / 刪除房間。
+     * 因此不能用 roomRef.update() 一次寫 sourceType + video，
+     * 必須逐一寫入子節點，讓子節點自己的 .write rule 生效。
      */
-    await state.roomRef.update({
-      sourceType:
-        platform,
+    await state.roomRef
+      .child("sourceType")
+      .set(platform);
 
-      video:
-        roomVideo
-    });
+    await state.roomRef
+      .child("video")
+      .set(roomVideo);
 
     cancelScheduledLocalPause();
     cancelScheduledRemotePause();
