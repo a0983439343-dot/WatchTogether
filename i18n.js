@@ -186,12 +186,31 @@
 
   function translateNode(node) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return;
+
     const parent = node.parentElement;
-    if (!parent || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/i.test(parent.tagName)) return;
-    if (!sourceByNode.has(node)) sourceByNode.set(node, node.nodeValue || "");
-    const source = sourceByNode.get(node);
+    if (
+      !parent ||
+      /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/i.test(parent.tagName)
+    ) {
+      return;
+    }
+
+    const current = node.nodeValue || "";
+    const previousSource = sourceByNode.get(node);
+
+    if (
+      previousSource === undefined ||
+      (!applying && current !== translate(previousSource))
+    ) {
+      sourceByNode.set(node, current);
+    }
+
+    const source = sourceByNode.get(node) || current;
     const next = translate(source);
-    if (node.nodeValue !== next) node.nodeValue = next;
+
+    if (current !== next) {
+      node.nodeValue = next;
+    }
   }
 
   function translateElementAttributes(element) {
@@ -211,19 +230,33 @@
 
   function translateTree(root = document.body) {
     if (!root) return;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const nodes = [];
-    let node;
-    while ((node = walker.nextNode())) nodes.push(node);
-    applying = true;
-    try {
-      nodes.forEach(translateNode);
-      if (root instanceof Element) translateElementAttributes(root);
-      root.querySelectorAll?.("*").forEach(translateElementAttributes);
-      document.title = translate("WatchTogether｜一起看");
-    } finally {
-      applying = false;
+
+    const roots = [];
+    if (root.nodeType === Node.TEXT_NODE) {
+      translateNode(root);
+      return;
     }
+
+    if (root instanceof Element) {
+      roots.push(root);
+    }
+
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_TEXT
+    );
+
+    let node;
+    while ((node = walker.nextNode())) {
+      translateNode(node);
+    }
+
+    if (root instanceof Element) {
+      translateElementAttributes(root);
+      root.querySelectorAll?.("*").forEach(translateElementAttributes);
+    }
+
+    document.title = translate("WatchTogether｜一起看");
   }
 
   function setLocale(locale, persist = true) {
@@ -284,22 +317,57 @@
     });
     const observer = new MutationObserver(mutations => {
       if (applying) return;
-      for (const mutation of mutations) {
-        if (mutation.type === "characterData") {
-          if (!sourceByNode.has(mutation.target)) sourceByNode.set(mutation.target, mutation.target.nodeValue || "");
-        } else if (mutation.type === "attributes" && mutation.target instanceof Element) {
-          const attr = mutation.attributeName;
-          if (["placeholder","title","aria-label","aria-placeholder","alt"].includes(attr)) {
+
+      applying = true;
+      try {
+        for (const mutation of mutations) {
+          if (mutation.type === "characterData") {
+            translateNode(mutation.target);
+            continue;
+          }
+
+          if (mutation.type === "attributes" && mutation.target instanceof Element) {
+            const attr = mutation.attributeName;
+            if (!["placeholder","title","aria-label","aria-placeholder","alt"].includes(attr)) {
+              continue;
+            }
+
             let attrs = sourceByAttribute.get(mutation.target);
             if (!attrs) {
               attrs = {};
               sourceByAttribute.set(mutation.target, attrs);
             }
-            attrs[attr] = mutation.target.getAttribute(attr) || "";
+
+            const current = mutation.target.getAttribute(attr) || "";
+            const previousSource = attrs[attr];
+
+            if (
+              previousSource === undefined ||
+              current !== translate(previousSource)
+            ) {
+              attrs[attr] = current;
+            }
+
+            const next = translate(attrs[attr]);
+            if (mutation.target.getAttribute(attr) !== next) {
+              mutation.target.setAttribute(attr, next);
+            }
+            continue;
+          }
+
+          if (mutation.type === "childList") {
+            mutation.addedNodes.forEach(node => {
+              if (node.nodeType === Node.TEXT_NODE) {
+                translateNode(node);
+              } else if (node.nodeType === Node.ELEMENT_NODE) {
+                translateTree(node);
+              }
+            });
           }
         }
+      } finally {
+        applying = false;
       }
-      translateTree(document.body);
     });
     window.addEventListener("watchtogether:settings-ready", () => {
       const select = document.getElementById("wtLanguageSelect");
