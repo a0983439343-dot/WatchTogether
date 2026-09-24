@@ -35,6 +35,8 @@
   const YOUTUBE_SEARCH_PAGE_SIZE = 25;
   const YOUTUBE_MAX_SEARCH_PAGES = 1;
   const YOUTUBE_SEARCH_COOLDOWN_MS = 650;
+  const MEMBER_HEARTBEAT_INTERVAL_MS = 15000;
+  const MEMBER_PRESENCE_TIMEOUT_MS = 45000;
   const LAST_ROOM_STORAGE_KEY = "wt_last_room_id";
 
   const PLATFORMS = {
@@ -7045,7 +7047,11 @@
 
       await ownerMemberRef
         .onDisconnect()
-        .remove();
+        .update({
+          online: false,
+          lastSeen:
+            firebase.database.ServerValue.TIMESTAMP
+        });
 
     } catch (error) {
       console.error(
@@ -7480,11 +7486,12 @@
     const isExistingMember =
       currentMemberSnapshot.exists();
 
+    const existingMembers =
+      roomMembersSnapshot.val() ||
+      {};
+
     const existingMemberCount =
-      Object.keys(
-        roomMembersSnapshot.val() ||
-        {}
-      ).length;
+      countLiveMembers(existingMembers);
 
     const isRoomOwner =
       actualOwnerUid ===
@@ -9583,6 +9590,32 @@
   }
 
 
+  function isMemberPresenceLive(member, now = Date.now()) {
+    if (!member || typeof member !== "object") {
+      return false;
+    }
+
+    if (member.online !== true) {
+      return false;
+    }
+
+    const lastSeen = Number(member.lastSeen || 0);
+
+    return (
+      Number.isFinite(lastSeen) &&
+      lastSeen > 0 &&
+      lastSeen >= now - MEMBER_PRESENCE_TIMEOUT_MS
+    );
+  }
+
+
+  function countLiveMembers(members, now = Date.now()) {
+    return Object.values(members || {}).filter(
+      member => isMemberPresenceLive(member, now)
+    ).length;
+  }
+
+
   async function markMemberOnline() {
     if (
       !state.membersRef ||
@@ -9616,14 +9649,26 @@
         )?.val?.() || null;
       }
 
+      const existingSnapshot =
+        await memberRef
+          .once("value")
+          .catch(() => null);
+
+      const existingMember =
+        existingSnapshot?.val?.() || {};
+
+      const existingJoinedAt =
+        Number(existingMember.joinedAt || 0);
+
       const memberData = {
         name:
           state.memberName,
 
         joinedAt:
-          firebase.database
-            .ServerValue
-            .TIMESTAMP,
+          Number.isFinite(existingJoinedAt) &&
+          existingJoinedAt > 0
+            ? existingJoinedAt
+            : firebase.database.ServerValue.TIMESTAMP,
 
         online:
           true,
@@ -9654,13 +9699,17 @@
         memberData.avatarEmoji = avatarEmoji;
       }
 
-      await memberRef
-        .onDisconnect()
-        .remove();
-
       await memberRef.set(
         memberData
       );
+
+      await memberRef
+        .onDisconnect()
+        .update({
+          online: false,
+          lastSeen:
+            firebase.database.ServerValue.TIMESTAMP
+        });
 
       const confirmed =
         await memberRef
@@ -9694,12 +9743,47 @@
 
 
   async function heartbeatMember() {
-    /*
-     * 保留此函式名稱相容舊呼叫點，但不再對 members/{uid}
-     * 做週期性 update。Firebase onDisconnect().remove() 已負責
-     * 斷線清理，避免 partial update 與成員移除發生競速。
-     */
-    return;
+    if (
+      !state.membersRef ||
+      !state.uid ||
+      state.leavingRoom ||
+      state.databaseConnected !== true
+    ) {
+      return;
+    }
+
+    try {
+      if (await isMemberKicked()) {
+        await leaveRoomLocally("你已被房主移出房間");
+        return;
+      }
+
+      const memberRef =
+        state.membersRef.child(state.uid);
+
+      const snapshot =
+        await memberRef.once("value");
+
+      if (!snapshot.exists()) {
+        await markMemberOnline();
+        return;
+      }
+
+      await memberRef.update({
+        online: true,
+        lastSeen:
+          firebase.database.ServerValue.TIMESTAMP
+      });
+
+      state.wasMemberInRoom = true;
+    } catch (error) {
+      if (!state.leavingRoom) {
+        console.warn(
+          "Firebase 成員 heartbeat 失敗:",
+          error
+        );
+      }
+    }
   }
 
 
@@ -9796,6 +9880,7 @@
         .filter(
           ([uid, member]) =>
             uid !== state.uid &&
+            isMemberPresenceLive(member) &&
             member &&
             typeof member === "object"
         )
@@ -9913,6 +9998,7 @@
         .filter(
           ([uid, member]) =>
             uid !== state.uid &&
+            isMemberPresenceLive(member) &&
             member &&
             typeof member === "object"
         )
@@ -10324,7 +10410,9 @@
               .once("value");
 
           ownerCanBeClaimed =
-            !ownerMemberSnapshot.exists();
+            !isMemberPresenceLive(
+              ownerMemberSnapshot.val()
+            );
         }
 
         if (
@@ -10438,13 +10526,15 @@
       state.memberHeartbeatTimer
     );
 
-    /*
-     * 成員在線狀態不再靠 60 秒 partial update 維持。
-     * 成員加入時建立完整節點，斷線時由 onDisconnect().remove()
-     * 移除節點；這樣可以避免踢人/斷線競速造成 permission_denied。
-     */
     state.memberHeartbeatTimer =
-      null;
+      setInterval(
+        () => {
+          void heartbeatMember();
+        },
+        MEMBER_HEARTBEAT_INTERVAL_MS
+      );
+
+    void heartbeatMember();
 
     attachPlaybackSyncListener();
 
@@ -11498,6 +11588,11 @@
       state.playbackServerClockHandler = null;
     }
 
+    clearInterval(
+      state.memberHeartbeatTimer
+    );
+    state.memberHeartbeatTimer = null;
+
     try {
       state.membersRef?.off();
       state.kickedRef?.off();
@@ -11636,6 +11731,21 @@
       ?.addEventListener(
         "click",
         async () => {
+          const button = $("createRoomBtn");
+
+          if (button?.disabled) {
+            return;
+          }
+
+          const originalText =
+            button?.textContent ||
+            "建立房間";
+
+          if (button) {
+            button.disabled = true;
+            button.textContent = "連線中…";
+          }
+
           try {
             setError(
               $("homeError"),
@@ -11653,6 +11763,11 @@
               error.message ||
                 "建立房間失敗"
             );
+          } finally {
+            if (button) {
+              button.disabled = false;
+              button.textContent = originalText;
+            }
           }
         }
       );
@@ -11666,6 +11781,21 @@
       ?.addEventListener(
         "click",
         async () => {
+          const button = $("joinRoomBtn");
+
+          if (button?.disabled) {
+            return;
+          }
+
+          const originalText =
+            button?.textContent ||
+            "加入朋友的房間";
+
+          if (button) {
+            button.disabled = true;
+            button.textContent = "連線中…";
+          }
+
           try {
             await joinRoom(
               $("joinCodeInput")
@@ -11680,6 +11810,11 @@
               error.message ||
               "加入房間失敗"
             );
+          } finally {
+            if (button) {
+              button.disabled = false;
+              button.textContent = originalText;
+            }
           }
         }
       );
@@ -12778,37 +12913,7 @@
             return;
           }
 
-          const memberRef =
-            state.membersRef.child(
-              state.uid
-            );
-
-          await memberRef
-            .onDisconnect()
-            .remove();
-
-          const memberSnapshot =
-            await memberRef.once(
-              "value"
-            );
-
-          if (
-            memberSnapshot.exists()
-          ) {
-            await memberRef.update({
-              online:
-                true,
-              lastSeen:
-                firebase.database
-                  .ServerValue
-                  .TIMESTAMP
-            });
-
-            state.wasMemberInRoom =
-              true;
-          } else {
-            await markMemberOnline();
-          }
+          await heartbeatMember();
 
           renderMembers(
             await getMembersOnce()
@@ -13039,32 +13144,51 @@
    * =========================================================
    */
 
-  async function waitForInitialAuthState() {
+  async function waitForInitialAuthState(timeoutMs = 5000) {
     if (!auth) {
       return null;
     }
 
     return new Promise((resolve) => {
       let finished = false;
+      let unsubscribe = null;
+      let timer = null;
 
-      const unsubscribe =
+      const finish = (user) => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        try {
+          unsubscribe?.();
+        } catch (_) {}
+
+        clearTimeout(timer);
+
+        resolve(
+          user ||
+          null
+        );
+      };
+
+      unsubscribe =
         auth.onAuthStateChanged(
           (user) => {
-            if (finished) {
-              return;
-            }
-
-            finished = true;
-
-            try {
-              unsubscribe();
-            } catch (_) {}
-
-            resolve(
-              user ||
-              null
-            );
+            finish(user);
           }
+        );
+
+      timer =
+        setTimeout(
+          () => {
+            finish(null);
+          },
+          Math.max(
+            1000,
+            Number(timeoutMs) || 5000
+          )
         );
     });
   }
@@ -13116,10 +13240,16 @@
 
       return user;
     } catch (error) {
-      throw new Error(
+      const wrapped = new Error(
         error?.message ||
         "Firebase 匿名登入失敗"
       );
+
+      if (error?.code) {
+        wrapped.code = error.code;
+      }
+
+      throw wrapped;
     }
   }
 
