@@ -280,6 +280,9 @@
     playbackYoutubeRatesCheckedAt: 0,
     playbackAwaitingActualStart: false,
     playbackActualStartTimer: null,
+    playbackInitialHardSyncUntil: 0,
+    playbackInitialHardSyncEventId: "",
+    playbackInitialHardSyncAt: 0,
 
     controlRequestRef: null,
     controlRequestListenerAttached: false,
@@ -6680,9 +6683,8 @@
                 eventData
               );
 
-              await applyRemotePlaybackEvent(
-                eventData,
-                true
+              await hardSyncPlaybackToTimeline(
+                eventData
               );
             } else if (
               state.isOwner &&
@@ -9631,6 +9633,134 @@
     } catch (_) {}
   }
 
+  async function hardSyncPlaybackToTimeline(event) {
+    if (
+      !event ||
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId
+    ) {
+      return false;
+    }
+
+    if (
+      String(event.videoId || "") !==
+        String(state.currentVideoId || "") ||
+      String(event.platform || "") !==
+        String(state.playerType || "")
+    ) {
+      return false;
+    }
+
+    const eventId = String(event.eventId || "");
+    if (!eventId) return false;
+
+    const now = Date.now();
+    if (
+      state.playbackInitialHardSyncEventId === eventId &&
+      now - Number(state.playbackInitialHardSyncAt || 0) < 1200
+    ) {
+      return true;
+    }
+
+    rememberRoomTimeline(event);
+    state.playbackLastRemoteEventId = eventId;
+    state.playbackLastRemoteUpdatedAt = Number(event.updatedAt || 0);
+    state.playbackApplyingRemoteEventId = eventId;
+    state.playbackApplyingRemote = true;
+    state.playbackPendingRecovery = true;
+
+    state.playbackInitialHardSyncUntil = now + 1400;
+    state.playbackInitialHardSyncEventId = eventId;
+    state.playbackInitialHardSyncAt = now;
+
+    state.playbackIgnoreStateChanges = 6;
+    state.playbackIgnoreStateUntil = now + 900;
+    state.playbackLocalSeekSuppressUntil = now + 1400;
+
+    cancelPendingPausePublish();
+    cancelScheduledLocalPause();
+    cancelScheduledRemotePause();
+    cancelScheduledRemotePlay();
+    cancelScheduledRemoteSeek();
+
+    clearTimeout(state.playbackLocalSeekTimer);
+    state.playbackLocalSeekTimer = null;
+    state.playbackLocalScheduledEventId = "";
+    state.playbackLocalControlUntil = 0;
+
+    try {
+      const target = getTimelinePosition(
+        event,
+        playbackClockNow()
+      );
+
+      await setPlaybackRateSafe(1);
+
+      const current = await asyncCurrentPosition();
+
+      if (
+        !Number.isFinite(current) ||
+        Math.abs(current - target) >= 0.02
+      ) {
+        await applyPlayerPosition(target);
+      }
+
+      await setPlaybackRateSafe(1);
+
+      if (event.playing === true) {
+        await playPlayer();
+      } else {
+        await pausePlayer();
+      }
+
+      await setPlaybackRateSafe(1);
+
+      const settledPosition =
+        await asyncCurrentPosition().catch(() => target);
+
+      if (
+        Math.abs(
+          settledPosition -
+            getTimelinePosition(event, playbackClockNow())
+        ) >= 0.25
+      ) {
+        await applyPlayerPosition(
+          getTimelinePosition(event, playbackClockNow())
+        );
+      }
+
+      if (event.playing === true) {
+        await playPlayer();
+      } else {
+        await pausePlayer();
+      }
+
+      state.playbackLastPosition =
+        await asyncCurrentPosition().catch(() => target);
+      state.playbackLastPlaying =
+        await asyncIsPlaying().catch(
+          () => event.playing === true
+        );
+      state.playbackLastObservedPosition =
+        state.playbackLastPosition;
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent = "已鎖定同步";
+      }
+
+      return true;
+    } catch (error) {
+      console.warn("初始硬同步失敗:", error);
+      return false;
+    } finally {
+      state.playbackApplyingRemote = false;
+      state.playbackPendingRecovery = false;
+      state.playbackApplyingRemoteEventId = null;
+      state.playbackReadyAt = Date.now() + 450;
+    }
+  }
+
   async function applyRemotePlaybackEvent(event, force = false) {
     if (!event || !state.playerReady || !state.player || !state.currentVideoId) return;
     if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
@@ -9640,6 +9770,10 @@
 
     const eventId = String(event.eventId || "");
     if (!eventId) return;
+
+    if (force) {
+      return hardSyncPlaybackToTimeline(event);
+    }
 
     const incoming = Number(event.updatedAt || 0);
     const previous = Number(state.playbackLastRemoteUpdatedAt || 0);
@@ -9707,7 +9841,7 @@
         youtubeHasFinePlaybackCorrection();
 
       const youtubeHardSeekThreshold =
-        0.55;
+        0.9;
 
       if (event.action === "pause") {
         await pausePlayer();
@@ -9833,6 +9967,9 @@
     state.playbackAwaitingActualStart = false;
     clearTimeout(state.playbackActualStartTimer);
     state.playbackActualStartTimer = null;
+    state.playbackInitialHardSyncUntil = 0;
+    state.playbackInitialHardSyncEventId = "";
+    state.playbackInitialHardSyncAt = 0;
   }
 
   async function reconcileRoomTimeline() {
@@ -9871,6 +10008,15 @@
       Date.now() <
       Number(
         state.playbackTransientStateUntil || 0
+      )
+    ) {
+      return;
+    }
+
+    if (
+      Date.now() <
+      Number(
+        state.playbackInitialHardSyncUntil || 0
       )
     ) {
       return;
@@ -10038,7 +10184,7 @@
     state.playbackReadyAt = Date.now() + 250;
     state.playbackSeekTimer = setInterval(() => {
       void reconcileRoomTimeline();
-    }, 100);
+    }, 250);
   }
 
   function recoverPlaybackAfterPageResume() {
