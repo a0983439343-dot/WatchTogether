@@ -11031,22 +11031,12 @@
       );
     }
 
-    const memberSnapshot =
-      await state.membersRef
-        .child(state.uid)
-        .once("value");
-
     if (
-      !memberSnapshot.exists()
+      !(await ensureRoomMembership())
     ) {
-      const restored =
-        await markMemberOnline();
-
-      if (!restored) {
-        throw new Error(
-          "目前不在這個房間"
-        );
-      }
+      throw new Error(
+        "目前不在這個房間"
+      );
     }
 
     try {
@@ -11073,7 +11063,7 @@
         "PERMISSION_DENIED"
       ) {
         const restored =
-          await markMemberOnline();
+          await ensureRoomMembership();
 
         if (restored) {
           await state.chatRef.push({
