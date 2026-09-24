@@ -248,7 +248,13 @@ function rememberVideo(video) {
   list.unshift(item);
   writeJson(KEYS.history, list.slice(0,30));
   renderHomeActivity();
-  renderFavorites();
+
+  if (
+    typeof wt.renderFavorites ===
+    "function"
+  ) {
+    wt.renderFavorites();
+  }
 }
 
 function toggleFavorite(video) {
@@ -2092,8 +2098,15 @@ function setupAuthListeners() {
         }
       });
     } else {
-      wt.stopDmListener && wt.stopDmListener();
-      stopRequestListener();
+      wt.stopDmListener &&
+        wt.stopDmListener();
+
+      if (
+        typeof wt.stopRequestListener ===
+        "function"
+      ) {
+        wt.stopRequestListener();
+      }
       try { wt.state.friendRef && wt.state.friendRef.off(); } catch (_) {}
       wt.state.friendRef = null;
       wt.state.profile = null;
