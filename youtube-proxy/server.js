@@ -9,7 +9,7 @@ const cache = new Map();
 const streamInflight = new Map();
 const searchInflight = new Map();
 const CACHE_TTL_MS = 600_000;
-const SEARCH_CACHE_TTL_MS = 120_000;
+const SEARCH_CACHE_TTL_MS = 0;
 const MAX_CACHE_ENTRIES = 500;
 const CACHE_CLEANUP_INTERVAL_MS = 60_000;
 const MAX_SEARCH_RESULTS = 25;
@@ -248,7 +248,10 @@ function runYoutubeSearch(query, maxResults, page) {
     page
   );
 
-  const cached = cache.get("search:" + cacheKey);
+  const cached =
+    SEARCH_CACHE_TTL_MS > 0
+      ? cache.get("search:" + cacheKey)
+      : null;
 
   if (
     cached &&
@@ -477,10 +480,12 @@ function runYoutubeSearch(query, maxResults, page) {
             : ""
       };
 
-      cache.set("search:" + cacheKey, {
-        data: result,
-        expiresAt: Date.now() + SEARCH_CACHE_TTL_MS
-      });
+      if (SEARCH_CACHE_TTL_MS > 0) {
+        cache.set("search:" + cacheKey, {
+          data: result,
+          expiresAt: Date.now() + SEARCH_CACHE_TTL_MS
+        });
+      }
 
       resolve(result);
     });
@@ -685,11 +690,64 @@ async function handleStream(req, res, videoId, requestUrl) {
         forceRefresh
       );
 
-    upstream =
-      await fetchUpstreamStream(
-        url,
-        req
+    try {
+      upstream =
+        await fetchUpstreamStream(
+          url,
+          req
+        );
+    } catch (firstError) {
+      if (forceRefresh) {
+        throw firstError;
+      }
+
+      console.warn(
+        "[stream-fetch-retry]",
+        videoId,
+        firstError?.message || firstError
       );
+
+      cache.delete(videoId);
+      forceRefresh = true;
+
+      url =
+        await getStreamUrl(
+          videoId,
+          true
+        );
+
+      upstream =
+        await fetchUpstreamStream(
+          url,
+          req
+        );
+    }
+
+    if (
+      !forceRefresh &&
+      upstream &&
+      upstream.status >= 500 &&
+      upstream.status <= 599
+    ) {
+      try {
+        await upstream.body?.cancel();
+      } catch (_) {}
+
+      cache.delete(videoId);
+      forceRefresh = true;
+
+      url =
+        await getStreamUrl(
+          videoId,
+          true
+        );
+
+      upstream =
+        await fetchUpstreamStream(
+          url,
+          req
+        );
+    }
 
     const initialContentType =
       String(
