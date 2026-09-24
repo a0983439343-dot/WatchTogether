@@ -9616,17 +9616,6 @@
         )?.val?.() || null;
       }
 
-      const currentMemberSnapshot =
-        await memberRef
-          .once("value")
-          .catch(
-            () => null
-          );
-
-      const currentMember =
-        currentMemberSnapshot?.val?.() ||
-        {};
-
       const memberData = {
         name:
           state.memberName,
