@@ -310,75 +310,130 @@
     currentLocale = resolveInitialLocale();
     document.documentElement.lang = currentLocale;
     document.documentElement.dir = currentLocale === "ar" ? "rtl" : "ltr";
-    window.addEventListener("DOMContentLoaded", () => {
-      translateTree(document.body);
-      const settingsSelect = document.getElementById("wtLanguageSelect");
-      if (settingsSelect) buildLanguageOptions(settingsSelect);
-    });
-    const observer = new MutationObserver(mutations => {
+
+    let mutationTimer = null;
+    const pendingTextNodes = new Set();
+    const pendingElements = new Set();
+
+    const flushMutations = () => {
+      mutationTimer = null;
       if (applying) return;
 
       applying = true;
       try {
-        for (const mutation of mutations) {
-          if (mutation.type === "characterData") {
-            translateNode(mutation.target);
-            continue;
-          }
+        const textNodes = Array.from(pendingTextNodes);
+        const elements = Array.from(pendingElements);
+        pendingTextNodes.clear();
+        pendingElements.clear();
 
-          if (mutation.type === "attributes" && mutation.target instanceof Element) {
-            const attr = mutation.attributeName;
-            if (!["placeholder","title","aria-label","aria-placeholder","alt"].includes(attr)) {
-              continue;
-            }
+        for (const node of textNodes) {
+          translateNode(node);
+        }
 
-            let attrs = sourceByAttribute.get(mutation.target);
-            if (!attrs) {
-              attrs = {};
-              sourceByAttribute.set(mutation.target, attrs);
-            }
-
-            const current = mutation.target.getAttribute(attr) || "";
-            const previousSource = attrs[attr];
-
-            if (
-              previousSource === undefined ||
-              current !== translate(previousSource)
-            ) {
-              attrs[attr] = current;
-            }
-
-            const next = translate(attrs[attr]);
-            if (mutation.target.getAttribute(attr) !== next) {
-              mutation.target.setAttribute(attr, next);
-            }
-            continue;
-          }
-
-          if (mutation.type === "childList") {
-            mutation.addedNodes.forEach(node => {
-              if (node.nodeType === Node.TEXT_NODE) {
-                translateNode(node);
-              } else if (node.nodeType === Node.ELEMENT_NODE) {
-                translateTree(node);
-              }
-            });
-          }
+        for (const element of elements) {
+          translateElementAttributes(element);
         }
       } finally {
         applying = false;
       }
+    };
+
+    const queueFlush = () => {
+      if (mutationTimer !== null) return;
+      mutationTimer = setTimeout(flushMutations, 120);
+    };
+
+    window.addEventListener("DOMContentLoaded", () => {
+      translateTree(document.body);
+
+      const settingsSelect =
+        document.getElementById("wtLanguageSelect");
+
+      if (settingsSelect) {
+        buildLanguageOptions(settingsSelect);
+      }
     });
-    window.addEventListener("watchtogether:settings-ready", () => {
-      const select = document.getElementById("wtLanguageSelect");
-      if (select) buildLanguageOptions(select);
+
+    const observer = new MutationObserver(mutations => {
+      if (applying) return;
+
+      for (const mutation of mutations) {
+        if (mutation.type === "characterData") {
+          pendingTextNodes.add(mutation.target);
+          continue;
+        }
+
+        if (mutation.type === "attributes") {
+          if (
+            mutation.target instanceof Element &&
+            ["placeholder","title","aria-label","aria-placeholder","alt"].includes(
+              mutation.attributeName
+            )
+          ) {
+            pendingElements.add(mutation.target);
+          }
+          continue;
+        }
+
+        if (mutation.type === "childList") {
+          mutation.addedNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              pendingTextNodes.add(node);
+              return;
+            }
+
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              pendingElements.add(node);
+              node.querySelectorAll?.("*").forEach(element => {
+                pendingElements.add(element);
+              });
+
+              const walker = document.createTreeWalker(
+                node,
+                NodeFilter.SHOW_TEXT
+              );
+
+              let textNode;
+              while ((textNode = walker.nextNode())) {
+                pendingTextNodes.add(textNode);
+              }
+            }
+          });
+        }
+      }
+
+      if (
+        pendingTextNodes.size ||
+        pendingElements.size
+      ) {
+        queueFlush();
+      }
     });
+
+    window.addEventListener(
+      "watchtogether:settings-ready",
+      () => {
+        const select =
+          document.getElementById("wtLanguageSelect");
+
+        if (select) {
+          buildLanguageOptions(select);
+        }
+      }
+    );
+
     observer.observe(document.documentElement, {
-      subtree:true,
-      childList:true,
-      characterData:true,
-      attributes:true,
-      attributeFilter:["placeholder","title","aria-label","aria-placeholder","alt"]
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: [
+        "placeholder",
+        "title",
+        "aria-label",
+        "aria-placeholder",
+        "alt"
+      ]
     });
   }
 
