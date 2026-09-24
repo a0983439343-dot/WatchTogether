@@ -1,10 +1,11 @@
-const CACHE_NAME = "wt-shell-20260924-v21";
+const CACHE_NAME = "wt-shell-20260924-v22";
 const ASSETS = [
   "./",
   "./styles.css",
   "./app.js",
   "./enhancements.css",
   "./enhancements.js",
+  "./i18n.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icon.svg"
