@@ -245,6 +245,7 @@
     playbackServerClockHandler: null,
     playbackActionSeq: 0,
     playbackPendingRecovery: false,
+    playbackReconcileInFlight: false,
     playbackPausePublishTimer: null,
     playbackLocalIntentAt: 0,
     playbackLocalActionTimer: null,
@@ -4635,7 +4636,6 @@
 
               if (
                 state.playerType !== "youtube" ||
-                state.player !== player ||
                 state.youtubeNativeVideoElement !== videoElement
               ) {
                 return;
@@ -9113,6 +9113,11 @@
   async function reconcileRoomTimeline() {
     if (!state.playerReady || !state.player || !state.currentVideoId) return;
     if (state.playbackApplyingRemote) return;
+    if (state.playbackReconcileInFlight) return;
+
+    state.playbackReconcileInFlight = true;
+
+    try {
 
     const timeline = state.playbackTimeline;
     if (!roomTimelineMatchesPlayer()) return;
@@ -9297,6 +9302,9 @@
       } else if (timeline.playing) {
         $("syncStatus").textContent = `同步中 ${drift >= 0 ? "+" : ""}${drift.toFixed(2)}s`;
       }
+    }
+     } finally {
+      state.playbackReconcileInFlight = false;
     }
   }
 
