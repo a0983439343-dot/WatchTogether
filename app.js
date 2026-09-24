@@ -247,6 +247,10 @@
     playbackRecoveryTimer: null,
     playbackServerTimeOffset: 0,
     playbackServerClockHandler: null,
+    playbackClockBaseServerMs: 0,
+    playbackClockBaseMonoMs: 0,
+    playbackClockOffsetSamples: [],
+    playbackClockLastCalibratedAt: 0,
     playbackActionSeq: 0,
     playbackPendingRecovery: false,
     playbackReconcileInFlight: false,
@@ -283,6 +287,8 @@
     playbackInitialHardSyncUntil: 0,
     playbackInitialHardSyncEventId: "",
     playbackInitialHardSyncAt: 0,
+    playbackSyncPhase: "idle",
+    playbackFineRateSupported: null,
 
     controlRequestRef: null,
     controlRequestListenerAttached: false,
@@ -6094,6 +6100,16 @@
         }
       },
 
+      getPlaybackRate() {
+        try {
+          return Number(
+            iframePlayer.getPlaybackRate()
+          ) || 1;
+        } catch (_) {
+          return 1;
+        }
+      },
+
       setPlaybackRate(rate) {
         const value = Number(rate);
 
@@ -8372,9 +8388,9 @@
       state.playbackLastObservedPosition = null;
       state.playbackPendingRecovery = false;
       state.playbackLocalIntentAt = 0;
+      state.playbackSyncPhase = "initializing";
+      state.playbackFineRateSupported = null;
       await buildYoutubePlayer(videoId, state.isOwner);
-      await applyLatestRoomPlaybackState();
-      startPlaybackSeekDetector();
       return;
     }
 
@@ -8420,15 +8436,70 @@
    */
 
   function playbackClockNow() {
-    if (typeof serverNow === "function") {
-      const value = Number(serverNow());
-      if (Number.isFinite(value) && value > 0) return value;
+    const mono = Number(performance?.now?.() || 0);
+    const baseServer = Number(state.playbackClockBaseServerMs || 0);
+    const baseMono = Number(state.playbackClockBaseMonoMs || 0);
+
+    if (
+      mono > 0 &&
+      baseServer > 0 &&
+      baseMono >= 0
+    ) {
+      return baseServer + Math.max(0, mono - baseMono);
     }
+
     return Date.now() + Number(state.playbackServerTimeOffset || 0);
   }
 
   function serverNow() {
-    return Date.now() + Number(state.playbackServerTimeOffset || 0);
+    return playbackClockNow();
+  }
+
+  function calibratePlaybackClock(offset) {
+    const numeric = Number(offset);
+    if (!Number.isFinite(numeric)) return;
+
+    const nowServer = Date.now() + numeric;
+    const nowMono = Number(performance?.now?.() || 0);
+
+    state.playbackServerTimeOffset = numeric;
+
+    if (
+      !state.playbackClockBaseServerMs ||
+      !state.playbackClockBaseMonoMs
+    ) {
+      state.playbackClockBaseServerMs = nowServer;
+      state.playbackClockBaseMonoMs = nowMono;
+      state.playbackClockLastCalibratedAt = Date.now();
+      state.playbackClockOffsetSamples = [numeric];
+      return;
+    }
+
+    const samples = Array.isArray(state.playbackClockOffsetSamples)
+      ? state.playbackClockOffsetSamples.slice()
+      : [];
+
+    samples.push(numeric);
+    while (samples.length > 9) samples.shift();
+    state.playbackClockOffsetSamples = samples;
+
+    const sorted = samples.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] ?? numeric;
+
+    const projected = playbackClockNow();
+    const target = Date.now() + median;
+    const delta = target - projected;
+
+    if (Math.abs(delta) > 750) {
+      state.playbackClockBaseServerMs = target;
+      state.playbackClockBaseMonoMs = nowMono;
+    } else {
+      state.playbackClockBaseServerMs += delta * 0.18;
+      state.playbackClockBaseMonoMs = nowMono;
+    }
+
+    state.playbackServerTimeOffset = median;
+    state.playbackClockLastCalibratedAt = Date.now();
   }
 
   function attachServerClockSync() {
@@ -8438,10 +8509,12 @@
       try { ref.off("value", state.playbackServerClockHandler); } catch (_) {}
     }
     state.playbackServerClockHandler = (snapshot) => {
-      const offset = Number(snapshot?.val());
-      state.playbackServerTimeOffset = Number.isFinite(offset) ? offset : 0;
+      calibratePlaybackClock(snapshot?.val());
     };
     ref.on("value", state.playbackServerClockHandler);
+    ref.once("value").then((snapshot) => {
+      calibratePlaybackClock(snapshot?.val());
+    }).catch(() => {});
   }
 
   function playbackSyncRef() {
@@ -9583,12 +9656,51 @@
     }
   }
 
+  async function detectYoutubeFineRateSupport() {
+    if (
+      state.playerType !== "youtube" ||
+      !state.player ||
+      typeof state.player.getPlaybackRate !== "function" ||
+      typeof state.player.setPlaybackRate !== "function"
+    ) {
+      state.playbackFineRateSupported = false;
+      return false;
+    }
+
+    if (state.playbackFineRateSupported !== null) {
+      return state.playbackFineRateSupported === true;
+    }
+
+    try {
+      const original =
+        Number(state.player.getPlaybackRate()) || 1;
+
+      const probe =
+        original > 1.01
+          ? 0.95
+          : 1.05;
+
+      state.player.setPlaybackRate(probe);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const actual =
+        Number(state.player.getPlaybackRate()) || 1;
+
+      state.player.setPlaybackRate(original);
+
+      state.playbackFineRateSupported =
+        Math.abs(actual - probe) <= 0.025;
+
+      return state.playbackFineRateSupported;
+    } catch (_) {
+      state.playbackFineRateSupported = false;
+      return false;
+    }
+  }
+
   function youtubeHasFinePlaybackCorrection() {
-    const rates = getYoutubeAvailablePlaybackRates();
-    return rates.some(rate =>
-      Math.abs(rate - 1) > 0.001 &&
-      Math.abs(rate - 1) <= 0.15
-    );
+    return state.playbackFineRateSupported === true;
   }
 
   function chooseSupportedPlaybackRate(rate, rates) {
@@ -9747,6 +9859,7 @@
         );
       state.playbackLastObservedPosition =
         state.playbackLastPosition;
+      state.playbackSyncPhase = "locked";
 
       if ($("syncStatus")) {
         $("syncStatus").textContent = "已鎖定同步";
@@ -9841,10 +9954,10 @@
 
       const useYoutubeFineRate =
         state.playerType === "youtube" &&
-        youtubeHasFinePlaybackCorrection();
+        state.playbackFineRateSupported === true;
 
       const youtubeHardSeekThreshold =
-        0.9;
+        1.0;
 
       if (event.action === "pause") {
         await pausePlayer();
@@ -10014,10 +10127,21 @@
     }
 
     if (
+      state.playbackSyncPhase === "initializing" ||
+      state.playbackSyncPhase === "recovering" ||
       Date.now() <
       Number(
         state.playbackInitialHardSyncUntil || 0
       )
+    ) {
+      return;
+    }
+
+    if (
+      Date.now() <
+        Number(state.playbackUserActionUntil || 0) ||
+      Date.now() <
+        Number(state.playbackLocalControlUntil || 0)
     ) {
       return;
     }
@@ -10108,13 +10232,15 @@
     }
 
     if (timeline.playing) {
-      if (!playing) {
+      if (!playing && !state.playbackIsBuffering) {
         await enforceRoomPlayingState(true);
       }
 
       if (state.playerType === "youtube") {
-        const fineRate = youtubeHasFinePlaybackCorrection();
-        if (absDrift >= 0.35 && !fineRate) {
+        const fineRate = state.playbackFineRateSupported === true;
+
+        if (absDrift >= 1.0) {
+          state.playbackSyncPhase = "hard-correcting";
           state.playbackApplyingRemote = true;
           try {
             await applyPlayerPosition(expected);
@@ -10124,10 +10250,21 @@
           } finally {
             state.playbackApplyingRemote = false;
           }
-        } else if (fineRate) {
-          const rate = correctionPlaybackRate(drift, 1);
+          state.playbackSyncPhase = "locked";
+        } else if (fineRate && absDrift >= 0.1) {
+          state.playbackSyncPhase = "correcting";
+          const rate =
+            1 +
+            Math.max(
+              -0.05,
+              Math.min(
+                0.05,
+                drift * 0.05
+              )
+            );
           await setPlaybackRateSafe(rate);
         } else {
+          state.playbackSyncPhase = "locked";
           await setPlaybackRateSafe(1);
         }
       } else if (absDrift >= 1.0) {
@@ -10145,6 +10282,7 @@
         await setPlaybackRateSafe(rate);
       }
     } else {
+      state.playbackSyncPhase = "locked";
       if (playing) {
         await enforceRoomPlayingState(false);
       }
@@ -10181,10 +10319,10 @@
 
   function startPlaybackSeekDetector() {
     stopPlaybackSeekDetector();
-    state.playbackReadyAt = Date.now() + 250;
+    state.playbackReadyAt = Date.now() + 400;
     state.playbackSeekTimer = setInterval(() => {
       void reconcileRoomTimeline();
-    }, 250);
+    }, 500);
   }
 
   function recoverPlaybackAfterPageResume() {
@@ -10198,8 +10336,9 @@
           state.playbackRecoveryTimer =
             null;
 
+          state.playbackSyncPhase = "recovering";
           state.playbackResumeRecoveryUntil =
-            Date.now() + 1800;
+            Date.now() + 2200;
 
           const ref =
             playbackSyncRef();
@@ -10226,11 +10365,12 @@
 
               if (
                 event &&
-                event.eventId
+                event.eventId &&
+                String(event.videoId || "") === String(state.currentVideoId || "") &&
+                String(event.platform || "") === String(state.playerType || "")
               ) {
-                rememberRoomTimeline(
-                  event
-                );
+                rememberRoomTimeline(event);
+                await hardSyncPlaybackToTimeline(event);
               }
             }
           } catch (error) {
@@ -10243,6 +10383,7 @@
           state.playbackLocalSeekSuppressUntil =
             Date.now() + 1800;
 
+          state.playbackSyncPhase = "locked";
           startPlaybackSeekDetector();
 
           setTimeout(() => {
@@ -10253,7 +10394,7 @@
             ) {
               void reconcileRoomTimeline();
             }
-          }, 80);
+          }, 120);
         },
         120
       );
