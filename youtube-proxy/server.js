@@ -160,7 +160,9 @@ function getStreamUrl(videoId, forceRefresh = false) {
       "--socket-timeout",
       "20",
       "-f",
-      "best[ext=mp4]/best",
+      "b[ext=mp4][vcodec^=avc1][acodec^=mp4a]/18/b[ext=mp4][vcodec^=avc1][acodec^=mp4a]",
+      "--format-sort",
+      "res,br",
       "--add-headers",
       "User-Agent:" + YT_STREAM_USER_AGENT,
       "--add-headers",
@@ -689,6 +691,43 @@ async function handleStream(req, res, videoId, requestUrl) {
         req
       );
 
+    const initialContentType =
+      String(
+        upstream.headers.get("content-type") || ""
+      ).toLowerCase();
+
+    const initialLooksPlayable =
+      initialContentType.startsWith("video/") ||
+      initialContentType.includes("application/octet-stream") ||
+      initialContentType.includes("application/mp4");
+
+    if (
+      upstream.ok &&
+      !initialLooksPlayable
+    ) {
+      try {
+        await upstream.body?.cancel();
+      } catch (_) {}
+
+      cache.delete(videoId);
+
+      if (!forceRefresh) {
+        forceRefresh = true;
+
+        url =
+          await getStreamUrl(
+            videoId,
+            true
+          );
+
+        upstream =
+          await fetchUpstreamStream(
+            url,
+            req
+          );
+      }
+    }
+
     if (
       (upstream.status === 403 ||
         upstream.status === 410) &&
@@ -712,6 +751,35 @@ async function handleStream(req, res, videoId, requestUrl) {
           url,
           req
         );
+    }
+
+    const finalContentType =
+      String(
+        upstream.headers.get("content-type") || ""
+      ).toLowerCase();
+
+    const finalLooksPlayable =
+      finalContentType.startsWith("video/") ||
+      finalContentType.includes("application/octet-stream") ||
+      finalContentType.includes("application/mp4");
+
+    if (
+      upstream.ok &&
+      !finalLooksPlayable
+    ) {
+      let details = "";
+      try {
+        details = await upstream
+          .text();
+      } catch (_) {}
+
+      throw new Error(
+        "upstream_not_playable:" +
+        (finalContentType || "unknown") +
+        (details
+          ? ":" + details.slice(0, 180)
+          : "")
+      );
     }
 
     if (
