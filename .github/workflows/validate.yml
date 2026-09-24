@@ -65,7 +65,7 @@ jobs:
           if (!rules.includes('"controlRequests"')) throw new Error('controlRequests rules missing.');
           if (!rules.includes("root.child('members').child($roomId).child(auth.uid).exists()")) throw new Error('Owner takeover membership guard missing.');
           if (/numChildren\s*\(/.test(rules)) throw new Error('Unsupported numChildren() remains in Firebase rules.');
-          if (/YT\.Player|youtube\.com\/iframe_api/.test(app + enh)) throw new Error('Legacy YouTube IFrame API remains.');
+          if (!app.includes('loadYoutubeIframeApi') || !app.includes('createYoutubeIframePlayer')) throw new Error('YouTube IFrame playback adapter is missing.');
           if (/randomCode\(12\)|length\s*={2,3}\s*12|randomCode\(8\)|length\s*={2,3}\s*8/.test(app + enh)) throw new Error('Legacy room/friend code length remains.');
           const appVersion = index.match(/app\.js\?v=([^"'&]+)/)?.[1];
           const enhVersion = index.match(/enhancements\.js\?v=([^"'&]+)/)?.[1];
