@@ -1961,8 +1961,7 @@
         .filter(
           ([memberUid, member]) =>
             Boolean(memberUid) &&
-            member &&
-            typeof member === "object"
+            isMemberPresenceLive(member)
         )
         .sort(
           ([uidA, memberA], [uidB, memberB]) =>
@@ -7281,6 +7280,15 @@
 
     try {
       await enterRoom();
+
+      if (
+        String(state.roomId || "") !== roomId ||
+        state.wasMemberInRoom !== true
+      ) {
+        throw new Error(
+          "房間建立後進入房間失敗"
+        );
+      }
     } catch (error) {
       try {
         await db
@@ -7343,6 +7351,17 @@
         "房間建立後進入房間失敗"
       );
     }
+
+    try {
+      window.WT_ENHANCEMENTS?.rememberRoom?.(
+        roomId,
+        state.room?.name ||
+          roomName ||
+          "一起看"
+      );
+    } catch (_) {}
+
+    saveRoomId(roomId);
 
     if (
       selectedVideo &&
@@ -7663,6 +7682,25 @@
     );
 
     await enterRoom();
+
+    if (
+      String(state.roomId || "") !== roomId ||
+      state.wasMemberInRoom !== true
+    ) {
+      throw new Error(
+        "加入房間失敗，使用者未成功成為房間成員"
+      );
+    }
+
+    try {
+      window.WT_ENHANCEMENTS?.rememberRoom?.(
+        roomId,
+        state.room?.name ||
+          metaData?.name ||
+          "一起看"
+      );
+    } catch (_) {}
+
     saveRoomId(roomId);
   }
 
@@ -10223,6 +10261,9 @@
         .trim() ||
       "一起看";
 
+    const hadSuccessfulMembership =
+      state.wasMemberInRoom === true;
+
     state.kickedLocally =
       true;
 
@@ -10308,6 +10349,7 @@
 
     if (
       leftRoomId &&
+      hadSuccessfulMembership &&
       window.WT_ENHANCEMENTS?.rememberRoom
     ) {
       try {
@@ -10341,6 +10383,64 @@
    * ENTER ROOM
    * =========================================================
    */
+
+  async function syncRoomMetaOwner(ownerUid = state.uid) {
+    const normalizedOwnerUid =
+      String(ownerUid || "").trim();
+
+    if (
+      !db ||
+      !state.roomId ||
+      !state.roomRef ||
+      !normalizedOwnerUid
+    ) {
+      return false;
+    }
+
+    const roomIdAtSync =
+      String(state.roomId);
+
+    const roomRefAtSync =
+      state.roomRef;
+
+    try {
+      const ownerSnapshot =
+        await roomRefAtSync
+          .child("owner")
+          .once("value");
+
+      if (
+        String(ownerSnapshot.val() || "") !==
+        normalizedOwnerUid
+      ) {
+        return false;
+      }
+
+      if (
+        String(state.roomId || "") !==
+          roomIdAtSync ||
+        state.roomRef !==
+          roomRefAtSync
+      ) {
+        return false;
+      }
+
+      await db
+        .ref(
+          `roomMeta/${roomIdAtSync}/owner`
+        )
+        .set(normalizedOwnerUid);
+
+      return true;
+    } catch (error) {
+      console.warn(
+        "同步 roomMeta 房主失敗:",
+        error
+      );
+      return false;
+    }
+  }
+
 
   function attachRoomOwnerListener() {
     if (
@@ -10386,6 +10486,7 @@
 
             if (state.isOwner) {
               attachPlaybackControlRequestListener();
+              void syncRoomMetaOwner(ownerUid);
               void reconcileRoomTimeline();
             } else {
               detachPlaybackControlRequestListener();
