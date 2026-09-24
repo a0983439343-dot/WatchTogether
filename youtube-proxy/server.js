@@ -8,7 +8,7 @@ const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const cache = new Map();
 const streamInflight = new Map();
 const searchInflight = new Map();
-const CACHE_TTL_MS = 90_000;
+const CACHE_TTL_MS = 600_000;
 const SEARCH_CACHE_TTL_MS = 120_000;
 const MAX_CACHE_ENTRIES = 500;
 const CACHE_CLEANUP_INTERVAL_MS = 60_000;
@@ -104,6 +104,7 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
     "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Expose-Headers": "Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified",
     "Cache-Control": "no-store"
   });
   res.end(body);
@@ -630,8 +631,7 @@ function setStreamResponseHeaders(res, upstream) {
   res.writeHead(upstream.status, headers);
 }
 
-async function handleStream(req, res, videoId) {
-  const requestUrl = new URL(req.url, "http://localhost");
+async function handleStream(req, res, videoId, requestUrl) {
   let forceRefresh =
     requestUrl.searchParams.has("refresh");
 
@@ -846,10 +846,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const url = new URL(
-    req.url,
-    "http://" + (req.headers.host || "localhost")
-  );
+  let url;
+  try {
+    url = new URL(req.url, "http://localhost");
+  } catch (error) {
+    send(res, 400, JSON.stringify({error: "invalid_request_url"}));
+    return;
+  }
 
   if (url.pathname === "/health") {
     send(res, 200, JSON.stringify({
@@ -888,13 +891,17 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    handleStream(req, res, videoId);
+    handleStream(req, res, videoId, url);
     return;
   }
 
   send(res, 404, JSON.stringify({
     error: "not_found"
   }));
+});
+
+process.on("unhandledRejection", error => {
+  console.error("[unhandled-rejection]", error);
 });
 
 server.listen(PORT, HOST, () => {
