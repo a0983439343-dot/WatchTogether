@@ -707,12 +707,22 @@ function buildSettingsModal() {
           '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtRequestNotificationBtn" type="button">允許瀏覽器通知</button><button class="wt-action-btn" id="wtInstallPwaBtn" type="button">安裝 WatchTogether</button></div>' +
           '<div class="wt-settings-actions"><button class="wt-action-btn" id="wtOpenStatusBtn" type="button">📡 狀態中心</button><button class="wt-action-btn" id="wtOpenReportBtn" type="button">🐛 回報問題</button></div>' +
         '</section>' +
+        '<section class="wt-card-section">' +
+          '<div class="wt-section-title"><div><div class="wt-panel-title" style="font-size:15px;">語言</div><div class="wt-small">首次進入會依瀏覽器語言自動選擇，也可以在這裡手動切換。</div></div></div>' +
+          '<div class="wt-form-row"><label for="wtLanguageSelect">顯示語言</label><select id="wtLanguageSelect"></select></div>' +
+        '</section>' +
       '</div>' +
       '<section class="wt-card-section" style="margin-top:18px;"><div class="wt-section-title"><div><div class="wt-panel-title" style="font-size:15px;">主題</div><div class="wt-small">不是只換顏色：不同主題會改變字體、卡片形狀、背景、排版氣質與陰影。</div></div></div><div class="wt-theme-grid" id="wtThemeGrid"></div></section>' +
       '<section class="wt-card-section" style="margin-top:18px;"><div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">收藏影片</span><span class="wt-small">本機收藏</span></div><div id="wtFavoritesList" style="display:grid;gap:9px;margin-top:12px;"></div></section>' +
       '<section class="wt-card-section" style="margin-top:18px;"><div class="wt-settings-actions"><button class="wt-action-btn" id="wtOpenPrivacyBtn" type="button">隱私說明</button><button class="wt-action-btn" id="wtOpenTermsBtn" type="button">使用規範</button></div></section>' +
     '</div>';
   document.body.appendChild(modal);
+
+  if (window.WT_I18N) {
+    window.WT_I18N.buildLanguageOptions($("wtLanguageSelect"));
+  }
+
+  window.dispatchEvent(new CustomEvent("watchtogether:settings-ready"));
 
   $("wtSettingsClose").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); });
   $("wtSaveProfileBtn").addEventListener("click",saveProfile);
@@ -727,6 +737,15 @@ function buildSettingsModal() {
   });
   $("wtRequestNotificationBtn").addEventListener("click",requestNotifications);
   $("wtInstallPwaBtn").addEventListener("click",installPwa);
+
+  var languageSelect = $("wtLanguageSelect");
+  if (languageSelect && window.WT_I18N) {
+    window.WT_I18N.buildLanguageOptions(languageSelect);
+    languageSelect.value = window.WT_I18N.getMode();
+    languageSelect.addEventListener("change",function(){
+      window.WT_I18N.setLocale(languageSelect.value,true);
+    });
+  }
   $("wtOpenStatusBtn").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); wt.openStatus(); });
   $("wtOpenReportBtn").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); wt.openReport(); });
   $("wtOpenPrivacyBtn").addEventListener("click",function(){ wt.openInfo("privacy"); });
@@ -897,6 +916,12 @@ function openSettings() {
   renderProfile();
   renderThemes();
   renderFavorites();
+
+  if ($("wtLanguageSelect") && window.WT_I18N) {
+    window.WT_I18N.buildLanguageOptions($("wtLanguageSelect"));
+    $("wtLanguageSelect").value = window.WT_I18N.getMode();
+  }
+
   wt.openModal("wtSettingsModal");
 }
 
