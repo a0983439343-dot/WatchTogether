@@ -2204,15 +2204,24 @@
         url.hostname.includes("vimeo.com") ||
         url.hostname.includes("player.vimeo.com")
       ) {
-        const match =
+        const videoMatch =
           url.pathname.match(
-            /(?:video\/)?(\d+)/
+            /\/video\/(\d+)/i
           );
 
-        return (
-          match?.[1] ||
-          null
-        );
+        if (videoMatch?.[1]) {
+          return videoMatch[1];
+        }
+
+        const numericMatches = [
+          ...url.pathname.matchAll(
+            /(?:^|\/)(\d+)(?=\/|$)/g
+          )
+        ];
+
+        if (numericMatches.length) {
+          return numericMatches[numericMatches.length - 1][1];
+        }
       }
     } catch (_) {}
 
@@ -6073,6 +6082,8 @@
           state.playerReady =
             true;
 
+      updateRoomOwnerUI();
+
           state.playerType =
             "youtube";
 
@@ -6332,6 +6343,8 @@
         state.playerReady =
           true;
 
+        updateRoomOwnerUI();
+
         startLocalTimeUpdate();
         updateTimeUI();
         void applyLatestRoomPlaybackState(true);
@@ -6509,6 +6522,8 @@
     state.playerReady =
       true;
 
+    updateRoomOwnerUI();
+
     startLocalTimeUpdate();
     void applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
@@ -6597,6 +6612,8 @@
 
     state.playerReady =
       true;
+
+    updateRoomOwnerUI();
 
     startLocalTimeUpdate();
   }
@@ -6823,6 +6840,8 @@
 
             state.playerReady =
               true;
+
+            updateRoomOwnerUI();
 
             resolve();
           };
