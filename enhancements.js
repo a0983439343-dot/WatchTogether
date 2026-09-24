@@ -471,8 +471,19 @@ if (!wt) return;
 var $ = wt.$ || function(id){ return document.getElementById(id); };
 wt.$ = $;
 var toast = wt.toast;
-var readJson = wt.readJson;
-var writeJson = wt.writeJson;
+var readJson = typeof wt.readJson === "function" ? wt.readJson : function(key, fallback) {
+  try {
+    var value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+};
+var writeJson = typeof wt.writeJson === "function" ? wt.writeJson : function(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_) {}
+};
 var roomIdFromUrl = wt.roomIdFromUrl;
 var randomCode = wt.randomCode;
 var esc = wt.esc;
