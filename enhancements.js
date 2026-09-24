@@ -432,6 +432,8 @@ wt.openModal = openModal;
 wt.closeModal = closeModal;
 wt.ROOM_RE = ROOM_RE;
 wt.FRIEND_CODE_RE = FRIEND_CODE_RE;
+wt.isCurrentAuthUser = isCurrentAuthUser;
+wt.rememberVideo = rememberVideo;
 
 applyTheme(currentTheme());
 
@@ -454,6 +456,7 @@ var openModal = wt.openModal;
 var closeModal = wt.closeModal;
 var serverTs = wt.serverTs;
 var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
+var isCurrentAuthUser = wt.isCurrentAuthUser;
 
 async function ensurePublicCode(profile) {
   var user = wt.auth.currentUser;
