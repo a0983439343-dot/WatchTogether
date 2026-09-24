@@ -2081,3 +2081,216 @@ select:focus {
     overflow: hidden !important;
   }
 }
+
+
+/* =========================================================
+   WatchTogether QA fixes: landscape modal + room toolbar
+   ========================================================= */
+
+@media (min-width: 761px) {
+  .room-toolbar {
+    position: sticky !important;
+    top: 68px !important;
+    z-index: 19 !important;
+    padding: 10px 0 !important;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(8, 12, 24, .98),
+        rgba(8, 12, 24, .94)
+      );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  #leaveRoomBtn {
+    position: relative;
+    z-index: 25;
+    pointer-events: auto !important;
+  }
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+  #sourceModal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #sourceModal .modal-card {
+    position: relative !important;
+    width: 100% !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  #sourceModal .modal-card > .panel-title {
+    flex: 0 0 auto !important;
+    margin: 0 0 4px !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+  }
+
+  #sourceModal .modal-card > label[for="sourceTypeModal"] {
+    flex: 0 0 auto !important;
+    margin: 4px 0 3px !important;
+    font-size: 11px !important;
+  }
+
+  #sourceModal #sourceTypeModal {
+    flex: 0 0 38px !important;
+    min-height: 38px !important;
+    height: 38px !important;
+  }
+
+  #sourceModal #modalVideoSearchArea {
+    flex: 1 1 0 !important;
+    width: 100% !important;
+    height: 0 !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin-top: 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  #sourceModal #modalVideoSearchArea > label {
+    flex: 0 0 auto !important;
+    margin: 3px 0 4px !important;
+    font-size: 11px !important;
+  }
+
+  #sourceModal #modalVideoSearchArea > .search-row {
+    flex: 0 0 40px !important;
+    min-height: 40px !important;
+    height: 40px !important;
+  }
+
+  #sourceModal #modalVideoSearchResults {
+    flex: 1 1 0 !important;
+    width: 100% !important;
+    height: 0 !important;
+    max-height: none !important;
+    min-height: 110px !important;
+    margin: 5px 0 0 !important;
+    padding: 6px 2px 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    overscroll-behavior-y: contain !important;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-card {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 96px !important;
+    height: auto !important;
+    display: grid !important;
+    grid-template-columns: 104px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    gap: 5px 8px !important;
+    padding: 7px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-main {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-columns: 104px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-main > div:first-child {
+    width: 104px !important;
+    min-width: 104px !important;
+    max-width: 104px !important;
+    height: 58px !important;
+    min-height: 58px !important;
+    max-height: 58px !important;
+    overflow: hidden !important;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-main img {
+    width: 104px !important;
+    min-width: 104px !important;
+    max-width: 104px !important;
+    height: 58px !important;
+    min-height: 58px !important;
+    max-height: 58px !important;
+    display: block !important;
+    object-fit: cover !important;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-info {
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #sourceModal #modalVideoSearchResults .video-result-card > div:last-child {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 5px !important;
+  }
+
+  #sourceModal .modal-actions {
+    position: relative !important;
+    z-index: 30 !important;
+    flex: 0 0 42px !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    width: 100% !important;
+    margin-top: 5px !important;
+    background: #101827 !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+
+  #sourceModal .modal-actions button {
+    min-height: 42px !important;
+    height: 42px !important;
+    margin-top: 0 !important;
+  }
+
+  #sourceModal #modalError {
+    flex: 0 0 18px !important;
+    height: 18px !important;
+    min-height: 18px !important;
+    margin: 2px 0 0 !important;
+    overflow: hidden !important;
+    font-size: 11px !important;
+    line-height: 18px !important;
+  }
+}
