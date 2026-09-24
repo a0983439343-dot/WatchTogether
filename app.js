@@ -8629,20 +8629,18 @@
       } else {
         cancelScheduledLocalPause();
         cancelScheduledRemotePause();
-        state.playbackAwaitingActualStart = true;
+        state.playbackAwaitingActualStart = false;
         clearTimeout(state.playbackActualStartTimer);
-        state.playbackActualStartTimer = setTimeout(async () => {
-          state.playbackActualStartTimer = null;
-          if (!state.playbackAwaitingActualStart || state.playbackApplyingRemote || !state.isOwner) return;
-          state.playbackAwaitingActualStart = false;
-          try {
-            if (await asyncIsPlaying()) {
-              const actualPosition = await asyncCurrentPosition();
-              await publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
-            }
-          } catch (_) {}
-        }, 100);
+        state.playbackActualStartTimer = null;
+        const issuedAt = playbackClockNow();
         await playPlayer({muteForAutoplay: false});
+        await publishPlaybackEvent(
+          "play",
+          position,
+          true,
+          issuedAt,
+          issuedAt
+        );
       }
     } catch (error) {
       console.warn("處理成員播放控制請求失敗:", error);
@@ -9621,14 +9619,20 @@
             ? Number(issuedAtOverride)
             : playbackClockNow();
 
-        const syncEffectiveAt =
+        const requestedEffectiveAt =
           Number.isFinite(
             Number(effectiveAt)
           ) &&
           Number(effectiveAt) > 0
             ? Number(effectiveAt)
-            : issuedAt +
-              getControlLeadMs();
+            : 0;
+
+        const syncEffectiveAt =
+          normalized === "seek"
+            ? (requestedEffectiveAt > 0
+                ? requestedEffectiveAt
+                : issuedAt + getControlLeadMs())
+            : issuedAt;
 
         const timelineIssuedAt =
           normalized === "seek"
@@ -13207,21 +13211,18 @@
             } else {
               cancelScheduledLocalPause();
               cancelScheduledRemotePause();
-              state.playbackAwaitingActualStart = true;
+              state.playbackAwaitingActualStart = false;
               clearTimeout(state.playbackActualStartTimer);
-              state.playbackActualStartTimer = setTimeout(async () => {
-                state.playbackActualStartTimer = null;
-                if (!state.playbackAwaitingActualStart || state.playbackApplyingRemote) return;
-                state.playbackAwaitingActualStart = false;
-                try {
-                  const actualPlaying = await asyncIsPlaying();
-                  if (actualPlaying) {
-                    const actualPosition = await asyncCurrentPosition();
-                    publishPlaybackEvent("play", actualPosition, true, playbackClockNow());
-                  }
-                } catch (_) {}
-              }, 100);
+              state.playbackActualStartTimer = null;
+              const issuedAt = playbackClockNow();
               await playPlayer();
+              publishPlaybackEvent(
+                "play",
+                position,
+                true,
+                issuedAt,
+                issuedAt
+              );
             }
           } catch (error) {
             console.warn("播放控制同步失敗:", error);
