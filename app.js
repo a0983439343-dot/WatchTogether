@@ -1789,6 +1789,104 @@
   }
 
 
+  function waitForDatabaseConnection(timeoutMs = 8000) {
+    if (!db || state.leavingRoom) {
+      return Promise.resolve(false);
+    }
+
+    if (state.databaseConnected === true) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+      const connectedRef = db.ref(".info/connected");
+      let settled = false;
+      let timer = null;
+
+      const cleanup = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        try {
+          connectedRef.off("value", handle);
+        } catch (_) {}
+      };
+
+      const finish = connected => {
+        cleanup();
+        if (connected) {
+          state.databaseConnected = true;
+        }
+        resolve(Boolean(connected));
+      };
+
+      const handle = snapshot => {
+        if (snapshot.val() === true) {
+          finish(true);
+        }
+      };
+
+      connectedRef.on("value", handle);
+      timer = setTimeout(() => finish(false), Math.max(1000, Number(timeoutMs) || 8000));
+
+      connectedRef.once("value").then(handle).catch(() => {});
+    });
+  }
+
+  async function ensureRoomMembership() {
+    if (
+      !state.roomId ||
+      !state.uid ||
+      !state.membersRef ||
+      state.leavingRoom
+    ) {
+      return false;
+    }
+
+    if (!(await waitForDatabaseConnection())) {
+      return false;
+    }
+
+    if (await isMemberKicked()) {
+      await leaveRoomLocally("你已被房主移出房間");
+      return false;
+    }
+
+    const memberRef =
+      state.membersRef.child(
+        state.uid
+      );
+
+    let snapshot =
+      await memberRef.once(
+        "value"
+      ).catch(() => null);
+
+    if (
+      !snapshot?.exists() ||
+      snapshot.val()?.online !== true
+    ) {
+      const restored =
+        await markMemberOnline();
+
+      if (!restored) {
+        return false;
+      }
+
+      snapshot =
+        await memberRef.once(
+          "value"
+        ).catch(() => null);
+    }
+
+    return Boolean(snapshot?.exists());
+  }
+
   async function getMembersOnce() {
     if (!state.membersRef) {
       return {};
@@ -7781,8 +7879,7 @@
     const now = Date.now();
     if (now - Number(state.controlRequestLastAt || 0) < 250) return false;
 
-    const memberSnapshot = await state.membersRef.child(state.uid).once("value").catch(() => null);
-    if (!memberSnapshot?.exists()) {
+    if (!(await ensureRoomMembership())) {
       toast("你已不在這個房間");
       return false;
     }
@@ -9624,6 +9721,12 @@
       return false;
     }
 
+    if (
+      !(await waitForDatabaseConnection())
+    ) {
+      return false;
+    }
+
     const memberRef =
       state.membersRef.child(
         state.uid
@@ -9726,9 +9829,6 @@
       }
 
       state.wasMemberInRoom =
-        true;
-
-      state.databaseConnected =
         true;
 
       return true;
@@ -10337,6 +10437,16 @@
       );
 
     if (await handleKickState()) {
+      return;
+    }
+
+    const connected =
+      await waitForDatabaseConnection();
+
+    if (!connected) {
+      await leaveRoomLocally(
+        "Firebase 目前正在重新連線，請稍後再加入房間"
+      );
       return;
     }
 
@@ -11188,19 +11298,7 @@
       throw new Error("目前不在房間內");
     }
 
-    let isCurrentMember = false;
-
-    try {
-      const memberSnapshot =
-        await state.membersRef
-          .child(state.uid)
-          .once("value");
-
-      isCurrentMember =
-        memberSnapshot.exists();
-    } catch (_) {}
-
-    if (!isCurrentMember) {
+    if (!(await ensureRoomMembership())) {
       throw new Error("你已不在這個房間");
     }
 
@@ -11295,13 +11393,28 @@
      * 因此不能用 roomRef.update() 一次寫 sourceType + video，
      * 必須逐一寫入子節點，讓子節點自己的 .write rule 生效。
      */
-    await state.roomRef
-      .child("sourceType")
-      .set(platform);
+    const writeRoomVideo = async () => {
+      await state.roomRef
+        .child("sourceType")
+        .set(platform);
 
-    await state.roomRef
-      .child("video")
-      .set(roomVideo);
+      await state.roomRef
+        .child("video")
+        .set(roomVideo);
+    };
+
+    try {
+      await writeRoomVideo();
+    } catch (error) {
+      if (
+        error?.code !== "PERMISSION_DENIED" ||
+        !(await ensureRoomMembership())
+      ) {
+        throw error;
+      }
+
+      await writeRoomVideo();
+    }
 
     cancelScheduledLocalPause();
     cancelScheduledRemotePause();
