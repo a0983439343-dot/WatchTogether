@@ -20,11 +20,13 @@
       return;
     }
 
+    window.__WATCHTOGETHER_BUILD__ = "20260924-formal-v21";
+
     window.addEventListener("load", async () => {
       try {
         const registration =
           await navigator.serviceWorker.register(
-            "./sw.js?v=20260924-formal-v20",
+            "./sw.js?v=20260924-formal-v21",
             {
               scope: "./"
             }
@@ -73,7 +75,7 @@
   })();
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=20260924-formal-v20"><link rel="stylesheet" href="enhancements.css?v=20260924-formal-v20">
+  <link rel="stylesheet" href="styles.css?v=20260924-formal-v21"><link rel="stylesheet" href="enhancements.css?v=20260924-formal-v21">
 </head>
 
 <body>
@@ -1255,7 +1257,7 @@
      主程式
 ========================== -->
 
-<script src="app.js?v=20260924-formal-v20"></script><script src="enhancements.js?v=20260924-formal-v20"></script>
+<script src="app.js?v=20260924-formal-v21"></script><script src="enhancements.js?v=20260924-formal-v21"></script>
 
 
 <!-- =========================
