@@ -1861,7 +1861,6 @@ async function setupRoom(id) {
 
   var meta = metaSnapshot.val() || {};
   wt.state.roomMeta = meta;
-  wt.rememberRoom(id,meta.name || "一起看");
 
   try { wt.state.roomVideoRef && wt.state.roomVideoRef.off(); } catch (_) {}
   wt.state.roomVideoRef = wt.db.ref("rooms/" + id + "/video");
@@ -1909,9 +1908,6 @@ function observeRoom() {
 
   if (id !== wt.state.roomId) {
     if (wt.state.roomId && !id) {
-      var oldId = wt.state.roomId;
-      var oldName = String($("roomTitle") && $("roomTitle").textContent || "一起看").trim();
-      wt.rememberRoom(oldId,oldName || "一起看");
       wt.state.roomLastObservedId = "";
       wt.state.roomLastObservedName = "";
       stopRoomEnhancements();
@@ -1935,7 +1931,6 @@ function observeRoom() {
     ) {
       wt.state.roomLastObservedId = id;
       wt.state.roomLastObservedName = title;
-      wt.rememberRoom(id,title);
     }
   } else {
     wt.renderHome();
