@@ -1,4 +1,4 @@
-const CACHE_NAME = "wt-shell-20260924-v20";
+const CACHE_NAME = "wt-shell-20260924-v21";
 const ASSETS = [
   "./",
   "./styles.css",
@@ -61,7 +61,8 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
   if (url.origin === self.location.origin) {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request,{ignoreSearch:true}).then(cached => cached || Response.error()))
+      fetch(new Request(request, {cache: "no-store"}))
+        .catch(() => caches.match(request,{ignoreSearch:true}).then(cached => cached || Response.error()))
     );
   }
 });
