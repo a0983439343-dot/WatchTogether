@@ -71,9 +71,10 @@ jobs:
           const enhVersion = index.match(/enhancements\.js\?v=([^"'&]+)/)?.[1];
           const cssVersion = index.match(/enhancements\.css\?v=([^"'&]+)/)?.[1];
           const swVersion = index.match(/sw\.js\?v=([^"'&]+)/)?.[1];
-          const cacheVersion = sw.match(/wt-shell-(20260923-v[^"\s]+)/)?.[1];
+          const stylesVersion = index.match(/styles\.css\?v=([^"\'&]+)/)?.[1];
+          const cacheVersion = sw.match(/wt-shell-(\d{8}-v[^"\s]+)/)?.[1];
 
-          if (!appVersion || appVersion !== enhVersion || appVersion !== cssVersion || appVersion !== swVersion) throw new Error('Frontend asset versions are not aligned.');
+          if (!appVersion || appVersion !== enhVersion || appVersion !== cssVersion || appVersion !== stylesVersion || appVersion !== swVersion) throw new Error('Frontend asset versions are not aligned.');
           if (cacheVersion !== appVersion.replace('formal-', '')) throw new Error('Service worker cache version is not aligned.');
           console.log('Synchronized room control architecture checks OK');
           NODE
