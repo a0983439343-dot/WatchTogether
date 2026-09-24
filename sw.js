@@ -1,4 +1,4 @@
-const CACHE_NAME = "wt-shell-20260924-v15";
+const CACHE_NAME = "wt-shell-20260924-v17";
 const ASSETS = [
   "./",
   "./styles.css",
@@ -13,7 +13,13 @@ const ASSETS = [
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS).catch(() => {}))
+      .then(cache => Promise.all(
+        ASSETS.map(asset =>
+          cache.add(asset).catch(error => {
+            console.warn("[sw] precache failed:", asset, error);
+          })
+        )
+      ))
       .then(() => self.skipWaiting())
   );
 });
