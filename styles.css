@@ -1988,8 +1988,8 @@ select:focus {
     grid-area: side !important;
     min-width: 0 !important;
     width: 100% !important;
-    height: calc(100svh - 16px) !important;
-    max-height: none !important;
+    height: min(72svh, 500px) !important;
+    max-height: calc(100svh - 86px) !important;
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
@@ -1999,6 +1999,65 @@ select:focus {
     display: flex !important;
     flex-direction: column !important;
     flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  .room-layout .side-column .chat-messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .room-layout .side-column .members-panel,
+  .room-layout .side-column .queue-panel {
+    flex: 0 0 auto !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
+
+/* Touch landscape: keep mobile room layout on wide phones */
+@media (orientation: landscape) and (max-height: 520px) and (hover: none) and (pointer: coarse) {
+  .room-layout {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 34vw) !important;
+    grid-template-areas: "watch side" !important;
+    gap: 10px !important;
+    align-items: stretch !important;
+  }
+
+  .room-layout > .watch-panel,
+  .room-layout .watch-panel {
+    grid-area: watch !important;
+    min-width: 0 !important;
+  }
+
+  .room-layout > .side-column,
+  .room-layout .side-column {
+    grid-area: side !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: min(72svh, 500px) !important;
+    max-height: calc(100svh - 86px) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .room-layout .side-column .chat-panel {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
     min-height: 0 !important;
     height: 100% !important;
     max-height: none !important;
