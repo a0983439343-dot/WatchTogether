@@ -298,6 +298,13 @@
 
     leavingRoom: false,
 
+    authReady: false,
+    authRetrying: false,
+
+    databaseConnected: false,
+    databaseConnectionListenerAttached: false,
+    memberRecoveryInFlight: false,
+
     sdk: {
       vimeo: false,
       dailymotion: false,
@@ -773,8 +780,16 @@
       window.innerHeight ||
       700;
 
+    const isCompactLandscape =
+      window.innerHeight <= 600 &&
+      window.innerWidth >= 700 &&
+      window.matchMedia?.(
+        "(orientation: landscape)"
+      )?.matches;
+
     const isMobile =
-      window.innerWidth <= 760;
+      window.innerWidth <= 760 ||
+      Boolean(isCompactLandscape);
 
     /* =====================================================
        Modal 本身固定滿版
@@ -1228,6 +1243,8 @@
     db =
       firebase.database();
 
+    attachDatabaseConnectionListener();
+
     /*
      * 使用 LOCAL 持久化，確保 Google Popup 完成後
      * 重新載入頁面仍能正確恢復 Firebase 使用者。
@@ -1249,6 +1266,9 @@
           state.uid =
             user.uid;
 
+          state.authReady =
+            true;
+
           if (
             !user.isAnonymous &&
             user.displayName &&
@@ -1265,6 +1285,9 @@
         } else {
           state.uid =
             null;
+
+          state.authReady =
+            false;
         }
 
         updateAuthUI(user);
@@ -6949,9 +6972,17 @@
               : "youtube"
           );
 
-    if (!state.uid || !auth?.currentUser) {
+    await ensureAuthReady({
+      silent: false,
+      maxAttempts: 4
+    });
+
+    if (
+      !state.uid ||
+      !auth?.currentUser
+    ) {
       throw new Error(
-        "Firebase 登入狀態尚未準備完成，請重新整理後再試"
+        "Firebase 登入狀態尚未準備完成，請稍後再試"
       );
     }
 
@@ -7370,6 +7401,11 @@
         "房間碼必須是 6 碼"
       );
     }
+
+    await ensureAuthReady({
+      silent: false,
+      maxAttempts: 4
+    });
 
     const metaSnapshot =
       await db
@@ -9580,6 +9616,17 @@
         )?.val?.() || null;
       }
 
+      const currentMemberSnapshot =
+        await memberRef
+          .once("value")
+          .catch(
+            () => null
+          );
+
+      const currentMember =
+        currentMemberSnapshot?.val?.() ||
+        {};
+
       const memberData = {
         name:
           state.memberName,
@@ -9618,11 +9665,13 @@
         memberData.avatarEmoji = avatarEmoji;
       }
 
-      await memberRef.set(memberData);
-
       await memberRef
         .onDisconnect()
         .remove();
+
+      await memberRef.set(
+        memberData
+      );
 
       const confirmed =
         await memberRef
@@ -9639,6 +9688,9 @@
       }
 
       state.wasMemberInRoom =
+        true;
+
+      state.databaseConnected =
         true;
 
       return true;
@@ -10174,6 +10226,7 @@
 
   async function enterRoom() {
     attachServerClockSync();
+    attachDatabaseConnectionListener();
     showView(
       "room"
     );
@@ -10454,6 +10507,7 @@
           if (
             state.wasMemberInRoom &&
             state.uid &&
+            state.databaseConnected === true &&
             !state.leavingRoom &&
             !Object.prototype.hasOwnProperty.call(
               members,
@@ -10462,9 +10516,25 @@
             !state.isOwner &&
             !state.kickedLocally
           ) {
-            await leaveRoomLocally(
-              "你已被房主移出房間"
-            );
+            const kicked =
+              await isMemberKicked();
+
+            if (kicked) {
+              await leaveRoomLocally(
+                "你已被房主移出房間"
+              );
+
+              return;
+            }
+
+            try {
+              await markMemberOnline();
+            } catch (error) {
+              console.warn(
+                "成員 reconnect 恢復失敗:",
+                error
+              );
+            }
 
             return;
           }
@@ -10758,25 +10828,89 @@
     if (
       !text ||
       !state.chatRef ||
-      !state.uid
+      !state.uid ||
+      state.leavingRoom
     ) {
       return;
     }
 
-    await state.chatRef.push({
-      uid:
-        state.uid,
+    if (
+      state.databaseConnected !== true
+    ) {
+      throw new Error(
+        "目前正在重新連線，請稍後再送出"
+      );
+    }
 
-      name:
-        state.memberName,
+    const memberSnapshot =
+      await state.membersRef
+        .child(state.uid)
+        .once("value");
 
-      text,
+    if (
+      !memberSnapshot.exists()
+    ) {
+      const restored =
+        await markMemberOnline();
 
-      createdAt:
-        firebase.database
-          .ServerValue
-          .TIMESTAMP
-    });
+      if (!restored) {
+        throw new Error(
+          "目前不在這個房間"
+        );
+      }
+    }
+
+    try {
+      await state.chatRef.push({
+        uid:
+          state.uid,
+
+        name:
+          state.memberName,
+
+        type:
+          "text",
+
+        text,
+
+        createdAt:
+          firebase.database
+            .ServerValue
+            .TIMESTAMP
+      });
+    } catch (error) {
+      if (
+        error?.code ===
+        "PERMISSION_DENIED"
+      ) {
+        const restored =
+          await markMemberOnline();
+
+        if (restored) {
+          await state.chatRef.push({
+            uid:
+              state.uid,
+
+            name:
+              state.memberName,
+
+            type:
+              "text",
+
+            text,
+
+            createdAt:
+              firebase.database
+                .ServerValue
+                .TIMESTAMP
+          });
+
+          return;
+        }
+      }
+
+      throw error;
+    }
   }
 
 
@@ -12125,21 +12259,25 @@
             return;
           }
 
-          input.value =
-            "";
-
           try {
             await sendChat(
               text
             );
+
+            input.value =
+              "";
           } catch (error) {
             console.error(
+              "聊天室送出失敗:",
               error
             );
 
             toast(
+              error?.message ||
               "訊息送出失敗"
             );
+
+            input?.focus();
           }
         }
       );
@@ -12599,6 +12737,311 @@
   }
 
 
+
+  function attachDatabaseConnectionListener() {
+    if (
+      !db ||
+      state.databaseConnectionListenerAttached
+    ) {
+      return;
+    }
+
+    const connectedRef =
+      db.ref(".info/connected");
+
+    connectedRef.on(
+      "value",
+      async (snapshot) => {
+        const connected =
+          snapshot.val() === true;
+
+        state.databaseConnected =
+          connected;
+
+        if ($("authStatus")) {
+          $("authStatus").textContent =
+            connected
+              ? "已連線"
+              : "重新連線中…";
+        }
+
+        if (
+          !connected ||
+          !state.roomId ||
+          !state.uid ||
+          !state.membersRef ||
+          state.leavingRoom ||
+          state.memberRecoveryInFlight
+        ) {
+          return;
+        }
+
+        state.memberRecoveryInFlight =
+          true;
+
+        try {
+          if (await isMemberKicked()) {
+            await leaveRoomLocally(
+              "你已被房主移出房間"
+            );
+            return;
+          }
+
+          const memberRef =
+            state.membersRef.child(
+              state.uid
+            );
+
+          await memberRef
+            .onDisconnect()
+            .remove();
+
+          const memberSnapshot =
+            await memberRef.once(
+              "value"
+            );
+
+          if (
+            memberSnapshot.exists()
+          ) {
+            await memberRef.update({
+              online:
+                true,
+              lastSeen:
+                firebase.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+
+            state.wasMemberInRoom =
+              true;
+          } else {
+            await markMemberOnline();
+          }
+
+          renderMembers(
+            await getMembersOnce()
+          );
+        } catch (error) {
+          console.warn(
+            "Firebase reconnect 成員恢復失敗:",
+            error
+          );
+        } finally {
+          state.memberRecoveryInFlight =
+            false;
+        }
+      }
+    );
+
+    state.databaseConnectionListenerAttached =
+      true;
+  }
+
+
+
+  function getFriendlyAuthError(error) {
+    const code =
+      String(error?.code || "");
+
+    if (
+      code ===
+      "auth/network-request-failed"
+    ) {
+      return "Firebase 網路連線失敗，請稍後再試";
+    }
+
+    if (
+      code ===
+      "auth/too-many-requests"
+    ) {
+      return "Firebase 請求過於頻繁，請稍後再試";
+    }
+
+    if (
+      code ===
+      "auth/operation-not-allowed"
+    ) {
+      return "Firebase Anonymous Auth 尚未啟用";
+    }
+
+    return (
+      error?.message ||
+      "Firebase 登入失敗，請稍後再試"
+    );
+  }
+
+
+  function showAuthFailure(error) {
+    state.authReady =
+      false;
+
+    if ($("authStatus")) {
+      $("authStatus").textContent =
+        "連線失敗";
+    }
+
+    setError(
+      $("homeError"),
+      "Firebase 目前無法連線。請再次按「建立房間」或「加入朋友的房間」重試。"
+    );
+
+    toast(
+      getFriendlyAuthError(error)
+    );
+  }
+
+
+  async function ensureAuthReady(
+    options = {}
+  ) {
+    const maxAttempts =
+      Math.max(
+        1,
+        Number(options.maxAttempts || 4)
+      );
+
+    const silent =
+      Boolean(options.silent);
+
+    if (!auth) {
+      await initializeFirebase();
+    }
+
+    const currentUser =
+      auth?.currentUser ||
+      null;
+
+    if (currentUser) {
+      state.uid =
+        currentUser.uid;
+
+      state.authReady =
+        true;
+
+      updateAuthUI(
+        currentUser
+      );
+
+      return currentUser;
+    }
+
+    if (state.authRetrying) {
+      while (state.authRetrying) {
+        await new Promise(
+          resolve =>
+            setTimeout(resolve, 120)
+        );
+      }
+
+      if (auth?.currentUser) {
+        state.uid =
+          auth.currentUser.uid;
+
+        state.authReady =
+          true;
+
+        return auth.currentUser;
+      }
+    }
+
+    state.authRetrying =
+      true;
+
+    try {
+      let lastError =
+        null;
+
+      for (
+        let attempt = 1;
+        attempt <= maxAttempts;
+        attempt++
+      ) {
+        try {
+          if ($("authStatus")) {
+            $("authStatus").textContent =
+              attempt === 1
+                ? "連線中…"
+                : `重新連線中… ${attempt}/${maxAttempts}`;
+          }
+
+          const user =
+            await ensureAnonymousAuth();
+
+          if (!user) {
+            throw new Error(
+              "Firebase Anonymous Auth 沒有回傳使用者"
+            );
+          }
+
+          state.uid =
+            user.uid;
+
+          state.authReady =
+            true;
+
+          updateAuthUI(
+            user
+          );
+
+          setError(
+            $("homeError"),
+            ""
+          );
+
+          return user;
+        } catch (error) {
+          lastError =
+            error;
+
+          state.authReady =
+            false;
+
+          if (
+            attempt < maxAttempts
+          ) {
+            const delay =
+              Math.min(
+                5000,
+                800 *
+                Math.pow(
+                  2,
+                  attempt - 1
+                )
+              );
+
+            if (!silent) {
+              toast(
+                `Firebase 連線失敗，${Math.ceil(
+                  delay / 1000
+                )} 秒後重試`
+              );
+            }
+
+            await new Promise(
+              resolve =>
+                setTimeout(
+                  resolve,
+                  delay
+                )
+            );
+          }
+        }
+      }
+
+      throw (
+        lastError ||
+        new Error(
+          "Firebase Auth 初始化失敗"
+        )
+      );
+    } finally {
+      state.authRetrying =
+        false;
+    }
+  }
+
+
   /*
    * =========================================================
    * START
@@ -12694,102 +13137,114 @@
 
 
   async function start() {
-    try {
-      state.memberName =
-        getMemberName();
+    state.memberName =
+      getMemberName();
 
+    setupEvents();
+
+    try {
       await initializeFirebase();
 
-      /*
-       * 如果瀏覽器剛完成舊版 Redirect 流程，
-       * 先嘗試取回結果。
-       */
       await handleGoogleRedirectResult();
 
-      /*
-       * Popup / Firebase 已有登入狀態時直接使用它。
-       * 沒有使用者時才建立匿名訪客。
-       */
       const initialUser =
-        await waitForInitialAuthState();
+        await waitForInitialAuthState(
+          5000
+        );
 
       if (initialUser) {
         state.uid =
           initialUser.uid;
 
+        state.authReady =
+          true;
+
         updateAuthUI(
           initialUser
         );
       } else {
-        await ensureAnonymousAuth();
-      }
-
-      setupEvents();
-
-      const urlRoomId =
-        getRoomIdFromUrl();
-
-      const savedRoomId =
-        getSavedRoomId();
-
-      const roomId =
-        urlRoomId ||
-        savedRoomId;
-
-      if (roomId) {
-        try {
-          await joinRoom(
-            roomId
-          );
-        } catch (error) {
-          console.error(
-            error
-          );
-
-          if (
-            !urlRoomId &&
-            /房間已不存在|找不到這個房間|你已被房主移出/.test(
-              error?.message ||
-              ""
-            )
-          ) {
-            clearSavedRoomId();
-          }
-
-          history.replaceState(
-            {},
-            "",
-            location.pathname
-          );
-
-          showView(
-            "home"
-          );
-
-          toast(
-            error.message ||
-            "無法進入房間"
-          );
-        }
-      } else {
-        showView(
-          "home"
-        );
+        await ensureAuthReady({
+          silent: false,
+          maxAttempts: 4
+        });
       }
     } catch (error) {
       console.error(
+        "WatchTogether Auth 初始化失敗:",
         error
       );
 
-      if ($("authStatus")) {
-        $("authStatus")
-          .textContent =
-          "連線失敗";
+      showAuthFailure(
+        error
+      );
+
+      showView(
+        "home"
+      );
+
+      return;
+    }
+
+    const urlRoomId =
+      getRoomIdFromUrl();
+
+    const savedRoomId =
+      getSavedRoomId();
+
+    const roomId =
+      urlRoomId ||
+      savedRoomId;
+
+    if (!roomId) {
+      showView(
+        "home"
+      );
+      return;
+    }
+
+    try {
+      await ensureAuthReady({
+        silent: false,
+        maxAttempts: 4
+      });
+
+      await joinRoom(
+        roomId
+      );
+    } catch (error) {
+      console.error(
+        "自動加入房間失敗:",
+        error
+      );
+
+      if (
+        !urlRoomId &&
+        /房間已不存在|找不到這個房間|你已被房主移出/.test(
+          error?.message ||
+          ""
+        )
+      ) {
+        clearSavedRoomId();
       }
 
+      history.replaceState(
+        {},
+        "",
+        location.pathname
+      );
+
+      showView(
+        "home"
+      );
+
+      setError(
+        $("homeError"),
+        getFriendlyAuthError(error)
+      );
+
       toast(
-        error.message ||
-        "網站初始化失敗"
+        error?.message ||
+        "無法進入房間"
       );
     }
   }
