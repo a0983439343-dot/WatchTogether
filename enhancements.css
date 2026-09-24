@@ -977,3 +977,12 @@ body[data-wt-theme="blueprint"] .wt-room-card,
 body[data-wt-theme="blueprint"] .wt-theme-card {
   border-radius: 5px !important;
 }
+
+
+@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  body {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
