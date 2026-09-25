@@ -788,7 +788,7 @@ function renderMessages() {
       body='<div class="wt-chat-text">' + esc(message.text || "") + '</div>';
     }
     var edited=message.editedAt ? '<span class="wt-chat-edited">已編輯</span>' : "";
-    var seen=self && Number(state.readAt[active]||0)>=Number(message.createdAt||0) ? '<span class="wt-chat-seen">已讀</span>' : "";
+    var seen=self && Number(state.readAt[active+"__friend"]||0)>=Number(message.createdAt||0) ? '<span class="wt-chat-seen">已讀</span>' : "";
     var actions='<div class="wt-chat-message-actions"><button type="button" data-chat-reply="' + esc(message.id) + '">↩ 回覆</button><button type="button" data-chat-react="' + esc(message.id) + '" data-chat-reaction="❤️">❤️</button><button type="button" data-chat-copy="' + esc(message.id) + '">複製</button>';
     if(self && message.type==="text") actions+='<button type="button" data-chat-edit="' + esc(message.id) + '">編輯</button>';
     if(self) actions+='<button type="button" class="danger" data-chat-delete="' + esc(message.id) + '">刪除</button>';
