@@ -234,7 +234,7 @@
           return '<tr>' +
             '<td><div class="primary-text">' + escapeHtml(item.email || "—") + '</div><span class="small">' + (item.emailVerified === true ? "Email 已驗證" : "Email 未驗證") + '</span></td>' +
             '<td>' + escapeHtml(item.displayName || "—") + '</td>' +
-            '<td><span class="small uid-text">' + escapeHtml(uid) + '</span></td>' +
+            '<td><div class="row-actions"><span class="small uid-text">' + escapeHtml(uid) + '</span><button class="btn" type="button" data-copy-uid="' + escapeHtml(uid) + '">複製 UID</button></div></td>'
             '<td>' + status + '</td>' +
             '<td>' + escapeHtml(item.provider || "—") + '</td>' +
             '<td>' + escapeHtml(formatDate(item.lastLoginAt)) + '</td>' +
@@ -253,6 +253,17 @@
     $("accountsBody").querySelectorAll("[data-unblock-user]").forEach(button => {
       button.addEventListener("click", () => unblockUser(button.dataset.unblockUser)
         .catch(error => { console.error(error); toast(error?.message || "解除封鎖失敗"); }));
+    });
+    $("accountsBody").querySelectorAll("[data-copy-uid]").forEach(button => {
+      button.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.copyUid || "");
+          toast("UID 已複製");
+        } catch (error) {
+          console.error(error);
+          toast("複製 UID 失敗，請手動複製");
+        }
+      });
     });
   }
 
@@ -307,19 +318,19 @@
   async function addWhitelist() {
     if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
     const input = $("whitelistEmail");
-    const email = String(input?.value || "").trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("請輸入有效的 Email"); return; }
-    if (email === MASTER_EMAIL) { toast("這個帳號已經是最高管理員"); return; }
+    const uid = String(input?.value || "").trim();
+    if (!uid) { toast("請輸入使用者 UID"); return; }
+    if (uid === MASTER_UID) { toast("這個帳號已經是最高管理員"); return; }
 
     const match = Object.values(accounts || {}).find(item =>
-      item && String(item.email || "").trim().toLowerCase() === email
+      item && String(item.uid || "") === uid
     );
     if (!match?.uid) {
-      toast("找不到這個登入帳號，請先讓該 Google 帳號登入一次");
+      toast("找不到這個 UID，請先讓該使用者登入 WatchTogether 一次");
       return;
     }
 
-    const uid = String(match.uid);
+    const email = String(match.email || "").trim().toLowerCase();
     await db.ref("admin/whitelistByUid/" + uid).set({
       uid,
       email,
@@ -525,7 +536,7 @@
     const help = $("whitelistHelp");
     if (master) {
       addPanel?.classList.remove("hidden");
-      if (help) help.textContent = "輸入已登入過 WatchTogether 的 Google Email 即可加入管理員白名單。";
+      if (help) help.textContent = "到「登入帳號」查看使用者 UID，按「複製 UID」後貼到這裡即可加入白名單。";
     } else {
       addPanel?.classList.add("hidden");
       if (help) help.textContent = "你目前是白名單管理員，可以查看與管理使用者、房間；白名單本身只有最高管理員可以操作。";
