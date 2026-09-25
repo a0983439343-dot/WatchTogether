@@ -16,9 +16,11 @@
   let blocks = {};
   let rooms = {};
   let reports = {};
+  let auditLogs = {};
   let profiles = {};
   let accountsRef = null;
   let reportsRef = null;
+  let auditLogsRef = null;
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -357,6 +359,117 @@
     $("whitelistBody").querySelectorAll("[data-remove]").forEach(btn =>
       btn.addEventListener("click", () => removeWhitelist(btn.dataset.remove).catch(error => { console.error(error); toast("刪除失敗"); }))
     );
+  }
+
+  const AUDIT_ACTION_LABELS = {
+    block: "封鎖",
+    unblock: "解除封鎖",
+    "user.update": "編輯使用者",
+    "room.delete": "刪除房間",
+    "report.status": "處理回報",
+    "report.delete": "刪除回報",
+    "whitelist.add": "加入白名單",
+    "whitelist.role": "調整權限",
+    "whitelist.toggle": "啟用 / 停用",
+    "whitelist.remove": "移除白名單"
+  };
+
+  function stopAuditLogsListener() {
+    if (!auditLogsRef) return;
+    try { auditLogsRef.off(); } catch (_) {}
+    auditLogsRef = null;
+  }
+
+  async function writeAuditLog(action, targetUid, targetName, details) {
+    if (currentRole !== "master" && currentRole !== "admin") return;
+    try {
+      await db.ref("admin/auditLogs").push({
+        action:String(action || "other").slice(0,40),
+        actorUid:String(currentUser?.uid || "").slice(0,128),
+        actorEmail:String(currentUser?.email || "").slice(0,320),
+        actorRole:String(currentRole || "").slice(0,20),
+        targetUid:String(targetUid || "").slice(0,128),
+        targetName:String(targetName || "").slice(0,200),
+        details:String(details || "").slice(0,1000),
+        createdAt:firebase.database.ServerValue.TIMESTAMP
+      });
+    } catch (error) {
+      console.warn("寫入管理員操作紀錄失敗:", error);
+    }
+  }
+
+  async function loadAuditLogs() {
+    if (!currentHasAdminAccess) {
+      auditLogs = {};
+      renderAuditLogs();
+      return;
+    }
+    const snapshot = await db.ref("admin/auditLogs").limitToLast(300).once("value");
+    auditLogs = snapshot.val() || {};
+    renderAuditLogs();
+  }
+
+  function startAuditLogsListener() {
+    stopAuditLogsListener();
+    if (!currentHasAdminAccess) return;
+    auditLogsRef = db.ref("admin/auditLogs").limitToLast(300);
+    auditLogsRef.on("value", snapshot => {
+      if (!currentHasAdminAccess) return;
+      auditLogs = snapshot.val() || {};
+      renderAuditLogs();
+    }, error => {
+      console.error("audit logs realtime listener failed", error);
+    });
+  }
+
+  function renderAuditLogs() {
+    const query = String($("auditSearch")?.value || "").trim().toLowerCase();
+    const filter = String($("auditActionFilter")?.value || "all");
+    const rows = Object.entries(auditLogs || {})
+      .filter(([id,item]) => {
+        if (!item || typeof item !== "object") return false;
+        const action = String(item.action || "other");
+        if (filter !== "all" && action !== filter) return false;
+        const hay = [
+          id,item.actorEmail,item.actorUid,item.actorRole,
+          item.targetName,item.targetUid,item.details,
+          AUDIT_ACTION_LABELS[action] || action
+        ].join(" ").toLowerCase();
+        return !query || hay.includes(query);
+      })
+      .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0));
+
+    $("auditCount").textContent = rows.length + " 筆";
+    $("auditBody").innerHTML = rows.length
+      ? rows.map(([id,item]) => {
+          const action = String(item.action || "other");
+          const label = AUDIT_ACTION_LABELS[action] || action;
+          const actor = String(item.actorEmail || item.actorUid || "—");
+          const target = String(item.targetName || item.targetUid || "—");
+          return '<tr>' +
+            '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
+            '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
+            '<td><span class="audit-action">' + escapeHtml(label) + '</span></td>' +
+            '<td class="audit-target"><div class="primary-text">' + escapeHtml(target) + '</div><span class="small">' + escapeHtml(item.targetUid || "") + '</span></td>' +
+            '<td class="audit-content">' + escapeHtml(item.details || "") + '</td>' +
+          '</tr>';
+        }).join("")
+      : '<tr><td colspan="5" class="muted">目前沒有操作紀錄。</td></tr>';
+  }
+
+  function exportReports() {
+    if (!currentHasAdminAccess) return;
+    const payload = Object.entries(reports || {}).map(([id,item]) => ({id,...item}));
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "watchtogether-reports-" + new Date().toISOString().replace(/[:.]/g,"-") + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    toast("回報資料已匯出");
   }
 
   const REPORT_CATEGORY_LABELS = {
@@ -784,6 +897,7 @@
      if (!window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
      await db.ref("admin/blocksByUid/" + uid).remove();
      await loadBlocks();
+     void writeAuditLog("unblock", uid, item.displayName || item.email || uid, "解除封鎖");
      toast("已解除封鎖");
    }
 
@@ -905,6 +1019,7 @@
     }));
 
     $("accountSearch")?.addEventListener("input", renderAccounts);
+     $("accountStatusFilter")?.addEventListener("change", renderAccounts);
     $("roomSearch")?.addEventListener("input", renderRooms);
     $("whitelistSearch")?.addEventListener("input", renderWhitelist);
 
