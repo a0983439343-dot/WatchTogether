@@ -2542,11 +2542,9 @@ function bindHomeSearch() {
     clearTimeout(searchTimer);
     var value = String(input.value || "").trim();
     if (value.length < 2) {
-      renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
+      renderHomeSearchMessage("按「搜尋」或 Enter 才會開始搜尋。");
       renderHistory();
-      return;
     }
-    searchTimer = setTimeout(function(){ void run(); },350);
   });
   $("clearSelectedVideoBtn") && $("clearSelectedVideoBtn").addEventListener("click",function(){
     wt.state.createVideo = null;
