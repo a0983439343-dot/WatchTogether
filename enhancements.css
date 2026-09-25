@@ -237,6 +237,18 @@ body.wt-modal-open {
   overflow-wrap: anywhere;
 }
 
+.wt-qr-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.wt-qr-actions .wt-action-btn {
+  width: min(280px, 100%);
+}
+
 .wt-profile-code {
   margin-top: 4px;
   color: var(--wt-accent);
