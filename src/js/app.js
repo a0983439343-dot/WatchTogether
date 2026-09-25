@@ -3117,15 +3117,41 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   ▶ 播放
                 </button>
 
-                <button
-                  type="button"
-                  class="tiny-btn"
-                  data-video-queue="${escapeHtml(
-                    video.id
-                  )}"
-                >
-                  ＋ 待播放
-                </button>
+                ${isCurrentVideo(video)
+                  ? `
+                    <button
+                      type="button"
+                      class="tiny-btn"
+                      disabled
+                      aria-disabled="true"
+                      style="opacity:.55;cursor:not-allowed;"
+                    >
+                      ✓ 目前播放中
+                    </button>
+                  `
+                  : isVideoInQueue(video)
+                    ? `
+                      <button
+                        type="button"
+                        class="tiny-btn"
+                        disabled
+                        aria-disabled="true"
+                        style="opacity:.55;cursor:not-allowed;"
+                      >
+                        ✓ 已在待播放
+                      </button>
+                    `
+                    : `
+                      <button
+                        type="button"
+                        class="tiny-btn"
+                        data-video-queue="${escapeHtml(
+                          video.id
+                        )}"
+                      >
+                        ＋ 待播放
+                      </button>
+                    `}
 
               </div>
 
@@ -12096,33 +12122,51 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     renderYoutubeSearchHistory();
   }
 
-  function renderYoutubeSearchHistory() {
+  function renderYoutubeSearchHistory(query = "") {
     const box = $("modalSearchHistory");
     if (!box) return;
-    const list = getYoutubeSearchHistory();
+
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+    let list = getYoutubeSearchHistory();
+
+    if (normalizedQuery) {
+      list = list.filter(function(item) {
+        return String(item || "").toLowerCase().includes(normalizedQuery);
+      });
+    }
+
     if (!list.length) {
-      box.innerHTML = '<span class="muted">還沒有最近搜尋。</span>';
+      box.innerHTML = normalizedQuery
+        ? '<span class="muted">沒有符合的最近搜尋。</span>'
+        : '<span class="muted">還沒有最近搜尋。</span>';
       return;
     }
-    box.innerHTML = '<span class="muted">最近搜尋：</span> ' + list.map((item) =>
-      '<span class="wt-search-history-item">' +
-        '<button type="button" class="wt-search-history-chip" data-wt-room-search-history="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>' +
-        '<button type="button" class="wt-search-history-delete" data-wt-room-search-history-delete="' + escapeHtml(item) + '" aria-label="刪除搜尋紀錄" title="刪除搜尋紀錄">×</button>' +
-      '</span>'
-    ).join(" ");
-    box.querySelectorAll("[data-wt-room-search-history]").forEach((button) => {
-      button.addEventListener("click", () => {
+
+    box.innerHTML =
+      '<span class="muted">最近搜尋：</span> ' +
+      list.map(function(item) {
+        return '<span class="wt-search-history-item">' +
+          '<button type="button" class="wt-search-history-chip" data-wt-room-search-history="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>' +
+          '<button type="button" class="wt-search-history-delete" data-wt-room-search-history-delete="' + escapeHtml(item) + '" aria-label="刪除搜尋紀錄" title="刪除搜尋紀錄">×</button>' +
+        '</span>';
+      }).join(" ");
+
+    box.querySelectorAll("[data-wt-room-search-history]").forEach(function(button) {
+      button.addEventListener("click", function() {
         const input = $("modalVideoSearchInput");
         if (!input) return;
         input.value = button.dataset.wtRoomSearchHistory || "";
+        renderYoutubeSearchHistory(input.value);
         $("modalSearchVideoBtn")?.click();
       });
     });
-    box.querySelectorAll("[data-wt-room-search-history-delete]").forEach((button) => {
-      button.addEventListener("click", (event) => {
+
+    box.querySelectorAll("[data-wt-room-search-history-delete]").forEach(function(button) {
+      button.addEventListener("click", function(event) {
         event.preventDefault();
         event.stopPropagation();
         deleteYoutubeSearchHistory(button.dataset.wtRoomSearchHistoryDelete || "");
+        renderYoutubeSearchHistory($("modalVideoSearchInput")?.value || "");
       });
     });
   }
@@ -13461,6 +13505,26 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             $("modalSearchVideoBtn")
               ?.click();
           }
+        }
+      );
+
+    $("modalVideoSearchInput")
+      ?.addEventListener(
+        "input",
+        () => {
+          renderYoutubeSearchHistory(
+            $("modalVideoSearchInput")?.value || ""
+          );
+        }
+      );
+
+    $("modalVideoSearchInput")
+      ?.addEventListener(
+        "focus",
+        () => {
+          renderYoutubeSearchHistory(
+            $("modalVideoSearchInput")?.value || ""
+          );
         }
       );
 
