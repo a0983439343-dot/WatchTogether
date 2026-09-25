@@ -1783,78 +1783,44 @@ async function shareRoom() {
 var qrPromise = null;
 
 function loadQr() {
-  if (window.QRCode && window.QRCode.toCanvas) return Promise.resolve();
+  if (window.QRCode && typeof window.QRCode.toCanvas === "function") return Promise.resolve();
   if (qrPromise) return qrPromise;
 
-  qrPromise = (async function() {
-    var urls = [
-      "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js",
-      "https://unpkg.com/qrcode@1.5.4/build/qrcode.min.js"
-    ];
-
-    for (var i = 0; i < urls.length; i++) {
-      var url = urls[i];
-
-      try {
-        var existing = document.querySelector('script[data-wt-qr="1"]');
-
-        if (existing && existing.dataset.wtQrUrl !== url) {
-          existing.remove();
-          existing = null;
-        }
-
-        if (!existing) {
-          existing = document.createElement("script");
-          existing.dataset.wtQr = "1";
-          existing.dataset.wtQrUrl = url;
-          existing.src = url;
-          existing.async = true;
-
-          await new Promise(function(resolve, reject) {
-            existing.onload = function() {
-              if (window.QRCode && window.QRCode.toCanvas) {
-                resolve();
-              } else {
-                reject(new Error("QR Code 不可用"));
-              }
-            };
-
-            existing.onerror = function() {
-              try { existing.remove(); } catch (_) {}
-              reject(new Error("QR Code 載入失敗"));
-            };
-
-            document.head.appendChild(existing);
-          });
-        } else if (!(window.QRCode && window.QRCode.toCanvas)) {
-          await new Promise(function(resolve, reject) {
-            var timer = setInterval(function() {
-              if (window.QRCode && window.QRCode.toCanvas) {
-                clearInterval(timer);
-                resolve();
-              }
-            }, 80);
-
-            setTimeout(function() {
-              clearInterval(timer);
-              reject(new Error("QR Code 載入逾時"));
-            }, 10000);
-          });
-        }
-
-        if (window.QRCode && window.QRCode.toCanvas) {
-          return;
-        }
-      } catch (_) {
-        var failed = document.querySelector('script[data-wt-qr="1"]');
-        if (failed && failed.dataset.wtQrUrl === url) {
-          try { failed.remove(); } catch (_) {}
-        }
-      }
+  qrPromise = new Promise(function(resolve, reject) {
+    if (window.QRCode && typeof window.QRCode.toCanvas === "function") {
+      resolve();
+      return;
     }
 
-    throw new Error("QR Code 載入失敗");
-  })().catch(function(error) {
+    var existing = document.querySelector('script[data-wt-qr-local="1"]');
+    if (existing) {
+      existing.addEventListener("load", function() {
+        if (window.QRCode && typeof window.QRCode.toCanvas === "function") resolve();
+        else reject(new Error("本地 QR Code 不可用"));
+      }, {once:true});
+      existing.addEventListener("error", function() {
+        reject(new Error("本地 QR Code 載入失敗"));
+      }, {once:true});
+      return;
+    }
+
+    var script = document.createElement("script");
+    script.dataset.wtQrLocal = "1";
+    script.src = "./vendor/qrcode-generator.js";
+    script.async = true;
+    script.onload = function() {
+      if (window.QRCode && typeof window.QRCode.toCanvas === "function") {
+        resolve();
+      } else {
+        reject(new Error("本地 QR Code 不可用"));
+      }
+    };
+    script.onerror = function() {
+      try { script.remove(); } catch (_) {}
+      reject(new Error("本地 QR Code 載入失敗"));
+    };
+    document.head.appendChild(script);
+  }).catch(function(error) {
     qrPromise = null;
     throw error;
   });
