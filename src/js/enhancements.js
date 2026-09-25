@@ -709,7 +709,6 @@ var openModal = wt.openModal;
 var closeModal = wt.closeModal;
 var serverTs = wt.serverTs;
 var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
-var esc = wt.esc;
 var isCurrentAuthUser = wt.isCurrentAuthUser;
 
 async function reservePublicId(code,user) {
