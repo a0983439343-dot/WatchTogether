@@ -498,7 +498,6 @@ function isCurrentAuthUser(user) {
 
 wt.isCurrentAuthUser =
   isCurrentAuthUser;
-wt.saveLoginAccount = saveLoginAccount;
 
 wt.rememberVideo = rememberVideo;
 
@@ -615,6 +614,8 @@ async function saveLoginAccount(user) {
     return false;
   }
 }
+
+wt.saveLoginAccount = saveLoginAccount;
 
 async function loadProfile(user) {
   if (!user || user.isAnonymous) {
