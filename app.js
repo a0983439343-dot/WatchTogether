@@ -689,33 +689,54 @@
     );
   }
 
+  const GUEST_NAME_STORAGE_KEY =
+    "wt_guest_name";
+
   function getMemberName() {
-    let name =
-      localStorage.getItem(
-        "wt_name"
-      );
+    const user =
+      state.user ||
+      auth?.currentUser ||
+      null;
 
     if (
-      !isGuestName(name) &&
-      state.user?.isAnonymous !== false
+      user &&
+      !user.isAnonymous
     ) {
-      name = "";
+      const loginName =
+        String(
+          localStorage.getItem("wt_name") ||
+          state.memberName ||
+          user.displayName ||
+          ""
+        ).trim();
+
+      if (loginName) {
+        return loginName.slice(0, 30);
+      }
+
+      return "玩家";
     }
 
-    if (!name) {
-      name =
+    let guestName =
+      String(
+        localStorage.getItem(GUEST_NAME_STORAGE_KEY) ||
+        ""
+      ).trim();
+
+    if (!isGuestName(guestName)) {
+      guestName =
         "訪客" +
         Math.floor(
           Math.random() * 900 + 100
         );
 
       localStorage.setItem(
-        "wt_name",
-        name
+        GUEST_NAME_STORAGE_KEY,
+        guestName
       );
     }
 
-    return name;
+    return guestName;
   }
 
 
@@ -1319,12 +1340,14 @@
           }
 
           if (user.isAnonymous) {
-            if (!isGuestName(localStorage.getItem("wt_name"))) {
-              localStorage.removeItem("wt_name");
-            }
             try {
-              state.memberName = getMemberName();
-            } catch (_) {}
+              state.memberName =
+                window.WT_CORE?.setGuestName?.() ||
+                getMemberName();
+            } catch (_) {
+              state.memberName =
+                getMemberName();
+            }
           }
         } else {
           state.uid =
@@ -1707,10 +1730,15 @@
       }
 
       localStorage.removeItem("wt_name");
+      state.profile = null;
       state.memberName = "";
       await auth.signOut();
 
       await ensureAnonymousAuth();
+
+      state.memberName =
+        window.WT_CORE?.setGuestName?.() ||
+        getMemberName();
 
       updateAuthUI();
 
@@ -15099,10 +15127,27 @@
   window.WT_CORE.setMemberName = setMemberName;
   window.WT_CORE.getMemberName = getMemberName;
   window.WT_CORE.setGuestName = function() {
+    const key = "wt_guest_name";
+    let name =
+      String(
+        localStorage.getItem(key) ||
+        ""
+      ).trim();
+
+    if (!/^訪客\d{3}$/.test(name)) {
+      name =
+        "訪客" +
+        Math.floor(
+          Math.random() * 900 + 100
+        );
+      localStorage.setItem(
+        key,
+        name
+      );
+    }
+
     localStorage.removeItem("wt_name");
-    const name = "訪客" + Math.floor(Math.random() * 900 + 100);
     state.memberName = name;
-    localStorage.setItem("wt_name", name);
     return name;
   };
   window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
