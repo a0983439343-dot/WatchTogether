@@ -155,6 +155,13 @@
         ".validate": "newData.hasChildren(['owner','name']) && newData.child('owner').isString() && newData.child('owner').val() === root.child('rooms').child($roomId).child('owner').val() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && (!newData.child('settings').exists() || (newData.child('settings').hasChildren(['locked','maxMembers','controlMode']) && newData.child('settings').child('locked').isBoolean() && newData.child('settings').child('maxMembers').isNumber() && newData.child('settings').child('maxMembers').val() >= 2 && newData.child('settings').child('maxMembers').val() <= 10 && newData.child('settings').child('controlMode').isString() && newData.child('settings').child('controlMode').val() === 'host')) && (!newData.child('createdAt').exists() || newData.child('createdAt').isNumber())"
       }
     },
+    "accounts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid','email','emailVerified','displayName','photoURL','provider','createdAt','lastLoginAt','updatedAt']) && newData.child('uid').isString() && newData.child('uid').val() === auth.uid && newData.child('email').isString() && newData.child('email').val().length > 3 && newData.child('email').val().length <= 320 && newData.child('emailVerified').isBoolean() && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100 && newData.child('photoURL').isString() && newData.child('photoURL').val().length <= 2000 && newData.child('provider').isString() && newData.child('provider').val().length > 0 && newData.child('provider').val().length <= 50 && newData.child('createdAt').isNumber() && newData.child('lastLoginAt').isNumber() && newData.child('lastLoginAt').val() <= now + 60000 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 60000)"
+      }
+    },
     "profiles": {
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('friendships').child($uid).child(auth.uid).exists() || root.child('friendships').child(auth.uid).child($uid).exists())",
