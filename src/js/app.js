@@ -7668,22 +7668,8 @@
         )
         .once("value");
 
-    const roomMembersSnapshot =
-      await db
-        .ref(
-          `members/${roomId}`
-        )
-        .once("value");
-
     const isExistingMember =
       currentMemberSnapshot.exists();
-
-    const existingMembers =
-      roomMembersSnapshot.val() ||
-      {};
-
-    const existingMemberCount =
-      countLiveMembers(existingMembers);
 
     const isRoomOwner =
       actualOwnerUid ===
@@ -7710,10 +7696,11 @@
       !state.adminJoinOverride &&
       !isRoomOwner &&
       !isExistingMember &&
-      existingMemberCount >= maxMembers
+      Number.isFinite(maxMembers) &&
+      maxMembers < 2
     ) {
       throw new Error(
-        "這個房間已達人數上限"
+        "這個房間的人數設定無效"
       );
     }
 
