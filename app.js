@@ -776,6 +776,14 @@
   }
 
 
+  function isMobileViewport() {
+    return (
+      window.innerWidth <= 760 ||
+      (window.innerHeight <= 600 && window.innerWidth >= 700 && window.matchMedia?.("(orientation: landscape)")?.matches)
+    );
+  }
+
+
   function configureSearchScroll() {
     const modal = $("sourceModal");
     const card = modal?.querySelector(".modal-card");
@@ -6548,8 +6556,36 @@
             state.playbackIsBuffering = false;
             state.playbackTransientStateUntil = 0;
             state.playbackLastPlayerState = "ended";
-            state.playbackLastObservedPosition =
-              await asyncCurrentPosition().catch(() => null);
+
+            const duration =
+              await asyncDuration().catch(() => 0);
+
+            const currentAtEnd =
+              await asyncCurrentPosition().catch(() => 0);
+
+            const finalPosition =
+              Number.isFinite(duration) && duration > 0
+                ? duration
+                : Math.max(0, Number(currentAtEnd) || 0);
+
+            state.playbackLastObservedPosition = finalPosition;
+            state.playbackLastPosition = finalPosition;
+            state.playbackLastPlaying = false;
+
+            if (
+              state.isOwner &&
+              !state.playbackApplyingRemote
+            ) {
+              const issuedAt = playbackClockNow();
+              void publishPlaybackEvent(
+                "pause",
+                finalPosition,
+                false,
+                issuedAt,
+                issuedAt,
+                true
+              );
+            }
 
             updateTimeUI();
 
@@ -8394,7 +8430,9 @@
       state.playbackLocalIntentAt = 0;
       state.playbackSyncPhase = "initializing";
       state.playbackFineRateSupported = null;
-      await buildYoutubePlayer(videoId, state.isOwner);
+      const shouldAutoplay = state.isOwner && !isMobileViewport();
+
+      await buildYoutubePlayer(videoId, shouldAutoplay);
       return;
     }
 
@@ -8734,6 +8772,7 @@
       platform: String(event.platform || ""),
       position: Math.max(0, Number(event.position) || 0),
       playing: event.playing === true,
+      ended: event.ended === true,
       playbackRate: Math.max(0.01, Number(event.playbackRate) || 1),
       issuedAt: Number.isFinite(issuedAt) && issuedAt > 0 ? issuedAt : playbackClockNow(),
       effectiveAt: Number(event.effectiveAt || 0),
@@ -8763,6 +8802,61 @@
     state.playbackUserActionKind = kind;
     state.playbackUserActionUntil = Date.now() + 900;
   }
+
+  async function replayVideo() {
+    if (
+      !state.playerReady ||
+      !state.player ||
+      !state.currentVideoId ||
+      !["youtube", "vimeo", "dailymotion", "twitch"].includes(state.playerType)
+    ) {
+      return false;
+    }
+
+    cancelScheduledLocalPause();
+    cancelScheduledRemotePause();
+    cancelScheduledRemotePlay();
+    cancelScheduledRemoteSeek();
+
+    state.playbackAwaitingActualStart = false;
+    clearTimeout(state.playbackActualStartTimer);
+    state.playbackActualStartTimer = null;
+
+    markLocalPlaybackIntent("replay");
+    state.playbackSyncPhase = "user-action";
+    state.playbackLocalControlUntil = Date.now() + 1000;
+    state.playbackLocalSeekSuppressUntil = Date.now() + 1000;
+
+    try {
+      await applyPlayerPosition(0);
+      await setPlaybackRateSafe(1);
+      await playPlayer({ muteForAutoplay: false });
+
+      const issuedAt = playbackClockNow();
+
+      if (state.isOwner) {
+        await publishPlaybackEvent(
+          "play",
+          0,
+          true,
+          issuedAt,
+          issuedAt,
+          false
+        );
+      } else {
+        void requestPlaybackControl("seek", 0, true);
+      }
+
+      state.playbackLastPosition = 0;
+      state.playbackLastPlaying = true;
+      state.playbackLastPlayerState = "playing";
+      return true;
+    } catch (error) {
+      console.warn("重播影片失敗:", error);
+      return false;
+    }
+  }
+
 
   async function applyOptimisticLocalPlaybackAction(
     action,
@@ -9386,7 +9480,8 @@
     position,
     playing,
     issuedAt = playbackClockNow(),
-    effectiveAt = 0
+    effectiveAt = 0,
+    ended = false
   ) {
     if (
       !state.isOwner ||
@@ -9436,6 +9531,7 @@
       updatedBy: state.uid,
       eventId,
       playing: Boolean(playing),
+      ended: Boolean(ended),
       playbackRate,
       ...(Number.isFinite(Number(effectiveAt)) && Number(effectiveAt) > 0
         ? { effectiveAt: Number(effectiveAt) }
@@ -9563,7 +9659,8 @@
     position = null,
     explicitPlaying = undefined,
     issuedAtOverride = null,
-    effectiveAt = 0
+    effectiveAt = 0,
+    endedOverride = false
   ) {
     if (
       !state.isOwner ||
@@ -9644,7 +9741,8 @@
           finalPosition,
           playing,
           timelineIssuedAt,
-          syncEffectiveAt
+          syncEffectiveAt,
+          endedOverride === true
         );
       } catch (error) {
         console.warn("播放控制同步寫入失敗:", error);
@@ -9981,6 +10079,34 @@
     state.playbackReadyAt = Date.now() + 120;
 
     try {
+      if (event.ended === true) {
+        const endedPosition = Math.max(0, Number(event.position) || 0);
+        const endedPlaying = await asyncIsPlaying();
+
+        if (endedPlaying) {
+          await pausePlayer();
+        }
+
+        const endedCurrent = await asyncCurrentPosition().catch(() => endedPosition);
+
+        if (Math.abs(endedCurrent - endedPosition) >= 0.08) {
+          await applyPlayerPosition(endedPosition);
+        }
+
+        await setPlaybackRateSafe(1);
+        state.playbackLastPosition = endedPosition;
+        state.playbackLastPlaying = false;
+        state.playbackLastPlayerState = "ended";
+        state.playbackReadyAt = Date.now() + 120;
+
+        if ($("syncStatus")) {
+          $("syncStatus").textContent =
+            "影片結束 " + formatTime(endedPosition);
+        }
+
+        return;
+      }
+
       const effectiveAt =
         Number(event.effectiveAt || 0);
 
@@ -13165,20 +13291,24 @@
              await asyncCurrentPosition();
 
            if (!state.isOwner) {
-             const action =
-               playing ? "pause" : "play";
+             if (!playing && state.playbackLastPlayerState === "ended") {
+               await replayVideo();
+             } else {
+               const action =
+                 playing ? "pause" : "play";
 
-             await applyOptimisticLocalPlaybackAction(
-               action,
-               position,
-               !playing
-             );
+               await applyOptimisticLocalPlaybackAction(
+                 action,
+                 position,
+                 !playing
+               );
 
-             void requestPlaybackControl(
-               action,
-               position,
-               !playing
-             );
+               void requestPlaybackControl(
+                 action,
+                 position,
+                 !playing
+               );
+             }
 
              updateTimeUI();
              return;
@@ -13209,20 +13339,24 @@
                 effectiveAt
               );
             } else {
-              cancelScheduledLocalPause();
-              cancelScheduledRemotePause();
-              state.playbackAwaitingActualStart = false;
-              clearTimeout(state.playbackActualStartTimer);
-              state.playbackActualStartTimer = null;
-              const issuedAt = playbackClockNow();
-              await playPlayer();
-              publishPlaybackEvent(
-                "play",
-                position,
-                true,
-                issuedAt,
-                issuedAt
-              );
+              if (state.playbackLastPlayerState === "ended") {
+                await replayVideo();
+              } else {
+                cancelScheduledLocalPause();
+                cancelScheduledRemotePause();
+                state.playbackAwaitingActualStart = false;
+                clearTimeout(state.playbackActualStartTimer);
+                state.playbackActualStartTimer = null;
+                const issuedAt = playbackClockNow();
+                await playPlayer();
+                publishPlaybackEvent(
+                  "play",
+                  position,
+                  true,
+                  issuedAt,
+                  issuedAt
+                );
+              }
             }
           } catch (error) {
             console.warn("播放控制同步失敗:", error);
