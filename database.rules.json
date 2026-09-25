@@ -159,11 +159,20 @@
       ".read": false,
       ".write": false,
       "whitelist": {
-        ".read": false,
-        ".write": false,
+        ".read": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+        ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
         "$emailKey": {
-          ".read": false,
-          ".write": false
+          ".read": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+          ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'"
+        }
+      },
+      "whitelistByUid": {
+        ".read": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+        ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'a0983439343@gmail.com')",
+          ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid','email','enabled','addedAt','addedByUid','addedByEmail']) && newData.child('uid').isString() && newData.child('uid').val() === $uid && newData.child('email').isString() && newData.child('email').val().length > 3 && newData.child('email').val().length <= 320 && newData.child('enabled').isBoolean() && newData.child('addedAt').isNumber() && newData.child('addedByUid').isString() && newData.child('addedByEmail').isString() && newData.child('addedByEmail').val() === 'a0983439343@gmail.com')"
         }
       }
     },
@@ -172,7 +181,8 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "!newData.exists() || (newData.hasChildren(['uid','email','emailVerified','displayName','photoURL','provider','createdAt','lastLoginAt','updatedAt']) && newData.child('uid').isString() && newData.child('uid').val() === auth.uid && newData.child('email').isString() && newData.child('email').val().length > 3 && newData.child('email').val().length <= 320 && newData.child('emailVerified').isBoolean() && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100 && newData.child('photoURL').isString() && newData.child('photoURL').val().length <= 2000 && newData.child('provider').isString() && newData.child('provider').val().length > 0 && newData.child('provider').val().length <= 50 && newData.child('createdAt').isNumber() && newData.child('lastLoginAt').isNumber() && newData.child('lastLoginAt').val() <= now + 60000 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 60000)"
-      }
+      },
+      ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "profiles": {
       "$uid": {
