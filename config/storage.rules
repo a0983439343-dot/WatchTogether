@@ -1,12 +1,13 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    /*
-     * WatchTogether 目前前端沒有使用 Firebase Storage。
-     * 暫時全部拒絕，避免匿名/一般登入者任意讀寫房間媒體。
-     */
-    match /{allPaths=**} {
-      allow read, write: if false;
+    match /chatMedia/{uid}/{conversationId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size <= 10485760
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('audio/.*'));
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
   }
 }
