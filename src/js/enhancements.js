@@ -592,37 +592,60 @@ async function ensurePublicCode(profile) {
 }
 
 async function saveLoginAccount(user) {
-  if (!user || user.isAnonymous || !user.uid || !user.email) {
+  if (!user || user.isAnonymous || !user.uid || !user.email || !wt.db) {
     return false;
   }
 
-  if (!isCurrentAuthUser(user)) {
+  var current = wt.auth && wt.auth.currentUser;
+  if (current && String(current.uid) !== String(user.uid)) {
     return false;
   }
 
-  try {
-    var ref = wt.db.ref("accounts/" + user.uid);
-    var provider = user.providerData && user.providerData.length
-      ? String(user.providerData[0].providerId || "google.com")
-      : "google.com";
+  var ref = wt.db.ref("accounts/" + user.uid);
+  var provider = user.providerData && user.providerData.length
+    ? String(user.providerData[0].providerId || "google.com")
+    : "google.com";
+  var account = {
+    uid: String(user.uid),
+    email: String(user.email).trim().toLowerCase(),
+    emailVerified: user.emailVerified === true,
+    displayName: String(user.displayName || "").trim().slice(0, 100),
+    photoURL: String(user.photoURL || "").trim().slice(0, 2000),
+    provider: provider.slice(0, 50)
+  };
 
-    await ref.set({
-      uid: String(user.uid),
-      email: String(user.email).trim().toLowerCase(),
-      emailVerified: user.emailVerified === true,
-      displayName: String(user.displayName || "").trim().slice(0, 100),
-      photoURL: String(user.photoURL || "").trim().slice(0, 2000),
-      provider: provider.slice(0, 50),
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      lastLoginAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
-    });
-
-    return true;
-  } catch (error) {
-    console.warn("登入帳號儲存失敗:", error);
-    return false;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    try {
+      var snapshot = await ref.once("value");
+      var old = snapshot.val() || {};
+      await ref.set({
+        uid: account.uid,
+        email: account.email,
+        emailVerified: account.emailVerified,
+        displayName: account.displayName,
+        photoURL: account.photoURL,
+        provider: account.provider,
+        createdAt: Number(old.createdAt || 0) > 0
+          ? Number(old.createdAt)
+          : firebase.database.ServerValue.TIMESTAMP,
+        lastLoginAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      return true;
+    } catch (error) {
+      if (attempt >= 3) {
+        console.warn("登入帳號儲存失敗:", error);
+        return false;
+      }
+      await new Promise(function(resolve){ setTimeout(resolve, 400 * attempt); });
+      current = wt.auth && wt.auth.currentUser;
+      if (current && String(current.uid) !== String(user.uid)) {
+        return false;
+      }
+    }
   }
+
+  return false;
 }
 
 wt.saveLoginAccount = saveLoginAccount;
@@ -2368,7 +2391,7 @@ function setupFriendsLiveListener() {
 }
 
 function setupAuthListeners() {
-  wt.auth.onAuthStateChanged(function(user){
+  wt.auth.onAuthStateChanged(async function(user){
     var sequence = Number(wt.state.authStateSequence || 0) + 1;
     wt.state.authStateSequence = sequence;
     wt.state.user = user || null;
@@ -2379,7 +2402,17 @@ function setupAuthListeners() {
     }
 
     if (user && !user.isAnonymous) {
-      void wt.saveLoginAccount(user);
+      try {
+        await wt.saveLoginAccount(user);
+      } catch (error) {
+        console.warn("WatchTogether account sync failed", error);
+      }
+      if (
+        sequence !== Number(wt.state.authStateSequence || 0) ||
+        !isCurrentAuthUser(user)
+      ) {
+        return;
+      }
       void wt.loadProfile(user).then(function(){
         if (
           sequence !== Number(wt.state.authStateSequence || 0) ||
