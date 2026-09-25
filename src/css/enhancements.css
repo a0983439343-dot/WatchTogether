@@ -95,6 +95,59 @@ body.wt-modal-open {
   background: rgba(255,255,255,.035);
 }
 
+.wt-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--wt-border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  color: var(--wt-muted);
+  font-size: 12px;
+}
+
+.wt-selection-bar .wt-card-actions {
+  margin-left: auto;
+}
+
+.wt-selection-check {
+  margin-bottom: 8px;
+}
+
+.wt-selection-check label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--wt-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.wt-selection-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--wt-accent);
+}
+
+.wt-selection-active {
+  border-color: color-mix(in srgb, var(--wt-accent) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wt-accent) 18%, transparent);
+}
+
+.wt-section-note {
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.wt-recent-section-title .wt-mini-btn {
+  flex: 0 0 auto;
+}
+
 .wt-room-card-main {
   min-width: 0;
   flex: 1;
@@ -810,6 +863,52 @@ body[data-wt-theme="terminal"] .wt-nav-btn {
 }
 
 @media (max-width: 640px) {
+  .wt-room-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .wt-room-card-main {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .wt-card-actions,
+  .wt-selection-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .wt-card-actions .wt-mini-btn {
+    flex: 0 1 auto;
+  }
+
+  .wt-section-title.wt-recent-section-title {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .wt-section-note {
+    display: block;
+    margin-left: 0;
+    margin-top: 2px;
+  }
+
+  .wt-selection-bar {
+    align-items: flex-start;
+  }
+
+  .wt-selection-bar .wt-card-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .wt-selection-bar .wt-mini-btn {
+    flex: 1 1 auto;
+  }
+
   .wt-modal {
     padding: 0;
     align-items: stretch;
