@@ -12,5 +12,6 @@ window.FIREBASE_CONFIG = {
 window.WATCHTOGETHER_CONFIG = {
   youtubeSearchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
-  dailymotionPlayerId: ""
+  dailymotionPlayerId: "",
+  adminEmail: ""
 };
