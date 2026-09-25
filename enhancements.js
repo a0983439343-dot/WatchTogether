@@ -1696,11 +1696,15 @@ function updatePictureInPictureButton(platform) {
   var pip = $("wtPipBtn");
   if (!pip) return;
   var normalized = String(platform || "").trim().toLowerCase();
-  var isYoutube = normalized === "youtube";
-  var hasPlatform = normalized !== "";
-  pip.classList.toggle("hidden", !hasPlatform || isYoutube);
-  pip.disabled = !hasPlatform || isYoutube;
-  pip.setAttribute("aria-hidden", String(!hasPlatform || isYoutube));
+  var direct = $("directVideo");
+  var isNativeVideo = normalized === "youtube" &&
+    direct instanceof HTMLVideoElement &&
+    !direct.classList.contains("hidden") &&
+    direct.style.display !== "none" &&
+    direct.style.visibility !== "hidden";
+  pip.classList.toggle("hidden", !isNativeVideo);
+  pip.disabled = !isNativeVideo;
+  pip.setAttribute("aria-hidden", String(!isNativeVideo));
 }
 
 function ensureRoomToolbar() {
@@ -1738,8 +1742,8 @@ function ensureRoomToolbar() {
         return;
       }
 
-      var video = document.querySelector("video");
-      if (!(video instanceof HTMLVideoElement)) {
+      var video = document.getElementById("directVideo");
+      if (!(video instanceof HTMLVideoElement) || video.classList.contains("hidden")) {
         showToast("目前影片來源不支援畫中畫");
         return;
       }
