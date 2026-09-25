@@ -1,13 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /chatMedia/{uid}/{conversationId}/{fileName} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+    match /chatMedia/{uidA}/{uidB}/{fileName} {
+      allow read: if request.auth != null
+        && (request.auth.uid == uidA || request.auth.uid == uidB);
       allow write: if request.auth != null
-        && request.auth.uid == uid
+        && (request.auth.uid == uidA || request.auth.uid == uidB)
         && request.resource.size <= 10485760
         && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('audio/.*'));
-      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null
+        && (request.auth.uid == uidA || request.auth.uid == uidB);
     }
   }
 }
