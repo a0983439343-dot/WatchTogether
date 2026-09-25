@@ -226,7 +226,12 @@ function rememberRoom(id, name) {
 }
 
 function deleteRecentRoom(id) {
-  writeJson(KEYS.recentRooms, recentRooms().filter(function(item){ return item.id !== String(id || "").toUpperCase(); }));
+  id = String(id || "").toUpperCase();
+  delete state.selectedRecentRooms[id];
+  writeJson(KEYS.recentRooms, recentRooms().filter(function(item){ return item.id !== id; }));
+  if (!Object.keys(state.selectedRecentRooms).length && state.recentRoomSelectionMode) {
+    state.recentRoomSelectionMode = false;
+  }
   renderRecentRooms();
 }
 
@@ -238,7 +243,11 @@ function historyList() {
 function deleteHistoryItem(key) {
   key = String(key || "");
   if (!key) return;
+  delete state.selectedHistoryItems[key];
   writeJson(KEYS.history, historyList().filter(function(item){ return String(item.key || "") !== key; }));
+  if (!Object.keys(state.selectedHistoryItems).length && state.historySelectionMode) {
+    state.historySelectionMode = false;
+  }
   renderHomeActivity();
 }
 
