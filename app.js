@@ -6348,6 +6348,13 @@
 
                         settled = true;
                         clearTimeout(timeout);
+                        try {
+                          const iframe = event.target?.getIframe?.();
+                          if (iframe) {
+                            iframe.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
+                            iframe.setAttribute("allowfullscreen", "true");
+                          }
+                        } catch (_) {}
                         resolve(event.target);
                       },
 
