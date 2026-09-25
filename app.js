@@ -10193,10 +10193,12 @@
     }
 
     state.kickedRef.off();
-    state.kickedRef.on("value", (snapshot) => {
-      if (snapshot.val() === true && state.roomId && state.uid) {
-        void leaveRoomLocally("你已被房主移出房間");
+    state.kickedRef.on("value", () => {
+      if (!state.roomId || !state.uid) {
+        return;
       }
+
+      void handleKickState();
     });
   }
 
