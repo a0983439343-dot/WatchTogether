@@ -487,6 +487,7 @@ wt.esc = esc;
 wt.randomCode = randomCode;
 wt.roomIdFromUrl = roomIdFromUrl;
 wt.serverTs = serverTs;
+wt.updateAdminButton = updateAdminButton;
 wt.readJson = readJson;
 wt.writeJson = writeJson;
 wt.openModal = openModal;
