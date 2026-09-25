@@ -296,7 +296,8 @@ async function updateAdminButton(user) {
   var button = document.getElementById("wtAdminBtn");
   if (!button) return;
   var email = String(user && user.email || "").trim().toLowerCase();
-  var master = Boolean(user && !user.isAnonymous && user.emailVerified === true && email === "a0983439343@gmail.com" && ADMIN_EMAIL === "a0983439343@gmail.com");
+  var configuredAdminEmail = String((window.WATCHTOGETHER_CONFIG || {}).adminEmail || "a0983439343@gmail.com").trim().toLowerCase();
+  var master = Boolean(user && !user.isAnonymous && user.emailVerified === true && email === configuredAdminEmail);
   if (master) {
     button.classList.remove("hidden");
     return;
