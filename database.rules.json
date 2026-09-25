@@ -159,7 +159,8 @@
         ".read": "auth != null && $roomId.length === 6",
         ".write": "auth != null && ($roomId.length === 6 && (( !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && root.child('rooms').child($roomId).child('owner').val() === auth.uid ) || (data.exists() && newData.exists() && root.child('rooms').child($roomId).child('owner').val() === auth.uid && newData.child('owner').val() === root.child('rooms').child($roomId).child('owner').val())) || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com'))",
         ".validate": "newData.hasChildren(['owner','name']) && newData.child('owner').isString() && newData.child('owner').val() === root.child('rooms').child($roomId).child('owner').val() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && (!newData.child('settings').exists() || (newData.child('settings').hasChildren(['locked','maxMembers','controlMode']) && newData.child('settings').child('locked').isBoolean() && newData.child('settings').child('maxMembers').isNumber() && newData.child('settings').child('maxMembers').val() >= 2 && newData.child('settings').child('maxMembers').val() <= 10 && newData.child('settings').child('controlMode').isString() && newData.child('settings').child('controlMode').val() === 'host')) && (!newData.child('createdAt').exists() || newData.child('createdAt').isNumber())"
-      }
+      },
+      ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "admin": {
       ".read": false,
