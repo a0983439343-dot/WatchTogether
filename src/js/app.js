@@ -189,11 +189,82 @@
     return `你的帳號目前已被管理員封鎖，剩餘約 ${minutes} 分鐘`;
   }
 
+  function clearGlobalBlockTimer() {
+    if (state.globalBlockTimer) {
+      clearInterval(state.globalBlockTimer);
+      state.globalBlockTimer = null;
+    }
+  }
+
+  function hideGlobalBlockScreen() {
+    clearGlobalBlockTimer();
+    state.globalBlocked = false;
+    state.globalBlockData = null;
+    $("globalBlockScreen")?.classList.add("hidden");
+    document.body?.classList.remove("wt-account-blocked");
+  }
+
+  function renderGlobalBlockScreen(block) {
+    const message = $("globalBlockMessage");
+    const meta = $("globalBlockMeta");
+    if (!message || !meta || !block) return;
+
+    const permanent = block.permanent === true || Number(block.blockedUntil || 0) === 0;
+    const blockedUntil = Number(block.blockedUntil || 0);
+    message.textContent = formatBlockMessage(block);
+
+    if (permanent) {
+      meta.textContent = "狀態：永久封鎖";
+    } else if (Number.isFinite(blockedUntil) && blockedUntil > Date.now()) {
+      meta.textContent = "解除時間：" + new Date(blockedUntil).toLocaleString("zh-TW", {
+        year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"
+      });
+    } else {
+      meta.textContent = "封鎖期限已到，正在重新確認帳號狀態…";
+    }
+  }
+
+  function showGlobalBlockScreen(block) {
+    const screen = $("globalBlockScreen");
+    if (!screen || !block) return;
+
+    clearGlobalBlockTimer();
+    state.globalBlocked = true;
+    state.globalBlockData = {...block};
+    renderGlobalBlockScreen(state.globalBlockData);
+    screen.classList.remove("hidden");
+    document.body?.classList.add("wt-account-blocked");
+
+    const blockedUntil = Number(block.blockedUntil || 0);
+    const permanent = block.permanent === true || blockedUntil === 0;
+    if (!permanent) {
+      state.globalBlockTimer = setInterval(async () => {
+        const current = state.globalBlockData;
+        const until = Number(current?.blockedUntil || 0);
+        if (!until || until > Date.now()) {
+          if (current) renderGlobalBlockScreen(current);
+          return;
+        }
+
+        clearGlobalBlockTimer();
+        const latest = await getGlobalBlockState(auth?.currentUser || null);
+        if (latest) {
+          showGlobalBlockScreen(latest);
+        } else {
+          hideGlobalBlockScreen();
+        }
+      }, 1000);
+    }
+  }
+
   async function ensureNotGloballyBlocked(user = auth?.currentUser || null) {
     if (!user || user.isAnonymous) return;
     if (String(user.uid || "") === MASTER_ADMIN_UID) return;
     const block = await getGlobalBlockState(user);
-    if (block) throw new Error(formatBlockMessage(block));
+    if (block) {
+      showGlobalBlockScreen(block);
+      throw new Error(formatBlockMessage(block));
+    }
   }
   const state = {
     uid: null,
@@ -212,6 +283,9 @@
     globalBlockListenerRef: null,
     globalBlockListenerAttached: false,
     globalBlockHandler: null,
+    globalBlocked: false,
+    globalBlockData: null,
+    globalBlockTimer: null,
 
     roomRef: null,
 
@@ -1459,10 +1533,17 @@
     const ref = db.ref("admin/blocksByUid/" + user.uid);
     const handler = async (snapshot) => {
       const value = snapshot.val();
-      if (!value || typeof value !== "object") return;
+      if (!value || typeof value !== "object") {
+        hideGlobalBlockScreen();
+        return;
+      }
       const permanent = value.permanent === true || Number(value.blockedUntil || 0) === 0;
       const blockedUntil = Number(value.blockedUntil || 0);
-      if (!permanent && (!Number.isFinite(blockedUntil) || blockedUntil <= Date.now())) return;
+      if (!permanent && (!Number.isFinite(blockedUntil) || blockedUntil <= Date.now())) {
+        hideGlobalBlockScreen();
+        return;
+      }
+      showGlobalBlockScreen(value);
       const message = formatBlockMessage(value);
       if (state.roomId && !state.leavingRoom) {
         try { await leaveRoomLocally(message); } catch (_) {}
@@ -12805,6 +12886,16 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           }
         }
       );
+
+    $("globalBlockRefreshBtn")?.addEventListener("click", async () => {
+      const block = await getGlobalBlockState(auth?.currentUser || null);
+      if (block) {
+        showGlobalBlockScreen(block);
+      } else {
+        hideGlobalBlockScreen();
+        toast("帳號已解除封鎖");
+      }
+    });
 
 
 
