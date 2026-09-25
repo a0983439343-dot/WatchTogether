@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
 <title>WatchTogether 管理員後台</title>
-<link rel="stylesheet" href="admin.css?v=20260925-admin-v4">
+<link rel="stylesheet" href="admin.css?v=20260925-admin-v5">
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
@@ -13,14 +13,31 @@
 </head>
 <body>
 <div id="loadingScreen" class="screen"><div><div class="loader"></div><div>正在驗證管理員身分…</div></div></div>
-<div id="deniedScreen" class="screen hidden"><div class="denied-card"><div class="eyebrow">WATCHTOGETHER / ADMIN</div><h1>無法進入管理員後台</h1><p id="deniedMessage">目前登入的 Google 帳號沒有管理員權限。</p><div class="denied-actions"><button id="switchAccountBtn" class="btn primary">切換 Google 帳號</button><a href="./" class="btn">返回 WatchTogether</a></div></div></div>
-<div id="setupScreen" class="screen hidden"><div class="denied-card"><div class="eyebrow">WATCHTOGETHER / ADMIN</div><h1>尚未設定管理員帳號</h1><p>管理員介面已建立。完成管理員 Email 設定後，只有指定的 Google 帳號可以讀取後台資料。</p><a href="./" class="btn">返回 WatchTogether</a></div></div>
+
+<div id="deniedScreen" class="screen hidden">
+  <div class="denied-card">
+    <div class="eyebrow">WATCHTOGETHER / ADMIN</div>
+    <h1>無法進入管理員後台</h1>
+    <p id="deniedMessage">目前登入的 Google 帳號沒有管理員權限。</p>
+    <div class="denied-actions"><button id="switchAccountBtn" class="btn primary">切換 Google 帳號</button><a href="./" class="btn">返回 WatchTogether</a></div>
+  </div>
+</div>
+
+<div id="setupScreen" class="screen hidden">
+  <div class="denied-card">
+    <div class="eyebrow">WATCHTOGETHER / ADMIN</div>
+    <h1>尚未設定管理員帳號</h1>
+    <p>管理員介面已建立。完成管理員 Email 設定後，只有指定的 Google 帳號可以讀取後台資料。</p>
+    <a href="./" class="btn">返回 WatchTogether</a>
+  </div>
+</div>
 
 <div id="app" class="hidden">
 <header class="topbar">
   <div><div class="eyebrow">WATCHTOGETHER / ADMIN</div><h1>管理員後台</h1></div>
   <div class="topbar-actions"><span id="adminAccount" class="account-chip"></span><button id="logoutBtn" class="btn">登出</button><a href="./" class="btn">回網站</a></div>
 </header>
+
 <main class="layout">
   <aside class="sidebar">
     <button class="nav-item active" data-section="overview">總覽</button>
@@ -28,6 +45,7 @@
     <button class="nav-item" data-section="rooms">🏠 房間監控</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
   </aside>
+
   <section class="content">
     <section id="section-overview" class="admin-section">
       <div class="section-head"><div><div class="eyebrow">DASHBOARD</div><h2>總覽</h2></div><button id="refreshBtn" class="btn primary">重新整理</button></div>
@@ -35,6 +53,7 @@
         <article class="stat-card"><span>已儲存帳號</span><strong id="statAccounts">—</strong></article>
         <article class="stat-card"><span>白名單</span><strong id="statWhitelist">—</strong></article>
         <article class="stat-card"><span>啟用白名單</span><strong id="statWhitelistEnabled">—</strong></article>
+        <article class="stat-card"><span>已封鎖</span><strong id="statBlocked">—</strong></article>
         <article class="stat-card"><span>目前管理員</span><strong id="statCurrent">—</strong></article>
         <article class="stat-card"><span>房間總數</span><strong id="statRooms">—</strong></article>
       </div>
@@ -44,13 +63,23 @@
     <section id="section-accounts" class="admin-section hidden">
       <div class="section-head"><div><div class="eyebrow">AUTH ACCOUNTS</div><h2>登入帳號</h2></div><button id="accountsRefreshBtn" class="btn primary">重新整理</button></div>
       <div class="toolbar"><input id="accountSearch" class="search" type="search" placeholder="搜尋 Email、暱稱或 UID"><span id="accountCount" class="muted"></span></div>
-      <div class="panel table-wrap"><table><thead><tr><th>帳號</th><th>暱稱</th><th>UID</th><th>登入方式</th><th>最後登入</th></tr></thead><tbody id="accountsBody"></tbody></table></div>
+      <div class="panel table-wrap">
+        <table>
+          <thead><tr><th>帳號</th><th>暱稱</th><th>UID</th><th>狀態</th><th>登入方式</th><th>最後登入</th><th>操作</th></tr></thead>
+          <tbody id="accountsBody"></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="section-rooms" class="admin-section hidden">
       <div class="section-head"><div><div class="eyebrow">ROOM MONITOR</div><h2>房間監控</h2></div><button id="roomsRefreshBtn" class="btn primary">重新整理</button></div>
       <div class="toolbar"><input id="roomSearch" class="search" type="search" placeholder="搜尋房間碼、房名、房主或影片"><span id="roomCount" class="muted">0 間</span></div>
-      <div class="panel table-wrap"><table><thead><tr><th>房間</th><th>房主</th><th>在線人數</th><th>目前影片</th><th>建立時間</th><th>操作</th></tr></thead><tbody id="roomsBody"></tbody></table></div>
+      <div class="panel table-wrap">
+        <table>
+          <thead><tr><th>房間</th><th>房主</th><th>在線人數</th><th>目前影片</th><th>建立時間</th><th>操作</th></tr></thead>
+          <tbody id="roomsBody"></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="section-whitelist" class="admin-section hidden">
@@ -59,14 +88,57 @@
         <div class="panel-head"><h3>加入管理員 Email</h3></div>
         <div class="add-row"><input id="whitelistEmail" class="search" type="email" autocomplete="off" placeholder="example@gmail.com"><button id="addWhitelistBtn" class="btn primary">加入白名單管理員</button></div>
       </div>
-      <div id="whitelistHelp" class="muted" style="margin:-6px 0 18px;"></div>
+      <div id="whitelistHelp" class="muted whitelist-help"></div>
       <div class="toolbar"><input id="whitelistSearch" class="search" type="search" placeholder="搜尋白名單 Email"><span id="whitelistCount" class="muted"></span></div>
-      <div class="panel table-wrap"><table><thead><tr><th>Email</th><th>狀態</th><th>加入時間</th><th>加入者</th><th>操作</th></tr></thead><tbody id="whitelistBody"></tbody></table></div>
+      <div class="panel table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>狀態</th><th>加入時間</th><th>加入者</th><th>操作</th></tr></thead>
+          <tbody id="whitelistBody"></tbody>
+        </table>
+      </div>
     </section>
   </section>
 </main>
+
+<div id="userEditModal" class="admin-modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><div><div class="eyebrow">USER DATA</div><h2>編輯使用者</h2></div><button id="userEditClose" class="icon-btn" type="button">✕</button></div>
+    <div class="form-grid">
+      <label>UID<input id="editUserUid" class="search" type="text" readonly></label>
+      <label>Email<input id="editUserEmail" class="search" type="email" readonly></label>
+      <label>顯示名稱<input id="editUserDisplayName" class="search" type="text" maxlength="30"></label>
+      <label>頭像 Emoji<input id="editUserAvatar" class="search" type="text" maxlength="4"></label>
+      <label class="span-2">頭像網址<input id="editUserPhotoURL" class="search" type="url" maxlength="2000"></label>
+      <label>主題<select id="editUserTheme" class="search">
+        <option value="aurora">Aurora</option><option value="cyber">Cyber Grid</option><option value="paper">Paper</option><option value="terminal">Terminal</option><option value="sakura">Sakura</option><option value="ocean">Ocean</option><option value="sunset">Sunset</option><option value="mono">Mono</option><option value="glass">Glass Room</option><option value="retro">Retro Tape</option><option value="forest">Forest</option><option value="blueprint">Blueprint</option>
+      </select></label>
+      <label class="checkbox-row"><input id="editUserNotifications" type="checkbox"> 開啟通知</label>
+    </div>
+    <p id="editUserHint" class="modal-hint"></p>
+    <div class="modal-actions"><button id="userEditCancel" class="btn" type="button">取消</button><button id="userEditSave" class="btn primary" type="button">儲存資料</button></div>
+  </div>
+</div>
+
+<div id="blockModal" class="admin-modal hidden">
+  <div class="modal-card small-card">
+    <div class="modal-head"><div><div class="eyebrow">USER MODERATION</div><h2>封鎖使用者</h2></div><button id="blockClose" class="icon-btn" type="button">✕</button></div>
+    <input id="blockUserUid" type="hidden">
+    <div class="target-card"><strong id="blockUserLabel">—</strong></div>
+    <label>封鎖時間<select id="blockDuration" class="search">
+      <option value="600000">10 分鐘</option>
+      <option value="3600000" selected>1 小時</option>
+      <option value="86400000">1 天</option>
+      <option value="604800000">7 天</option>
+      <option value="2592000000">30 天</option>
+      <option value="permanent">永久</option>
+    </select></label>
+    <p class="modal-hint">封鎖會套用到該 Google 帳號，使用者目前在線時也會被移出房間。</p>
+    <div class="modal-actions"><button id="blockCancel" class="btn" type="button">取消</button><button id="blockConfirm" class="btn danger" type="button">確認封鎖</button></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260925-admin-v4"></script>
+<script src="admin.js?v=20260925-admin-v5"></script>
 </body>
 </html>
