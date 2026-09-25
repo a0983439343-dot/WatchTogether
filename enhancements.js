@@ -556,6 +556,47 @@ async function ensurePublicCode(profile) {
   throw new Error("ID 建立失敗");
 }
 
+async function saveLoginAccount(user) {
+  if (!user || user.isAnonymous || !user.uid || !user.email) {
+    return false;
+  }
+
+  if (!isCurrentAuthUser(user)) {
+    return false;
+  }
+
+  try {
+    var ref = wt.db.ref("accounts/" + user.uid);
+    var snapshot = await ref.once("value");
+
+    if (!isCurrentAuthUser(user)) {
+      return false;
+    }
+
+    var old = snapshot.val() || {};
+    var provider = user.providerData && user.providerData.length
+      ? String(user.providerData[0].providerId || "google.com")
+      : "google.com";
+
+    await ref.set({
+      uid: String(user.uid),
+      email: String(user.email).trim().toLowerCase(),
+      emailVerified: user.emailVerified === true,
+      displayName: String(user.displayName || old.displayName || "").trim().slice(0, 100),
+      photoURL: String(user.photoURL || old.photoURL || "").trim().slice(0, 2000),
+      provider: provider.slice(0, 50),
+      createdAt: old.createdAt || firebase.database.ServerValue.TIMESTAMP,
+      lastLoginAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    return true;
+  } catch (error) {
+    console.warn("登入帳號儲存失敗:", error);
+    return false;
+  }
+}
+
 async function loadProfile(user) {
   if (!user || user.isAnonymous) {
     wt.state.profile = null;
@@ -2291,7 +2332,7 @@ function setupAuthListeners() {
     wt.state.user = user || null;
 
     if (user && !user.isAnonymous) {
-      void wt.loadProfile(user).then(function(){
+      void wt.saveLoginAccount(user);\n      void wt.loadProfile(user).then(function(){
         if (
           sequence !== Number(wt.state.authStateSequence || 0) ||
           !isCurrentAuthUser(user)
