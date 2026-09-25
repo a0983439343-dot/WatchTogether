@@ -10,6 +10,7 @@
   let db = null;
   let currentUser = null;
   let currentHasAdminAccess = false;
+  let currentRole = null;
   let accounts = {};
   let whitelist = {};
   let blocks = {};
@@ -67,12 +68,17 @@
       String(user.email || "").trim().toLowerCase() === MASTER_EMAIL;
   }
 
-  async function hasAdminAccess(user) {
-    if (!user || user.isAnonymous) return false;
-    if (isMasterUser(user)) return true;
+  async function resolveAdminRole(user) {
+    if (!user || user.isAnonymous) return null;
+    if (isMasterUser(user)) return "master";
     const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
     const item = snapshot.val();
-    return Boolean(item && item.uid === user.uid && item.enabled === true);
+    if (!item || item.uid !== user.uid || item.enabled !== true) return null;
+    return item.role === "viewer" ? "viewer" : "admin";
+  }
+
+  function isAdminOperator() {
+    return currentRole === "master" || currentRole === "admin";
   }
 
   async function loadAccounts() {
@@ -96,10 +102,10 @@
 
   function startAccountsListener() {
     stopAccountsListener();
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     accountsRef = db.ref("accounts");
     accountsRef.on("value", snapshot => {
-      if (!currentHasAdminAccess) return;
+      if (!isAdminOperator()) return;
       accounts = snapshot.val() || {};
       renderAccounts();
       updateStats();
@@ -300,13 +306,18 @@
     $("whitelistBody").innerHTML = rows.length
       ? rows.map(({key,item}) => {
           const enabled = item.enabled === true;
+          const role = item.role === "viewer" ? "viewer" : "admin";
+          const roleLabel = role === "viewer" ? "觀察員" : "管理員";
           const actions = master
-            ? '<div class="row-actions"><button class="btn" data-toggle="' + escapeHtml(key) + '">' + (enabled ? "停用" : "啟用") + '</button><button class="btn" data-remove="' + escapeHtml(key) + '">刪除</button></div>'
+            ? '<div class="row-actions"><select class="search" data-role-select="' + escapeHtml(key) + '" aria-label="權限級別"><option value="admin"' + (role === "admin" ? " selected" : "") + '>管理員</option><option value="viewer"' + (role === "viewer" ? " selected" : "") + '>觀察員</option></select><button class="btn" data-role-save="' + escapeHtml(key) + '">套用</button><button class="btn" data-toggle="' + escapeHtml(key) + '">' + (enabled ? "停用" : "啟用") + '</button><button class="btn" data-remove="' + escapeHtml(key) + '">刪除</button></div>'
             : '<span class="muted">僅最高管理員可管理</span>';
-          return '<tr><td><div class="primary-text">' + escapeHtml(item.email || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || key) + '</span></td><td><span class="status ' + (enabled ? "" : "off") + '">' + (enabled ? "啟用" : "停用") + '</span></td><td>' + escapeHtml(formatDate(item.addedAt)) + '</td><td>' + escapeHtml(item.addedByEmail || "—") + '</td><td>' + actions + '</td></tr>';
+          return '<tr><td><div class="primary-text">' + escapeHtml(item.email || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || key) + '</span></td><td><span class="status admin">' + escapeHtml(roleLabel) + '</span></td><td><span class="status ' + (enabled ? "" : "off") + '">' + (enabled ? "啟用" : "停用") + '</span></td><td>' + escapeHtml(formatDate(item.addedAt)) + '</td><td>' + escapeHtml(item.addedByEmail || "—") + '</td><td>' + actions + '</td></tr>';
         }).join("")
       : '<tr><td colspan="5" class="muted">目前沒有白名單帳號。</td></tr>';
 
+    $("whitelistBody").querySelectorAll("[data-role-save]").forEach(btn =>
+      btn.addEventListener("click", () => changeWhitelistRole(btn.dataset.roleSave).catch(error => { console.error(error); toast(error?.message || "權限更新失敗"); }))
+    );
     $("whitelistBody").querySelectorAll("[data-toggle]").forEach(btn =>
       btn.addEventListener("click", () => toggleWhitelist(btn.dataset.toggle).catch(error => { console.error(error); toast("操作失敗"); }))
     );
@@ -327,8 +338,9 @@
     if ($("statRooms")) $("statRooms").textContent = Object.keys(rooms || {}).length;
 
     const u = currentUser || {};
+    const roleLabel = currentRole === "master" ? "最高管理員" : currentRole === "admin" ? "管理員" : currentRole === "viewer" ? "觀察員" : "—";
     $("adminInfo").innerHTML = [
-      ["權限", isMasterUser(u) ? "最高管理員" : "白名單管理員"],
+      ["權限", roleLabel],
       ["Email", u.email || "—"],
       ["UID", u.uid || "—"],
       ["Email 驗證", u.emailVerified === true ? "已驗證" : "未驗證"],
@@ -352,9 +364,11 @@
     }
 
     const email = String(match.email || "").trim().toLowerCase();
+    const role = $("whitelistRole")?.value === "viewer" ? "viewer" : "admin";
     await db.ref("admin/whitelistByUid/" + uid).set({
       uid,
       email,
+      role,
       enabled:true,
       addedAt:firebase.database.ServerValue.TIMESTAMP,
       addedByUid:currentUser.uid,
@@ -363,6 +377,21 @@
     input.value = "";
     await loadWhitelist();
     toast("已加入白名單管理員");
+  }
+
+  async function changeWhitelistRole(uid) {
+    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以調整權限"); return; }
+    const item = whitelist[uid];
+    if (!item) return;
+    if (uid === MASTER_UID) { toast("最高管理員的權限不可修改"); return; }
+    const role = $("whitelistBody")?.querySelector('[data-role-select="' + uid.replace(/"/g, '\"') + '"]')?.value === "viewer" ? "viewer" : "admin";
+    await db.ref("admin/whitelistByUid/" + uid).update({
+      role,
+      updatedAt:firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid:currentUser.uid
+    });
+    await loadWhitelist();
+    toast(role === "viewer" ? "已設為觀察員" : "已設為管理員");
   }
 
   async function toggleWhitelist(uid) {
@@ -389,7 +418,7 @@
   }
 
   async function openEditUser(uid) {
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     const item = accounts[uid];
     if (!item) return;
 
@@ -413,7 +442,7 @@
   }
 
   async function saveUser() {
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -471,7 +500,7 @@
   }
 
   function openBlockUser(uid) {
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -489,7 +518,7 @@
   }
 
   async function confirmBlock() {
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -519,7 +548,7 @@
   }
 
   async function unblockUser(uid) {
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     const item = accounts[uid];
     if (!item) return;
     if (!window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
@@ -529,7 +558,7 @@
   }
 
   async function deleteRoom(roomId) {
-    if (!currentHasAdminAccess) return;
+    if (!isAdminOperator()) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
@@ -552,15 +581,18 @@
   }
 
   function applyRoleUi() {
-    const master = isMasterUser(currentUser);
+    const master = currentRole === "master";
     const addPanel = $("whitelistAddPanel");
     const help = $("whitelistHelp");
     if (master) {
       addPanel?.classList.remove("hidden");
-      if (help) help.textContent = "到「登入帳號」查看使用者 UID，按「複製 UID」後貼到這裡即可加入白名單。";
+      if (help) help.textContent = "到「登入帳號」查看使用者 UID，按「複製 UID」後貼到這裡；新增時可指定「管理員」或「觀察員」。";
+    } else if (currentRole === "admin") {
+      addPanel?.classList.add("hidden");
+      if (help) help.textContent = "你目前是管理員，可管理使用者、封鎖帳號、刪除房間與控制房間；白名單由最高管理員管理。";
     } else {
       addPanel?.classList.add("hidden");
-      if (help) help.textContent = "你目前是白名單管理員，可以查看與管理使用者、房間；白名單本身只有最高管理員可以操作。";
+      if (help) help.textContent = "你目前是觀察員，僅可查看後台資料，不可修改使用者、封鎖帳號或刪除房間。";
     }
   }
 
@@ -584,6 +616,7 @@
       stopAccountsListener();
       currentUser = user || null;
       currentHasAdminAccess = false;
+      currentRole = null;
       accounts = {};
       whitelist = {};
       blocks = {};
@@ -601,7 +634,8 @@
       }
 
       try {
-        currentHasAdminAccess = await hasAdminAccess(user);
+        currentRole = await resolveAdminRole(user);
+        currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
           show("deniedScreen");
           $("deniedMessage").textContent = "目前登入的 Google 帳號沒有管理員權限。";
