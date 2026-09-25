@@ -1,4 +1,4 @@
-const CACHE_NAME = "wt-shell-20260925-v47";
+const CACHE_NAME = "wt-shell-20260925-v48";
 const ASSETS = [
   "./",
   "./styles.css",
@@ -9,7 +9,10 @@ const ASSETS = [
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icon.svg",
-  "./vendor/qrcode-generator.js"
+  "./vendor/qrcode-generator.js",
+  "./admin.html",
+  "./admin.css",
+  "./admin.js"
 ];
 
 self.addEventListener("install", event => {
