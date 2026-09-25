@@ -1902,6 +1902,54 @@
 
 
 
+  async function updateCurrentMemberName() {
+    if (
+      !state.roomId ||
+      !state.membersRef ||
+      !state.uid ||
+      !state.wasMemberInRoom ||
+      state.leavingRoom
+    ) {
+      return;
+    }
+
+    try {
+      const memberRef =
+        state.membersRef.child(
+          state.uid
+        );
+
+      await memberRef.transaction(
+        (current) => {
+          if (
+            !current ||
+            state.leavingRoom
+          ) {
+            return;
+          }
+
+          return {
+            ...current,
+            name: state.memberName,
+            online: true,
+            lastSeen: Date.now(),
+            ...(state.user && !state.user.isAnonymous && window.WT_ENHANCEMENTS?.state?.profile?.publicCode
+              ? { publicCode: String(window.WT_ENHANCEMENTS.state.profile.publicCode).toUpperCase().slice(0, 6) }
+              : {})
+          };
+        }
+      );
+    } catch (error) {
+      if (!state.leavingRoom) {
+        console.warn(
+          "Firebase 成員名稱同步失敗:",
+          error
+        );
+      }
+    }
+  }
+
+
   /*
    * =========================================================
    * ID PARSERS
