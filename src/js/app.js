@@ -3586,94 +3586,103 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
    * =========================================================
    */
 
+  function normalizeVideoIdentity(video) {
+    if (!video) return null;
+
+    const platform = String(video.platform || "youtube").trim().toLowerCase();
+    let id = String(video.id || video.url || "").trim();
+
+    if (!id) return null;
+
+    if (platform === "youtube") {
+      try {
+        const parsed = getYoutubeId(id);
+        if (parsed) id = parsed;
+      } catch (_) {}
+    }
+
+    return {platform,id};
+  }
+
+  function isSameVideo(a, b) {
+    const left = normalizeVideoIdentity(a);
+    const right = normalizeVideoIdentity(b);
+    if (!left || !right) return false;
+    return left.platform === right.platform && left.id === right.id;
+  }
+
+  function isCurrentVideo(video) {
+    return Boolean(state.room?.video && isSameVideo(state.room.video, video));
+  }
+
+  function isVideoInQueue(video) {
+    return Object.values(state.queue || {}).some(function(item) {
+      return isSameVideo(item, video);
+    });
+  }
+
+  async function removeQueuedCopiesOfVideo(video) {
+    if (!state.queueRef || !video) return;
+
+    const matches = Object.entries(state.queue || {}).filter(function(entry) {
+      return isSameVideo(entry[1], video);
+    });
+
+    if (!matches.length) return;
+
+    await Promise.all(matches.map(async function(entry) {
+      try {
+        await state.queueRef.child(entry[0]).remove();
+      } catch (error) {
+        console.warn("移除目前影片的待播放重複項失敗:", error);
+      }
+    }));
+
+    matches.forEach(function(entry) {
+      delete state.queue[entry[0]];
+    });
+
+    renderQueue();
+  }
+
   async function addToQueue(video) {
-    if (
-      !state.queueRef ||
-      !state.uid
-    ) {
-      throw new Error(
-        "目前不在房間內"
-      );
+    if (!state.queueRef || !state.uid) {
+      throw new Error("目前不在房間內");
     }
 
     if (!video?.id) {
-      throw new Error(
-        "無效的影片"
-      );
+      throw new Error("無效的影片");
     }
 
-    const duplicate =
-      Object.values(
-        state.queue || {}
-      ).some(
-        (item) =>
-          String(
-            item?.id || ""
-          ) ===
-          String(video.id) &&
-          String(
-            item?.platform ||
-            "youtube"
-          ) ===
-          String(
-            video.platform ||
-            "youtube"
-          )
-      );
+    if (isCurrentVideo(video)) {
+      throw new Error("這部影片目前正在播放，不能加入待播放清單");
+    }
 
-    if (duplicate) {
-      throw new Error(
-        "這部影片已經在待播放清單"
-      );
+    if (isVideoInQueue(video)) {
+      throw new Error("這部影片已經在待播放清單");
     }
 
     const item = {
-      id:
-        String(video.id),
-
-      platform:
-        video.platform ||
-        "youtube",
-
-      title:
-        video.title ||
-        "未命名影片",
-
-      thumbnail:
-        video.thumbnail ||
-        "",
-
-      channel:
-        video.channel ||
-        "YouTube",
-
-      addedBy:
-        state.uid,
-
-      addedByName:
-        state.memberName,
-
-      addedAt:
-        firebase.database
-          .ServerValue
-          .TIMESTAMP
+      id: String(video.id),
+      platform: video.platform || "youtube",
+      title: video.title || "未命名影片",
+      thumbnail: video.thumbnail || "",
+      channel: video.channel || "YouTube",
+      addedBy: state.uid,
+      addedByName: state.memberName,
+      addedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
-    if (video.url) {
-      item.url =
-        String(video.url);
-    }
+    if (video.url) item.url = String(video.url);
+    if (video.twitchType) item.twitchType = video.twitchType;
 
-    if (video.twitchType) {
-      item.twitchType =
-        video.twitchType;
-    }
+    const newRef = await state.queueRef.push(item);
 
-    await state.queueRef.push(
-      item
-    );
+    if (newRef?.key) {
+      state.queue[newRef.key] = {...item,addedAt:Date.now()};
+      renderQueue();
+    }
   }
-
 
   async function removeFromQueue(queueId) {
     if (
@@ -3792,7 +3801,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     const list =
-      getSortedQueue();
+      getSortedQueue().filter(function(item) {
+        return !isCurrentVideo(item);
+      });
 
     if (!list.length) {
       container.innerHTML = `
