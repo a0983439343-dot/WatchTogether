@@ -63,7 +63,7 @@
   }
 
   function isMasterUser(user) {
-    if (!user || user.isAnonymous || user.emailVerified !== true) return false;
+    if (!user || user.isAnonymous) return false;
     return String(user.uid || "") === MASTER_UID ||
       String(user.email || "").trim().toLowerCase() === MASTER_EMAIL;
   }
