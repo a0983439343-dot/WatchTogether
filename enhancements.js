@@ -1582,6 +1582,7 @@ wt.stopDmListener = stopDmListener;
 var wt = window.WT_ENHANCEMENTS;
 if (!wt) return;
 var $ = wt.$;
+var roomLink = wt.roomLink;
 
 function roomId() {
   return wt.roomIdFromUrl();
