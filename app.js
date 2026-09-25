@@ -146,6 +146,22 @@
    * =========================================================
    */
 
+  const MASTER_ADMIN_EMAIL = "a0983439343@gmail.com";
+
+  async function isPrivilegedAdminUser() {
+    const user = auth?.currentUser || null;
+    if (!user || user.isAnonymous || user.emailVerified !== true) return false;
+    const email = String(user.email || "").trim().toLowerCase();
+    if (email === MASTER_ADMIN_EMAIL) return true;
+    try {
+      const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
+      const value = snapshot.val();
+      return Boolean(value && value.enabled === true);
+    } catch (_) {
+      return false;
+    }
+  }
+
   const state = {
     uid: null,
 
@@ -157,6 +173,9 @@
     room: null,
 
     isOwner: false,
+
+    adminJoinRequested: false,
+    adminJoinOverride: false,
 
     roomRef: null,
 
@@ -1913,7 +1932,7 @@
       return false;
     }
 
-    if (await isMemberKicked()) {
+    if (!state.adminJoinOverride && await isMemberKicked()) {
       await leaveRoomLocally("你已被房主移出房間");
       return false;
     }
@@ -1973,7 +1992,8 @@
       !state.roomId ||
       !state.membersRef ||
       !state.uid ||
-      state.isOwner
+      state.isOwner ||
+      state.adminJoinOverride
     ) {
       return true;
     }
@@ -7306,6 +7326,8 @@
       state.queueRef = null;
       state.room = null;
       state.isOwner = false;
+      state.adminJoinRequested = false;
+      state.adminJoinOverride = false;
       state.wasMemberInRoom = false;
       state.kickedLocally = false;
       state.leavingRoom = false;
@@ -7501,6 +7523,10 @@
       maxAttempts: 4
     });
 
+    state.adminJoinOverride = Boolean(
+      state.adminJoinRequested && await isPrivilegedAdminUser()
+    );
+
     const metaSnapshot =
       await db
         .ref(
@@ -7589,6 +7615,7 @@
       );
 
     if (
+      !state.adminJoinOverride &&
       !isRoomOwner &&
       !isExistingMember &&
       metaSettings.locked === true
@@ -7599,6 +7626,7 @@
     }
 
     if (
+      !state.adminJoinOverride &&
       !isRoomOwner &&
       !isExistingMember &&
       existingMemberCount >= maxMembers
@@ -7614,7 +7642,7 @@
         state.uid
       );
 
-    if (kickRemainingMs > 0) {
+    if (!state.adminJoinOverride && kickRemainingMs > 0) {
       const remainingMinutes = Math.max(
         1,
         Math.ceil(
@@ -10174,6 +10202,7 @@
 
 
   async function handleKickState() {
+    if (state.adminJoinOverride) return false;
     if (!state.kickedRef || !state.roomId || !state.uid) {
       return false;
     }
@@ -10369,7 +10398,7 @@
     }
 
     try {
-      if (await isMemberKicked()) {
+      if (!state.adminJoinOverride && await isMemberKicked()) {
         await leaveRoomLocally("你已被房主移出房間");
         return;
       }
@@ -13737,7 +13766,7 @@
           true;
 
         try {
-          if (await isMemberKicked()) {
+          if (!state.adminJoinOverride && await isMemberKicked()) {
             await leaveRoomLocally(
               "你已被房主移出房間"
             );
@@ -14146,6 +14175,12 @@
 
       return;
     }
+
+    const urlParams = new URLSearchParams(location.search);
+    state.adminJoinRequested = urlParams.get("adminJoin") === "1";
+    state.adminJoinOverride = Boolean(
+      state.adminJoinRequested && await isPrivilegedAdminUser()
+    );
 
     const urlRoomId =
       getRoomIdFromUrl();
