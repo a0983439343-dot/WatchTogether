@@ -182,6 +182,7 @@ function getStreamUrl(videoId, forceRefresh = false) {
         args.splice(
           args.indexOf("--extractor-args") + 2,
           0,
+          "--extractor-args",
           "youtubepot-bgutilhttp:base_url=" + YT_POT_PROVIDER_URL
         );
       }
