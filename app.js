@@ -5126,7 +5126,14 @@
         oldType ===
         "dailymotion"
       ) {
-        old.destroy?.();
+        await old.destroy?.();
+      }
+
+      if (
+        oldType ===
+        "twitch"
+      ) {
+        await old.destroy?.();
       }
 
       if (
@@ -5157,42 +5164,8 @@
    * 每個人自己控制自己的播放。
    */
 
-  function currentPosition() {
-    const player =
-      state.player;
-
-    if (
-      !state.playerReady ||
-      !player
-    ) {
-      return 0;
-    }
-
-    try {
-      if (
-        state.playerType ===
-        "youtube"
-      ) {
-        return (
-          Number(
-            player.getCurrentTime()
-          ) || 0
-        );
-      }
-
-      if (
-        state.playerType ===
-        "twitch"
-      ) {
-        return (
-          Number(
-            player.getCurrentTime()
-          ) || 0
-        );
-      }
-    } catch (_) {}
-
-    return 0;
+  async function currentPosition() {
+    return asyncCurrentPosition();
   }
 
 
@@ -7265,7 +7238,12 @@
       throw new Error("找不到 vimeoPlayer");
     }
 
-    container.src = video.url || `https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=0&playsinline=1`;
+    const rawUrl = String(video.url || "").trim();
+    const embedUrl = /^https?:\\/\\/([^.]+\\.)?vimeo\\.com\\//i.test(rawUrl)
+      ? rawUrl
+      : `https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=0&playsinline=1`;
+
+    container.src = embedUrl;
     container.allow = "autoplay; fullscreen; picture-in-picture";
     container.allowFullscreen = true;
     container.frameBorder = "0";
@@ -7274,8 +7252,8 @@
     const player = new Vimeo.Player(container);
 
     state.player = player;
-    state.currentVideoId = video.id;
-    state.currentVideoUrl = video.url || null;
+    state.currentVideoId = String(video.id);
+    state.currentVideoUrl = embedUrl;
     state.playerType = "vimeo";
     state.playerReady = false;
 
@@ -7291,16 +7269,28 @@
 
     player.on("seeked", event => {
       if (state.player !== player) return;
-      void handlePlatformNativeEvent("seek", Number(event?.seconds));
+      const seconds = Number(event?.seconds);
+      void handlePlatformNativeEvent(
+        "seek",
+        Number.isFinite(seconds) ? seconds : null
+      );
     });
 
     player.on("ended", async () => {
       if (state.player !== player) return;
       state.playbackLastPlayerState = "ended";
+      state.playbackLastPlaying = false;
       if (!state.isOwner || state.playbackApplyingRemote) return;
       const position = await asyncCurrentPosition().catch(() => 0);
       const issuedAt = playbackClockNow();
-      await publishPlaybackEvent("pause", position, false, issuedAt, issuedAt, true);
+      await publishPlaybackEvent(
+        "pause",
+        position,
+        false,
+        issuedAt,
+        issuedAt,
+        true
+      );
     });
 
     player.on("timeupdate", () => {
@@ -7311,7 +7301,13 @@
 
     if (state.player !== player) return;
 
+    const durationValue = await player.getDuration().catch(() => 0);
+    if (!Number.isFinite(Number(durationValue)) || Number(durationValue) <= 0) {
+      throw new Error("Vimeo 影片無法取得有效長度");
+    }
+
     state.playerReady = true;
+    state.playbackLastPlayerState = "paused";
     updateRoomOwnerUI();
     startLocalTimeUpdate();
     void updateTimeUI();
@@ -7349,7 +7345,8 @@
       video: String(video.id),
       controls: true,
       autoplay: false,
-      mute: true
+      mute: true,
+      startTime: 0
     });
 
     state.player = player;
@@ -7574,7 +7571,8 @@
       height: "100%",
       autoplay: false,
       muted: true,
-      parent: [host]
+      parent: [host],
+      layout: "video"
     };
 
     if (video.twitchType === "video") {
