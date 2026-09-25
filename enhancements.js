@@ -1946,7 +1946,7 @@ function enhanceRoomMembers() {
         member.dataset.memberPublicCode || ""
       ).trim().toUpperCase();
 
-      if (!FRIEND_CODE_RE.test(code)) {
+      if (!wt.FRIEND_CODE_RE.test(code)) {
         wt.toast("對方目前沒有可用的 ID");
         return;
       }
@@ -2087,6 +2087,7 @@ wt.enhanceRoomMembers = enhanceRoomMembers;
 var wt = window.WT_ENHANCEMENTS;
 if (!wt) return;
 var $ = wt.$;
+var isCurrentAuthUser = wt.isCurrentAuthUser;
 
 function buildStatusModal() {
   if ($("wtStatusModal")) return;
