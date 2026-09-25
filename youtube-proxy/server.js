@@ -24,6 +24,9 @@ const YT_STREAM_USER_AGENT =
   process.env.YT_STREAM_USER_AGENT ||
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 const YT_STREAM_REFERER = "https://www.youtube.com/";
+const YT_POT_PROVIDER_URL =
+  process.env.YT_POT_PROVIDER_URL ||
+  "http://127.0.0.1:4416";
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
@@ -155,10 +158,14 @@ function getStreamUrl(videoId, forceRefresh = false) {
       "--no-progress",
       "--skip-download",
       "--get-url",
+      "--remote-components",
+      "ejs:github",
       "--js-runtimes",
       "node",
       "--socket-timeout",
       "20",
+      "--extractor-args",
+      "youtubepot-bgutilhttp:base_url=" + YT_POT_PROVIDER_URL,
       "-f",
       "b[ext=mp4][vcodec^=avc1][acodec^=mp4a]/18/b[ext=mp4][vcodec^=avc1][acodec^=mp4a]",
       "--format-sort",
