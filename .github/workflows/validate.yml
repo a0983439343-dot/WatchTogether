@@ -28,7 +28,7 @@ jobs:
 
       - name: Validate JSON files
         run: |
-          node -e "JSON.parse(require('fs').readFileSync('config/config/database.rules.json','utf8')); JSON.parse(require('fs').readFileSync('firebase.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8')); console.log('JSON OK')"
+          node -e "JSON.parse(require('fs').readFileSync('config/database.rules.json','utf8')); JSON.parse(require('fs').readFileSync('firebase.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8')); console.log('JSON OK')"
 
       - name: Check for exposed YouTube API key
         run: |
@@ -46,16 +46,16 @@ jobs:
 
       - name: Check six-character room code implementation
         run: |
-          node -e "const fs=require('fs'); const app=fs.readFileSync('src/js/src/js/app.js','utf8'); const all=['src/js/app.js','index.html','src/js/enhancements.js'].map(f=>fs.readFileSync(f,'utf8')).join('\n'); if(!app.includes('new Uint32Array(\n        6\n      )')&&!/new Uint32Array\\(\\s*6\\s*\\)/s.test(app)){throw new Error('Six-character room code generator check failed.')} if(/6 或 12|12 碼房間|A-Z0-9\\{12\\}/.test(all)){throw new Error('Legacy 12-character room code validation detected.')} const e=fs.readFileSync('src/js/src/js/enhancements.js','utf8'); if(!e.includes('var FRIEND_CODE_RE = /^[A-Z0-9]{6}$/;')){throw new Error('Six-character friend code check failed.')} if(/FRIEND_CODE_RE.*\{8\}|8 碼好友代碼|好友代碼必須是 8/.test(e)){throw new Error('Legacy eight-character friend code detected.')} const rules=fs.readFileSync('config/config/database.rules.json','utf8'); if(/publicCode.*length === 8|\$code\.length === 8|fromCode.*length <= 8/.test(rules)){throw new Error('Legacy eight-character database rule detected.')} if(!/glass/.test(e)||!/retro/.test(e)||!/forest/.test(e)||!/blueprint/.test(e)){throw new Error('Formal theme IDs missing.')} console.log('Six-character room and friend code checks OK')"
+          node -e "const fs=require('fs'); const app=fs.readFileSync('src/js/app.js','utf8'); const all=['src/js/app.js','index.html','src/js/enhancements.js'].map(f=>fs.readFileSync(f,'utf8')).join('\n'); if(!app.includes('new Uint32Array(\n        6\n      )')&&!/new Uint32Array\\(\\s*6\\s*\\)/s.test(app)){throw new Error('Six-character room code generator check failed.')} if(/6 或 12|12 碼房間|A-Z0-9\\{12\\}/.test(all)){throw new Error('Legacy 12-character room code validation detected.')} const e=fs.readFileSync('src/js/enhancements.js','utf8'); if(!e.includes('var FRIEND_CODE_RE = /^[A-Z0-9]{6}$/;')){throw new Error('Six-character friend code check failed.')} if(/FRIEND_CODE_RE.*\{8\}|8 碼好友代碼|好友代碼必須是 8/.test(e)){throw new Error('Legacy eight-character friend code detected.')} const rules=fs.readFileSync('config/database.rules.json','utf8'); if(/publicCode.*length === 8|\$code\.length === 8|fromCode.*length <= 8/.test(rules)){throw new Error('Legacy eight-character database rule detected.')} if(!/glass/.test(e)||!/retro/.test(e)||!/forest/.test(e)||!/blueprint/.test(e)){throw new Error('Formal theme IDs missing.')} console.log('Six-character room and friend code checks OK')"
 
 
       - name: Check synchronized room control architecture
         run: |
           node - <<'NODE'
           const fs = require('fs');
-          const app = fs.readFileSync('src/js/src/js/app.js', 'utf8');
-          const enh = fs.readFileSync('src/js/src/js/enhancements.js', 'utf8');
-          const rules = fs.readFileSync('config/config/database.rules.json', 'utf8');
+          const app = fs.readFileSync('src/js/app.js', 'utf8');
+          const enh = fs.readFileSync('src/js/enhancements.js', 'utf8');
+          const rules = fs.readFileSync('config/database.rules.json', 'utf8');
           const index = fs.readFileSync('index.html', 'utf8');
           const sw = fs.readFileSync('sw.js', 'utf8');
 
