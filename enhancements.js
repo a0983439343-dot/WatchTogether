@@ -86,6 +86,7 @@ function toast(message) {
   setTimeout(function(){ item.remove(); }, 3000);
 }
 
+var showToast = toast;
 wt.toast = toast;
 
 function openModal(id) {
@@ -1607,6 +1608,17 @@ function ensureRoomChat(room) {
   }
 }
 
+function updatePictureInPictureButton(platform) {
+  var pip = $("wtPipBtn");
+  if (!pip) return;
+  var normalized = String(platform || "").trim().toLowerCase();
+  var isYoutube = normalized === "youtube";
+  var hasPlatform = normalized !== "";
+  pip.classList.toggle("hidden", !hasPlatform || isYoutube);
+  pip.disabled = !hasPlatform || isYoutube;
+  pip.setAttribute("aria-hidden", String(!hasPlatform || isYoutube));
+}
+
 function ensureRoomToolbar() {
   var meta = document.querySelector(".room-meta");
   if (!meta) return;
@@ -1636,26 +1648,38 @@ function ensureRoomToolbar() {
     pip.type = "button";
     pip.textContent = "▣ 畫中畫";
     pip.addEventListener("click",async function() {
-      var video = document.getElementById("directVideo");
-      if (!(video instanceof HTMLVideoElement)) {
-        toast("目前影片來源不支援畫中畫");
+      var platform = String(wt.state.roomCurrentPlatform || "").trim().toLowerCase();
+      if (platform === "youtube") {
+        showToast("YouTube 請使用播放器內建的畫中畫功能");
         return;
       }
+
+      var video = document.querySelector("video");
+      if (!(video instanceof HTMLVideoElement)) {
+        showToast("目前影片來源不支援畫中畫");
+        return;
+      }
+
       try {
-        if (document.pictureInPictureElement) {
+        if (document.pictureInPictureElement === video) {
           await document.exitPictureInPicture();
           return;
+        }
+        if (document.pictureInPictureElement && document.pictureInPictureElement !== video) {
+          await document.exitPictureInPicture();
         }
         if (!document.pictureInPictureEnabled || typeof video.requestPictureInPicture !== "function") {
           throw new Error("這個瀏覽器不支援畫中畫");
         }
         await video.requestPictureInPicture();
       } catch (error) {
-        toast(error && error.message || "無法開啟畫中畫");
+        showToast(error && error.message || "無法開啟畫中畫");
       }
     });
     actions.appendChild(pip);
   }
+
+  updatePictureInPictureButton(wt.state.roomCurrentPlatform);
 }
 
 async function shareRoom() {
@@ -1916,6 +1940,8 @@ async function setupRoom(id) {
 
   var meta = metaSnapshot.val() || {};
   wt.state.roomMeta = meta;
+  wt.state.roomCurrentPlatform = "";
+  updatePictureInPictureButton("");
 
   try { wt.state.roomVideoRef && wt.state.roomVideoRef.off(); } catch (_) {}
   wt.state.roomVideoRef = wt.db.ref("rooms/" + id + "/video");
@@ -1937,6 +1963,8 @@ async function setupRoom(id) {
     }
 
     var video = snapshot.val();
+    wt.state.roomCurrentPlatform = String(video?.platform || "").trim().toLowerCase();
+    updatePictureInPictureButton(wt.state.roomCurrentPlatform);
     if (video && video.id) wt.rememberVideo(video);
   });
 }
@@ -1948,6 +1976,8 @@ function stopRoomEnhancements() {
   wt.state.roomChatRef = null;
   wt.state.roomVideoRef = null;
   wt.state.roomMeta = null;
+  wt.state.roomCurrentPlatform = "";
+  updatePictureInPictureButton("");
   wt.state.roomSetupId = "";
   wt.state.roomLastObservedId = "";
   wt.state.roomLastObservedName = "";
