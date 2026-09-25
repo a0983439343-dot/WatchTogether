@@ -7760,9 +7760,7 @@
     history.replaceState(
       {},
       "",
-      `?room=${encodeURIComponent(
-        roomId
-      )}`
+      `?room=${encodeURIComponent(roomId)}${state.adminJoinOverride ? "&adminJoin=1" : ""}`
     );
 
     await enterRoom();
