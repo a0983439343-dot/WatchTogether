@@ -313,7 +313,9 @@ async function updateAdminButton(user) {
   }
 }
 
-wt.updateAdminButton = updateAdminButton;\n\nfunction ensureTopbar() {
+wt.updateAdminButton = updateAdminButton;
+
+function ensureTopbar() {
   var right = document.querySelector(".topbar-right");
   if (!right) return;
   if (!document.getElementById("wtFriendsBtn")) {
