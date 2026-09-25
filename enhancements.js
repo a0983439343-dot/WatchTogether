@@ -481,6 +481,7 @@ function isCurrentAuthUser(user) {
 
 wt.isCurrentAuthUser =
   isCurrentAuthUser;
+wt.saveLoginAccount = saveLoginAccount;
 
 wt.rememberVideo = rememberVideo;
 
