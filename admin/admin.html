@@ -66,6 +66,7 @@
     <button class="nav-item" data-section="rooms">🏠 房間監控</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
      <button class="nav-item" data-section="reports">🐛 問題回報</button>
+     <button class="nav-item" data-section="audit">📜 操作紀錄</button>
   </aside>
 
   <section class="content">
@@ -85,7 +86,7 @@
 
     <section id="section-accounts" class="admin-section hidden">
       <div class="section-head"><div><div class="eyebrow">AUTH ACCOUNTS</div><h2>登入帳號</h2></div><button id="accountsRefreshBtn" class="btn primary">重新整理</button></div>
-      <div class="toolbar"><input id="accountSearch" class="search" type="search" placeholder="搜尋 Email、暱稱或 UID"><span id="accountCount" class="muted"></span></div>
+      <div class="toolbar"><input id="accountSearch" class="search" type="search" placeholder="搜尋 Email、暱稱或 UID"><select id="accountStatusFilter" class="search report-filter" aria-label="帳號狀態"><option value="all">全部帳號</option><option value="normal">正常</option><option value="blocked">已封鎖</option></select><span id="accountCount" class="muted"></span></div>
       <div class="panel table-wrap">
         <table>
           <thead><tr><th>帳號</th><th>暱稱</th><th>UID</th><th>狀態</th><th>登入方式</th><th>最後登入</th><th>操作</th></tr></thead>
@@ -106,7 +107,7 @@
     </section>
 
     <section id="section-reports" class="admin-section hidden">
-       <div class="section-head"><div><div class="eyebrow">ISSUE REPORTS</div><h2>問題回報</h2></div><button id="reportsRefreshBtn" class="btn primary">重新整理</button></div>
+       <div class="section-head"><div><div class="eyebrow">ISSUE REPORTS</div><h2>問題回報</h2></div><div class="section-head-actions"><button id="reportsExportBtn" class="btn">匯出 JSON</button><button id="reportsRefreshBtn" class="btn primary">重新整理</button></div></div>
        <div class="toolbar">
          <input id="reportSearch" class="search" type="search" placeholder="搜尋描述、UID、Email、房間碼">
          <select id="reportStatusFilter" class="search report-filter" aria-label="回報狀態">
@@ -121,6 +122,33 @@
          <table class="reports-table">
            <thead><tr><th>時間</th><th>類型</th><th>帳號</th><th>房間</th><th>問題描述</th><th>狀態</th><th>操作</th></tr></thead>
            <tbody id="reportsBody"></tbody>
+         </table>
+       </div>
+     </section>
+
+    <section id="section-audit" class="admin-section hidden">
+       <div class="section-head"><div><div class="eyebrow">AUDIT LOG</div><h2>操作紀錄</h2></div><button id="auditRefreshBtn" class="btn primary">重新整理</button></div>
+       <div class="toolbar">
+         <input id="auditSearch" class="search" type="search" placeholder="搜尋管理員、UID、目標或操作內容">
+         <select id="auditActionFilter" class="search report-filter" aria-label="操作類型">
+           <option value="all">全部操作</option>
+           <option value="block">封鎖</option>
+           <option value="unblock">解除封鎖</option>
+           <option value="user.update">編輯使用者</option>
+           <option value="room.delete">刪除房間</option>
+           <option value="report.status">處理回報</option>
+           <option value="report.delete">刪除回報</option>
+           <option value="whitelist.add">加入白名單</option>
+           <option value="whitelist.role">調整權限</option>
+           <option value="whitelist.toggle">啟用 / 停用</option>
+           <option value="whitelist.remove">移除白名單</option>
+         </select>
+         <span id="auditCount" class="muted">0 筆</span>
+       </div>
+       <div class="panel table-wrap">
+         <table class="audit-table">
+           <thead><tr><th>時間</th><th>管理員</th><th>操作</th><th>目標</th><th>內容</th></tr></thead>
+           <tbody id="auditBody"></tbody>
          </table>
        </div>
      </section>
@@ -211,6 +239,6 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260925-admin-v13"></script>
+<script src="admin.js?v=20260925-admin-v14"></script>
 </body>
 </html>
