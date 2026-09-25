@@ -1563,6 +1563,7 @@
             user.uid;
 
           updateAuthUI(user);
+          void window.WT_ENHANCEMENTS?.saveLoginAccount?.(user);
 
           toast(
             "Google 登入成功"
@@ -1647,6 +1648,7 @@
         user.uid;
 
       updateAuthUI(user);
+      void window.WT_ENHANCEMENTS?.saveLoginAccount?.(user);
 
       toast(
         "Google 登入成功"
@@ -1693,6 +1695,7 @@
           updateAuthUI(
             recoveredUser
           );
+          void window.WT_ENHANCEMENTS?.saveLoginAccount?.(recoveredUser);
 
           toast(
             "Google 登入成功"
