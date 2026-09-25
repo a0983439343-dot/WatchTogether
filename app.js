@@ -5921,8 +5921,8 @@
         }
 
         const playerId =
-          window.DAILYMOTION_PLAYER_ID ||
-          "";
+          DAILYMOTION_PLAYER_ID ||
+          String(window.DAILYMOTION_PLAYER_ID || "").trim();
 
         if (!playerId) {
           reject(
@@ -7588,7 +7588,7 @@
     updateRoomOwnerUI();
 
     player.on(
-      dailymotion.events.VIDEO_PLAY,
+      dailymotion.events.VIDEO_PLAYING,
       () => {
         if (state.player !== player) return;
         void handlePlatformNativeEvent("play");
