@@ -66,6 +66,9 @@ jobs:
           if (!rules.includes("root.child('members').child($roomId).child(auth.uid).exists()")) throw new Error('Owner takeover membership guard missing.');
           if (/numChildren\s*\(/.test(rules)) throw new Error('Unsupported numChildren() remains in Firebase rules.');
           if (!app.includes('loadYoutubeIframeApi') || !app.includes('createYoutubeIframePlayer')) throw new Error('YouTube IFrame playback adapter is missing.');
+          if (!app.includes('loadVimeoSdk') || !app.includes('new Vimeo.Player')) throw new Error('Vimeo Player SDK integration is missing.');
+          if (!app.includes('loadDailymotionSdk') || !app.includes('dailymotion.createPlayer') || !app.includes('dailymotion.events.VIDEO_SEEKEND')) throw new Error('Dailymotion Web SDK integration is missing.');
+          if (!app.includes('loadTwitchSdk') || !app.includes('new Twitch.Player') || !app.includes('Twitch.Player.SEEK')) throw new Error('Twitch JavaScript Player integration is missing.');
           if (/randomCode\(12\)|length\s*={2,3}\s*12|randomCode\(8\)|length\s*={2,3}\s*8/.test(app + enh)) throw new Error('Legacy room/friend code length remains.');
           const appVersion = index.match(/app\.js\?v=([^"'&]+)/)?.[1];
           const enhVersion = index.match(/enhancements\.js\?v=([^"'&]+)/)?.[1];
