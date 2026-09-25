@@ -20,11 +20,11 @@
       return;
     }
 
-    window.__WATCHTOGETHER_BUILD__ = "20260925-formal-v43";
+    window.__WATCHTOGETHER_BUILD__ = "20260925-formal-v45";
 
     window.addEventListener("load", async () => {
       try {
-        const currentBuild = "20260925-formal-v43";
+        const currentBuild = "20260925-formal-v45";
 
         const registrations =
           await navigator.serviceWorker.getRegistrations();
@@ -58,7 +58,7 @@
 
         const registration =
           await navigator.serviceWorker.register(
-            "./sw.js?v=20260925-formal-v43",
+            "./sw.js?v=20260925-formal-v45",
             {
               scope: "./"
             }
