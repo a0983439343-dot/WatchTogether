@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="./src/css/enhancements.css?v=20260925-formal-v54">
 <script>
 (() => {
-  const path = window.location.pathname.replace(/\\/+$/, "");
-  if (/(^|\\/)WatchTogether(\\/)admin\\.html$/i.test(path)) {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  if (path === "/WatchTogether/admin.html") {
     window.location.replace("./admin/admin.html");
   }
 })();
