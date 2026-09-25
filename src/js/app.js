@@ -1950,6 +1950,220 @@
   }
 
 
+
+function waitForDatabaseConnection(timeoutMs = 8000) {
+    if (!db || state.leavingRoom) {
+      return Promise.resolve(false);
+    }
+
+    if (state.databaseConnected === true) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+      const connectedRef = db.ref(".info/connected");
+      let settled = false;
+      let timer = null;
+
+      const cleanup = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        try {
+          connectedRef.off("value", handle);
+        } catch (_) {}
+      };
+
+      const finish = connected => {
+        cleanup();
+        if (connected) {
+          state.databaseConnected = true;
+        }
+        resolve(Boolean(connected));
+      };
+
+      const handle = snapshot => {
+        if (snapshot.val() === true) {
+          finish(true);
+        }
+      };
+
+      connectedRef.on("value", handle);
+      timer = setTimeout(() => finish(false), Math.max(1000, Number(timeoutMs) || 8000));
+
+      connectedRef.once("value").then(handle).catch(() => {});
+    });
+  }
+
+  async function ensureRoomMembership() {
+    if (
+      !state.roomId ||
+      !state.uid ||
+      !state.membersRef ||
+      state.leavingRoom
+    ) {
+      return false;
+    }
+
+    if (!(await waitForDatabaseConnection())) {
+      return false;
+    }
+
+    if (!state.adminJoinOverride && await isMemberKicked()) {
+      await leaveRoomLocally("你已被房主移出房間");
+      return false;
+    }
+
+    const memberRef =
+      state.membersRef.child(
+        state.uid
+      );
+
+    let snapshot =
+      await memberRef.once(
+        "value"
+      ).catch(() => null);
+
+    if (
+      !snapshot?.exists() ||
+      snapshot.val()?.online !== true
+    ) {
+      const restored =
+        await markMemberOnline();
+
+      if (!restored) {
+        return false;
+      }
+
+      snapshot =
+        await memberRef.once(
+          "value"
+        ).catch(() => null);
+    }
+
+    return Boolean(snapshot?.exists());
+  }
+
+  async function getMembersOnce() {
+    if (!state.membersRef) {
+      return {};
+    }
+
+    try {
+      const snapshot =
+        await state.membersRef.once(
+          "value"
+        );
+
+      return (
+        snapshot.val() ||
+        {}
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  async function enforceRoomCapacity() {
+    if (
+      !state.roomId ||
+      !state.membersRef ||
+      !state.uid ||
+      state.isOwner ||
+      state.adminJoinOverride
+    ) {
+      return true;
+    }
+
+    const roomId = String(state.roomId);
+    const uid = String(state.uid);
+
+    let maxMembers;
+
+    try {
+      const metaSnapshot =
+        await db.ref(
+          "roomMeta/" + roomId
+        ).once("value");
+
+      const settings =
+        metaSnapshot.val()?.settings || {};
+
+      maxMembers = Math.max(
+        2,
+        Math.min(
+          10,
+          Number(settings.maxMembers || 2)
+        )
+      );
+    } catch (_) {
+      return true;
+    }
+
+    let members;
+
+    try {
+      const memberSnapshot =
+        await state.membersRef.once(
+          "value"
+        );
+
+      members =
+        memberSnapshot.val() || {};
+    } catch (_) {
+      return true;
+    }
+
+    const entries =
+      Object.entries(members || {})
+        .filter(
+          ([memberUid, member]) =>
+            Boolean(memberUid) &&
+            isMemberPresenceLive(member)
+        )
+        .sort(
+          ([uidA, memberA], [uidB, memberB]) =>
+            Number(memberA?.joinedAt || 0) -
+              Number(memberB?.joinedAt || 0) ||
+            String(uidA).localeCompare(
+              String(uidB)
+            )
+        );
+
+    const ownIndex =
+      entries.findIndex(
+        ([memberUid]) =>
+          String(memberUid) === uid
+      );
+
+    if (
+      ownIndex < 0 ||
+      ownIndex < maxMembers
+    ) {
+      return ownIndex >= 0;
+    }
+
+    try {
+      await state.membersRef
+        .child(uid)
+        .onDisconnect()
+        .cancel();
+    } catch (_) {}
+
+    try {
+      await state.membersRef
+        .child(uid)
+        .remove();
+    } catch (_) {}
+
+    return false;
+  }
+
   /*
    * =========================================================
    * ID PARSERS
