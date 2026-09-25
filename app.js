@@ -6031,260 +6031,6 @@
    * =========================================================
    */
 
-  async function loadYoutubeIframeApi() {
-    if (window.YT?.Player) {
-      return;
-    }
-
-    if (window.__watchTogetherYoutubeApiPromise) {
-      return window.__watchTogetherYoutubeApiPromise;
-    }
-
-    window.__watchTogetherYoutubeApiPromise =
-      new Promise((resolve, reject) => {
-        const finish = () => {
-          clearTimeout(timeout);
-          if (window.YT?.Player) {
-            resolve();
-          } else {
-            reject(
-              new Error(
-                "YouTube IFrame API 載入失敗"
-              )
-            );
-          }
-        };
-
-        const timeout =
-          setTimeout(() => {
-            window.__watchTogetherYoutubeApiPromise = null;
-            reject(
-              new Error(
-                "YouTube IFrame API 載入逾時"
-              )
-            );
-          }, 15000);
-
-        const previousReady =
-          window.onYouTubeIframeAPIReady;
-
-        window.onYouTubeIframeAPIReady = () => {
-          try {
-            previousReady?.();
-          } catch (_) {}
-
-          finish();
-        };
-
-        const existing =
-          document.querySelector(
-            'script[src="https://www.youtube.com/iframe_api"]'
-          );
-
-        if (existing) {
-          if (window.YT?.Player) {
-            finish();
-            return;
-          }
-
-          return;
-        }
-
-        const script =
-          document.createElement("script");
-
-        script.src =
-          "https://www.youtube.com/iframe_api";
-
-        script.async = true;
-
-        script.onerror = () => {
-          window.__watchTogetherYoutubeApiPromise = null;
-          clearTimeout(timeout);
-          reject(
-            new Error(
-              "YouTube IFrame API 載入失敗"
-            )
-          );
-        };
-
-        document.head.appendChild(script);
-      });
-
-    try {
-      await window.__watchTogetherYoutubeApiPromise;
-    } catch (error) {
-      window.__watchTogetherYoutubeApiPromise = null;
-      throw error;
-    }
-  }
-
-  function createYoutubeIframePlayer(
-    iframePlayer,
-    videoId
-  ) {
-    return {
-      getCurrentTime() {
-        try {
-          return Number(
-            iframePlayer.getCurrentTime()
-          ) || 0;
-        } catch (_) {
-          return 0;
-        }
-      },
-
-      getDuration() {
-        try {
-          return Number(
-            iframePlayer.getDuration()
-          ) || 0;
-        } catch (_) {
-          return 0;
-        }
-      },
-
-      getPlayerState() {
-        try {
-          return Number(
-            iframePlayer.getPlayerState()
-          );
-        } catch (_) {
-          return -1;
-        }
-      },
-
-      getAvailablePlaybackRates() {
-        try {
-          const rates =
-            iframePlayer.getAvailablePlaybackRates();
-
-          return Array.isArray(rates) && rates.length
-            ? rates.slice()
-            : [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-        } catch (_) {
-          return [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-        }
-      },
-
-      getPlaybackRate() {
-        try {
-          return Number(
-            iframePlayer.getPlaybackRate()
-          ) || 1;
-        } catch (_) {
-          return 1;
-        }
-      },
-
-      setPlaybackRate(rate) {
-        const value = Number(rate);
-
-        if (
-          !Number.isFinite(value) ||
-          value <= 0
-        ) {
-          return;
-        }
-
-        try {
-          iframePlayer.setPlaybackRate(value);
-        } catch (_) {}
-      },
-
-      seekTo(seconds, allowSeekAhead = true) {
-        const target =
-          Math.max(
-            0,
-            Number(seconds) || 0
-          );
-
-        try {
-          iframePlayer.seekTo(
-            target,
-            Boolean(allowSeekAhead)
-          );
-        } catch (_) {}
-
-        return target;
-      },
-
-      async playVideo() {
-        try {
-          iframePlayer.playVideo();
-          return true;
-        } catch (_) {
-          return false;
-        }
-      },
-
-      pauseVideo() {
-        try {
-          iframePlayer.pauseVideo();
-        } catch (_) {}
-      },
-
-      mute() {
-        try {
-          iframePlayer.mute();
-        } catch (_) {}
-      },
-
-      unMute() {
-        try {
-          iframePlayer.unMute();
-        } catch (_) {}
-      },
-
-      setVolume(value) {
-        const normalized =
-          Math.max(
-            0,
-            Math.min(
-              100,
-              Number(value)
-            )
-          );
-
-        if (!Number.isFinite(normalized)) {
-          return;
-        }
-
-        try {
-          iframePlayer.setVolume(
-            normalized
-          );
-        } catch (_) {}
-      },
-
-      destroy() {
-        try {
-          iframePlayer.destroy();
-        } catch (_) {}
-
-        return Promise.resolve();
-      },
-
-      getVideoData() {
-        try {
-          return {
-            video_id:
-              String(
-                iframePlayer.getVideoData?.()
-                  ?.video_id ||
-                videoId
-              )
-          };
-        } catch (_) {
-          return {
-            video_id:
-              videoId
-          };
-        }
-      }
-    };
-  }
-
   async function buildYoutubeNativePlayer(
     videoId,
     autoplay = false
@@ -8047,31 +7793,31 @@
       state.playbackFineRateSupported = null;
       const shouldAutoplay = state.isOwner && !isMobileViewport();
 
-      if (YOUTUBE_STREAM_PROXY_URL) {
-        try {
-          await buildYoutubeNativePlayer(
-            videoId,
-            shouldAutoplay
-          );
-          return;
-        } catch (nativeError) {
-          console.warn(
-            "原生 YouTube 串流不可用，切換官方播放器:",
-            nativeError
-          );
-
-          if ($("syncStatus")) {
-            $("syncStatus").textContent =
-              "無廣告串流暫時不可用，正在切換 YouTube 播放器…";
-          }
-        }
+      if (!YOUTUBE_STREAM_PROXY_URL) {
+        throw new Error(
+          "YouTube 串流代理尚未設定"
+        );
       }
 
-      await buildYoutubePlayer(
-        videoId,
-        shouldAutoplay
-      );
-      return;
+      try {
+        await buildYoutubeNativePlayer(
+          videoId,
+          shouldAutoplay
+        );
+        return;
+      } catch (nativeError) {
+        console.error(
+          "原生 YouTube 串流建立失敗:",
+          nativeError
+        );
+
+        if ($("syncStatus")) {
+          $("syncStatus").textContent =
+            "YouTube 無法建立無廣告串流";
+        }
+
+        throw nativeError;
+      }
     }
 
     await buildPlatformPlayer(
