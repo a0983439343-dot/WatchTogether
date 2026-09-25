@@ -185,6 +185,9 @@ body.wt-modal-open {
 
 .wt-mini-btn {
   min-height: 34px;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
   padding: 7px 10px;
   border: 1px solid var(--wt-border);
   border-radius: 10px;
