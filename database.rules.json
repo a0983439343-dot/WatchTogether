@@ -155,6 +155,18 @@
         ".validate": "newData.hasChildren(['owner','name']) && newData.child('owner').isString() && newData.child('owner').val() === root.child('rooms').child($roomId).child('owner').val() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && (!newData.child('settings').exists() || (newData.child('settings').hasChildren(['locked','maxMembers','controlMode']) && newData.child('settings').child('locked').isBoolean() && newData.child('settings').child('maxMembers').isNumber() && newData.child('settings').child('maxMembers').val() >= 2 && newData.child('settings').child('maxMembers').val() <= 10 && newData.child('settings').child('controlMode').isString() && newData.child('settings').child('controlMode').val() === 'host')) && (!newData.child('createdAt').exists() || newData.child('createdAt').isNumber())"
       }
     },
+    "admin": {
+      ".read": false,
+      ".write": false,
+      "whitelist": {
+        ".read": false,
+        ".write": false,
+        "$emailKey": {
+          ".read": false,
+          ".write": false
+        }
+      }
+    },
     "accounts": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
