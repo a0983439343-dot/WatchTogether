@@ -1041,6 +1041,17 @@ body[data-wt-theme="blueprint"] .wt-theme-card {
 #wtQrModal .wt-qr {
   width: 100%;
   box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#wtQrModal .wt-qr canvas {
+  display: block;
+  width: 280px;
+  height: 280px;
+  max-width: 100%;
+  margin-inline: auto;
 }
 
 #wtQrModal .wt-profile-code {
@@ -1053,6 +1064,11 @@ body[data-wt-theme="blueprint"] .wt-theme-card {
   display: flex;
   justify-content: center;
   align-items: center;
+  box-sizing: border-box;
+}
+
+#wtQrModal .wt-qr-actions {
+  padding-inline: 0;
 }
 
 #wtQrModal #wtQrCopy {
@@ -1060,4 +1076,14 @@ body[data-wt-theme="blueprint"] .wt-theme-card {
   width: 280px;
   max-width: 100%;
   margin-inline: auto;
+}
+
+#wtQrModal .wt-qr-stage {
+  width: 280px;
+  max-width: 100%;
+  margin-inline: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
 }
