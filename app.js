@@ -7243,11 +7243,27 @@
     try {
       const parsedUrl = new URL(rawUrl);
       const host = parsedUrl.hostname.toLowerCase();
+      const pathMatch = parsedUrl.pathname.match(/\/video\/(\d+)/i);
+      const directIdMatch = parsedUrl.pathname.match(/\/(\d+)(?:\/)?$/);
+
       if (
         (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") &&
-        (host === "vimeo.com" || host.endsWith(".vimeo.com"))
+        host === "player.vimeo.com" &&
+        pathMatch?.[1]
       ) {
-        embedUrl = rawUrl;
+        const params = new URLSearchParams(parsedUrl.search);
+        params.set("autoplay", "0");
+        params.set("playsinline", "1");
+        embedUrl = `https://player.vimeo.com/video/${encodeURIComponent(pathMatch[1])}?${params.toString()}`;
+      } else if (
+        (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") &&
+        (host === "vimeo.com" || host === "www.vimeo.com") &&
+        directIdMatch?.[1]
+      ) {
+        const params = new URLSearchParams(parsedUrl.search);
+        params.set("autoplay", "0");
+        params.set("playsinline", "1");
+        embedUrl = `https://player.vimeo.com/video/${encodeURIComponent(directIdMatch[1])}?${params.toString()}`;
       }
     } catch (_) {}
 
