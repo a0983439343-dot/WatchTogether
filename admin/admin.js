@@ -628,6 +628,11 @@
   }
 
   function setupEvents() {
+    document.addEventListener("dblclick", event => {
+      if (event.target?.closest("button,a,input,select")) {
+        event.preventDefault();
+      }
+    }, {passive:false});
     document.querySelectorAll(".nav-item").forEach(btn => btn.addEventListener("click", () => {
       document.querySelectorAll(".nav-item").forEach(x => x.classList.remove("active"));
       btn.classList.add("active");
