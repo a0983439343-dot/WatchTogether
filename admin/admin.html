@@ -26,7 +26,7 @@
   window.addEventListener("orientationchange", updateOrientation, {passive:true});
 })();
 </script>
-<link rel="stylesheet" href="admin.css?v=20260925-admin-v10">
+<link rel="stylesheet" href="admin.css?v=20260925-admin-v11">
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
@@ -65,6 +65,7 @@
     <button class="nav-item" data-section="accounts">登入帳號</button>
     <button class="nav-item" data-section="rooms">🏠 房間監控</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
+     <button class="nav-item" data-section="reports">🐛 問題回報</button>
   </aside>
 
   <section class="content">
@@ -77,6 +78,7 @@
         <article class="stat-card"><span>已封鎖</span><strong id="statBlocked">—</strong></article>
         <article class="stat-card"><span>目前管理員</span><strong id="statCurrent">—</strong></article>
         <article class="stat-card"><span>房間總數</span><strong id="statRooms">—</strong></article>
+         <article class="stat-card"><span>待處理回報</span><strong id="statOpenReports">—</strong></article>
       </div>
       <div class="panel"><div class="panel-head"><h3>目前管理員</h3></div><div id="adminInfo" class="info-grid"></div></div>
     </section>
@@ -102,6 +104,26 @@
         </table>
       </div>
     </section>
+
+    <section id="section-reports" class="admin-section hidden">
+       <div class="section-head"><div><div class="eyebrow">ISSUE REPORTS</div><h2>問題回報</h2></div><button id="reportsRefreshBtn" class="btn primary">重新整理</button></div>
+       <div class="toolbar">
+         <input id="reportSearch" class="search" type="search" placeholder="搜尋描述、UID、Email、房間碼">
+         <select id="reportStatusFilter" class="search report-filter" aria-label="回報狀態">
+           <option value="all">全部狀態</option>
+           <option value="open">待處理</option>
+           <option value="in_progress">處理中</option>
+           <option value="resolved">已處理</option>
+         </select>
+         <span id="reportCount" class="muted">0 筆</span>
+       </div>
+       <div class="panel table-wrap">
+         <table class="reports-table">
+           <thead><tr><th>時間</th><th>類型</th><th>帳號</th><th>房間</th><th>問題描述</th><th>狀態</th><th>操作</th></tr></thead>
+           <tbody id="reportsBody"></tbody>
+         </table>
+       </div>
+     </section>
 
     <section id="section-whitelist" class="admin-section hidden">
       <div class="section-head"><div><div class="eyebrow">ACCESS CONTROL</div><h2>白名單</h2></div></div>
@@ -140,6 +162,35 @@
   </div>
 </div>
 
+<div id="reportModal" class="admin-modal hidden">
+   <div class="modal-card report-modal-card">
+     <div class="modal-head"><div><div class="eyebrow">ISSUE REPORT</div><h2>問題回報詳情</h2></div><button id="reportClose" class="icon-btn" type="button">✕</button></div>
+     <input id="reportId" type="hidden">
+     <div class="report-detail-grid">
+       <div><span>回報時間</span><strong id="reportCreatedAt">—</strong></div>
+       <div><span>問題類型</span><strong id="reportCategoryLabel">—</strong></div>
+       <div><span>使用者 UID</span><strong id="reportUid">—</strong></div>
+       <div><span>房間</span><strong id="reportRoomId">—</strong></div>
+       <div class="span-2"><span>頁面</span><strong id="reportPage">—</strong></div>
+       <div class="span-2"><span>瀏覽器</span><strong id="reportUserAgent">—</strong></div>
+     </div>
+     <label>問題描述<textarea id="reportDetails" class="search report-details" readonly></textarea></label>
+     <div class="report-status-row">
+       <label>處理狀態<select id="reportStatus" class="search">
+         <option value="open">待處理</option>
+         <option value="in_progress">處理中</option>
+         <option value="resolved">已處理</option>
+       </select></label>
+       <div><span>最後處理者</span><strong id="reportHandledBy">—</strong></div>
+     </div>
+     <p id="reportHint" class="modal-hint"></p>
+     <div class="modal-actions">
+       <button id="reportDelete" class="btn danger" type="button">刪除回報</button>
+       <div class="modal-actions-right"><button id="reportCancel" class="btn" type="button">關閉</button><button id="reportSave" class="btn primary" type="button">儲存狀態</button></div>
+     </div>
+   </div>
+ </div>
+
 <div id="blockModal" class="admin-modal hidden">
   <div class="modal-card small-card">
     <div class="modal-head"><div><div class="eyebrow">USER MODERATION</div><h2>封鎖使用者</h2></div><button id="blockClose" class="icon-btn" type="button">✕</button></div>
@@ -160,6 +211,6 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260925-admin-v12"></script>
+<script src="admin.js?v=20260925-admin-v13"></script>
 </body>
 </html>
