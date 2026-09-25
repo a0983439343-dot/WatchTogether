@@ -566,7 +566,7 @@ async function ensurePublicCode(profile) {
 
   for (var attempt=0;attempt<64;attempt++) {
     var code = randomCode(6);
-    if (await reserve(code)) {
+    if (await reservePublicId(code, user)) {
       return code;
     }
   }
