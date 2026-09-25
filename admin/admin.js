@@ -1008,8 +1008,8 @@
           loadWhitelist(),
           loadBlocks(),
           loadRooms(),
-          loadReports(),
-          loadAuditLogs()
+          loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
+          loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error))
         ]);
         startAccountsListener();
         startReportsListener();
