@@ -1992,6 +1992,16 @@ async function openQr() {
   }
 }
 
+async function isAdminRoomUser() {
+  try {
+    if (window.WT_CORE?.state?.adminJoinOverride === true) return true;
+    if (typeof window.WT_CORE?.isPrivilegedAdminUser === "function") {
+      return await window.WT_CORE.isPrivilegedAdminUser();
+    }
+  } catch (_) {}
+  return false;
+}
+
 async function openRoomSettings() {
   buildRoomModals();
   var id = roomId();
@@ -2001,15 +2011,16 @@ async function openRoomSettings() {
   var roomSnapshot = await wt.db.ref("rooms/" + id + "/owner").once("value").catch(function(){ return null; });
   var meta = metaSnapshot && metaSnapshot.val();
   var actualOwner = String(roomSnapshot && roomSnapshot.val() || "");
-  if (!meta || actualOwner !== String(user.uid)) {
-    wt.toast("只有房主可以修改房間設定");
+  var adminUser = await isAdminRoomUser();
+  if (!meta || (!adminUser && actualOwner !== String(user.uid))) {
+    wt.toast("只有房主或管理員可以修改房間設定");
     return;
   }
   var settings = meta.settings || {};
   $("wtRoomSettingName").value = String(meta.name || "一起看");
   $("wtRoomSettingMax").value = String(settings.maxMembers || 2);
   $("wtRoomSettingLocked").checked = settings.locked === true;
-  $("wtRoomSettingHint").textContent = "房間碼：" + id + " · 控制權限：房主";
+  $("wtRoomSettingHint").textContent = "房間碼：" + id + " · 控制權限：" + (adminUser ? "管理員 · 房主權限" : "房主");
   wt.openModal("wtRoomSettingsModal");
 }
 
@@ -2021,8 +2032,9 @@ async function saveRoomSettings() {
   var roomSnapshot = await wt.db.ref("rooms/" + id + "/owner").once("value").catch(function(){ return null; });
   var meta = metaSnapshot && metaSnapshot.val();
   var actualOwner = String(roomSnapshot && roomSnapshot.val() || "");
-  if (!meta || actualOwner !== String(user.uid)) {
-    wt.toast("只有房主可以修改房間設定");
+  var adminUser = await isAdminRoomUser();
+  if (!meta || (!adminUser && actualOwner !== String(user.uid))) {
+    wt.toast("只有房主或管理員可以修改房間設定");
     return;
   }
   var name = String($("wtRoomSettingName").value || "").trim().slice(0,40);
@@ -2034,7 +2046,7 @@ async function saveRoomSettings() {
   }
   var updates = {};
   updates["rooms/" + id + "/name"] = name;
-  updates["roomMeta/" + id + "/owner"] = user.uid;
+  updates["roomMeta/" + id + "/owner"] = actualOwner || meta.owner || "";
   updates["roomMeta/" + id + "/name"] = name;
   updates["roomMeta/" + id + "/settings"] = {locked:locked,maxMembers:maxMembers,controlMode:"host"};
   try {
