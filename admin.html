@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>WatchTogether 管理員後台</title>
+<link rel="stylesheet" href="admin.css?v=20260925-admin-v1">
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js?v=20260925-formal-v47"></script>
+</head>
+<body>
+<div id="loadingScreen" class="screen"><div><div class="loader"></div><div>正在驗證管理員身分…</div></div></div>
+<div id="deniedScreen" class="screen hidden"><div class="denied-card"><div class="eyebrow">WATCHTOGETHER / ADMIN</div><h1>無法進入管理員後台</h1><p id="deniedMessage">目前登入的 Google 帳號沒有管理員權限。</p><div class="denied-actions"><button id="switchAccountBtn" class="btn primary">切換 Google 帳號</button><a href="./" class="btn">返回 WatchTogether</a></div></div></div>
+<div id="setupScreen" class="screen hidden"><div class="denied-card"><div class="eyebrow">WATCHTOGETHER / ADMIN</div><h1>尚未設定管理員帳號</h1><p>管理員介面已建立。完成管理員 Email 設定後，只有指定的 Google 帳號可以讀取後台資料。</p><a href="./" class="btn">返回 WatchTogether</a></div></div>
+
+<div id="app" class="hidden">
+<header class="topbar">
+  <div><div class="eyebrow">WATCHTOGETHER / ADMIN</div><h1>管理員後台</h1></div>
+  <div class="topbar-actions"><span id="adminAccount" class="account-chip"></span><button id="logoutBtn" class="btn">登出</button><a href="./" class="btn">回網站</a></div>
+</header>
+<main class="layout">
+  <aside class="sidebar">
+    <button class="nav-item active" data-section="overview">總覽</button>
+    <button class="nav-item" data-section="accounts">登入帳號</button>
+    <button class="nav-item" data-section="whitelist">白名單</button>
+  </aside>
+  <section class="content">
+    <section id="section-overview" class="admin-section">
+      <div class="section-head"><div><div class="eyebrow">DASHBOARD</div><h2>總覽</h2></div><button id="refreshBtn" class="btn primary">重新整理</button></div>
+      <div class="stats-grid">
+        <article class="stat-card"><span>已儲存帳號</span><strong id="statAccounts">—</strong></article>
+        <article class="stat-card"><span>白名單</span><strong id="statWhitelist">—</strong></article>
+        <article class="stat-card"><span>啟用白名單</span><strong id="statWhitelistEnabled">—</strong></article>
+        <article class="stat-card"><span>目前管理員</span><strong id="statCurrent">—</strong></article>
+      </div>
+      <div class="panel"><div class="panel-head"><h3>目前管理員</h3></div><div id="adminInfo" class="info-grid"></div></div>
+    </section>
+
+    <section id="section-accounts" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">AUTH ACCOUNTS</div><h2>登入帳號</h2></div><button id="accountsRefreshBtn" class="btn primary">重新整理</button></div>
+      <div class="toolbar"><input id="accountSearch" class="search" type="search" placeholder="搜尋 Email、暱稱或 UID"><span id="accountCount" class="muted"></span></div>
+      <div class="panel table-wrap"><table><thead><tr><th>帳號</th><th>暱稱</th><th>UID</th><th>登入方式</th><th>最後登入</th></tr></thead><tbody id="accountsBody"></tbody></table></div>
+    </section>
+
+    <section id="section-whitelist" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">ACCESS CONTROL</div><h2>白名單</h2></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>加入 Email</h3></div>
+        <div class="add-row"><input id="whitelistEmail" class="search" type="email" autocomplete="off" placeholder="example@gmail.com"><button id="addWhitelistBtn" class="btn primary">加入白名單</button></div>
+        <div class="muted">白名單先作為管理資料保存；後續可再決定是否讓網站強制只有白名單帳號才能使用。</div>
+      </div>
+      <div class="toolbar"><input id="whitelistSearch" class="search" type="search" placeholder="搜尋白名單 Email"><span id="whitelistCount" class="muted"></span></div>
+      <div class="panel table-wrap"><table><thead><tr><th>Email</th><th>狀態</th><th>加入時間</th><th>加入者</th><th>操作</th></tr></thead><tbody id="whitelistBody"></tbody></table></div>
+    </section>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+</div>
+<script src="admin.js?v=20260925-admin-v1"></script>
+</body>
+</html>
