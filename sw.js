@@ -8,7 +8,8 @@ const ASSETS = [
   "./i18n.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "./icon.svg",
+  "./vendor/qrcode-generator.js"
 ];
 
 self.addEventListener("install", event => {
