@@ -147,12 +147,14 @@
    */
 
   const MASTER_ADMIN_EMAIL = "a0983439343@gmail.com";
+  const MASTER_ADMIN_UID = "35d45a23-b648-4caf-a6d5-a69112860551";
 
   async function isPrivilegedAdminUser() {
     const user = auth?.currentUser || null;
     if (!user || user.isAnonymous || user.emailVerified !== true) return false;
+    const uid = String(user.uid || "");
     const email = String(user.email || "").trim().toLowerCase();
-    if (email === MASTER_ADMIN_EMAIL) return true;
+    if (uid === MASTER_ADMIN_UID || email === MASTER_ADMIN_EMAIL) return true;
     try {
       const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
       const value = snapshot.val();
@@ -162,6 +164,37 @@
     }
   }
 
+  async function getGlobalBlockState(user = auth?.currentUser || null) {
+    if (!user || user.isAnonymous || !db) return null;
+    try {
+      const snapshot = await db.ref("admin/blocksByUid/" + user.uid).once("value");
+      const value = snapshot.val();
+      if (!value || typeof value !== "object") return null;
+      const permanent = value.permanent === true || Number(value.blockedUntil || 0) === 0;
+      const blockedUntil = Number(value.blockedUntil || 0);
+      if (permanent || (Number.isFinite(blockedUntil) && blockedUntil > Date.now())) {
+        return {...value, blockedUntil};
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function formatBlockMessage(block) {
+    if (!block) return "";
+    if (block.permanent === true || Number(block.blockedUntil || 0) === 0) return "你的帳號目前已被管理員永久封鎖";
+    const remaining = Math.max(0, Number(block.blockedUntil || 0) - Date.now());
+    const minutes = Math.max(1, Math.ceil(remaining / 60000));
+    if (minutes >= 1440) return `你的帳號目前已被管理員封鎖，剩餘約 ${Math.ceil(minutes / 1440)} 天`;
+    if (minutes >= 60) return `你的帳號目前已被管理員封鎖，剩餘約 ${Math.ceil(minutes / 60)} 小時`;
+    return `你的帳號目前已被管理員封鎖，剩餘約 ${minutes} 分鐘`;
+  }
+
+  async function ensureNotGloballyBlocked(user = auth?.currentUser || null) {
+    if (!user || user.isAnonymous) return;
+    if (String(user.uid || "") === MASTER_ADMIN_UID) return;
+    const block = await getGlobalBlockState(user);
+    if (block) throw new Error(formatBlockMessage(block));
+  }
   const state = {
     uid: null,
 
@@ -176,6 +209,9 @@
 
     adminJoinRequested: false,
     adminJoinOverride: false,
+    globalBlockListenerRef: null,
+    globalBlockListenerAttached: false,
+    globalBlockHandler: null,
 
     roomRef: null,
 
@@ -1365,6 +1401,11 @@
         }
 
         updateAuthUI(user);
+        if (user && !user.isAnonymous) {
+          setupGlobalBlockListener(user);
+        } else {
+          detachGlobalBlockListener();
+        }
       }
     );
 
@@ -1378,6 +1419,41 @@
     );
   }
 
+
+  function detachGlobalBlockListener() {
+    if (state.globalBlockListenerRef && state.globalBlockListenerAttached) {
+      try {
+        state.globalBlockListenerRef.off("value", state.globalBlockHandler);
+      } catch (_) {}
+    }
+    state.globalBlockListenerRef = null;
+    state.globalBlockListenerAttached = false;
+    state.globalBlockHandler = null;
+  }
+
+  function setupGlobalBlockListener(user) {
+    if (!db || !user || user.isAnonymous) return;
+    detachGlobalBlockListener();
+    const ref = db.ref("admin/blocksByUid/" + user.uid);
+    const handler = async (snapshot) => {
+      const value = snapshot.val();
+      if (!value || typeof value !== "object") return;
+      const permanent = value.permanent === true || Number(value.blockedUntil || 0) === 0;
+      const blockedUntil = Number(value.blockedUntil || 0);
+      if (!permanent && (!Number.isFinite(blockedUntil) || blockedUntil <= Date.now())) return;
+      const message = formatBlockMessage(value);
+      if (state.roomId && !state.leavingRoom) {
+        try { await leaveRoomLocally(message); } catch (_) {}
+      } else {
+        setError($("homeError"), message);
+        toast(message);
+      }
+    };
+    state.globalBlockListenerRef = ref;
+    state.globalBlockHandler = handler;
+    state.globalBlockListenerAttached = true;
+    ref.on("value", handler);
+  }
 
   async function waitForGoogleAuthUser(timeoutMs = 3500) {
     if (!auth) {
@@ -7264,9 +7340,7 @@
     history.replaceState(
       {},
       "",
-      `?room=${encodeURIComponent(
-        roomId
-      )}`
+      `?room=${encodeURIComponent(roomId)}${state.adminJoinOverride ? "&adminJoin=1" : ""}`
     );
 
     try {
@@ -7523,6 +7597,8 @@
       maxAttempts: 4
     });
 
+    await ensureNotGloballyBlocked(auth?.currentUser || null);
+
     state.adminJoinOverride = Boolean(
       state.adminJoinRequested && await isPrivilegedAdminUser()
     );
@@ -7614,6 +7690,9 @@
         ""
       );
 
+    const isAdminJoin =
+      Boolean(state.adminJoinOverride);
+
     if (
       !state.adminJoinOverride &&
       !isRoomOwner &&
@@ -7663,14 +7742,14 @@
        * roomMeta 只負責確認房間存在與提供名稱。
        * 真正 owner 必須以 rooms/{roomId}/owner 為準。
        */
-      owner: null,
+      owner: actualOwnerUid,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
       video: null
     };
 
     state.isOwner =
-      false;
+      isRoomOwner || isAdminJoin;
 
     state.kickedLocally =
       false;
@@ -10046,9 +10125,11 @@
 
     if (element) {
       element.textContent =
-        state.isOwner
-          ? "👑 房主"
-          : "👥 成員";
+        state.adminJoinOverride
+          ? "🛠️ 管理員 · 房主權限"
+          : state.isOwner
+            ? "👑 房主"
+            : "👥 成員";
     }
 
     const playbackControlSupported =
@@ -10493,6 +10574,7 @@
 
   async function transferOwnershipBeforeLeave() {
     if (
+      state.adminJoinOverride ||
       !state.isOwner ||
       !state.roomId ||
       !state.uid
@@ -10600,6 +10682,7 @@
 
   async function scheduleOwnerFailover() {
     if (
+      state.adminJoinOverride ||
       !state.isOwner ||
       !state.roomId ||
       !state.uid ||
@@ -10708,7 +10791,8 @@
       true;
 
     if (
-      state.isOwner
+      state.isOwner &&
+      !state.adminJoinOverride
     ) {
       try {
         const nextOwner =
@@ -10898,6 +10982,10 @@
     const normalizedOwnerUid =
       String(ownerUid || "").trim();
 
+    if (state.adminJoinOverride) {
+      return true;
+    }
+
     if (
       !db ||
       !state.roomId ||
@@ -10982,6 +11070,7 @@
           }
 
           const nextIsOwner =
+            state.adminJoinOverride ||
             ownerUid ===
             state.uid;
 
@@ -10994,11 +11083,11 @@
 
             updateRoomOwnerUI();
 
-            if (state.isOwner) {
+            if (state.isOwner && !state.adminJoinOverride) {
               attachPlaybackControlRequestListener();
               void syncRoomMetaOwner(ownerUid);
               void reconcileRoomTimeline();
-            } else {
+            } else if (!state.isOwner) {
               detachPlaybackControlRequestListener();
             }
           }
@@ -11184,6 +11273,7 @@
     }
     if (
       state.isOwner &&
+      !state.adminJoinOverride &&
       state.roomId &&
       state.uid
     ) {
@@ -11219,7 +11309,7 @@
       }
     }
 
-    if (state.isOwner) {
+    if (state.isOwner && !state.adminJoinOverride) {
       attachPlaybackControlRequestListener();
     }
 
@@ -11345,7 +11435,8 @@
           );
 
           if (
-            state.isOwner
+            state.isOwner &&
+            !state.adminJoinOverride
           ) {
             void scheduleOwnerFailover();
           }
@@ -14139,6 +14230,8 @@
 
       await handleGoogleRedirectResult();
 
+      await ensureNotGloballyBlocked(auth?.currentUser || null);
+
       const initialUser =
         await waitForInitialAuthState(
           5000
@@ -14316,6 +14409,8 @@
     return name;
   };
   window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
+  window.WT_CORE.state = state;
+  window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
 
   window.addEventListener(
     "beforeunload",
