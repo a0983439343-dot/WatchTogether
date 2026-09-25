@@ -41,6 +41,10 @@ var STICKERS = wt.STICKERS = [
 var state = wt.state = {
   user:null,
   profile:null,
+  recentRoomSelectionMode:false,
+  selectedRecentRooms:{},
+  historySelectionMode:false,
+  selectedHistoryItems:{},
   friends:{},
   requests:{},
   selectedFriendUid:"",
@@ -357,6 +361,92 @@ function ensureTopbar() {
   }
 }
 
+function selectedRecentRoomCount() {
+  return Object.keys(state.selectedRecentRooms || {}).filter(function(id){ return state.selectedRecentRooms[id] === true; }).length;
+}
+
+function selectedHistoryCount() {
+  return Object.keys(state.selectedHistoryItems || {}).filter(function(key){ return state.selectedHistoryItems[key] === true; }).length;
+}
+
+function clearRecentRoomSelection() {
+  state.selectedRecentRooms = {};
+  state.recentRoomSelectionMode = false;
+}
+
+function clearHistorySelection() {
+  state.selectedHistoryItems = {};
+  state.historySelectionMode = false;
+}
+
+function toggleRecentRoomSelection(id, checked) {
+  id = String(id || "").toUpperCase();
+  if (!ROOM_RE.test(id)) return;
+  state.selectedRecentRooms[id] = checked === true;
+  if (!checked) delete state.selectedRecentRooms[id];
+  renderRecentRooms();
+}
+
+function toggleHistorySelection(key, checked) {
+  key = String(key || "");
+  if (!key) return;
+  state.selectedHistoryItems[key] = checked === true;
+  if (!checked) delete state.selectedHistoryItems[key];
+  renderHomeHistory();
+}
+
+function deleteSelectedRecentRooms() {
+  var selected = new Set(Object.keys(state.selectedRecentRooms || {}).filter(function(id){ return state.selectedRecentRooms[id] === true; }));
+  if (!selected.size) {
+    toast("請先選取要刪除的房間紀錄");
+    return;
+  }
+  writeJson(KEYS.recentRooms, recentRooms().filter(function(item){ return !selected.has(item.id); }));
+  clearRecentRoomSelection();
+  renderRecentRooms();
+  toast("已刪除 " + selected.size + " 筆房間紀錄");
+}
+
+function deleteSelectedHistory() {
+  var selected = new Set(Object.keys(state.selectedHistoryItems || {}).filter(function(key){ return state.selectedHistoryItems[key] === true; }));
+  if (!selected.size) {
+    toast("請先選取要刪除的影片紀錄");
+    return;
+  }
+  writeJson(KEYS.history, historyList().filter(function(item){ return !selected.has(String(item.key || "")); }));
+  clearHistorySelection();
+  renderHomeHistory();
+  toast("已刪除 " + selected.size + " 筆影片紀錄");
+}
+
+function toggleRecentRoomSelectionMode() {
+  state.recentRoomSelectionMode = !state.recentRoomSelectionMode;
+  if (!state.recentRoomSelectionMode) state.selectedRecentRooms = {};
+  renderRecentRooms();
+}
+
+function toggleHistorySelectionMode() {
+  state.historySelectionMode = !state.historySelectionMode;
+  if (!state.historySelectionMode) state.selectedHistoryItems = {};
+  renderHomeHistory();
+}
+
+function selectAllRecentRooms() {
+  var list = recentRooms();
+  state.selectedRecentRooms = {};
+  list.forEach(function(item){ state.selectedRecentRooms[item.id] = true; });
+  state.recentRoomSelectionMode = true;
+  renderRecentRooms();
+}
+
+function selectAllHistoryItems() {
+  var list = historyList().slice(0,6);
+  state.selectedHistoryItems = {};
+  list.forEach(function(item){ if (item.key) state.selectedHistoryItems[item.key] = true; });
+  state.historySelectionMode = true;
+  renderHomeHistory();
+}
+
 function ensureHome() {
   var home = $("homeView");
   if (!home) return;
@@ -369,35 +459,74 @@ function ensureHome() {
         '<div><div class="wt-panel-title">最近活動</div><div class="wt-home-subtitle">離開房間後會保留最近加入紀錄，可重新加入或刪除紀錄。</div></div>' +
         '<div class="wt-card-actions"><button class="wt-mini-btn" id="wtHomeFriends" type="button">👥 好友</button><button class="wt-mini-btn" id="wtHomeSettings" type="button">⚙️ 設定</button></div>' +
       '</div>' +
+      '<div class="wt-selection-bar hidden" id="wtRecentRoomsSelectionBar"><span id="wtRecentRoomsSelectionCount">已選 0 筆</span><div class="wt-card-actions"><button class="wt-mini-btn" id="wtRecentRoomsSelectAll" type="button">全選</button><button class="wt-mini-btn danger" id="wtRecentRoomsDeleteSelected" type="button">刪除選取</button><button class="wt-mini-btn" id="wtRecentRoomsCancelSelect" type="button">取消</button></div></div>' +
+      '<div class="wt-section-title wt-recent-section-title"><span class="wt-panel-title" style="font-size:15px;">最近房間</span><button class="wt-mini-btn" id="wtRecentRoomsSelectMode" type="button">選取刪除</button></div>' +
       '<div class="wt-recent-grid" id="wtRecentRooms"></div>' +
-      '<div class="wt-section-title" style="margin-top:22px;"><span class="wt-panel-title" style="font-size:15px;">最近觀看</span><span class="wt-small">只保留在目前裝置。</span></div>' +
+      '<div class="wt-section-title wt-recent-section-title" style="margin-top:22px;"><span><span class="wt-panel-title" style="font-size:15px;">最近觀看</span><span class="wt-small wt-section-note">只保留在目前裝置。</span></span><button class="wt-mini-btn" id="wtHistorySelectMode" type="button">選取刪除</button></div>' +
+      '<div class="wt-selection-bar hidden" id="wtHistorySelectionBar"><span id="wtHistorySelectionCount">已選 0 筆</span><div class="wt-card-actions"><button class="wt-mini-btn" id="wtHistorySelectAll" type="button">全選</button><button class="wt-mini-btn danger" id="wtHistoryDeleteSelected" type="button">刪除選取</button><button class="wt-mini-btn" id="wtHistoryCancelSelect" type="button">取消</button></div></div>' +
       '<div class="wt-recent-grid" id="wtHomeHistory"></div>';
     var platformPanel = home.querySelector(".platform-panel");
     home.insertBefore(section, platformPanel || home.lastElementChild);
     $("wtHomeFriends").addEventListener("click",function(){ wt.openFriends(); });
     $("wtHomeSettings").addEventListener("click",function(){ wt.openSettings(); });
+    $("wtRecentRoomsSelectMode").addEventListener("click",toggleRecentRoomSelectionMode);
+    $("wtRecentRoomsSelectAll").addEventListener("click",selectAllRecentRooms);
+    $("wtRecentRoomsDeleteSelected").addEventListener("click",deleteSelectedRecentRooms);
+    $("wtRecentRoomsCancelSelect").addEventListener("click",function(){ clearRecentRoomSelection(); renderRecentRooms(); });
+    $("wtHistorySelectMode").addEventListener("click",toggleHistorySelectionMode);
+    $("wtHistorySelectAll").addEventListener("click",selectAllHistoryItems);
+    $("wtHistoryDeleteSelected").addEventListener("click",deleteSelectedHistory);
+    $("wtHistoryCancelSelect").addEventListener("click",function(){ clearHistorySelection(); renderHomeHistory(); });
   }
   renderHomeActivity();
+}
+
+function updateRecentRoomSelectionBar() {
+  var bar = $("wtRecentRoomsSelectionBar");
+  if (!bar) return;
+  var active = state.recentRoomSelectionMode === true;
+  bar.classList.toggle("hidden", !active);
+  var count = selectedRecentRoomCount();
+  if ($("wtRecentRoomsSelectionCount")) $("wtRecentRoomsSelectionCount").textContent = "已選 " + count + " 筆";
+  var modeBtn = $("wtRecentRoomsSelectMode");
+  if (modeBtn) modeBtn.textContent = active ? "完成選取" : "選取刪除";
+}
+
+function updateHistorySelectionBar() {
+  var bar = $("wtHistorySelectionBar");
+  if (!bar) return;
+  var active = state.historySelectionMode === true;
+  bar.classList.toggle("hidden", !active);
+  var count = selectedHistoryCount();
+  if ($("wtHistorySelectionCount")) $("wtHistorySelectionCount").textContent = "已選 " + count + " 筆";
+  var modeBtn = $("wtHistorySelectMode");
+  if (modeBtn) modeBtn.textContent = active ? "完成選取" : "選取刪除";
 }
 
 function renderRecentRooms() {
   var box = $("wtRecentRooms");
   if (!box) return;
   var list = recentRooms();
+  updateRecentRoomSelectionBar();
   if (!list.length) {
     box.innerHTML = '<div class="wt-card-section" style="grid-column:1/-1;"><div class="wt-small">目前沒有最近房間。加入或建立房間後會顯示在這裡。</div></div>';
     return;
   }
   box.innerHTML = list.map(function(item) {
-    return '<article class="wt-room-card">' +
+    var selected = state.selectedRecentRooms[item.id] === true;
+    return '<article class="wt-room-card' + (selected ? ' wt-selection-active' : '') + '">' +
       '<div class="wt-room-card-main">' +
+        '<div class="wt-selection-check' + (state.recentRoomSelectionMode ? '' : ' hidden') + '"><label><input type="checkbox" data-wt-room-select="' + esc(item.id) + '"' + (selected ? ' checked' : '') + '><span>選取刪除</span></label></div>' +
         '<div class="wt-room-card-title">' + esc(item.name) + '</div>' +
         '<div class="wt-room-code">' + esc(item.id) + '</div>' +
         '<div class="wt-room-card-meta">最近加入：' + esc(formatDate(item.joinedAt)) + '</div>' +
       '</div>' +
-      '<div class="wt-card-actions"><button class="wt-mini-btn primary" data-wt-rejoin="' + esc(item.id) + '" type="button">重新加入</button><button class="wt-mini-btn danger" data-wt-delete-room="' + esc(item.id) + '" type="button">刪除紀錄</button></div>' +
+      '<div class="wt-card-actions' + (state.recentRoomSelectionMode ? ' wt-selection-actions' : '') + '"><button class="wt-mini-btn primary" data-wt-rejoin="' + esc(item.id) + '" type="button">重新加入</button><button class="wt-mini-btn danger" data-wt-delete-room="' + esc(item.id) + '" type="button">刪除紀錄</button></div>' +
     '</article>';
   }).join("");
+  box.querySelectorAll("[data-wt-room-select]").forEach(function(input){
+    input.addEventListener("change",function(){ toggleRecentRoomSelection(input.dataset.wtRoomSelect,input.checked); });
+  });
   box.querySelectorAll("[data-wt-rejoin]").forEach(function(btn){
     btn.addEventListener("click",function(){ location.href = roomLink(btn.dataset.wtRejoin); });
   });
@@ -410,16 +539,24 @@ function renderHomeHistory() {
   var box = $("wtHomeHistory");
   if (!box) return;
   var list = historyList().slice(0,6);
+  updateHistorySelectionBar();
   if (!list.length) {
     box.innerHTML = '<div class="wt-card-section" style="grid-column:1/-1;"><div class="wt-small">開始播放影片後，最近觀看會顯示在這裡。</div></div>';
     return;
   }
   box.innerHTML = list.map(function(video){
-    return '<article class="wt-room-card">' +
-      '<div class="wt-room-card-main"><div class="wt-room-card-title">' + esc(video.title) + '</div><div class="wt-room-code" style="letter-spacing:normal;">' + esc(video.platform) + '</div><div class="wt-room-card-meta">' + esc(video.channel || "") + '</div></div>' +
-      '<div class="wt-card-actions"><button class="wt-mini-btn" data-wt-history-fav="' + esc(video.key) + '" type="button">' + (isFavorite(video) ? "★ 已收藏" : "☆ 收藏") + '</button><button class="wt-mini-btn primary" data-wt-history-room="' + esc(video.key) + '" type="button">建立房間</button><button class="wt-mini-btn danger" data-wt-history-delete="' + esc(video.key) + '" type="button">刪除</button></div>' +
+    var selected = state.selectedHistoryItems[String(video.key || "")] === true;
+    return '<article class="wt-room-card' + (selected ? ' wt-selection-active' : '') + '">' +
+      '<div class="wt-room-card-main">' +
+        '<div class="wt-selection-check' + (state.historySelectionMode ? '' : ' hidden') + '"><label><input type="checkbox" data-wt-history-select="' + esc(video.key) + '"' + (selected ? ' checked' : '') + '><span>選取刪除</span></label></div>' +
+        '<div class="wt-room-card-title">' + esc(video.title) + '</div><div class="wt-room-code" style="letter-spacing:normal;">' + esc(video.platform) + '</div><div class="wt-room-card-meta">' + esc(video.channel || "") + '</div>' +
+      '</div>' +
+      '<div class="wt-card-actions' + (state.historySelectionMode ? ' wt-selection-actions' : '') + '"><button class="wt-mini-btn" data-wt-history-fav="' + esc(video.key) + '" type="button">' + (isFavorite(video) ? "★ 已收藏" : "☆ 收藏") + '</button><button class="wt-mini-btn primary" data-wt-history-room="' + esc(video.key) + '" type="button">建立房間</button><button class="wt-mini-btn danger" data-wt-history-delete="' + esc(video.key) + '" type="button">刪除</button></div>' +
     '</article>';
   }).join("");
+  box.querySelectorAll("[data-wt-history-select]").forEach(function(input){
+    input.addEventListener("change",function(){ toggleHistorySelection(input.dataset.wtHistorySelect,input.checked); });
+  });
   box.querySelectorAll("[data-wt-history-fav]").forEach(function(btn){
     var video = list.find(function(item){ return item.key === btn.dataset.wtHistoryFav; });
     btn.addEventListener("click",function(){ toggleFavorite(video); });
