@@ -1316,6 +1316,42 @@
    * =========================================================
    */
 
+  async function persistAuthenticatedAccount(user) {
+    if (!user || user.isAnonymous || !user.uid || !user.email || !db) {
+      return false;
+    }
+
+    const current = auth?.currentUser;
+    if (current && String(current.uid) !== String(user.uid)) {
+      return false;
+    }
+
+    const ref = db.ref("accounts/" + user.uid);
+    const provider = user.providerData && user.providerData.length
+      ? String(user.providerData[0].providerId || "google.com")
+      : "google.com";
+
+    const snapshot = await ref.once("value");
+    const old = snapshot.val() || {};
+
+    await ref.set({
+      uid: String(user.uid),
+      email: String(user.email).trim().toLowerCase(),
+      emailVerified: user.emailVerified === true,
+      displayName: String(user.displayName || "").trim().slice(0, 100),
+      photoURL: String(user.photoURL || "").trim().slice(0, 2000),
+      provider: provider.slice(0, 50),
+      createdAt: Number(old.createdAt || 0) > 0
+        ? Number(old.createdAt)
+        : firebase.database.ServerValue.TIMESTAMP,
+      lastLoginAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    return true;
+  }
+
+
   async function initializeFirebase() {
     if (!window.firebase) {
       throw new Error(
@@ -1403,6 +1439,9 @@
         updateAuthUI(user);
         if (user && !user.isAnonymous) {
           setupGlobalBlockListener(user);
+          void persistAuthenticatedAccount(user).catch((error) => {
+            console.warn("核心帳號同步失敗:", error);
+          });
         } else {
           detachGlobalBlockListener();
         }
@@ -1563,7 +1602,13 @@
             user.uid;
 
           updateAuthUI(user);
-          void window.WT_ENHANCEMENTS?.saveLoginAccount?.(user);
+          try {
+            if (typeof window.WT_ENHANCEMENTS?.saveLoginAccount === "function") {
+              await window.WT_ENHANCEMENTS.saveLoginAccount(user);
+            }
+          } catch (syncError) {
+            console.warn("登入帳號同步失敗:", syncError);
+          }
 
           toast(
             "Google 登入成功"
@@ -1656,6 +1701,7 @@
 
       updateAuthUI(user);
       try {
+        await persistAuthenticatedAccount(user);
         if (typeof window.WT_ENHANCEMENTS?.saveLoginAccount === "function") {
           await window.WT_ENHANCEMENTS.saveLoginAccount(user);
         }
@@ -1782,6 +1828,14 @@
         }
 
         updateAuthUI(user);
+        try {
+          await persistAuthenticatedAccount(user);
+          if (typeof window.WT_ENHANCEMENTS?.saveLoginAccount === "function") {
+            await window.WT_ENHANCEMENTS.saveLoginAccount(user);
+          }
+        } catch (syncError) {
+          console.warn("Redirect 登入帳號同步失敗:", syncError);
+        }
 
         toast(
           "Google 登入成功"
@@ -14426,6 +14480,7 @@
   window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
   window.WT_CORE.state = state;
   window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
+  window.WT_CORE.persistAuthenticatedAccount = persistAuthenticatedAccount;
 
   window.addEventListener(
     "beforeunload",
