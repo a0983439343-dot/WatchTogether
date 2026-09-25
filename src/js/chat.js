@@ -49,7 +49,8 @@ var state = {
   lightbox:null,
   recording:null,
   recordingChunks:[],
-  recordingStartedAt:0
+  recordingStartedAt:0,
+  recordingTargetUid:""
 };
 
 function user() {
@@ -323,9 +324,10 @@ function messagePreview(message) {
   return String(message.text || "");
 }
 
-async function updateSummary(id,message) {
+async function updateSummary(id,message,targetUid) {
   var me = user();
-  if (!me) return;
+  targetUid = String(targetUid || state.activeUid || "");
+  if (!me || !targetUid) return;
   var summary = {
     uid:me.uid,
     name:displayName(),
@@ -334,20 +336,21 @@ async function updateSummary(id,message) {
     createdAt:firebase.database.ServerValue.TIMESTAMP,
     messageId:String(id)
   };
-  await wt.db.ref("conversations/" + privateId(me.uid,state.activeUid) + "/lastMessage").set(summary);
+  await wt.db.ref("conversations/" + privateId(me.uid,targetUid) + "/lastMessage").set(summary);
 }
 
-async function sendMessagePayload(payload) {
+async function sendMessagePayload(payload,targetUid) {
   var me = user();
-  if (!me || !state.activeUid) throw new Error("請先選擇好友");
-  var conversationId = await ensureConversation(state.activeUid);
+  targetUid = String(targetUid || state.activeUid || "");
+  if (!me || !targetUid) throw new Error("請先選擇好友");
+  var conversationId = await ensureConversation(targetUid);
   payload = Object.assign({
     uid:me.uid,
     name:displayName(),
     createdAt:firebase.database.ServerValue.TIMESTAMP
   },payload);
   var messageRef = await wt.db.ref("conversations/" + conversationId + "/messages").push(payload);
-  await updateSummary(messageRef.key,payload);
+  await updateSummary(messageRef.key,payload,targetUid);
   return messageRef.key;
 }
 
@@ -452,9 +455,14 @@ async function uploadMediaBlob(blob,type,name) {
   return {url:url,path:path,size:blob.size,name:safeName,type:type};
 }
 
-async function sendImageFile(file) {
-  if (!state.activeUid) throw new Error("請先選擇好友");
-  var prepared = await blobFromFile(file,8 * 1024 * 1024);
+async function sendImageFile(file,targetUid) {
+  targetUid = String(targetUid || state.activeUid || "");
+  if (!targetUid) throw new Error("請先選擇好友");
+  var originalUid = state.activeUid;
+  state.activeUid = targetUid;
+  var prepared;
+  try {
+    prepared = await blobFromFile(file,8 * 1024 * 1024);
   var media = await uploadMediaBlob(prepared.blob,prepared.type,prepared.name);
   var payload = Object.assign({
     type:"image",
@@ -463,7 +471,11 @@ async function sendImageFile(file) {
     mediaName:media.name,
     mediaSize:media.size
   },state.replyTo ? buildReplyFields(state.replyTo) : {});
-  await sendMessagePayload(payload);
+  try {
+    await sendMessagePayload(payload,targetUid);
+  } finally {
+    if (state.activeUid === targetUid) state.activeUid = originalUid;
+  }
 }
 
 async function handleImageFiles(files) {
@@ -476,8 +488,9 @@ async function handleImageFiles(files) {
   state.pendingUploads = list.length;
   renderComposerState();
   try {
+    var targetUid = state.activeUid;
     for (var i=0;i<list.length;i++) {
-      await sendImageFile(list[i]);
+      await sendImageFile(list[i],targetUid);
       state.pendingUploads--;
       renderComposerState();
     }
@@ -512,12 +525,14 @@ async function toggleRecording() {
     return;
   }
   var stream = null;
+  var targetUid = state.activeUid;
   try {
     stream = await navigator.mediaDevices.getUserMedia({audio:true});
     var mime = mediaRecorderMime();
     var recorder = new MediaRecorder(stream,mime ? {mimeType:mime} : undefined);
     state.recordingChunks = [];
     state.recordingStartedAt = Date.now();
+    state.recordingTargetUid = targetUid;
     state.recording = recorder;
     recorder.addEventListener("dataavailable",function(event){
       if (event.data && event.data.size) state.recordingChunks.push(event.data);
@@ -540,7 +555,7 @@ async function toggleRecording() {
           mediaSize:media.size,
           duration:duration
         },state.replyTo ? buildReplyFields(state.replyTo) : {});
-        await sendMessagePayload(payload);
+        await sendMessagePayload(payload,targetUid);
         clearReplyEdit();
       } catch (error) {
         wt.toast(error && error.message || "語音訊息上傳失敗");
@@ -858,6 +873,8 @@ function startActiveListeners(uid) {
 
 async function openConversation(uid) {
   if(!state.friends[uid]) return;
+  var card = document.querySelector("#wtChatCenter .wt-chat-modal-card");
+  if (card) card.classList.remove("wt-chat-show-sidebar");
   var token=++state.selectionToken;
   state.activeUid=uid;
   state.activeProfile=state.friends[uid];
@@ -933,7 +950,7 @@ function buildModal() {
         '<section class="wt-chat-main">' +
           '<header class="wt-chat-header">' +
             '<div class="wt-chat-header-user"><div class="wt-chat-avatar large" id="wtChatHeaderAvatar">💬</div><div><strong id="wtChatTitle">選擇好友</strong><span id="wtChatSubtitle">選擇一位好友開始聊天</span></div></div>' +
-            '<div class="wt-chat-header-actions"><button class="wt-chat-icon-btn" id="wtChatSearchToggle" type="button">⌕</button><button class="wt-chat-icon-btn danger" id="wtChatRemoveFriend" type="button" disabled>刪除好友</button></div>' +
+            '<div class="wt-chat-header-actions"><button class="wt-chat-icon-btn wt-chat-mobile-back" id="wtChatBackBtn" type="button">←</button><button class="wt-chat-icon-btn" id="wtChatSearchToggle" type="button">⌕</button><button class="wt-chat-icon-btn danger" id="wtChatRemoveFriend" type="button" disabled>刪除好友</button></div>' +
           '</header>' +
           '<div id="wtChatMessageSearchBar" class="wt-chat-message-search hidden"><input id="wtChatMessageSearch" type="search" placeholder="搜尋這個聊天室的訊息"><button type="button" id="wtChatMessageSearchClear">清除</button></div>' +
           '<div id="wtChatMessages" class="wt-chat-messages"></div>' +
@@ -956,6 +973,10 @@ function buildModal() {
   document.body.appendChild(modal);
 
   $("wtChatClose").addEventListener("click",closeChat);
+  $("wtChatBackBtn").addEventListener("click",function(){
+    var card=document.querySelector("#wtChatCenter .wt-chat-modal-card");
+    if(card) card.classList.add("wt-chat-show-sidebar");
+  });
   $("wtChatAddFriend").addEventListener("click",function(){
     sendFriendRequest($("wtChatFriendCode").value).then(function(){
       $("wtChatFriendCode").value="";
@@ -1036,6 +1057,8 @@ async function openChat() {
   buildModal();
   if(!ensureLogin()) return;
   var modal=$("wtChatCenter");
+  var card=modal && modal.querySelector(".wt-chat-modal-card");
+  if (card) card.classList.toggle("wt-chat-show-sidebar",window.innerWidth <= 700 && !state.activeUid);
   wt.openModal("wtChatCenter");
   $("wtChatFriendCode").focus();
   try {
