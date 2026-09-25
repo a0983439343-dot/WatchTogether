@@ -602,13 +602,6 @@ async function saveLoginAccount(user) {
 
   try {
     var ref = wt.db.ref("accounts/" + user.uid);
-    var snapshot = await ref.once("value");
-
-    if (!isCurrentAuthUser(user)) {
-      return false;
-    }
-
-    var old = snapshot.val() || {};
     var provider = user.providerData && user.providerData.length
       ? String(user.providerData[0].providerId || "google.com")
       : "google.com";
@@ -617,10 +610,10 @@ async function saveLoginAccount(user) {
       uid: String(user.uid),
       email: String(user.email).trim().toLowerCase(),
       emailVerified: user.emailVerified === true,
-      displayName: String(user.displayName || old.displayName || "").trim().slice(0, 100),
-      photoURL: String(user.photoURL || old.photoURL || "").trim().slice(0, 2000),
+      displayName: String(user.displayName || "").trim().slice(0, 100),
+      photoURL: String(user.photoURL || "").trim().slice(0, 2000),
       provider: provider.slice(0, 50),
-      createdAt: old.createdAt || firebase.database.ServerValue.TIMESTAMP,
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastLoginAt: firebase.database.ServerValue.TIMESTAMP,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
