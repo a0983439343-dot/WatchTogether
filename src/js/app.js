@@ -2972,6 +2972,19 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               video.durationSeconds
             );
 
+          const selectedForPlayback =
+            String(
+              state.modalSelectedVideoId ||
+              ""
+            ) ===
+            String(video.id);
+
+          const inCurrentQueue =
+            isVideoInQueue(video);
+
+          const currentVideo =
+            isCurrentVideo(video);
+
           const viewsText =
             formatViews(
               video.viewCount
@@ -3117,7 +3130,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   ▶ 播放
                 </button>
 
-                ${isCurrentVideo(video)
+                ${currentVideo
                   ? `
                     <button
                       type="button"
@@ -3129,7 +3142,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                       ✓ 目前播放中
                     </button>
                   `
-                  : isVideoInQueue(video)
+                  : selectedForPlayback
                     ? `
                       <button
                         type="button"
@@ -3138,20 +3151,32 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                         aria-disabled="true"
                         style="opacity:.55;cursor:not-allowed;"
                       >
-                        ✓ 已在待播放
+                        ✓ 已選擇
                       </button>
                     `
-                    : `
-                      <button
-                        type="button"
-                        class="tiny-btn"
-                        data-video-queue="${escapeHtml(
-                          video.id
-                        )}"
-                      >
-                        ＋ 待播放
-                      </button>
-                    `}
+                    : inCurrentQueue
+                      ? `
+                        <button
+                          type="button"
+                          class="tiny-btn"
+                          disabled
+                          aria-disabled="true"
+                          style="opacity:.55;cursor:not-allowed;"
+                        >
+                          ✓ 已在待播放
+                        </button>
+                      `
+                      : `
+                        <button
+                          type="button"
+                          class="tiny-btn"
+                          data-video-queue="${escapeHtml(
+                            video.id
+                          )}"
+                        >
+                          ＋ 待播放
+                        </button>
+                      `
 
               </div>
 
@@ -3707,6 +3732,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     if (newRef?.key) {
       state.queue[newRef.key] = {...item,addedAt:Date.now()};
       renderQueue();
+      renderSearchResults();
     }
   }
 
