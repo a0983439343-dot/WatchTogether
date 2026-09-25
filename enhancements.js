@@ -875,7 +875,7 @@ async function updateCurrentRoomMember(name,avatar) {
 async function copyFriendCode() {
   var code = wt.state.profile && wt.state.profile.publicCode;
   if (!code) {
-    toast("Google 登入後才有好友代碼");
+    toast("Google 登入後才有 ID");
     return;
   }
   try {
@@ -932,7 +932,7 @@ function openInfo(kind) {
   if (kind === "privacy") {
     $("wtInfoTitle").textContent = "隱私說明";
     $("wtInfoBody").innerHTML =
-      "<p>Google 登入由 Firebase Authentication 管理。公開社交資料只有暱稱、頭像與好友代碼；不把 Email 顯示在好友搜尋裡。</p>" +
+      "<p>Google 登入由 Firebase Authentication 管理。公開社交資料只有暱稱、頭像與 ID；不把 Email 顯示在好友搜尋裡。</p>" +
       "<p>最近房間、觀看紀錄、收藏、主題與通知偏好保留在目前裝置的瀏覽器中。</p>" +
       "<p>房間聊天、好友關係、好友邀請與私聊訊息由 Firebase Realtime Database 儲存，Rules 會限制存取範圍。</p>";
   } else {
