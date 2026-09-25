@@ -702,44 +702,28 @@
       auth?.currentUser ||
       null;
 
-    if (
-      user &&
-      !user.isAnonymous
-    ) {
-      const loginName =
-        String(
-          localStorage.getItem("wt_name") ||
-          state.memberName ||
-          user.displayName ||
-          ""
-        ).trim();
-
-      if (loginName) {
-        return loginName.slice(0, 30);
-      }
-
-      return "玩家";
-    }
-
-    let guestName =
-      String(
-        localStorage.getItem(GUEST_NAME_STORAGE_KEY) ||
+    if (user && !user.isAnonymous) {
+      const loginName = String(
+        localStorage.getItem("wt_name") ||
+        state.memberName ||
+        user.displayName ||
         ""
       ).trim();
 
-    if (!isGuestName(guestName)) {
-      guestName =
-        "訪客" +
-        Math.floor(
-          Math.random() * 900 + 100
-        );
-
-      localStorage.setItem(
-        GUEST_NAME_STORAGE_KEY,
-        guestName
-      );
+      return loginName ? loginName.slice(0, 30) : "玩家";
     }
 
+    let guestName = String(
+      localStorage.getItem(GUEST_NAME_STORAGE_KEY) ||
+      ""
+    ).trim();
+
+    if (!isGuestName(guestName)) {
+      guestName = "訪客" + Math.floor(Math.random() * 900 + 100);
+      localStorage.setItem(GUEST_NAME_STORAGE_KEY, guestName);
+    }
+
+    localStorage.removeItem("wt_name");
     return guestName;
   }
 
@@ -1846,12 +1830,12 @@
 
           return {
             ...current,
-            name:
-              state.memberName,
-            online:
-              true,
-            lastSeen:
-              Date.now()
+            name: state.memberName,
+            online: true,
+            lastSeen: Date.now(),
+            ...(state.user && !state.user.isAnonymous && window.WT_ENHANCEMENTS?.state?.profile?.publicCode
+              ? { publicCode: String(window.WT_ENHANCEMENTS.state.profile.publicCode).toUpperCase().slice(0, 6) }
+              : {})
           };
         }
       );
@@ -2491,15 +2475,10 @@
         };
       }
 
-      if (
-        parts[0] === "videos" &&
-        parts[1]
-      ) {
+      if (parts[0] === "videos" && parts[1]) {
         return {
-          type:
-            "video",
-          value:
-            parts[1].replace(/^v/i, "")
+          type: "video",
+          value: "v" + parts[1].replace(/^v/i, "")
         };
       }
 
@@ -2513,10 +2492,8 @@
 
     if (/^v?\d+$/i.test(text)) {
       return {
-        type:
-          "video",
-        value:
-          text.replace(/^v/i, "")
+        type: "video",
+        value: "v" + text.replace(/^v/i, "")
       };
     }
 
@@ -7407,9 +7384,15 @@
       void handlePlatformNativeEvent("pause");
     });
 
-    player.on(dailymotion.events.VIDEO_SEEKEND, event => {
+    player.on(dailymotion.events.VIDEO_SEEKEND, async event => {
       if (state.player !== player) return;
-      void handlePlatformNativeEvent("seek", Number(event?.videoTime));
+      const eventPosition = Number(event?.videoTime);
+      if (Number.isFinite(eventPosition)) {
+        void handlePlatformNativeEvent("seek", eventPosition);
+        return;
+      }
+      const playerState = await player.getState().catch(() => null);
+      void handlePlatformNativeEvent("seek", Number(playerState?.videoTime));
     });
 
     player.on(dailymotion.events.VIDEO_END, async () => {
