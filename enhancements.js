@@ -1784,6 +1784,47 @@ async function shareRoom() {
   } catch (_) {}
 }
 
+async function copyRoomLink() {
+  var id = roomId();
+  if (!id) return;
+
+  var url = roomLink(id);
+
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function" && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      var area = document.createElement("textarea");
+      area.value = url;
+      area.setAttribute("readonly","");
+      area.setAttribute("aria-hidden","true");
+      area.style.position = "fixed";
+      area.style.top = "-9999px";
+      area.style.left = "-9999px";
+      area.style.opacity = "0";
+      area.style.pointerEvents = "none";
+      document.body.appendChild(area);
+      area.focus();
+      area.select();
+
+      var copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } finally {
+        area.remove();
+      }
+
+      if (!copied) {
+        throw new Error("複製失敗，請手動複製房間連結");
+      }
+    }
+
+    wt.toast("房間連結已複製");
+  } catch (error) {
+    wt.toast(error && error.message || "複製房間連結失敗");
+  }
+}
+
 var qrPromise = null;
 
 function loadQr() {
@@ -1838,10 +1879,10 @@ function buildRoomModals() {
     qr.id = "wtQrModal";
     qr.className = "wt-modal hidden";
     qr.setAttribute("aria-hidden","true");
-    qr.innerHTML = '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div><div class="wt-panel-title">加入房間</div><div class="wt-small">掃描 QR Code 或輸入 6 碼房間碼。</div></div><button class="wt-close-btn" id="wtQrClose" type="button">×</button></div><div class="wt-qr"><canvas id="wtQrCanvas" width="280" height="280"></canvas></div><div class="wt-profile-code" id="wtQrCode" style="text-align:center;"></div><div class="wt-settings-actions"><button class="wt-action-btn primary" id="wtQrCopy" type="button">複製房間連結</button></div></div>';
+    qr.innerHTML = '<div class="wt-modal-card narrow"><div class="wt-modal-header"><div><div class="wt-panel-title">加入房間</div><div class="wt-small">掃描 QR Code 或輸入 6 碼房間碼。</div></div><button class="wt-close-btn" id="wtQrClose" type="button">×</button></div><div class="wt-qr"><canvas id="wtQrCanvas" width="280" height="280"></canvas></div><div class="wt-profile-code" id="wtQrCode" style="text-align:center;"></div><div class="wt-qr-actions"><button class="wt-action-btn primary" id="wtQrCopy" type="button">複製房間連結</button></div></div>';
     document.body.appendChild(qr);
     $("wtQrClose").addEventListener("click",function(){ wt.closeModal("wtQrModal"); });
-    $("wtQrCopy").addEventListener("click",shareRoom);
+    $("wtQrCopy").addEventListener("click",copyRoomLink);
   }
 
   if (!$("wtRoomSettingsModal")) {
