@@ -7239,9 +7239,17 @@
     }
 
     const rawUrl = String(video.url || "").trim();
-    const embedUrl = /^https?:\\/\\/([^.]+\\.)?vimeo\\.com\\//i.test(rawUrl)
-      ? rawUrl
-      : `https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=0&playsinline=1`;
+    let embedUrl = `https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=0&playsinline=1`;
+    try {
+      const parsedUrl = new URL(rawUrl);
+      const host = parsedUrl.hostname.toLowerCase();
+      if (
+        (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") &&
+        (host === "vimeo.com" || host.endsWith(".vimeo.com"))
+      ) {
+        embedUrl = rawUrl;
+      }
+    } catch (_) {}
 
     container.src = embedUrl;
     container.allow = "autoplay; fullscreen; picture-in-picture";
