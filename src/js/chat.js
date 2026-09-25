@@ -350,7 +350,11 @@ async function sendMessagePayload(payload,targetUid) {
     createdAt:firebase.database.ServerValue.TIMESTAMP
   },payload);
   var messageRef = await wt.db.ref("conversations/" + conversationId + "/messages").push(payload);
-  await updateSummary(messageRef.key,payload,targetUid);
+  try {
+    await updateSummary(messageRef.key,payload,targetUid);
+  } catch (error) {
+    console.warn("聊天摘要更新失敗，訊息本身仍已送出:", error);
+  }
   return messageRef.key;
 }
 
