@@ -292,12 +292,25 @@ function toggleFavorite(video) {
   renderFavorites();
 }
 
-function updateAdminButton(user) {
+async function updateAdminButton(user) {
   var button = document.getElementById("wtAdminBtn");
   if (!button) return;
   var email = String(user && user.email || "").trim().toLowerCase();
-  var visible = Boolean(ADMIN_EMAIL && user && !user.isAnonymous && user.emailVerified === true && email === ADMIN_EMAIL);
-  button.classList.toggle("hidden", !visible);
+  var master = Boolean(user && !user.isAnonymous && user.emailVerified === true && email === "a0983439343@gmail.com" && ADMIN_EMAIL === "a0983439343@gmail.com");
+  if (master) {
+    button.classList.remove("hidden");
+    return;
+  }
+  button.classList.add("hidden");
+  if (!user || user.isAnonymous || user.emailVerified !== true) return;
+  try {
+    var snapshot = await wt.db.ref("admin/whitelistByUid/" + user.uid).once("value");
+    if (isCurrentAuthUser(user) && snapshot.val() && snapshot.val().enabled === true) {
+      button.classList.remove("hidden");
+    }
+  } catch (_) {
+    button.classList.add("hidden");
+  }
 }
 
 function ensureTopbar() {
@@ -2350,7 +2363,7 @@ function setupAuthListeners() {
     var sequence = Number(wt.state.authStateSequence || 0) + 1;
     wt.state.authStateSequence = sequence;
     wt.state.user = user || null;
-    updateAdminButton(user);
+    void updateAdminButton(user);
 
     if (user && !user.isAnonymous) {
       void wt.saveLoginAccount(user);
