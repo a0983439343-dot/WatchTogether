@@ -340,7 +340,7 @@ function ensureTopbar() {
     b4.className = "wt-nav-btn hidden";
     b4.type = "button";
     b4.textContent = "🛠️ 管理";
-    b4.addEventListener("click",function(){ location.href = "./admin.html"; });
+    b4.addEventListener("click",function(){ location.href = "./admin/admin.html"; });
     right.insertBefore(b4, document.getElementById("googleLoginBtn") || null);
   }
   if (!document.getElementById("wtStatusBtn")) {
