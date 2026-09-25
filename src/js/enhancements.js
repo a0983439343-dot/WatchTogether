@@ -316,10 +316,16 @@ async function updateAdminButton(user) {
     return;
   }
   button.classList.add("hidden");
-  if (!user || user.isAnonymous || user.emailVerified !== true) return;
+  if (!user || user.isAnonymous) return;
   try {
     var snapshot = await wt.db.ref("admin/whitelistByUid/" + user.uid).once("value");
-    if (isCurrentAuthUser(user) && snapshot.val() && snapshot.val().enabled === true) {
+    var item = snapshot.val();
+    if (
+      isCurrentAuthUser(user) &&
+      item &&
+      item.uid === user.uid &&
+      item.enabled === true
+    ) {
       button.classList.remove("hidden");
     }
   } catch (_) {
