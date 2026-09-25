@@ -292,6 +292,14 @@ function toggleFavorite(video) {
   renderFavorites();
 }
 
+function updateAdminButton(user) {
+  var button = document.getElementById("wtAdminBtn");
+  if (!button) return;
+  var email = String(user && user.email || "").trim().toLowerCase();
+  var visible = Boolean(ADMIN_EMAIL && user && !user.isAnonymous && user.emailVerified === true && email === ADMIN_EMAIL);
+  button.classList.toggle("hidden", !visible);
+}
+
 function ensureTopbar() {
   var right = document.querySelector(".topbar-right");
   if (!right) return;
@@ -312,6 +320,15 @@ function ensureTopbar() {
     b2.textContent = "⚙️ 設定";
     b2.addEventListener("click",function(){ wt.openSettings(); });
     right.insertBefore(b2, document.getElementById("googleLoginBtn") || null);
+  }
+  if (!document.getElementById("wtAdminBtn")) {
+    var b4 = document.createElement("button");
+    b4.id = "wtAdminBtn";
+    b4.className = "wt-nav-btn hidden";
+    b4.type = "button";
+    b4.textContent = "🛠️ 管理";
+    b4.addEventListener("click",function(){ location.href = "./admin.html"; });
+    right.insertBefore(b4, document.getElementById("googleLoginBtn") || null);
   }
   if (!document.getElementById("wtStatusBtn")) {
     var b3 = document.createElement("button");
@@ -493,6 +510,7 @@ applyTheme(currentTheme());
 "use strict";
 var wt = window.WT_ENHANCEMENTS;
 if (!wt) return;
+var ADMIN_EMAIL = String((window.WATCHTOGETHER_CONFIG || {}).adminEmail || "").trim().toLowerCase();
 
 var $ = wt.$ || function(id){ return document.getElementById(id); };
 wt.$ = $;
@@ -2331,6 +2349,7 @@ function setupAuthListeners() {
     var sequence = Number(wt.state.authStateSequence || 0) + 1;
     wt.state.authStateSequence = sequence;
     wt.state.user = user || null;
+    updateAdminButton(user);
 
     if (user && !user.isAnonymous) {
       void wt.saveLoginAccount(user);
