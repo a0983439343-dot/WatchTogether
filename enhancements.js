@@ -499,28 +499,28 @@ var serverTs = wt.serverTs;
 var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
 var isCurrentAuthUser = wt.isCurrentAuthUser;
 
+async function reservePublicId(code,user) {
+  if (!user || user.isAnonymous || !FRIEND_CODE_RE.test(code)) return false;
+  try {
+    var ref = wt.db.ref("profileCodes/" + code);
+    var result = await ref.transaction(function(value){
+      if (value === null || String(value) === String(user.uid)) {
+        return user.uid;
+      }
+      return;
+    });
+    return Boolean(result.committed && String(result.snapshot.val()) === String(user.uid));
+  } catch (_) {
+    return false;
+  }
+}
+
 async function ensurePublicCode(profile) {
   var user = wt.auth.currentUser;
-  if (!user || user.isAnonymous) throw new Error("Google 登入後才能建立好友代碼");
-
-  async function reserve(code) {
-    if (!FRIEND_CODE_RE.test(code)) return false;
-    try {
-      var ref = wt.db.ref("profileCodes/" + code);
-      var result = await ref.transaction(function(value){
-        if (value === null || String(value) === String(user.uid)) {
-          return user.uid;
-        }
-        return;
-      });
-      return Boolean(result.committed && String(result.snapshot.val()) === String(user.uid));
-    } catch (_) {
-      return false;
-    }
-  }
+  if (!user || user.isAnonymous) throw new Error("Google 登入後才能建立 ID");
 
   var existing = String(profile && profile.publicCode || "").trim().toUpperCase();
-  if (FRIEND_CODE_RE.test(existing) && await reserve(existing)) {
+  if (FRIEND_CODE_RE.test(existing) && await reservePublicId(existing,user)) {
     return existing;
   }
 
@@ -531,7 +531,7 @@ async function ensurePublicCode(profile) {
     }
   }
 
-  throw new Error("好友代碼建立失敗");
+  throw new Error("ID 建立失敗");
 }
 
 async function loadProfile(user) {
@@ -562,6 +562,7 @@ async function loadProfile(user) {
   }
 
   var localName = String(localStorage.getItem("wt_name") || "").trim();
+  if (/^訪客\d{3}$/.test(localName)) localName = "";
   var displayName = String(old.displayName || localName || user.displayName || "玩家").trim().slice(0,30) || "玩家";
   var theme = wt.THEMES.some(function(x){ return x.id === old.theme; }) ? old.theme : (localStorage.getItem(wt.KEYS.theme) || "aurora");
   var profile = {
@@ -617,14 +618,19 @@ function renderProfile() {
   var hint = $("wtProfileHint");
 
   if (name) name.textContent = profile && profile.displayName || wt.currentName();
-  if (code) code.textContent = profile && profile.publicCode ? "好友代碼：" + profile.publicCode : "訪客模式";
+  if (code) code.textContent = profile && profile.publicCode ? "ID：" + profile.publicCode : "訪客模式";
   if (avatar) avatar.textContent = profile && profile.avatarEmoji || wt.currentAvatar();
   if (input) input.value = profile && profile.displayName || wt.currentName();
+  var idInput = $("wtPublicIdInput");
+  if (idInput) {
+    idInput.value = profile && profile.publicCode || "";
+    idInput.disabled = !profile;
+  }
   if (avatarInput) avatarInput.value = profile && profile.avatarEmoji || wt.currentAvatar();
   if (note) note.checked = localStorage.getItem(wt.KEYS.notifications) !== "0";
   if (hint) {
     hint.textContent = wt.state.user && !wt.state.user.isAnonymous
-      ? "好友代碼可提供給朋友，不需要公開 Email。"
+      ? "ID 可提供給朋友，不需要公開 Email。"
       : "Google 登入後才能使用好友與私聊功能。";
   }
 }
@@ -703,8 +709,9 @@ function buildSettingsModal() {
           '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">個人資料</span></div>' +
           '<div class="wt-profile-head" style="margin-top:13px;"><div class="wt-avatar-lg" id="wtProfileAvatar">🙂</div><div class="wt-profile-text"><div class="wt-profile-name" id="wtProfileName">玩家</div><div class="wt-profile-code" id="wtProfileCodeText">訪客模式</div></div></div>' +
           '<div class="wt-form-row"><label for="wtNicknameInput">暱稱</label><input id="wtNicknameInput" maxlength="30" autocomplete="off"></div>' +
+          '<div class="wt-form-row"><label for="wtPublicIdInput">ID</label><input id="wtPublicIdInput" maxlength="6" minlength="6" autocomplete="off" spellcheck="false" placeholder="6 碼英數字"></div>' +
           '<div class="wt-form-row"><label for="wtAvatarInput">頭像 Emoji</label><input id="wtAvatarInput" maxlength="4" autocomplete="off" placeholder="🙂"></div>' +
-          '<div class="wt-settings-actions"><button class="wt-action-btn primary" id="wtSaveProfileBtn" type="button">儲存個人資料</button><button class="wt-action-btn" id="wtCopyFriendCodeBtn" type="button">複製好友代碼</button></div>' +
+          '<div class="wt-settings-actions"><button class="wt-action-btn primary" id="wtSaveProfileBtn" type="button">儲存個人資料</button><button class="wt-action-btn" id="wtCopyFriendCodeBtn" type="button">複製 ID</button></div>' +
           '<div class="wt-small" id="wtProfileHint" style="margin-top:10px;"></div>' +
         '</section>' +
         '<section class="wt-card-section">' +
@@ -768,27 +775,75 @@ async function saveProfile() {
     toast("Google 登入後才能儲存公開個人資料");
     return;
   }
+
   var name = String($("wtNicknameInput").value || "").trim().slice(0,30);
   var avatar = String($("wtAvatarInput").value || "🙂").trim().slice(0,4) || "🙂";
+  var requestedId = String($("wtPublicIdInput").value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+  var oldId = String(wt.state.profile && wt.state.profile.publicCode || "").trim().toUpperCase();
+
   if (!name) {
     toast("暱稱不能是空白");
     return;
   }
-  try { await user.updateProfile({displayName:name}); } catch (_) {}
-  localStorage.setItem("wt_name",name);
-  var profile = {
-    displayName:name,
-    avatarEmoji:avatar,
-    theme:wt.currentTheme(),
-    notifications:localStorage.getItem(wt.KEYS.notifications) !== "0",
-    updatedAt:wt.serverTs()
-  };
-  await wt.db.ref("profiles/" + user.uid).update(profile);
-  wt.state.profile = Object.assign({},wt.state.profile || {},profile);
-  await updateCurrentRoomMember(name,avatar);
-  renderProfile();
-  wt.renderHome();
-  toast("個人資料已更新");
+
+  if (!FRIEND_CODE_RE.test(requestedId)) {
+    toast("ID 必須是 6 碼英數字");
+    return;
+  }
+
+  var reservedNewId = false;
+  try {
+    if (requestedId !== oldId) {
+      reservedNewId = await reservePublicId(requestedId,user);
+      if (!reservedNewId) {
+        toast("這個 ID 已被使用，請換一個");
+        return;
+      }
+    } else {
+      reservedNewId = true;
+    }
+
+    try { await user.updateProfile({displayName:name}); } catch (_) {}
+
+    localStorage.setItem("wt_name",name);
+    var profile = {
+      displayName:name,
+      publicCode:requestedId,
+      avatarEmoji:avatar,
+      theme:wt.currentTheme(),
+      notifications:localStorage.getItem(wt.KEYS.notifications) !== "0",
+      updatedAt:wt.serverTs()
+    };
+
+    await wt.db.ref("profiles/" + user.uid).update(profile);
+
+    if (oldId && oldId !== requestedId) {
+      try {
+        var oldIdRef = wt.db.ref("profileCodes/" + oldId);
+        var oldIdSnapshot = await oldIdRef.once("value");
+        if (String(oldIdSnapshot.val() || "") === String(user.uid)) {
+          await oldIdRef.remove();
+        }
+      } catch (_) {}
+    }
+
+    wt.state.profile = Object.assign({},wt.state.profile || {},profile);
+    await updateCurrentRoomMember(name,avatar);
+    renderProfile();
+    wt.renderHome();
+    toast("個人資料已更新");
+  } catch (error) {
+    if (reservedNewId && requestedId !== oldId) {
+      try {
+        var rollbackRef = wt.db.ref("profileCodes/" + requestedId);
+        var rollbackSnapshot = await rollbackRef.once("value");
+        if (String(rollbackSnapshot.val() || "") === String(user.uid)) {
+          await rollbackRef.remove();
+        }
+      } catch (_) {}
+    }
+    toast(error && error.message || "個人資料更新失敗");
+  }
 }
 
 async function updateCurrentRoomMember(name,avatar) {
@@ -809,7 +864,7 @@ async function copyFriendCode() {
   }
   try {
     await navigator.clipboard.writeText(code);
-    toast("好友代碼已複製");
+    toast("ID 已複製");
   } catch (_) {
     toast(code);
   }
@@ -991,11 +1046,11 @@ async function addFriendByCode(code) {
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   code = String(code || "").trim().toUpperCase();
-  if (!FRIEND_CODE_RE.test(code)) throw new Error("好友代碼必須是 6 碼英數字");
+  if (!FRIEND_CODE_RE.test(code)) throw new Error("ID 必須是 6 碼英數字");
 
   var codeSnapshot = await wt.db.ref("profileCodes/" + code).once("value");
   var targetUid = String(codeSnapshot.val() || "");
-  if (!targetUid) throw new Error("找不到這個好友代碼");
+  if (!targetUid) throw new Error("找不到這個 ID");
   if (targetUid === user.uid) throw new Error("不能加自己為好友");
 
   if (await isFriend(targetUid)) throw new Error("你們已經是好友");
@@ -1135,8 +1190,8 @@ function buildFriendsModal() {
   modal.setAttribute("aria-hidden","true");
   modal.innerHTML =
     '<div class="wt-modal-card">' +
-      '<div class="wt-modal-header"><div><div class="wt-panel-title">好友與私聊</div><div class="wt-small">用 6 碼好友代碼加好友，私聊只允許對話雙方讀取。</div></div><button class="wt-close-btn" id="wtFriendsClose" type="button">×</button></div>' +
-      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="6" minlength="6" placeholder="輸入 6 碼好友代碼" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
+      '<div class="wt-modal-header"><div><div class="wt-panel-title">好友與私聊</div><div class="wt-small">用 6 碼 ID 加好友，私聊只允許對話雙方讀取。</div></div><button class="wt-close-btn" id="wtFriendsClose" type="button">×</button></div>' +
+      '<div class="wt-card-section" style="margin-top:16px;"><div class="wt-inline"><input id="wtFriendCodeInput" class="wt-friend-search" maxlength="6" minlength="6" placeholder="輸入 6 碼 ID" autocomplete="off" spellcheck="false" style="max-width:360px;"><button class="wt-action-btn primary" id="wtAddFriendBtn" type="button">＋ 加好友</button><span id="wtMyFriendCode" class="wt-small"></span></div></div>' +
       '<div class="wt-friends-layout">' +
         '<aside class="wt-friends-sidebar">' +
           '<div class="wt-section-title"><span class="wt-panel-title" style="font-size:15px;">好友</span><span id="wtFriendCount" class="wt-small">0</span></div>' +
@@ -1230,9 +1285,9 @@ function renderFriends() {
   if (!box) return;
   var entries = Object.entries(wt.state.friends || {});
   if ($("wtFriendCount")) $("wtFriendCount").textContent = String(entries.length);
-  if ($("wtMyFriendCode")) $("wtMyFriendCode").textContent = wt.state.profile && wt.state.profile.publicCode ? "我的好友代碼：" + wt.state.profile.publicCode : "Google 登入後會建立好友代碼";
+  if ($("wtMyFriendCode")) $("wtMyFriendCode").textContent = wt.state.profile && wt.state.profile.publicCode ? "我的ID：" + wt.state.profile.publicCode : "Google 登入後會建立 ID";
   if (!entries.length) {
-    box.innerHTML = '<div class="wt-small">還沒有好友。把 6 碼好友代碼給朋友即可互加。</div>';
+    box.innerHTML = '<div class="wt-small">還沒有好友。把 6 碼ID 給朋友即可互加。</div>';
     return;
   }
   box.innerHTML = entries.map(function(pair){
@@ -1351,7 +1406,7 @@ function updatePrivateHeader() {
     return;
   }
   title.textContent = wt.state.selectedFriendProfile.displayName || "好友";
-  subtitle.textContent = "好友代碼：" + String(wt.state.selectedFriendProfile.publicCode || "");
+  subtitle.textContent = "ID：" + String(wt.state.selectedFriendProfile.publicCode || "");
   if (remove) remove.disabled = false;
 }
 
@@ -1897,7 +1952,7 @@ function enhanceRoomMembers() {
       ).trim().toUpperCase();
 
       if (!FRIEND_CODE_RE.test(code)) {
-        wt.toast("對方目前沒有可用的好友代碼");
+        wt.toast("對方目前沒有可用的 ID");
         return;
       }
 
