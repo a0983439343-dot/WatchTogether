@@ -7152,6 +7152,8 @@
       );
     }
 
+    await ensureNotGloballyBlocked(auth?.currentUser || null);
+
     let roomId =
       randomRoomCode();
 
