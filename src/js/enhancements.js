@@ -313,7 +313,7 @@ async function updateAdminButton(user) {
   }
 }
 
-function ensureTopbar() {
+wt.updateAdminButton = updateAdminButton;\n\nfunction ensureTopbar() {
   var right = document.querySelector(".topbar-right");
   if (!right) return;
   if (!document.getElementById("wtFriendsBtn")) {
@@ -2375,7 +2375,7 @@ function setupAuthListeners() {
     var sequence = Number(wt.state.authStateSequence || 0) + 1;
     wt.state.authStateSequence = sequence;
     wt.state.user = user || null;
-    void updateAdminButton(user);
+    if (typeof wt.updateAdminButton === "function") {\n      void wt.updateAdminButton(user).catch(function(error){\n        console.warn("WatchTogether admin button update failed", error);\n      });\n    }
 
     if (user && !user.isAnonymous) {
       void wt.saveLoginAccount(user);
