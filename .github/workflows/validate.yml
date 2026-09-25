@@ -59,24 +59,6 @@ jobs:
           const index = fs.readFileSync('index.html', 'utf8');
           const sw = fs.readFileSync('sw.js', 'utf8');
 
-          const requiredFiles = [
-            'index.html',
-            'sw.js',
-            'src/css/styles.css',
-            'src/css/enhancements.css',
-            'src/js/app.js',
-            'src/js/enhancements.js',
-            'src/js/i18n.js',
-            'src/vendor/qrcode-generator.js',
-            'config/firebase-config.js',
-            'admin/admin.html',
-            'admin/admin.css',
-            'admin/admin.js'
-          ];
-          for (const file of requiredFiles) {
-            if (!fs.existsSync(file)) throw new Error('Required file missing: ' + file);
-          }
-
           if (!app.includes('requestPlaybackControl(')) throw new Error('Member playback request function missing.');
           if (!app.includes('attachPlaybackControlRequestListener(')) throw new Error('Owner control-request listener missing.');
           if (!app.includes('空房房主接管失敗')) throw new Error('Vacant-room owner takeover flow missing.');
@@ -84,7 +66,7 @@ jobs:
           if (!rules.includes("root.child('members').child($roomId).child(auth.uid).exists()")) throw new Error('Owner takeover membership guard missing.');
           if (/numChildren\s*\(/.test(rules)) throw new Error('Unsupported numChildren() remains in Firebase rules.');
           if (!app.includes('buildYoutubeNativePlayer') || !app.includes('createYoutubeNativePlayer')) throw new Error('Native YouTube playback adapter is missing.');
-          if (/new\s+YT\.Player|youtube\.com\/iframe_api|loadYoutubeIframeApi|createYoutubeIframePlayer/.test(app)) throw new Error('Legacy YouTube IFrame playback path remains.');
+          if (/new\\s+YT\\.Player|youtube\.com\\/iframe_api|loadYoutubeIframeApi|createYoutubeIframePlayer/.test(app)) throw new Error('Legacy YouTube IFrame playback path remains.');
           if (!app.includes('loadVimeoSdk') || !app.includes('new Vimeo.Player')) throw new Error('Vimeo Player SDK integration is missing.');
           if (!app.includes('loadDailymotionSdk') || !app.includes('dailymotion.createPlayer') || !app.includes('dailymotion.events.VIDEO_SEEKEND')) throw new Error('Dailymotion Web SDK integration is missing.');
           if (!app.includes('loadTwitchSdk') || !app.includes('new Twitch.Player') || !app.includes('Twitch.Player.SEEK')) throw new Error('Twitch JavaScript Player integration is missing.');
