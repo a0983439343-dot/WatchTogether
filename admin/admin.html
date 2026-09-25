@@ -107,13 +107,13 @@
       <div class="section-head"><div><div class="eyebrow">ACCESS CONTROL</div><h2>白名單</h2></div></div>
       <div class="panel" id="whitelistAddPanel">
         <div class="panel-head"><h3>加入白名單管理員</h3></div>
-        <div class="add-row"><input id="whitelistEmail" class="search" type="text" autocomplete="off" placeholder="貼上使用者 UID"><button id="addWhitelistBtn" class="btn primary">加入白名單管理員</button></div>
+        <div class="add-row"><input id="whitelistEmail" class="search" type="text" autocomplete="off" placeholder="貼上使用者 UID"><select id="whitelistRole" class="search role-select" aria-label="新增管理員權限"><option value="admin">管理員</option><option value="viewer">觀察員</option></select><button id="addWhitelistBtn" class="btn primary">加入白名單</button></div>
       </div>
       <div id="whitelistHelp" class="muted whitelist-help"></div>
       <div class="toolbar"><input id="whitelistSearch" class="search" type="search" placeholder="搜尋白名單 Email"><span id="whitelistCount" class="muted"></span></div>
       <div class="panel table-wrap">
         <table>
-          <thead><tr><th>Email</th><th>狀態</th><th>加入時間</th><th>加入者</th><th>操作</th></tr></thead>
+          <thead><tr><th>Email</th><th>權限</th><th>狀態</th><th>加入時間</th><th>加入者</th><th>操作</th></tr></thead>
           <tbody id="whitelistBody"></tbody>
         </table>
       </div>
