@@ -1027,3 +1027,37 @@ body[data-wt-theme="blueprint"] .wt-theme-card {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+#wtQrModal .wt-modal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+#wtQrModal .wt-modal-header {
+  width: 100%;
+}
+
+#wtQrModal .wt-qr {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#wtQrModal .wt-profile-code {
+  width: 100%;
+  text-align: center;
+}
+
+#wtQrModal .wt-qr-actions {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#wtQrModal #wtQrCopy {
+  display: block;
+  width: 280px;
+  max-width: 100%;
+  margin-inline: auto;
+}
