@@ -48,17 +48,19 @@
         "$other": {
           ".validate": false
         }
-      }
+      },
+      ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "members": {
       "$roomId": {
-        ".read": "auth != null && $roomId.length === 6",
+        ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
         "$uid": {
           ".read": "auth != null && $roomId.length === 6 && (auth.uid === $uid || root.child('members').child($roomId).child(auth.uid).exists())",
-          ".write": "auth != null && $roomId.length === 6 && root.child('rooms').child($roomId).exists() && ((auth.uid === $uid && data.exists()) || (auth.uid === $uid && !data.exists() && root.child('kicked').child($roomId).child($uid).val() !== true && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomMeta').child($roomId).child('settings').child('locked').val() !== true) && true) || (auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))",
+          ".write": "auth != null && $roomId.length === 6 && root.child('rooms').child($roomId).exists() && ((auth.uid === $uid && data.exists()) || (auth.uid === $uid && !data.exists() && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true || (root.child('kicked').child($roomId).child($uid).val() !== true && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomMeta').child($roomId).child('settings').child('locked').val() !== true)))) || (auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))",
           ".validate": "!newData.exists() || (newData.hasChildren(['name','joinedAt','online','lastSeen']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('joinedAt').isNumber() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && (!newData.child('avatarEmoji').exists() || (newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length <= 4)) && (!newData.child('publicCode').exists() || (newData.child('publicCode').isString() && newData.child('publicCode').val().length === 6 && newData.child('publicCode').val() === root.child('profiles').child(auth.uid).child('publicCode').val())))"
         }
-      }
+      },
+      ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "chat": {
       "$roomId": {
