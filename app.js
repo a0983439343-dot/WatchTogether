@@ -13462,6 +13462,11 @@
       notice.classList.toggle("hidden", !manual);
     }
 
+    if (manual && window.WT_ENHANCEMENTS?.state) {
+      window.WT_ENHANCEMENTS.state.createVideo = null;
+      $("selectedVideoCard")?.classList.add("hidden");
+    }
+
     if (manual) {
       const label = $("platformManualLabel");
       const input = $("platformManualInput");
