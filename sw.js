@@ -1,18 +1,18 @@
 const CACHE_NAME = "wt-shell-20260925-v54";
 const ASSETS = [
   "./",
-  "./styles.css",
-  "./app.js",
-  "./enhancements.css",
-  "./enhancements.js",
-  "./i18n.js",
-  "./firebase-config.js",
+  "./src/css/styles.css",
+  "./src/js/app.js",
+  "./src/css/enhancements.css",
+  "./src/js/enhancements.js",
+  "./src/js/i18n.js",
+  "./config/firebase-config.js",
   "./manifest.webmanifest",
   "./icon.svg",
-  "./vendor/qrcode-generator.js",
-  "./admin.html",
-  "./admin.css",
-  "./admin.js"
+  "./src/vendor/qrcode-generator.js",
+  "./admin/admin.html",
+  "./admin/admin.css",
+  "./admin/admin.js"
 ];
 
 self.addEventListener("install", event => {
