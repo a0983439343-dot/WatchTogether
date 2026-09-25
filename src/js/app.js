@@ -3176,7 +3176,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                         >
                           ＋ 待播放
                         </button>
-                      `
+                      `}
 
               </div>
 
