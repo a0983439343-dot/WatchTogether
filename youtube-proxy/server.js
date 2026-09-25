@@ -136,110 +136,124 @@ function makeSearchCacheKey(query, maxResults, page) {
 function getStreamUrl(videoId, forceRefresh = false) {
   const cached = cache.get(videoId);
 
-  if (
-    !forceRefresh &&
-    cached &&
-    cached.expiresAt > Date.now()
-  ) {
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
     return Promise.resolve(cached.url);
   }
 
-  if (
-    !forceRefresh &&
-    streamInflight.has(videoId)
-  ) {
+  if (!forceRefresh && streamInflight.has(videoId)) {
     return streamInflight.get(videoId);
   }
 
-  const request = new Promise((resolve, reject) => {
-    const args = [
-      "--no-playlist",
-      "--no-warnings",
-      "--no-progress",
-      "--skip-download",
-      "--get-url",
-      "--remote-components",
-      "ejs:github",
-      "--js-runtimes",
-      "node",
-      "--socket-timeout",
-      "20",
-      "--extractor-args",
-      "youtubepot-bgutilhttp:base_url=" + YT_POT_PROVIDER_URL,
-      "-f",
-      "b[ext=mp4][vcodec^=avc1][acodec^=mp4a]/18/b[ext=mp4][vcodec^=avc1][acodec^=mp4a]",
-      "--format-sort",
-      "res,br",
-      "--add-headers",
-      "User-Agent:" + YT_STREAM_USER_AGENT,
-      "--add-headers",
-      "Referer:" + YT_STREAM_REFERER,
-      youtubeUrl(videoId)
-    ];
+  const strategies = [
+    {client:"android_vr", format:"18/b[ext=mp4][vcodec^=avc1][acodec^=mp4a]"},
+    {client:"web_embedded", format:"18/b[ext=mp4][vcodec^=avc1][acodec^=mp4a]"}
+  ];
 
-    const child = spawn("yt-dlp", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        PYTHONUNBUFFERED: "1"
-      }
-    });
+  const request = (async () => {
+    let lastError = null;
 
-    let stdout = "";
-    let stderr = "";
+    for (const strategy of strategies) {
+      const args = [
+        "--no-playlist",
+        "--no-warnings",
+        "--no-progress",
+        "--skip-download",
+        "--get-url",
+        "--remote-components",
+        "ejs:github",
+        "--js-runtimes",
+        "node",
+        "--socket-timeout",
+        "20",
+        "--extractor-args",
+        "youtube:player_client=" + strategy.client,
+        "-f",
+        strategy.format,
+        "--format-sort",
+        "res,br",
+        "--add-headers",
+        "User-Agent:" + YT_STREAM_USER_AGENT,
+        "--add-headers",
+        "Referer:" + YT_STREAM_REFERER,
+        youtubeUrl(videoId)
+      ];
 
-    child.stdout.on("data", chunk => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on("data", chunk => {
-      stderr += chunk.toString();
-    });
-
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error("yt-dlp timeout"));
-    }, 30_000);
-
-    child.on("error", error => {
-      clearTimeout(timer);
-      reject(error);
-    });
-
-    child.on("close", code => {
-      clearTimeout(timer);
-
-      const url = stdout
-        .split(/\r?\n/)
-        .map(line => line.trim())
-        .find(line => /^https?:\/\//i.test(line));
-
-      if (code !== 0 || !url) {
-        const details = stderr.trim().slice(-1600);
-        reject(new Error(details || "yt-dlp failed"));
-        return;
+      if (strategy.client !== "android_vr") {
+        args.splice(
+          args.indexOf("--extractor-args") + 2,
+          0,
+          "youtubepot-bgutilhttp:base_url=" + YT_POT_PROVIDER_URL
+        );
       }
 
-      cache.set(videoId, {
-        url,
-        expiresAt: Date.now() + CACHE_TTL_MS
-      });
+      try {
+        const url = await new Promise((resolve, reject) => {
+          const child = spawn("yt-dlp", args, {
+            stdio: ["ignore", "pipe", "pipe"],
+            env: {
+              ...process.env,
+              PYTHONUNBUFFERED: "1"
+            }
+          });
 
-      resolve(url);
-    });
-  });
+          let stdout = "";
+          let stderr = "";
+
+          child.stdout.on("data", chunk => {
+            stdout += chunk.toString();
+          });
+
+          child.stderr.on("data", chunk => {
+            stderr += chunk.toString();
+          });
+
+          const timer = setTimeout(() => {
+            child.kill("SIGKILL");
+            reject(new Error("yt-dlp timeout"));
+          }, 30_000);
+
+          child.on("error", error => {
+            clearTimeout(timer);
+            reject(error);
+          });
+
+          child.on("close", code => {
+            clearTimeout(timer);
+
+            const streamUrl = stdout
+              .split(/\r?\n/)
+              .map(line => line.trim())
+              .find(line => /^https?:\/\//i.test(line));
+
+            if (code !== 0 || !streamUrl) {
+              const details = stderr.trim().slice(-1600);
+              reject(new Error(details || "yt-dlp failed"));
+              return;
+            }
+
+            resolve(streamUrl);
+          });
+        });
+
+        cache.set(videoId, {
+          url,
+          expiresAt: Date.now() + CACHE_TTL_MS
+        });
+
+        return url;
+      } catch (error) {
+        lastError = error;
+        console.warn("[stream-extract]", videoId, strategy.client, error?.message || error);
+      }
+    }
+
+    throw lastError || new Error("yt-dlp failed");
+  })();
 
   if (!forceRefresh) {
-    streamInflight.set(
-      videoId,
-      request
-    );
-
+    streamInflight.set(videoId, request);
     request.finally(() => {
-      if (
-        streamInflight.get(videoId) ===
-        request
-      ) {
+      if (streamInflight.get(videoId) === request) {
         streamInflight.delete(videoId);
       }
     }).catch(() => {});
