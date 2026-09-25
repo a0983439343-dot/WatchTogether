@@ -1707,7 +1707,7 @@
       }
 
       localStorage.removeItem("wt_name");
-      state.memberName = "訪客";
+      state.memberName = "";
       await auth.signOut();
 
       await ensureAnonymousAuth();
@@ -12950,6 +12950,47 @@
   }
 
 
+  function getYoutubeSearchHistory() {
+    try {
+      const value = JSON.parse(localStorage.getItem("wt_search_history_v1") || "[]");
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => String(item || "").trim()).filter((item) => item.length >= 2).slice(0, 8);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveYoutubeSearchHistory(query) {
+    const normalized = String(query || "").trim();
+    if (normalized.length < 2) return;
+    const list = getYoutubeSearchHistory().filter((item) => item !== normalized);
+    list.unshift(normalized);
+    try {
+      localStorage.setItem("wt_search_history_v1", JSON.stringify(list.slice(0, 8)));
+    } catch (_) {}
+  }
+
+  function renderYoutubeSearchHistory() {
+    const box = $("modalSearchHistory");
+    if (!box) return;
+    const list = getYoutubeSearchHistory();
+    if (!list.length) {
+      box.innerHTML = '<span class="muted">還沒有最近搜尋。</span>';
+      return;
+    }
+    box.innerHTML = '<span class="muted">最近搜尋：</span> ' + list.map((item) =>
+      '<button type="button" class="wt-search-history-chip" data-wt-room-search-history="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>'
+    ).join(" ");
+    box.querySelectorAll("[data-wt-room-search-history]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const input = $("modalVideoSearchInput");
+        if (!input) return;
+        input.value = button.dataset.wtRoomSearchHistory || "";
+        $("modalSearchVideoBtn")?.click();
+      });
+    });
+  }
+
   /*
    * =========================================================
    * SOURCE MODAL
@@ -13012,6 +13053,8 @@
         .value =
         "";
     }
+
+    renderYoutubeSearchHistory();
 
     if (
       $("modalVideoSearchResults")
@@ -14148,6 +14191,9 @@
               ?.value
               .trim();
 
+          saveYoutubeSearchHistory(query);
+          renderYoutubeSearchHistory();
+
           if (!query) {
             setError(
               $("modalError"),
@@ -14831,6 +14877,12 @@
     if (existingUser) {
       state.uid =
         existingUser.uid;
+      if (existingUser.isAnonymous) {
+        if (!isGuestName(localStorage.getItem("wt_name"))) {
+          window.WT_CORE?.setGuestName?.();
+        }
+        state.memberName = localStorage.getItem("wt_name");
+      }
 
       updateAuthUI(
         existingUser
@@ -14851,6 +14903,10 @@
       state.uid =
         user?.uid ||
         null;
+
+      if (user?.isAnonymous) {
+        window.WT_CORE?.setGuestName?.();
+      }
 
       if (!state.uid) {
         throw new Error(
@@ -15019,6 +15075,17 @@
 
   window.WT_CORE.createRoomWithVideo =
     createRoomWithVideo;
+
+  window.WT_CORE.setMemberName = setMemberName;
+  window.WT_CORE.getMemberName = getMemberName;
+  window.WT_CORE.setGuestName = function() {
+    localStorage.removeItem("wt_name");
+    const name = "訪客" + Math.floor(Math.random() * 900 + 100);
+    state.memberName = name;
+    localStorage.setItem("wt_name", name);
+    return name;
+  };
+  window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
 
   window.addEventListener(
     "beforeunload",
