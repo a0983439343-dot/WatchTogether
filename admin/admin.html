@@ -5,7 +5,28 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
 <title>WatchTogether 管理員後台</title>
-<link rel="stylesheet" href="admin.css?v=20260925-admin-v8">
+<script>
+(() => {
+  const ua = navigator.userAgent || "";
+  const maxTouchPoints = Number(navigator.maxTouchPoints || 0);
+  const isTv = /smart-tv|smarttv|hbbtv|appletv|googletv|aftb|aftm|web0s|webos|viera|netcast|roku/i.test(ua);
+  const isIpad = /ipad/i.test(ua) || (/macintosh/i.test(ua) && maxTouchPoints > 1);
+  const isTablet = isIpad || /tablet|android(?!.*mobile)|kindle|silk/i.test(ua);
+  const isPhone = !isTablet && /mobi|iphone|ipod|android.*mobile|windows phone/i.test(ua);
+  let device = "other";
+  if (!isTv && isPhone) device = "phone";
+  else if (!isTv && isTablet) device = "tablet";
+  else if (!isTv && /windows|macintosh|linux|x11|cros/i.test(ua)) device = "desktop";
+  document.documentElement.dataset.device = device;
+  document.documentElement.dataset.orientation = window.innerWidth >= window.innerHeight ? "landscape" : "portrait";
+  const updateOrientation = () => {
+    document.documentElement.dataset.orientation = window.innerWidth >= window.innerHeight ? "landscape" : "portrait";
+  };
+  window.addEventListener("resize", updateOrientation, {passive:true});
+  window.addEventListener("orientationchange", updateOrientation, {passive:true});
+})();
+</script>
+<link rel="stylesheet" href="admin.css?v=20260925-admin-v9">
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
@@ -139,6 +160,6 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260925-admin-v8"></script>
+<script src="admin.js?v=20260925-admin-v9"></script>
 </body>
 </html>
