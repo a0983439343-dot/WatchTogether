@@ -4,7 +4,7 @@
   const config=window.WATCHTOGETHER_CONFIG||{};
   const adminEmail=String(config.adminEmail||"").trim().toLowerCase();
   const MASTER_EMAIL="a0983439343@gmail.com";
-  let auth=null,db=null,currentUser=null,accounts={},whitelist={},currentHasAdminAccess=false;
+  let auth=null,db=null,currentUser=null,accounts={},whitelist={},rooms={},currentHasAdminAccess=false;
   const $=id=>document.getElementById(id);
   const show=id=>$(id)?.classList.remove("hidden");
   const hide=id=>$(id)?.classList.add("hidden");
@@ -69,12 +69,53 @@
     updateStats();
   }
 
+  async function loadRooms(){
+    if(!currentHasAdminAccess){
+      rooms={};
+      renderRooms();
+      return;
+    }
+    const snapshot=await db.ref("rooms").once("value");
+    rooms=snapshot.val()||{};
+    const memberSnapshot=await db.ref("members").once("value").catch(()=>null);
+    const members=memberSnapshot?.val?.()||{};
+    Object.keys(rooms).forEach(id=>{
+      rooms[id].__members=Object.values(members[id]||{}).filter(x=>x&&x.online===true).length;
+    });
+    renderRooms();
+  }
+
+  function renderRooms(){
+    const query=String($("roomSearch")?.value||"").trim().toLowerCase();
+    const accountByUid={};
+    Object.values(accounts||{}).forEach(item=>{
+      if(item&&item.uid)accountByUid[item.uid]=item;
+    });
+    const rows=Object.entries(rooms||{}).map(([id,item])=>({id,item})).filter(({id,item})=>{
+      if(!item||!/^[A-Z0-9]{6}$/.test(String(id).toUpperCase()))return false;
+      const owner=accountByUid[item.owner]?.email||item.owner||"";
+      const hay=[id,item.name,owner,item.sourceType,item.video?.title,item.video?.platform].join(" ").toLowerCase();
+      return !query||hay.includes(query);
+    }).sort((a,b)=>Number(b.item.createdAt||0)-Number(a.item.createdAt||0));
+    $("roomCount").textContent=rows.length+" 間";
+    $("roomsBody").innerHTML=rows.length?rows.map(({id,item})=>{
+      const key=String(id).toUpperCase();
+      const owner=accountByUid[item.owner];
+      const members=Number(item.__members||0);
+      const platform=String(item.video?.platform||item.sourceType||"—");
+      const title=String(item.video?.title||"目前沒有影片");
+      const href="./?room="+encodeURIComponent(key)+"&adminJoin=1";
+      return '<tr><td><div class="primary-text">'+escapeHtml(item.name||"一起看")+'</div><span class="small">房間碼：'+escapeHtml(key)+'</span></td><td>'+escapeHtml(owner?.email||item.owner||"—")+'</td><td><strong>'+members+'</strong></td><td><span class="small">'+escapeHtml(platform)+' · '+escapeHtml(title)+'</span></td><td>'+escapeHtml(formatDate(item.createdAt))+'</td><td><a class="btn primary" href="'+href+'">🚪 管理員直接進入</a></td></tr>';
+    }).join(""):'<tr><td colspan="6" class="muted">目前沒有符合條件的房間。</td></tr>';
+  }
+
   function updateStats(){
     const list=Object.values(accounts||{}),wl=Object.values(whitelist||{});
     $("statAccounts").textContent=list.length;
     $("statWhitelist").textContent=isMasterUser(currentUser)?wl.length:(currentHasAdminAccess?"1":"0");
     $("statWhitelistEnabled").textContent=wl.filter(x=>x&&x.enabled===true).length;
     $("statCurrent").textContent=currentUser?1:0;
+    if($("statRooms"))$("statRooms").textContent=Object.keys(rooms||{}).length;
     const u=currentUser||{};
     $("adminInfo").innerHTML=[
       ["權限",isMasterUser(u)?"最高管理員":"白名單管理員"],
@@ -213,7 +254,9 @@
         $("adminAccount").textContent=user.email||"";
         show("app");
         applyRoleUi();
-        await Promise.all([loadAccounts(),loadWhitelist()]);
+        await loadAccounts();
+        await loadWhitelist();
+        await loadRooms();
       }catch(error){
         console.error(error);
         show("deniedScreen");
@@ -230,11 +273,13 @@
       show("section-"+btn.dataset.section);
     }));
     $("accountSearch")?.addEventListener("input",renderAccounts);
+    $("roomSearch")?.addEventListener("input",renderRooms);
     $("whitelistSearch")?.addEventListener("input",renderWhitelist);
     $("addWhitelistBtn")?.addEventListener("click",()=>addWhitelist().catch(error=>{console.error(error);toast("加入白名單失敗");}));
     $("whitelistEmail")?.addEventListener("keydown",event=>{if(event.key==="Enter")void addWhitelist().catch(error=>{console.error(error);toast("加入白名單失敗");});});
     $("refreshBtn")?.addEventListener("click",()=>Promise.all([loadAccounts(),loadWhitelist()]).then(()=>toast("已重新整理")).catch(()=>toast("重新整理失敗")));
     $("accountsRefreshBtn")?.addEventListener("click",()=>loadAccounts().then(()=>toast("已重新整理")).catch(()=>toast("重新整理失敗")));
+    $("roomsRefreshBtn")?.addEventListener("click",()=>loadRooms().then(()=>toast("已重新整理")).catch(()=>toast("重新整理失敗")));
     $("logoutBtn")?.addEventListener("click",()=>auth.signOut());
     $("switchAccountBtn")?.addEventListener("click",async()=>{
       try{
