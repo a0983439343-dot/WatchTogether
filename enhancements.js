@@ -2333,7 +2333,8 @@ function setupAuthListeners() {
     wt.state.user = user || null;
 
     if (user && !user.isAnonymous) {
-      void wt.saveLoginAccount(user);\n      void wt.loadProfile(user).then(function(){
+      void wt.saveLoginAccount(user);
+      void wt.loadProfile(user).then(function(){
         if (
           sequence !== Number(wt.state.authStateSequence || 0) ||
           !isCurrentAuthUser(user)
