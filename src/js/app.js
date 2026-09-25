@@ -12887,6 +12887,32 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         }
       );
 
+
+    $("logoutBtn")
+      ?.addEventListener(
+        "click",
+        async () => {
+          const button = $("logoutBtn");
+
+          if (button?.disabled) {
+            return;
+          }
+
+          if (button) {
+            button.disabled = true;
+          }
+
+          try {
+            await logout();
+          } finally {
+            if (button) {
+              button.disabled = false;
+            }
+          }
+        }
+      );
+
+
     $("globalBlockRefreshBtn")?.addEventListener("click", async () => {
       const block = await getGlobalBlockState(auth?.currentUser || null);
       if (block) {
