@@ -6204,7 +6204,7 @@
                   )
                 );
               },
-              18000
+              60000
             );
 
           videoElement.addEventListener(
@@ -7747,6 +7747,16 @@
         throw new Error(
           "Firebase 中的 YouTube ID 無效"
         );
+      }
+
+      if (
+        state.currentVideoId ===
+          videoId &&
+        state.youtubeLoading &&
+        state.youtubeRequestedId ===
+          videoId
+      ) {
+        return;
       }
 
       if (
@@ -11300,28 +11310,6 @@
 
       state.queueListenerAttached =
         true;
-    }
-
-    const initialVideo =
-      state.room?.video ||
-      null;
-
-    if (initialVideo) {
-      await handleRoomVideo(
-        initialVideo
-      );
-    } else {
-      hidePlayers();
-
-      showPlayerElement(
-        "emptyPlayer"
-      );
-
-      if ($("syncStatus")) {
-        $("syncStatus")
-          .textContent =
-          "等待有人選擇影片";
-      }
     }
 
     renderQueue();
