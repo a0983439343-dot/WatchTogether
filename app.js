@@ -6226,6 +6226,309 @@
     };
   }
 
+  async function buildYoutubeNativePlayer(
+    videoId,
+    autoplay = false
+  ) {
+    if (!videoId) {
+      return;
+    }
+
+    const token =
+      ++state.youtubeBuildToken;
+
+    state.youtubeRequestedId =
+      videoId;
+
+    state.youtubeLoading =
+      true;
+
+    try {
+      if (state.player) {
+        await destroyCurrentPlayer();
+      }
+
+      if (
+        state.youtubeBuildToken !== token ||
+        state.youtubeRequestedId !== videoId
+      ) {
+        return;
+      }
+
+      const videoElement =
+        $("directVideo");
+
+      if (!videoElement) {
+        throw new Error(
+          "找不到 directVideo"
+        );
+      }
+
+      hidePlayers();
+
+      videoElement.controls = true;
+      videoElement.playsInline = true;
+      videoElement.autoplay = false;
+      videoElement.preload = "metadata";
+
+      try {
+        videoElement.pause();
+        videoElement.removeAttribute("src");
+        videoElement.load();
+      } catch (_) {}
+
+      state.youtubePlaybackMode =
+        "native";
+
+      state.youtubeIframeInitialSyncUntil =
+        0;
+
+      state.playbackRemoteEvent =
+        null;
+      state.playbackLastRemoteEventId =
+        null;
+      state.playbackApplyingRemoteEventId =
+        null;
+
+      const adapter =
+        createYoutubeNativePlayer(
+          videoElement,
+          videoId
+        );
+
+      state.player =
+        adapter;
+
+      state.playerReady =
+        false;
+
+      state.playerType =
+        "youtube";
+
+      state.currentVideoId =
+        videoId;
+
+      state.currentVideoUrl =
+        null;
+
+      const streamUrl =
+        YOUTUBE_STREAM_PROXY_URL +
+        "/stream?v=" +
+        encodeURIComponent(
+          videoId
+        );
+
+      if (!YOUTUBE_STREAM_PROXY_URL) {
+        throw new Error(
+          "YouTube 串流代理尚未設定"
+        );
+      }
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "正在載入無廣告 YouTube 串流…";
+      }
+
+      await new Promise(
+        (resolve, reject) => {
+          let settled =
+            false;
+
+          const finish = (
+            error = null
+          ) => {
+            if (settled) {
+              return;
+            }
+
+            settled = true;
+
+            videoElement.removeEventListener(
+              "loadedmetadata",
+              onLoaded
+            );
+
+            videoElement.removeEventListener(
+              "error",
+              onError
+            );
+
+            clearTimeout(
+              timeout
+            );
+
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          };
+
+          const onLoaded =
+            () => {
+              finish();
+            };
+
+          const onError =
+            () => {
+              const mediaError =
+                videoElement.error;
+
+              finish(
+                new Error(
+                  "YouTube 原生串流載入失敗" +
+                  (
+                    mediaError?.code
+                      ? " (code " +
+                        String(
+                          mediaError.code
+                        ) +
+                        ")"
+                      : ""
+                  )
+                )
+              );
+            };
+
+          const timeout =
+            setTimeout(
+              () => {
+                finish(
+                  new Error(
+                    "YouTube 原生串流載入逾時"
+                  )
+                );
+              },
+              18000
+            );
+
+          videoElement.addEventListener(
+            "loadedmetadata",
+            onLoaded,
+            {once:true}
+          );
+
+          videoElement.addEventListener(
+            "error",
+            onError,
+            {once:true}
+          );
+
+          try {
+            videoElement.src =
+              streamUrl;
+
+            videoElement.load();
+          } catch (error) {
+            finish(error);
+          }
+        }
+      );
+
+      if (
+        state.youtubeBuildToken !== token ||
+        state.youtubeRequestedId !== videoId ||
+        state.player !== adapter
+      ) {
+        return;
+      }
+
+      state.playerReady =
+        true;
+
+      state.playbackReadyAt =
+        Date.now() + 250;
+
+      state.playbackSyncPhase =
+        "initializing";
+
+      attachYoutubeNativeEvents(
+        videoElement
+      );
+
+      forceYoutubePlayerVisible();
+      updateRoomOwnerUI();
+
+      await applyLatestRoomPlaybackState(
+        true
+      );
+
+      startPlaybackSeekDetector();
+
+      if (
+        autoplay &&
+        !state.playbackTimeline &&
+        state.player === adapter &&
+        state.playerReady
+      ) {
+        try {
+          await playPlayer({
+            muteForAutoplay:
+              true
+          });
+        } catch (_) {}
+      }
+
+      if ($("syncStatus")) {
+        $("syncStatus").textContent =
+          "YouTube 已載入（無廣告串流）";
+      }
+    } catch (error) {
+      if (
+        state.youtubeBuildToken === token &&
+        state.playerType === "youtube" &&
+        state.youtubePlaybackMode === "native"
+      ) {
+        try {
+          detachYoutubeNativeEvents();
+        } catch (_) {}
+
+        try {
+          state.player?.destroy?.();
+        } catch (_) {}
+
+        state.player =
+          null;
+
+        state.playerReady =
+          false;
+
+        state.playerType =
+          null;
+
+        state.currentVideoId =
+          null;
+
+        state.currentVideoUrl =
+          null;
+
+        state.youtubePlaybackMode =
+          "iframe";
+
+        state.youtubeIframeInitialSyncUntil =
+          0;
+
+        try {
+          videoElement.pause();
+          videoElement.removeAttribute("src");
+          videoElement.load();
+          videoElement.classList.add(
+            "hidden"
+          );
+        } catch (_) {}
+      }
+
+      throw error;
+    } finally {
+      if (
+        state.youtubeBuildToken === token
+      ) {
+        state.youtubeLoading =
+          false;
+      }
+    }
+  }
+
   async function buildYoutubePlayer(
     videoId,
     autoplay = true
@@ -8439,7 +8742,30 @@
       state.playbackFineRateSupported = null;
       const shouldAutoplay = state.isOwner && !isMobileViewport();
 
-      await buildYoutubePlayer(videoId, shouldAutoplay);
+      if (YOUTUBE_STREAM_PROXY_URL) {
+        try {
+          await buildYoutubeNativePlayer(
+            videoId,
+            shouldAutoplay
+          );
+          return;
+        } catch (nativeError) {
+          console.warn(
+            "原生 YouTube 串流不可用，切換官方播放器:",
+            nativeError
+          );
+
+          if ($("syncStatus")) {
+            $("syncStatus").textContent =
+              "無廣告串流暫時不可用，正在切換 YouTube 播放器…";
+          }
+        }
+      }
+
+      await buildYoutubePlayer(
+        videoId,
+        shouldAutoplay
+      );
       return;
     }
 
