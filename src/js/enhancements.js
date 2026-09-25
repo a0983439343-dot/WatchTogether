@@ -4,6 +4,9 @@ if (!window.firebase) return;
 
 var wt = window.WT_ENHANCEMENTS = window.WT_ENHANCEMENTS || {};
 var $ = function(id) { return document.getElementById(id); };
+if (!firebase.apps.length && window.FIREBASE_CONFIG) {
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+}
 var db = wt.db = firebase.database();
 var auth = wt.auth = firebase.auth();
 
