@@ -5250,25 +5250,15 @@
         );
       }
 
-      if (
-        type === "dailymotion"
-      ) {
-        if (
-          typeof player.currentTime ===
-          "function"
-        ) {
-          return (
-            Number(
-              await player.currentTime()
-            ) || 0
-          );
+      if (type === "dailymotion") {
+        if (typeof player.getState === "function") {
+          const playerState = await player.getState();
+          return Number(playerState?.videoTime) || 0;
         }
-
-        return (
-          Number(
-            player.currentTime
-          ) || 0
-        );
+        if (typeof player.currentTime === "function") {
+          return Number(await player.currentTime()) || 0;
+        }
+        return Number(player.currentTime) || 0;
       }
 
       if (type === "twitch") {
@@ -5343,25 +5333,15 @@
         );
       }
 
-      if (
-        type === "dailymotion"
-      ) {
-        if (
-          typeof player.duration ===
-          "function"
-        ) {
-          return (
-            Number(
-              await player.duration()
-            ) || 0
-          );
+      if (type === "dailymotion") {
+        if (typeof player.getState === "function") {
+          const playerState = await player.getState();
+          return Number(playerState?.videoDuration) || 0;
         }
-
-        return (
-          Number(
-            player.duration
-          ) || 0
-        );
+        if (typeof player.duration === "function") {
+          return Number(await player.duration()) || 0;
+        }
+        return Number(player.duration) || 0;
       }
 
       if (type === "twitch") {
@@ -5406,18 +5386,14 @@
         );
       }
 
-      if (
-        type === "dailymotion"
-      ) {
-        if (
-          typeof player.paused ===
-          "function"
-        ) {
-          return !(
-            await player.paused()
-          );
+      if (type === "dailymotion") {
+        if (typeof player.getState === "function") {
+          const playerState = await player.getState();
+          return playerState?.playerIsPlaying === true;
         }
-
+        if (typeof player.paused === "function") {
+          return !(await player.paused());
+        }
         return !player.paused;
       }
 
@@ -7316,6 +7292,7 @@
     container.allow = "autoplay; fullscreen; picture-in-picture";
     container.allowFullscreen = true;
     container.frameBorder = "0";
+    container.referrerPolicy = "strict-origin-when-cross-origin";
 
     const player = new Vimeo.Player(container);
 
@@ -7335,9 +7312,9 @@
       void handlePlatformNativeEvent("pause");
     });
 
-    player.on("seeked", data => {
+    player.on("seeked", event => {
       if (state.player !== player) return;
-      void handlePlatformNativeEvent("seek", Number(data?.seconds));
+      void handlePlatformNativeEvent("seek", Number(event?.seconds));
     });
 
     player.on("ended", async () => {
@@ -7345,10 +7322,13 @@
       state.playbackLastPlayerState = "ended";
       if (!state.isOwner || state.playbackApplyingRemote) return;
       const position = await asyncCurrentPosition().catch(() => 0);
-      await publishPlaybackEvent("pause", position, false, playbackClockNow(), playbackClockNow(), true);
+      const issuedAt = playbackClockNow();
+      await publishPlaybackEvent("pause", position, false, issuedAt, issuedAt, true);
     });
 
-    player.on("timeupdate", updateTimeUI);
+    player.on("timeupdate", () => {
+      void updateTimeUI();
+    });
 
     await player.ready();
 
@@ -7357,7 +7337,7 @@
     state.playerReady = true;
     updateRoomOwnerUI();
     startLocalTimeUpdate();
-    updateTimeUI();
+    void updateTimeUI();
     await applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
   }
@@ -7373,31 +7353,27 @@
     if (!container) {
       throw new Error("找不到 dailymotionPlayer");
     }
-    if (!DAILYMOTION_PLAYER_ID) {
+
+    const playerId = DAILYMOTION_PLAYER_ID || String(window.DAILYMOTION_PLAYER_ID || "").trim();
+    if (!playerId) {
       throw new Error("尚未設定 DAILYMOTION_PLAYER_ID");
     }
 
     container.innerHTML = "";
 
-    const playerId = "dm_" + Math.random().toString(36).slice(2);
+    const targetId = "dm_" + Math.random().toString(36).slice(2);
     const target = document.createElement("div");
-    target.id = playerId;
+    target.id = targetId;
     target.style.width = "100%";
     target.style.height = "100%";
     container.appendChild(target);
 
-    const player = await window.dailymotion.createPlayer(playerId, {
-      video: video.id,
-      mute: false,
+    const player = await window.dailymotion.createPlayer(targetId, {
+      video: String(video.id),
       controls: true,
-      autoplay: false
+      autoplay: false,
+      mute: true
     });
-
-    if (state.player && state.player !== player) {
-      try {
-        await state.player.destroy?.();
-      } catch (_) {}
-    }
 
     state.player = player;
     state.currentVideoId = video.id;
@@ -7406,6 +7382,18 @@
     state.playerReady = true;
 
     updateRoomOwnerUI();
+    startLocalTimeUpdate();
+    void updateTimeUI();
+
+    const refreshPlaybackState = () => {
+      if (state.player !== player) return;
+      void applyLatestRoomPlaybackState(true);
+      startPlaybackSeekDetector();
+      void updateTimeUI();
+    };
+
+    player.on(dailymotion.events.PLAYER_VIDEOCHANGE, refreshPlaybackState);
+    player.on(dailymotion.events.PLAYER_CRITICALPATHREADY, refreshPlaybackState);
 
     player.on(dailymotion.events.VIDEO_PLAYING, () => {
       if (state.player !== player) return;
@@ -7426,22 +7414,20 @@
       if (state.player !== player) return;
       state.playbackLastPlayerState = "ended";
       if (!state.isOwner || state.playbackApplyingRemote) return;
-      const position = await asyncCurrentPosition().catch(() => 0);
-      await publishPlaybackEvent("pause", position, false, playbackClockNow(), playbackClockNow(), true);
+      const playerState = await player.getState().catch(() => null);
+      const position = Number(playerState?.videoTime) || await asyncCurrentPosition().catch(() => 0);
+      const issuedAt = playbackClockNow();
+      await publishPlaybackEvent("pause", position, false, issuedAt, issuedAt, true);
     });
 
-    player.on(dailymotion.events.VIDEO_TIMECHANGE, updateTimeUI);
+    player.on(dailymotion.events.VIDEO_TIMECHANGE, () => {
+      void updateTimeUI();
+    });
 
-    startLocalTimeUpdate();
     await applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
   }
 
-  /*
-   * =========================================================
-   * BILIBILI
-   * =========================================================
-   */
 
   async function buildBilibiliPlayer(
     video
@@ -7567,11 +7553,6 @@
       state.playerType = "twitch-clip";
       state.twitchPlaybackKind = "clip";
       state.playerReady = false;
-
-      if ($("syncStatus")) {
-        $("syncStatus").textContent = "Twitch Clip：此官方嵌入模式不支援本站同步控制";
-      }
-
       void updateTimeUI();
       return;
     }
@@ -7587,12 +7568,12 @@
       width: "100%",
       height: "100%",
       autoplay: false,
-      muted: false,
+      muted: true,
       parent: [host]
     };
 
     if (video.twitchType === "video") {
-      options.video = video.id;
+      options.video = String(video.id);
     } else {
       options.channel = String(video.id || "").replace(/^@/, "");
     }
@@ -7618,8 +7599,7 @@
       });
 
       player.addEventListener(Twitch.Player.SEEK, () => {
-        if (state.player !== player) return;
-        if (state.twitchPlaybackKind !== "video") return;
+        if (state.player !== player || state.twitchPlaybackKind !== "video") return;
         void handlePlatformNativeEvent("seek");
       });
 
@@ -7628,7 +7608,8 @@
         state.playbackLastPlayerState = "ended";
         if (!state.isOwner || state.playbackApplyingRemote) return;
         const position = await asyncCurrentPosition().catch(() => 0);
-        await publishPlaybackEvent("pause", position, false, playbackClockNow(), playbackClockNow(), true);
+        const issuedAt = playbackClockNow();
+        await publishPlaybackEvent("pause", position, false, issuedAt, issuedAt, true);
       });
 
       player.addEventListener(Twitch.Player.PLAYBACK_BLOCKED, () => {
@@ -7641,37 +7622,31 @@
 
     await new Promise(resolve => {
       let done = false;
-      const ready = () => {
+      const finish = () => {
         if (done) return;
         done = true;
-        if (state.player !== player) {
-          resolve();
-          return;
+        if (state.player === player) {
+          state.playerReady = true;
+          updateRoomOwnerUI();
         }
-        state.playerReady = true;
-        updateRoomOwnerUI();
         resolve();
       };
       if (player.addEventListener) {
-        player.addEventListener(Twitch.Player.READY, ready);
-        setTimeout(ready, 5000);
+        player.addEventListener(Twitch.Player.READY, finish);
+        setTimeout(finish, 5000);
       } else {
-        setTimeout(ready, 1500);
+        setTimeout(finish, 1500);
       }
     });
 
     if (state.player !== player) return;
 
     startLocalTimeUpdate();
+    void updateTimeUI();
     await applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
   }
 
-  /*
-   * =========================================================
-   * EXTERNAL
-   * =========================================================
-   */
 
   async function buildExternalPlayer(
     video
@@ -10150,9 +10125,9 @@
       } else if (type === "vimeo" && typeof player.setPlaybackRate === "function") {
         if (Number.isFinite(Number(state.playbackAppliedRate)) && Math.abs(Number(state.playbackAppliedRate) - normalized) < 0.002) return;
         await player.setPlaybackRate(normalized);
-      } else if (type === "dailymotion" && typeof player.setPlaybackRate === "function") {
+      } else if (type === "dailymotion" && typeof player.setPlaybackSpeed === "function") {
         if (Number.isFinite(Number(state.playbackAppliedRate)) && Math.abs(Number(state.playbackAppliedRate) - normalized) < 0.002) return;
-        await player.setPlaybackRate(normalized);
+        await player.setPlaybackSpeed(normalized);
       } else {
         return;
       }
