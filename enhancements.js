@@ -86,6 +86,8 @@ function toast(message) {
   setTimeout(function(){ item.remove(); }, 3000);
 }
 
+wt.toast = toast;
+
 function openModal(id) {
   var modal = $(id);
   if (!modal) return;
@@ -470,7 +472,10 @@ if (!wt) return;
 
 var $ = wt.$ || function(id){ return document.getElementById(id); };
 wt.$ = $;
-var toast = wt.toast;
+var toast = typeof wt.toast === "function" ? wt.toast : function(message) {
+  var event = new CustomEvent("wt-toast", { detail: String(message || "") });
+  window.dispatchEvent(event);
+};
 var readJson = typeof wt.readJson === "function" ? wt.readJson : function(key, fallback) {
   try {
     var value = localStorage.getItem(key);
