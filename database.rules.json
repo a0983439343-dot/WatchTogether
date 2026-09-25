@@ -144,7 +144,7 @@
         "$uid": {
           ".read": "auth != null && (auth.uid === $uid || auth.uid === root.child('rooms').child($roomId).child('owner').val())",
           ".write": "auth != null && auth.uid === root.child('rooms').child($roomId).child('owner').val()",
-          ".validate": "!newData.exists() || (newData.isBoolean() && newData.val() === true)"
+          ".validate": "!newData.exists() || (newData.hasChildren(['kickedAt','kickedBy']) && newData.child('kickedAt').isNumber() && newData.child('kickedAt').val() <= now + 60000 && newData.child('kickedAt').val() >= now - 120000 && newData.child('kickedBy').isString() && newData.child('kickedBy').val() === root.child('rooms').child($roomId).child('owner').val())"
         }
       }
     },
@@ -190,6 +190,7 @@
     },
     "friendRequests": {
       "$targetUid": {
+        ".read": "auth != null && auth.uid === $targetUid",
         "$requesterUid": {
           ".read": "auth != null && (auth.uid === $targetUid || auth.uid === $requesterUid)",
           ".write": "auth != null && (( !data.exists() && newData.exists() && auth.uid === $requesterUid ) || (!newData.exists() && (auth.uid === $targetUid || auth.uid === $requesterUid)))",
@@ -199,6 +200,7 @@
     },
     "friendships": {
       "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
         "$friendUid": {
           ".read": "auth != null && auth.uid === $uid",
           ".write": "auth != null && (auth.uid === $uid || auth.uid === $friendUid) && ((!newData.exists() && data.exists()) || (newData.exists() && (root.child('friendRequests').child($uid).child($friendUid).exists() || root.child('friendRequests').child($friendUid).child($uid).exists())))",
