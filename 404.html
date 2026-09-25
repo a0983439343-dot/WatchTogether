@@ -6,8 +6,16 @@
   <meta name="theme-color" content="#0b1020">
   <link rel="icon" href="./icon.svg">
   <title>找不到頁面｜WatchTogether</title>
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./enhancements.css?v=20260923-formal-v2">
+  <link rel="stylesheet" href="./src/css/styles.css?v=20260925-formal-v54">
+  <link rel="stylesheet" href="./src/css/enhancements.css?v=20260925-formal-v54">
+<script>
+(() => {
+  const path = window.location.pathname.replace(/\\/+$/, "");
+  if (/(^|\\/)WatchTogether(\\/)admin\\.html$/i.test(path)) {
+    window.location.replace("./admin/admin.html");
+  }
+})();
+</script>
 </head>
 <body data-wt-theme="aurora">
   <main class="view" style="min-height:100dvh;display:grid;place-items:center;padding:24px;">
