@@ -2064,6 +2064,10 @@ body[data-wt-theme="blueprint"] .wt-theme-card {
     display:none;
   }
 
+  .wt-chat-header-actions .wt-chat-mobile-back {
+    display:inline-flex;
+  }
+
   .wt-chat-send-btn {
     min-width:54px;
   }
