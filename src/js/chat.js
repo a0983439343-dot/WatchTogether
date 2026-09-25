@@ -445,20 +445,61 @@ function blobFromFile(file,maxBytes) {
   });
 }
 
+function blobToDataUrl(blob) {
+  return new Promise(function(resolve,reject){
+    var reader = new FileReader();
+    reader.onerror = function(){ reject(new Error("圖片備援資料建立失敗")); };
+    reader.onload = function(){ resolve(String(reader.result || "")); };
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function uploadMediaBlob(blob,type,name,targetUid) {
-  if (!firebase.storage) throw new Error("Firebase Storage 尚未載入");
   var me = user();
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("聊天對象不存在");
   var conversationId = privateId(me.uid,targetUid);
   var ext = type.indexOf("audio/") === 0 ? ".webm" : (type === "image/gif" ? ".gif" : ".webp");
   var safeName = String(name || "media").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,60);
-  var path = "chatMedia/" + me.uid + "/" + conversationId + "/" + Date.now() + "_" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)) + ext;
-  var ref = firebase.storage().ref(path);
-  var metadata = {contentType:type,customMetadata:{ownerUid:me.uid,conversationId:conversationId}};
-  await ref.put(blob,metadata);
-  var url = await ref.getDownloadURL();
-  return {url:url,path:path,size:blob.size,name:safeName,type:type};
+  var fileId = Date.now() + "_" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+
+  if (type.indexOf("image/") === 0 && blob.size <= 720 * 1024) {
+    if (firebase.storage) {
+      try {
+        var pair = [me.uid,targetUid].sort();
+        var storagePath = "chatMedia/" + pair[0] + "/" + pair[1] + "/" + fileId + ext;
+        var ref = firebase.storage().ref(storagePath);
+        var metadata = {
+          contentType:type,
+          customMetadata:{
+            ownerUid:me.uid,
+            friendUid:targetUid,
+            conversationId:conversationId
+          }
+        };
+        await ref.put(blob,metadata);
+        var url = await ref.getDownloadURL();
+        return {url:url,path:storagePath,size:blob.size,name:safeName,type:type};
+      } catch (error) {
+        console.warn("Firebase Storage 圖片上傳失敗，改用 RTDB 圖片備援:", error);
+      }
+    }
+
+    var dataUrl = await blobToDataUrl(blob);
+    if (dataUrl.length > 900000) {
+      throw new Error("圖片壓縮後仍太大，請選擇較小的圖片");
+    }
+    return {url:dataUrl,path:"",size:blob.size,name:safeName,type:type,inline:true};
+  }
+
+  if (!firebase.storage) throw new Error("Firebase Storage 尚未載入");
+  var pair = [me.uid,targetUid].sort();
+  var path = "chatMedia/" + pair[0] + "/" + pair[1] + "/" + fileId + ext;
+  var storageRef = firebase.storage().ref(path);
+  var storageMetadata = {contentType:type,customMetadata:{ownerUid:me.uid,friendUid:targetUid,conversationId:conversationId}};
+  await storageRef.put(blob,storageMetadata);
+  var storageUrl = await storageRef.getDownloadURL();
+  return {url:storageUrl,path:path,size:blob.size,name:safeName,type:type};
 }
 
 async function sendImageFile(file,targetUid) {
@@ -469,7 +510,7 @@ async function sendImageFile(file,targetUid) {
   var payload = Object.assign({
     type:"image",
     mediaUrl:media.url,
-    mediaPath:media.path,
+    mediaPath:media.path || "",
     mediaName:media.name,
     mediaSize:media.size
   },state.replyTo ? buildReplyFields(state.replyTo) : {});
