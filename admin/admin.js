@@ -15,6 +15,7 @@
   let blocks = {};
   let rooms = {};
   let profiles = {};
+  let accountsRef = null;
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -85,6 +86,26 @@
     accounts = snapshot.val() || {};
     renderAccounts();
     updateStats();
+  }
+
+  function stopAccountsListener() {
+    if (!accountsRef) return;
+    try { accountsRef.off(); } catch (_) {}
+    accountsRef = null;
+  }
+
+  function startAccountsListener() {
+    stopAccountsListener();
+    if (!currentHasAdminAccess) return;
+    accountsRef = db.ref("accounts");
+    accountsRef.on("value", snapshot => {
+      if (!currentHasAdminAccess) return;
+      accounts = snapshot.val() || {};
+      renderAccounts();
+      updateStats();
+    }, error => {
+      console.error("accounts realtime listener failed", error);
+    });
   }
 
   async function loadWhitelist() {
@@ -234,7 +255,7 @@
           return '<tr>' +
             '<td><div class="primary-text">' + escapeHtml(item.email || "—") + '</div><span class="small">' + (item.emailVerified === true ? "Email 已驗證" : "Email 未驗證") + '</span></td>' +
             '<td>' + escapeHtml(item.displayName || "—") + '</td>' +
-            '<td><div class="row-actions"><span class="small uid-text">' + escapeHtml(uid) + '</span><button class="btn" type="button" data-copy-uid="' + escapeHtml(uid) + '">複製 UID</button></div></td>'
+            '<td><div class="row-actions"><span class="small uid-text">' + escapeHtml(uid) + '</span><button class="btn" type="button" data-copy-uid="' + escapeHtml(uid) + '">複製 UID</button></div></td>' +
             '<td>' + status + '</td>' +
             '<td>' + escapeHtml(item.provider || "—") + '</td>' +
             '<td>' + escapeHtml(formatDate(item.lastLoginAt)) + '</td>' +
@@ -560,6 +581,7 @@
     db = firebase.database();
 
     auth.onAuthStateChanged(async user => {
+      stopAccountsListener();
       currentUser = user || null;
       currentHasAdminAccess = false;
       accounts = {};
@@ -596,6 +618,7 @@
           loadBlocks(),
           loadRooms()
         ]);
+        startAccountsListener();
       } catch (error) {
         console.error(error);
         show("deniedScreen");
