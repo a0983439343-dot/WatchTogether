@@ -441,10 +441,12 @@ function blobFromFile(file,maxBytes) {
   });
 }
 
-async function uploadMediaBlob(blob,type,name) {
+async function uploadMediaBlob(blob,type,name,targetUid) {
   if (!firebase.storage) throw new Error("Firebase Storage 尚未載入");
   var me = user();
-  var conversationId = privateId(me.uid,state.activeUid);
+  targetUid = String(targetUid || state.activeUid || "");
+  if (!me || !targetUid) throw new Error("聊天對象不存在");
+  var conversationId = privateId(me.uid,targetUid);
   var ext = type.indexOf("audio/") === 0 ? ".webm" : (type === "image/gif" ? ".gif" : ".webp");
   var safeName = String(name || "media").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,60);
   var path = "chatMedia/" + me.uid + "/" + conversationId + "/" + Date.now() + "_" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)) + ext;
@@ -458,12 +460,8 @@ async function uploadMediaBlob(blob,type,name) {
 async function sendImageFile(file,targetUid) {
   targetUid = String(targetUid || state.activeUid || "");
   if (!targetUid) throw new Error("請先選擇好友");
-  var originalUid = state.activeUid;
-  state.activeUid = targetUid;
-  var prepared;
-  try {
-    prepared = await blobFromFile(file,8 * 1024 * 1024);
-  var media = await uploadMediaBlob(prepared.blob,prepared.type,prepared.name);
+  var prepared = await blobFromFile(file,8 * 1024 * 1024);
+  var media = await uploadMediaBlob(prepared.blob,prepared.type,prepared.name,targetUid);
   var payload = Object.assign({
     type:"image",
     mediaUrl:media.url,
@@ -471,11 +469,7 @@ async function sendImageFile(file,targetUid) {
     mediaName:media.name,
     mediaSize:media.size
   },state.replyTo ? buildReplyFields(state.replyTo) : {});
-  try {
-    await sendMessagePayload(payload,targetUid);
-  } finally {
-    if (state.activeUid === targetUid) state.activeUid = originalUid;
-  }
+  await sendMessagePayload(payload,targetUid);
 }
 
 async function handleImageFiles(files) {
@@ -546,7 +540,7 @@ async function toggleRecording() {
       state.recordingChunks = [];
       if (!blob.size) return;
       try {
-        var media = await uploadMediaBlob(blob,blob.type,"voice.webm");
+        var media = await uploadMediaBlob(blob,blob.type,"voice.webm",targetUid);
         var payload = Object.assign({
           type:"audio",
           mediaUrl:media.url,
