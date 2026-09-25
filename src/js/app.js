@@ -1606,6 +1606,13 @@
               user.uid;
 
             updateAuthUI(user);
+            try {
+              if (typeof window.WT_ENHANCEMENTS?.saveLoginAccount === "function") {
+                await window.WT_ENHANCEMENTS.saveLoginAccount(user);
+              }
+            } catch (syncError) {
+              console.warn("登入帳號同步失敗:", syncError);
+            }
 
             toast(
               "Google 登入成功"
@@ -1648,7 +1655,13 @@
         user.uid;
 
       updateAuthUI(user);
-      void window.WT_ENHANCEMENTS?.saveLoginAccount?.(user);
+      try {
+        if (typeof window.WT_ENHANCEMENTS?.saveLoginAccount === "function") {
+          await window.WT_ENHANCEMENTS.saveLoginAccount(user);
+        }
+      } catch (syncError) {
+        console.warn("登入帳號同步失敗:", syncError);
+      }
 
       toast(
         "Google 登入成功"
@@ -1695,7 +1708,13 @@
           updateAuthUI(
             recoveredUser
           );
-          void window.WT_ENHANCEMENTS?.saveLoginAccount?.(recoveredUser);
+          try {
+            if (typeof window.WT_ENHANCEMENTS?.saveLoginAccount === "function") {
+              await window.WT_ENHANCEMENTS.saveLoginAccount(recoveredUser);
+            }
+          } catch (syncError) {
+            console.warn("登入帳號同步失敗:", syncError);
+          }
 
           toast(
             "Google 登入成功"
