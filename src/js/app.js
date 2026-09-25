@@ -7601,9 +7601,15 @@
 
     await ensureNotGloballyBlocked(auth?.currentUser || null);
 
-    state.adminJoinOverride = Boolean(
-      state.adminJoinRequested && await isPrivilegedAdminUser()
-    );
+    let adminJoinAllowed = false;
+    if (state.adminJoinRequested) {
+      try {
+        adminJoinAllowed = await isPrivilegedAdminUser();
+      } catch (_) {
+        adminJoinAllowed = false;
+      }
+    }
+    state.adminJoinOverride = Boolean(adminJoinAllowed);
 
     const metaSnapshot =
       await db
