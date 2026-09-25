@@ -178,6 +178,8 @@
 
     currentVideoUrl: null,
 
+    twitchPlaybackKind: null,
+
     localTimer: null,
     queueNextTimer: null,
 
@@ -2497,7 +2499,7 @@
           type:
             "video",
           value:
-            parts[1]
+            /^v/i.test(parts[1]) ? parts[1] : "v" + parts[1]
         };
       }
 
@@ -2514,7 +2516,7 @@
         type:
           "video",
         value:
-          text
+          "v" + text
       };
     }
 
@@ -5108,6 +5110,8 @@
     state.currentVideoUrl =
       null;
 
+    state.twitchPlaybackKind = null;
+
     state.youtubePlaybackMode = "iframe";
     state.youtubeIframeInitialSyncUntil = 0;
 
@@ -5569,14 +5573,10 @@
       }
 
       if (type === "twitch") {
+        if (state.twitchPlaybackKind !== "video") return;
         suppressPlatformNativeEvent("seek");
-        if (
-          typeof player.seek ===
-          "function"
-        ) {
-          player.seek(
-            target
-          );
+        if (typeof player.seek === "function") {
+          player.seek(target);
         }
       }
     } catch (error) {
@@ -5713,6 +5713,14 @@
       platformNativeEventSuppressed(kind) ||
       Date.now() < Number(state.playbackIgnoreStateUntil || 0) ||
       Date.now() < Number(state.playbackInitialHardSyncUntil || 0)
+    ) {
+      return;
+    }
+
+    if (
+      kind === "seek" &&
+      state.playerType === "twitch" &&
+      state.twitchPlaybackKind !== "video"
     ) {
       return;
     }
@@ -7293,349 +7301,139 @@
     }
   }
 
-  /*
-   * =========================================================
-   * VIMEO
-   * =========================================================
-   */
-
-  async function buildVimeoPlayer(
-    video
-  ) {
+  async function buildVimeoPlayer(video) {
     await destroyCurrentPlayer();
-
     await loadVimeoSdk();
-
     hidePlayers();
+    showPlayerElement("vimeoPlayer");
 
-    showPlayerElement(
-      "vimeoPlayer"
-    );
-
-    const container =
-      $("vimeoPlayer");
-
+    const container = $("vimeoPlayer");
     if (!container) {
-      throw new Error(
-        "找不到 vimeoPlayer"
-      );
+      throw new Error("找不到 vimeoPlayer");
     }
 
-    container.src =
-      video.url ||
-      `https://player.vimeo.com/video/${encodeURIComponent(
-        video.id
-      )}`;
+    container.src = video.url || `https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=0&playsinline=1`;
+    container.allow = "autoplay; fullscreen; picture-in-picture";
+    container.allowFullscreen = true;
+    container.frameBorder = "0";
 
-    container.allow =
-      "autoplay; fullscreen; picture-in-picture";
+    const player = new Vimeo.Player(container);
 
-    const player =
-      new Vimeo.Player(
-        container
-      );
+    state.player = player;
+    state.currentVideoId = video.id;
+    state.currentVideoUrl = video.url || null;
+    state.playerType = "vimeo";
+    state.playerReady = false;
 
-    state.player =
-      player;
+    player.on("play", () => {
+      if (state.player !== player) return;
+      void handlePlatformNativeEvent("play");
+    });
 
-    state.currentVideoId =
-      video.id;
+    player.on("pause", () => {
+      if (state.player !== player) return;
+      void handlePlatformNativeEvent("pause");
+    });
 
-    state.currentVideoUrl =
-      video.url ||
-      null;
+    player.on("seeked", data => {
+      if (state.player !== player) return;
+      void handlePlatformNativeEvent("seek", Number(data?.seconds));
+    });
 
-    state.playerType =
-      "vimeo";
+    player.on("ended", async () => {
+      if (state.player !== player) return;
+      state.playbackLastPlayerState = "ended";
+      if (!state.isOwner || state.playbackApplyingRemote) return;
+      const position = await asyncCurrentPosition().catch(() => 0);
+      await publishPlaybackEvent("pause", position, false, playbackClockNow(), playbackClockNow(), true);
+    });
 
-    state.playerReady =
-      false;
+    player.on("timeupdate", updateTimeUI);
 
-    player.on(
-      "loaded",
-      () => {
-        if (
-          state.player !==
-          player
-        ) {
-          return;
-        }
+    await player.ready();
 
-        state.playerReady =
-          true;
+    if (state.player !== player) return;
 
-        updateRoomOwnerUI();
-
-        startLocalTimeUpdate();
-        updateTimeUI();
-        void applyLatestRoomPlaybackState(true);
-        startPlaybackSeekDetector();
-      }
-    );
-
-    player.on(
-      "play",
-      () => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("play");
-      }
-    );
-
-    player.on(
-      "pause",
-      () => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("pause");
-      }
-    );
-
-    player.on(
-      "seeked",
-      (data) => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("seek", Number(data?.seconds));
-      }
-    );
-
-    player.on(
-      "ended",
-      async () => {
-        if (state.player !== player) return;
-        state.playbackLastPlayerState = "ended";
-        if (!state.isOwner || state.playbackApplyingRemote) return;
-        const position = await asyncCurrentPosition().catch(() => 0);
-        await publishPlaybackEvent(
-          "pause",
-          position,
-          false,
-          playbackClockNow(),
-          playbackClockNow(),
-          true
-        );
-      }
-    );
-
-    player.on(
-      "timeupdate",
-      updateTimeUI
-    );
+    state.playerReady = true;
+    updateRoomOwnerUI();
+    startLocalTimeUpdate();
+    updateTimeUI();
+    await applyLatestRoomPlaybackState(true);
+    startPlaybackSeekDetector();
   }
 
 
-  /*
-   * =========================================================
-   * DAILYMOTION
-   * =========================================================
-   */
-
-  async function buildDailymotionPlayer(
-    video
-  ) {
+  async function buildDailymotionPlayer(video) {
     await destroyCurrentPlayer();
-
-    hidePlayers();
-
-    showPlayerElement(
-      "dailymotionPlayer"
-    );
-
-    const container =
-      $("dailymotionPlayer");
-
-    if (!container) {
-      throw new Error(
-        "找不到 dailymotionPlayer"
-      );
-    }
-
-    container.innerHTML =
-      "";
-
-    /*
-     * Dailymotion 目前要求自訂 Web SDK 使用 Player ID。
-     * 沒有 Player ID 時，改用官方 default Player iframe，
-     * 讓 Dailymotion 仍然可以播放，而不是整個平台失效。
-     */
-    if (!DAILYMOTION_PLAYER_ID) {
-      const iframe =
-        document.createElement(
-          "iframe"
-        );
-
-      iframe.title =
-        video.title ||
-        "Dailymotion";
-
-      iframe.src =
-        "https://geo.dailymotion.com/player.html?video=" +
-        encodeURIComponent(
-          video.id
-        );
-
-      iframe.allow =
-        "autoplay; fullscreen; picture-in-picture; web-share";
-
-      iframe.allowFullscreen =
-        true;
-
-      iframe.frameBorder =
-        "0";
-
-      iframe.referrerPolicy =
-        "strict-origin-when-cross-origin";
-
-      Object.assign(
-        iframe.style,
-        {
-          width:
-            "100%",
-          height:
-            "100%",
-          display:
-            "block",
-          border:
-            "0"
-        }
-      );
-
-      container.appendChild(
-        iframe
-      );
-
-      state.player =
-        iframe;
-
-      state.currentVideoId =
-        video.id;
-
-      state.currentVideoUrl =
-        video.url ||
-        null;
-
-      state.playerType =
-        "dailymotion-iframe";
-
-      state.playerReady =
-        false;
-
-      if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          "Dailymotion 官方播放器：此模式不支援本站時間同步";
-      }
-
-      void updateTimeUI();
-      return;
-    }
-
     await loadDailymotionSdk();
+    hidePlayers();
+    showPlayerElement("dailymotionPlayer");
 
-    const playerId =
-      "dm_" +
-      Math.random()
-        .toString(36)
-        .slice(2);
+    const container = $("dailymotionPlayer");
+    if (!container) {
+      throw new Error("找不到 dailymotionPlayer");
+    }
+    if (!DAILYMOTION_PLAYER_ID) {
+      throw new Error("尚未設定 DAILYMOTION_PLAYER_ID");
+    }
 
-    const target =
-      document.createElement(
-        "div"
-      );
+    container.innerHTML = "";
 
-    target.id =
-      playerId;
+    const playerId = "dm_" + Math.random().toString(36).slice(2);
+    const target = document.createElement("div");
+    target.id = playerId;
+    target.style.width = "100%";
+    target.style.height = "100%";
+    container.appendChild(target);
 
-    target.style.width =
-      "100%";
+    const player = await window.dailymotion.createPlayer(playerId, {
+      video: video.id,
+      mute: false,
+      controls: true,
+      autoplay: false
+    });
 
-    target.style.height =
-      "100%";
+    if (state.player && state.player !== player) {
+      try {
+        await state.player.destroy?.();
+      } catch (_) {}
+    }
 
-    container.appendChild(
-      target
-    );
-
-    const player =
-      await window.dailymotion
-        .createPlayer(
-          playerId,
-          {
-            video:
-              video.id,
-
-            mute:
-              true,
-
-            controls:
-              true
-          }
-        );
-
-    state.player =
-      player;
-
-    state.currentVideoId =
-      video.id;
-
-    state.currentVideoUrl =
-      video.url ||
-      null;
-
-    state.playerType =
-      "dailymotion";
-
-    state.playerReady =
-      true;
+    state.player = player;
+    state.currentVideoId = video.id;
+    state.currentVideoUrl = video.url || null;
+    state.playerType = "dailymotion";
+    state.playerReady = true;
 
     updateRoomOwnerUI();
 
-    player.on(
-      dailymotion.events.VIDEO_PLAYING,
-      () => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("play");
-      }
-    );
+    player.on(dailymotion.events.VIDEO_PLAYING, () => {
+      if (state.player !== player) return;
+      void handlePlatformNativeEvent("play");
+    });
 
-    player.on(
-      dailymotion.events.VIDEO_PAUSE,
-      () => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("pause");
-      }
-    );
+    player.on(dailymotion.events.VIDEO_PAUSE, () => {
+      if (state.player !== player) return;
+      void handlePlatformNativeEvent("pause");
+    });
 
-    player.on(
-      dailymotion.events.VIDEO_SEEKEND,
-      (event) => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("seek", Number(event?.videoTime));
-      }
-    );
+    player.on(dailymotion.events.VIDEO_SEEKEND, event => {
+      if (state.player !== player) return;
+      void handlePlatformNativeEvent("seek", Number(event?.videoTime));
+    });
 
-    player.on(
-      dailymotion.events.VIDEO_END,
-      async () => {
-        if (state.player !== player) return;
-        state.playbackLastPlayerState = "ended";
-        if (!state.isOwner || state.playbackApplyingRemote) return;
-        const position = await asyncCurrentPosition().catch(() => 0);
-        await publishPlaybackEvent(
-          "pause",
-          position,
-          false,
-          playbackClockNow(),
-          playbackClockNow(),
-          true
-        );
-      }
-    );
+    player.on(dailymotion.events.VIDEO_END, async () => {
+      if (state.player !== player) return;
+      state.playbackLastPlayerState = "ended";
+      if (!state.isOwner || state.playbackApplyingRemote) return;
+      const position = await asyncCurrentPosition().catch(() => 0);
+      await publishPlaybackEvent("pause", position, false, playbackClockNow(), playbackClockNow(), true);
+    });
 
-    player.on(
-      dailymotion.events.VIDEO_TIMECHANGE,
-      updateTimeUI
-    );
+    player.on(dailymotion.events.VIDEO_TIMECHANGE, updateTimeUI);
 
     startLocalTimeUpdate();
-    void applyLatestRoomPlaybackState(true);
+    await applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
   }
 
@@ -7729,310 +7527,144 @@
   }
 
 
-  /*
-   * =========================================================
-   * TWITCH
-   * =========================================================
-   */
-
-  async function buildTwitchPlayer(
-    video
-  ) {
+  async function buildTwitchPlayer(video) {
     await destroyCurrentPlayer();
-
+    await loadTwitchSdk();
     hidePlayers();
+    showPlayerElement("twitchPlayer");
 
-    showPlayerElement(
-      "twitchPlayer"
-    );
-
-    const container =
-      $("twitchPlayer");
-
+    const container = $("twitchPlayer");
     if (!container) {
-      throw new Error(
-        "找不到 twitchPlayer"
-      );
+      throw new Error("找不到 twitchPlayer");
     }
 
-    container.innerHTML =
-      "";
+    container.innerHTML = "";
 
-    const host =
-      location.hostname ||
-      "localhost";
+    const host = location.hostname || "localhost";
 
-    /*
-     * Twitch Clip 官方文件明確指出 Clip 不支援
-     * Interactive JavaScript Player，必須使用 clips iframe。
-     */
-    if (
-      video.twitchType ===
-      "clip"
-    ) {
-      const iframe =
-        document.createElement(
-          "iframe"
-        );
+    if (video.twitchType === "clip") {
+      const iframe = document.createElement("iframe");
+      const params = new URLSearchParams();
+      params.set("clip", video.id);
+      params.set("parent", host);
+      iframe.title = video.title || "Twitch Clip";
+      iframe.src = "https://clips.twitch.tv/embed?" + params.toString();
+      iframe.allow = "autoplay; fullscreen; picture-in-picture";
+      iframe.allowFullscreen = true;
+      iframe.frameBorder = "0";
+      Object.assign(iframe.style, {
+        width: "100%",
+        height: "100%",
+        display: "block",
+        border: "0",
+        minHeight: "300px"
+      });
+      container.appendChild(iframe);
 
-      iframe.title =
-        video.title ||
-        "Twitch Clip";
-
-      const params =
-        new URLSearchParams();
-
-      params.set(
-        "clip",
-        video.id
-      );
-
-      params.set(
-        "parent",
-        host
-      );
-
-      iframe.src =
-        "https://clips.twitch.tv/embed?" +
-        params.toString();
-
-      iframe.allow =
-        "autoplay; fullscreen; picture-in-picture";
-
-      iframe.allowFullscreen =
-        true;
-
-      iframe.frameBorder =
-        "0";
-
-      Object.assign(
-        iframe.style,
-        {
-          width:
-            "100%",
-          height:
-            "100%",
-          display:
-            "block",
-          border:
-            "0",
-          minHeight:
-            "300px"
-        }
-      );
-
-      container.appendChild(
-        iframe
-      );
-
-      state.player =
-        iframe;
-
-      state.currentVideoId =
-        video.id;
-
-      state.currentVideoUrl =
-        video.url ||
-        null;
-
-      state.playerType =
-        "twitch-clip";
-
-      state.playerReady =
-        false;
+      state.player = iframe;
+      state.currentVideoId = video.id;
+      state.currentVideoUrl = video.url || null;
+      state.playerType = "twitch-clip";
+      state.twitchPlaybackKind = "clip";
+      state.playerReady = false;
 
       if ($("syncStatus")) {
-        $("syncStatus").textContent =
-          "Twitch Clip：此官方嵌入模式不支援本站同步控制";
+        $("syncStatus").textContent = "Twitch Clip：此官方嵌入模式不支援本站同步控制";
       }
 
       void updateTimeUI();
       return;
     }
 
-    await loadTwitchSdk();
-
-    const wrapperId =
-      "tw_" +
-      Math.random()
-        .toString(36)
-        .slice(2);
-
-    const target =
-      document.createElement(
-        "div"
-      );
-
-    target.id =
-      wrapperId;
-
-    target.style.width =
-      "100%";
-
-    target.style.height =
-      "100%";
-
-    container.appendChild(
-      target
-    );
+    const wrapperId = "tw_" + Math.random().toString(36).slice(2);
+    const target = document.createElement("div");
+    target.id = wrapperId;
+    target.style.width = "100%";
+    target.style.height = "100%";
+    container.appendChild(target);
 
     const options = {
-      width:
-        "100%",
-
-      height:
-        "100%",
-
-      autoplay:
-        !isMobileViewport(),
-
-      muted:
-        true,
-
-      parent: [
-        host
-      ]
+      width: "100%",
+      height: "100%",
+      autoplay: false,
+      muted: false,
+      parent: [host]
     };
 
-    if (
-      video.twitchType ===
-      "video"
-    ) {
-      options.video =
-        video.id;
+    if (video.twitchType === "video") {
+      options.video = video.id;
     } else {
-      options.channel =
-        video.id;
+      options.channel = String(video.id || "").replace(/^@/, "");
     }
 
-    const player =
-      new Twitch.Player(
-        wrapperId,
-        options
-      );
+    const player = new Twitch.Player(wrapperId, options);
 
-    state.player =
-      player;
-
-    state.currentVideoId =
-      video.id;
-
-    state.currentVideoUrl =
-      video.url ||
-      null;
-
-    state.playerType =
-      "twitch";
-
-    state.playerReady =
-      false;
-
-    await new Promise(
-      (resolve) => {
-        let done =
-          false;
-
-        const ready =
-          () => {
-            if (done) {
-              return;
-            }
-
-            done = true;
-
-            if (
-              state.player !==
-              player
-            ) {
-              resolve();
-              return;
-            }
-
-            state.playerReady =
-              true;
-
-            updateRoomOwnerUI();
-
-            resolve();
-          };
-
-        if (
-          player.addEventListener
-        ) {
-          player.addEventListener(
-            Twitch.Player.READY,
-            ready
-          );
-
-          setTimeout(
-            ready,
-            2000
-          );
-        } else {
-          setTimeout(
-            ready,
-            1500
-          );
-        }
-      }
-    );
+    state.player = player;
+    state.currentVideoId = video.id;
+    state.currentVideoUrl = video.url || null;
+    state.playerType = "twitch";
+    state.twitchPlaybackKind = video.twitchType === "video" ? "video" : "channel";
+    state.playerReady = false;
 
     if (player.addEventListener) {
-      player.addEventListener(
-        Twitch.Player.PLAYING,
-        () => {
-          if (state.player !== player) return;
-          void handlePlatformNativeEvent("play");
-        }
-      );
+      player.addEventListener(Twitch.Player.PLAYING, () => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("play");
+      });
 
-      player.addEventListener(
-        Twitch.Player.PAUSE,
-        () => {
-          if (state.player !== player) return;
-          void handlePlatformNativeEvent("pause");
-        }
-      );
+      player.addEventListener(Twitch.Player.PAUSE, () => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("pause");
+      });
 
-      player.addEventListener(
-        Twitch.Player.SEEK,
-        () => {
-          if (state.player !== player) return;
-          void handlePlatformNativeEvent("seek");
-        }
-      );
+      player.addEventListener(Twitch.Player.SEEK, () => {
+        if (state.player !== player) return;
+        if (state.twitchPlaybackKind !== "video") return;
+        void handlePlatformNativeEvent("seek");
+      });
 
-      player.addEventListener(
-        Twitch.Player.ENDED,
-        async () => {
-          if (state.player !== player) return;
-          state.playbackLastPlayerState = "ended";
-          if (!state.isOwner || state.playbackApplyingRemote) return;
-          const position = await asyncCurrentPosition().catch(() => 0);
-          await publishPlaybackEvent(
-            "pause",
-            position,
-            false,
-            playbackClockNow(),
-            playbackClockNow(),
-            true
-          );
-        }
-      );
+      player.addEventListener(Twitch.Player.ENDED, async () => {
+        if (state.player !== player) return;
+        state.playbackLastPlayerState = "ended";
+        if (!state.isOwner || state.playbackApplyingRemote) return;
+        const position = await asyncCurrentPosition().catch(() => 0);
+        await publishPlaybackEvent("pause", position, false, playbackClockNow(), playbackClockNow(), true);
+      });
 
-      player.addEventListener(
-        Twitch.Player.PLAYBACK_BLOCKED,
-        () => {
-          if (state.player !== player) return;
-          if ($("syncStatus")) {
-            $("syncStatus").textContent =
-              "Twitch 需要點擊播放器後才能開始播放";
-          }
+      player.addEventListener(Twitch.Player.PLAYBACK_BLOCKED, () => {
+        if (state.player !== player) return;
+        if ($("syncStatus")) {
+          $("syncStatus").textContent = "Twitch 需要點擊播放器後才能開始播放";
         }
-      );
+      });
     }
 
+    await new Promise(resolve => {
+      let done = false;
+      const ready = () => {
+        if (done) return;
+        done = true;
+        if (state.player !== player) {
+          resolve();
+          return;
+        }
+        state.playerReady = true;
+        updateRoomOwnerUI();
+        resolve();
+      };
+      if (player.addEventListener) {
+        player.addEventListener(Twitch.Player.READY, ready);
+        setTimeout(ready, 5000);
+      } else {
+        setTimeout(ready, 1500);
+      }
+    });
+
+    if (state.player !== player) return;
+
     startLocalTimeUpdate();
+    await applyLatestRoomPlaybackState(true);
+    startPlaybackSeekDetector();
   }
 
   /*
