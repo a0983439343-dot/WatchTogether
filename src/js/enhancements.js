@@ -1295,6 +1295,7 @@ var $ = wt.$;
 var roomLink = wt.roomLink;
 var ROOM_RE = wt.ROOM_RE;
 var FRIEND_CODE_RE = wt.FRIEND_CODE_RE;
+var esc = wt.esc;
 
 function notify(title,body) {
   if (localStorage.getItem(wt.KEYS.notifications) === "0") return;
