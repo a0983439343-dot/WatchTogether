@@ -6982,6 +6982,11 @@
    */
 
   async function createRoom(initialVideo = null) {
+    setError(
+      $("homeError"),
+      ""
+    );
+
     const roomName =
       $("roomNameInput")
         ?.value
@@ -7603,16 +7608,22 @@
       );
     }
 
-    const kickedSnapshot =
-      await db
-        .ref(
-          `kicked/${roomId}/${state.uid}`
-        )
-        .once("value");
+    const kickRemainingMs =
+      await getKickRemainingMs(
+        roomId,
+        state.uid
+      );
 
-    if (kickedSnapshot.val() === true) {
+    if (kickRemainingMs > 0) {
+      const remainingMinutes = Math.max(
+        1,
+        Math.ceil(
+          kickRemainingMs / 60000
+        )
+      );
+
       throw new Error(
-        "你已被房主移出這個房間"
+        `你已被房主移出這個房間，請 ${remainingMinutes} 分鐘後再加入`
       );
     }
 
@@ -10114,10 +10125,50 @@
 
     try {
       const snapshot = await state.kickedRef.once("value");
-      return snapshot.val() === true;
+      const value = snapshot.val();
+
+      if (value === true) {
+        return true;
+      }
+
+      if (!value || typeof value !== "object") {
+        return false;
+      }
+
+      const kickedAt = Number(value.kickedAt || 0);
+
+      if (!Number.isFinite(kickedAt) || kickedAt <= 0) {
+        return false;
+      }
+
+      return Date.now() - kickedAt < 5 * 60 * 1000;
     } catch (error) {
       console.warn("讀取踢出狀態失敗:", error);
       return false;
+    }
+  }
+
+  async function getKickRemainingMs(roomId, uid) {
+    if (!db || !roomId || !uid) {
+      return 0;
+    }
+
+    try {
+      const snapshot = await db.ref(`kicked/${roomId}/${uid}`).once("value");
+      const value = snapshot.val();
+
+      if (value === true) {
+        return 5 * 60 * 1000;
+      }
+
+      const kickedAt = Number(value?.kickedAt || 0);
+      if (!Number.isFinite(kickedAt) || kickedAt <= 0) {
+        return 0;
+      }
+
+      return Math.max(0, 5 * 60 * 1000 - (Date.now() - kickedAt));
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -10388,7 +10439,10 @@
     try {
       await db
         .ref(`kicked/${state.roomId}/${targetUid}`)
-        .set(true);
+        .set({
+          kickedAt: firebase.database.ServerValue.TIMESTAMP,
+          kickedBy: state.uid
+        });
 
       await state.membersRef
         .child(targetUid)
@@ -14128,10 +14182,26 @@
         "home"
       );
 
+      const friendlyError =
+        getFriendlyAuthError(error);
+
       setError(
         $("homeError"),
-        getFriendlyAuthError(error)
+        friendlyError
       );
+
+      if (
+        /你已被房主移出/.test(
+          String(error?.message || "")
+        )
+      ) {
+        setTimeout(() => {
+          const current = $("homeError")?.textContent || "";
+          if (current === friendlyError) {
+            setError($("homeError"), "");
+          }
+        }, 4500);
+      }
 
       toast(
         error?.message ||
