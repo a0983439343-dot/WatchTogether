@@ -49,18 +49,18 @@
           ".validate": false
         }
       },
-      ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
+      ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "members": {
       "$roomId": {
-        ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+        ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
         "$uid": {
           ".read": "auth != null && $roomId.length === 6 && (auth.uid === $uid || root.child('members').child($roomId).child(auth.uid).exists())",
-          ".write": "auth != null && $roomId.length === 6 && root.child('rooms').child($roomId).exists() && ((auth.uid === $uid && data.exists()) || (auth.uid === $uid && !data.exists() && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true || (root.child('kicked').child($roomId).child($uid).val() !== true && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomMeta').child($roomId).child('settings').child('locked').val() !== true)))) || (auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))",
+          ".write": "auth != null && $roomId.length === 6 && root.child('rooms').child($roomId).exists() && ((auth.uid === $uid && data.exists()) || (auth.uid === $uid && !data.exists() && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true || (root.child('kicked').child($roomId).child($uid).val() !== true && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomMeta').child($roomId).child('settings').child('locked').val() !== true)))) || (auth.uid === root.child('rooms').child($roomId).child('owner').val() && auth.uid !== $uid && !newData.exists()))",
           ".validate": "!newData.exists() || (newData.hasChildren(['name','joinedAt','online','lastSeen']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 30 && newData.child('joinedAt').isNumber() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && (!newData.child('avatarEmoji').exists() || (newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length <= 4)) && (!newData.child('publicCode').exists() || (newData.child('publicCode').isString() && newData.child('publicCode').val().length === 6 && newData.child('publicCode').val() === root.child('profiles').child(auth.uid).child('publicCode').val())))"
         }
       },
-      ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
+      ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "chat": {
       "$roomId": {
@@ -161,19 +161,19 @@
       ".read": false,
       ".write": false,
       "whitelist": {
-        ".read": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
-        ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+        ".read": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
         "$emailKey": {
-          ".read": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
-          ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'"
+          ".read": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')"
         }
       },
       "whitelistByUid": {
-        ".read": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
-        ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+        ".read": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
         "$uid": {
-          ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'a0983439343@gmail.com')",
-          ".write": "auth != null && auth.token.email === 'a0983439343@gmail.com'",
+          ".read": "auth != null && (auth.uid === $uid || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com'))",
+          ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
           ".validate": "!newData.exists() || (newData.hasChildren(['uid','email','enabled','addedAt','addedByUid','addedByEmail']) && newData.child('uid').isString() && newData.child('uid').val() === $uid && newData.child('email').isString() && newData.child('email').val().length > 3 && newData.child('email').val().length <= 320 && newData.child('enabled').isBoolean() && newData.child('addedAt').isNumber() && newData.child('addedByUid').isString() && newData.child('addedByEmail').isString() && newData.child('addedByEmail').val() === 'a0983439343@gmail.com')"
         }
       }
@@ -184,7 +184,7 @@
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "!newData.exists() || (newData.hasChildren(['uid','email','emailVerified','displayName','photoURL','provider','createdAt','lastLoginAt','updatedAt']) && newData.child('uid').isString() && newData.child('uid').val() === auth.uid && newData.child('email').isString() && newData.child('email').val().length > 3 && newData.child('email').val().length <= 320 && newData.child('emailVerified').isBoolean() && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100 && newData.child('photoURL').isString() && newData.child('photoURL').val().length <= 2000 && newData.child('provider').isString() && newData.child('provider').val().length > 0 && newData.child('provider').val().length <= 50 && newData.child('createdAt').isNumber() && newData.child('lastLoginAt').isNumber() && newData.child('lastLoginAt').val() <= now + 60000 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 60000)"
       },
-      ".read": "auth != null && (auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
+      ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
     },
     "profiles": {
       "$uid": {
