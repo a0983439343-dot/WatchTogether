@@ -604,6 +604,8 @@ async function loadProfile(user) {
   }
   wt.state.profile = Object.assign({},old,profile);
   localStorage.setItem("wt_name",displayName);
+  window.WT_CORE?.setMemberName?.(displayName);
+  void window.WT_CORE?.updateCurrentMemberName?.();
   localStorage.setItem(wt.KEYS.notifications,profile.notifications ? "1" : "0");
   wt.applyTheme(theme);
   renderProfile();
@@ -2287,6 +2289,10 @@ function setupAuthListeners() {
     } else {
       wt.stopDmListener &&
         wt.stopDmListener();
+      if (user && user.isAnonymous) {
+        wt.state.profile = null;
+        window.WT_CORE?.setGuestName?.();
+      }
 
       if (
         typeof wt.stopRequestListener ===
@@ -2491,40 +2497,11 @@ function bindHomeSearch() {
   var hint = $("searchHint");
   if (!input || !button || input.dataset.wtFastSearch) return;
 
-  function getQueryHistory() {
-    var list = wt.readJson("wt_search_history_v1",[]);
-    if (!Array.isArray(list)) return [];
-    return list.map(function(item){ return String(item || "").trim(); }).filter(function(item){ return item.length >= 2; }).slice(0,8);
-  }
-
-  function saveQuery(query) {
-    query = String(query || "").trim();
-    if (query.length < 2) return;
-    var list = getQueryHistory().filter(function(item){ return item !== query; });
-    list.unshift(query);
-    wt.writeJson("wt_search_history_v1",list.slice(0,8));
-    renderHistory();
-  }
-
   function renderHistory() {
     if (!hint) return;
-    var list = getQueryHistory();
-    if (!list.length) {
-      hint.textContent = "停止輸入約 350ms 後會自動搜尋。";
-      return;
-    }
-    hint.innerHTML =
-      '<span class="muted">最近搜尋：</span> ' +
-      list.map(function(item){
-        return '<button type="button" class="wt-search-history-chip" data-wt-history-query="' + wt.esc(item) + '">' + wt.esc(item) + '</button>';
-      }).join(" ");
-    hint.querySelectorAll("[data-wt-history-query]").forEach(function(chip){
-      chip.addEventListener("click",function(){
-        input.value = chip.dataset.wtHistoryQuery || "";
-        void run();
-      });
-    });
+    hint.textContent = "進入房間後按「更換影片」，可以使用最近搜尋。";
   }
+
 
   var runSerial = 0;
   async function run() {
@@ -2542,7 +2519,7 @@ function bindHomeSearch() {
 
     try {
       await searchHome(query);
-      if (serial === runSerial) saveQuery(query);
+      if (serial === runSerial) {}
     } catch (error) {
       if (error && error.name === "AbortError") return;
       if (serial === runSerial) renderHomeSearchMessage(error && error.message || "搜尋失敗");
