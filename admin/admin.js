@@ -68,11 +68,11 @@
   }
 
   async function hasAdminAccess(user) {
-    if (!user || user.isAnonymous || user.emailVerified !== true) return false;
+    if (!user || user.isAnonymous) return false;
     if (isMasterUser(user)) return true;
     const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
     const item = snapshot.val();
-    return Boolean(item && item.enabled === true);
+    return Boolean(item && item.uid === user.uid && item.enabled === true);
   }
 
   async function loadAccounts() {
@@ -594,9 +594,9 @@
       hide("app");
       hide("deniedScreen");
 
-      if (!user || user.isAnonymous || user.emailVerified !== true) {
+      if (!user || user.isAnonymous) {
         show("deniedScreen");
-        $("deniedMessage").textContent = "請使用已驗證 Email 的 Google 帳號登入。";
+        $("deniedMessage").textContent = "請先使用 Google 帳號登入。";
         return;
       }
 
