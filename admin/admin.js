@@ -629,6 +629,7 @@
     await loadReports();
     $("reportHandledBy").textContent = currentUser.email || currentUser.uid || "—";
     $("reportHint").textContent = "狀態已更新。";
+    void writeAuditLog("report.status", item.uid, item.uid, "回報 " + id + " 狀態改為 " + REPORT_STATUS_LABELS[status]);
     toast("回報狀態已更新");
   }
 
@@ -644,6 +645,7 @@
     await db.ref("reports/" + id).remove();
     await loadReports();
     closeReportModal();
+    void writeAuditLog("report.delete", item.uid, item.uid, "刪除回報 " + id);
     toast("問題回報已刪除");
   }
 
@@ -697,6 +699,7 @@
     });
     input.value = "";
     await loadWhitelist();
+    void writeAuditLog("whitelist.add", uid, email, "新增 " + role + " 權限");
     toast("已加入白名單管理員");
   }
 
@@ -712,6 +715,7 @@
       updatedByUid:currentUser.uid
     });
     await loadWhitelist();
+    void writeAuditLog("whitelist.role", uid, item.email || uid, "調整為 " + role);
     toast(role === "viewer" ? "已設為觀察員" : "已設為管理員");
   }
 
@@ -725,6 +729,7 @@
       updatedByUid:currentUser.uid
     });
     await loadWhitelist();
+    void writeAuditLog("whitelist.toggle", uid, item.email || uid, item.enabled === true ? "停用管理員資格" : "啟用管理員資格");
     toast(item.enabled === true ? "已停用" : "已啟用");
   }
 
@@ -735,6 +740,7 @@
     if (!window.confirm("確定刪除 " + (item.email || "這個帳號") + " 的管理員資格？")) return;
     await db.ref("admin/whitelistByUid/" + uid).remove();
     await loadWhitelist();
+    void writeAuditLog("whitelist.remove", uid, item.email || uid, "移除管理員資格");
     toast("已刪除白名單管理員");
   }
 
@@ -813,6 +819,7 @@
       profiles[uid] = {...profile,displayName,avatarEmoji,theme,notifications};
       renderAccounts();
       closeUserEdit();
+      void writeAuditLog("user.update", uid, displayName, "管理員更新使用者資料");
       toast("使用者資料已更新");
     } catch (error) {
       console.error(error);
@@ -866,6 +873,7 @@
 
     await loadBlocks();
     closeBlockModal();
+    void writeAuditLog("block", uid, item.displayName || item.email || uid, permanent ? "永久封鎖" : "封鎖 " + formatRemaining({blockedUntil,permanent}));
     toast(permanent ? "已永久封鎖使用者" : "已封鎖使用者");
   }
 
@@ -921,6 +929,7 @@
     delete rooms[key];
     renderRooms();
     updateStats();
+    void writeAuditLog("room.delete", key, name, "刪除房間");
     toast("房間已刪除");
   }
 
