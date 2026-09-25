@@ -222,6 +222,13 @@ function historyList() {
   return Array.isArray(list) ? list.slice(0,30) : [];
 }
 
+function deleteHistoryItem(key) {
+  key = String(key || "");
+  if (!key) return;
+  writeJson(KEYS.history, historyList().filter(function(item){ return String(item.key || "") !== key; }));
+  renderHomeActivity();
+}
+
 function videoKey(video) {
   return String(video && video.platform || "youtube") + ":" + String(video && video.id || "");
 }
@@ -368,7 +375,7 @@ function renderHomeHistory() {
   box.innerHTML = list.map(function(video){
     return '<article class="wt-room-card">' +
       '<div class="wt-room-card-main"><div class="wt-room-card-title">' + esc(video.title) + '</div><div class="wt-room-code" style="letter-spacing:normal;">' + esc(video.platform) + '</div><div class="wt-room-card-meta">' + esc(video.channel || "") + '</div></div>' +
-      '<div class="wt-card-actions"><button class="wt-mini-btn" data-wt-history-fav="' + esc(video.key) + '" type="button">' + (isFavorite(video) ? "★ 已收藏" : "☆ 收藏") + '</button><button class="wt-mini-btn primary" data-wt-history-room="' + esc(video.key) + '" type="button">建立房間</button></div>' +
+      '<div class="wt-card-actions"><button class="wt-mini-btn" data-wt-history-fav="' + esc(video.key) + '" type="button">' + (isFavorite(video) ? "★ 已收藏" : "☆ 收藏") + '</button><button class="wt-mini-btn primary" data-wt-history-room="' + esc(video.key) + '" type="button">建立房間</button><button class="wt-mini-btn danger" data-wt-history-delete="' + esc(video.key) + '" type="button">刪除</button></div>' +
     '</article>';
   }).join("");
   box.querySelectorAll("[data-wt-history-fav]").forEach(function(btn){
@@ -378,6 +385,12 @@ function renderHomeHistory() {
   box.querySelectorAll("[data-wt-history-room]").forEach(function(btn){
     var video = list.find(function(item){ return item.key === btn.dataset.wtHistoryRoom; });
     btn.addEventListener("click",function(){ void createRoomWithVideo(video); });
+  });
+  box.querySelectorAll("[data-wt-history-delete]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      deleteHistoryItem(btn.dataset.wtHistoryDelete);
+      toast("已刪除最近觀看紀錄");
+    });
   });
 }
 
@@ -740,6 +753,9 @@ function buildSettingsModal() {
   $("wtSettingsClose").addEventListener("click",function(){ wt.closeModal("wtSettingsModal"); });
   $("wtSaveProfileBtn").addEventListener("click",saveProfile);
   $("wtCopyFriendCodeBtn").addEventListener("click",copyFriendCode);
+  $("wtPublicIdInput").addEventListener("input",function(event){
+    event.target.value = String(event.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+  });
   $("wtNotificationToggle").addEventListener("change",async function(event){
     var enabled = Boolean(event.target.checked);
     localStorage.setItem(wt.KEYS.notifications,enabled ? "1" : "0");
