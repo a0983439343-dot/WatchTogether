@@ -289,6 +289,8 @@
     playbackInitialHardSyncAt: 0,
     playbackSyncPhase: "idle",
     playbackFineRateSupported: null,
+    playbackNativeEventSuppressKind: "",
+    playbackNativeEventSuppressUntil: 0,
 
     controlRequestRef: null,
     controlRequestListenerAttached: false,
@@ -5546,6 +5548,7 @@
       }
 
       if (type === "vimeo") {
+        suppressPlatformNativeEvent("seek");
         await player.setCurrentTime(
           target
         );
@@ -5554,6 +5557,7 @@
       if (
         type === "dailymotion"
       ) {
+        suppressPlatformNativeEvent("seek");
         if (
           typeof player.seek ===
           "function"
@@ -5565,6 +5569,7 @@
       }
 
       if (type === "twitch") {
+        suppressPlatformNativeEvent("seek");
         if (
           typeof player.seek ===
           "function"
@@ -5613,6 +5618,7 @@
         state.playerType ===
         "vimeo"
       ) {
+        suppressPlatformNativeEvent("play");
         await state.player.play();
       }
 
@@ -5620,6 +5626,7 @@
         state.playerType ===
         "dailymotion"
       ) {
+        suppressPlatformNativeEvent("play");
         await state.player.play();
       }
 
@@ -5627,6 +5634,7 @@
         state.playerType ===
         "twitch"
       ) {
+        suppressPlatformNativeEvent("play");
         state.player.play();
       }
     } catch (_) {}
@@ -5640,6 +5648,8 @@
     ) {
       return;
     }
+
+    suppressPlatformNativeEvent("pause");
 
     try {
       if (
@@ -5673,6 +5683,67 @@
         state.player.pause();
       }
     } catch (_) {}
+  }
+
+  function suppressPlatformNativeEvent(kind, durationMs = 900) {
+    state.playbackNativeEventSuppressKind = String(kind || "");
+    state.playbackNativeEventSuppressUntil = Date.now() + Math.max(0, Number(durationMs) || 0);
+  }
+
+  function platformNativeEventSuppressed(kind = "") {
+    return (
+      String(state.playbackNativeEventSuppressKind || "") === String(kind || "") &&
+      Date.now() < Number(state.playbackNativeEventSuppressUntil || 0)
+    );
+  }
+
+  async function handlePlatformNativeEvent(kind, positionOverride = null) {
+    if (
+      !state.roomId ||
+      !state.uid ||
+      !state.playerReady ||
+      !state.player ||
+      !["vimeo", "dailymotion", "twitch"].includes(state.playerType)
+    ) {
+      return;
+    }
+
+    if (
+      state.playbackApplyingRemote ||
+      platformNativeEventSuppressed(kind) ||
+      Date.now() < Number(state.playbackIgnoreStateUntil || 0) ||
+      Date.now() < Number(state.playbackInitialHardSyncUntil || 0)
+    ) {
+      return;
+    }
+
+    const position = Number.isFinite(Number(positionOverride))
+      ? Math.max(0, Number(positionOverride))
+      : await asyncCurrentPosition().catch(() => 0);
+
+    let playing;
+    if (kind === "play") {
+      playing = true;
+    } else if (kind === "pause") {
+      playing = false;
+    } else {
+      playing = await asyncIsPlaying().catch(() => false);
+    }
+
+    if (!state.isOwner) {
+      await requestPlaybackControl(kind, position, playing);
+      return;
+    }
+
+    const now = playbackClockNow();
+    publishPlaybackEvent(
+      kind,
+      position,
+      playing,
+      now,
+      now,
+      false
+    );
   }
 
 
@@ -5869,7 +5940,7 @@
           );
 
         script.src =
-          `https://geo.dailymotion.com/player/${encodeURIComponent(
+          `https://geo.dailymotion.com/libs/player/${encodeURIComponent(
             playerId
           )}.js`;
 
@@ -7303,6 +7374,48 @@
     );
 
     player.on(
+      "play",
+      () => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("play");
+      }
+    );
+
+    player.on(
+      "pause",
+      () => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("pause");
+      }
+    );
+
+    player.on(
+      "seeked",
+      (data) => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("seek", Number(data?.seconds));
+      }
+    );
+
+    player.on(
+      "ended",
+      async () => {
+        if (state.player !== player) return;
+        state.playbackLastPlayerState = "ended";
+        if (!state.isOwner || state.playbackApplyingRemote) return;
+        const position = await asyncCurrentPosition().catch(() => 0);
+        await publishPlaybackEvent(
+          "pause",
+          position,
+          false,
+          playbackClockNow(),
+          playbackClockNow(),
+          true
+        );
+      }
+    );
+
+    player.on(
       "timeupdate",
       updateTimeUI
     );
@@ -7473,6 +7586,53 @@
       true;
 
     updateRoomOwnerUI();
+
+    player.on(
+      dailymotion.events.VIDEO_PLAY,
+      () => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("play");
+      }
+    );
+
+    player.on(
+      dailymotion.events.VIDEO_PAUSE,
+      () => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("pause");
+      }
+    );
+
+    player.on(
+      dailymotion.events.VIDEO_SEEKEND,
+      (event) => {
+        if (state.player !== player) return;
+        void handlePlatformNativeEvent("seek", Number(event?.videoTime));
+      }
+    );
+
+    player.on(
+      dailymotion.events.VIDEO_END,
+      async () => {
+        if (state.player !== player) return;
+        state.playbackLastPlayerState = "ended";
+        if (!state.isOwner || state.playbackApplyingRemote) return;
+        const position = await asyncCurrentPosition().catch(() => 0);
+        await publishPlaybackEvent(
+          "pause",
+          position,
+          false,
+          playbackClockNow(),
+          playbackClockNow(),
+          true
+        );
+      }
+    );
+
+    player.on(
+      dailymotion.events.VIDEO_TIMECHANGE,
+      updateTimeUI
+    );
 
     startLocalTimeUpdate();
     void applyLatestRoomPlaybackState(true);
@@ -7724,7 +7884,7 @@
         "100%",
 
       autoplay:
-        true,
+        !isMobileViewport(),
 
       muted:
         true,
@@ -7816,6 +7976,61 @@
         }
       }
     );
+
+    if (player.addEventListener) {
+      player.addEventListener(
+        Twitch.Player.PLAYING,
+        () => {
+          if (state.player !== player) return;
+          void handlePlatformNativeEvent("play");
+        }
+      );
+
+      player.addEventListener(
+        Twitch.Player.PAUSE,
+        () => {
+          if (state.player !== player) return;
+          void handlePlatformNativeEvent("pause");
+        }
+      );
+
+      player.addEventListener(
+        Twitch.Player.SEEK,
+        () => {
+          if (state.player !== player) return;
+          void handlePlatformNativeEvent("seek");
+        }
+      );
+
+      player.addEventListener(
+        Twitch.Player.ENDED,
+        async () => {
+          if (state.player !== player) return;
+          state.playbackLastPlayerState = "ended";
+          if (!state.isOwner || state.playbackApplyingRemote) return;
+          const position = await asyncCurrentPosition().catch(() => 0);
+          await publishPlaybackEvent(
+            "pause",
+            position,
+            false,
+            playbackClockNow(),
+            playbackClockNow(),
+            true
+          );
+        }
+      );
+
+      player.addEventListener(
+        Twitch.Player.PLAYBACK_BLOCKED,
+        () => {
+          if (state.player !== player) return;
+          if ($("syncStatus")) {
+            $("syncStatus").textContent =
+              "Twitch 需要點擊播放器後才能開始播放";
+          }
+        }
+      );
+    }
 
     startLocalTimeUpdate();
   }
@@ -8016,10 +8231,29 @@
         "youtube"
       ).trim();
 
-    const selectedVideo =
+    let selectedVideo =
       initialVideo ||
       window.WT_ENHANCEMENTS?.state?.createVideo ||
       null;
+
+    if (
+      !selectedVideo &&
+      ["vimeo", "dailymotion", "twitch"].includes(selectedSourceType)
+    ) {
+      const raw = $("platformManualInput")?.value?.trim() || "";
+      if (!raw) {
+        throw new Error("請輸入影片網址或 ID");
+      }
+
+      selectedVideo = createVideoObject(
+        selectedSourceType,
+        raw
+      );
+
+      if (!selectedVideo) {
+        throw new Error("無法辨識目前平台的影片網址或 ID");
+      }
+    }
 
     const sourceType =
       selectedVideo?.id &&
@@ -13196,6 +13430,69 @@
   }
 
 
+  function updatePlatformInputUI() {
+    const platform =
+      $("sourceTypeInput")?.value ||
+      "youtube";
+
+    const searchArea =
+      $("videoSearchArea");
+
+    const manualArea =
+      $("platformManualArea");
+
+    const notice =
+      $("platformNotice");
+
+    const searchable =
+      PLATFORMS[platform]?.searchable === true;
+
+    const manual =
+      ["vimeo", "dailymotion", "twitch"].includes(platform);
+
+    if (searchArea) {
+      searchArea.classList.toggle("hidden", !searchable);
+    }
+
+    if (manualArea) {
+      manualArea.classList.toggle("hidden", !manual);
+    }
+
+    if (notice) {
+      notice.classList.toggle("hidden", !manual);
+    }
+
+    if (manual) {
+      const label = $("platformManualLabel");
+      const input = $("platformManualInput");
+      const hint = $("platformManualHint");
+
+      if (label) {
+        label.textContent =
+          platform === "twitch"
+            ? "Twitch 頻道名稱、VOD ID 或網址"
+            : "影片網址或 ID";
+      }
+
+      if (input) {
+        input.placeholder =
+          platform === "vimeo"
+            ? "例如 76979871 或 https://vimeo.com/..."
+            : platform === "dailymotion"
+              ? "例如 x84sh87 或 https://www.dailymotion.com/video/..."
+              : "例如 twitchdev、40464143 或 Twitch 網址";
+        input.type = "text";
+      }
+
+      if (hint) {
+        hint.textContent =
+          platform === "twitch"
+            ? "直播可輸入頻道名稱；VOD 可輸入影片 ID。"
+            : "可以直接貼上影片網址，也可以輸入影片 ID。";
+      }
+    }
+  }
+
   function updateModalPlatformUI() {
     const platform =
       $("sourceTypeModal")
@@ -13207,6 +13504,27 @@
 
     const externalArea =
       $("modalExternalSourceArea");
+
+    if (externalArea) {
+      const input = $("modalSourceUrlInput");
+      const label = externalArea.querySelector("label[for='modalSourceUrlInput']");
+      if (label) {
+        label.textContent =
+          platform === "twitch"
+            ? "Twitch 頻道名稱、VOD ID 或網址"
+            : "影片網址或 ID";
+      }
+      if (input) {
+        input.placeholder =
+          platform === "vimeo"
+            ? "例如 76979871 或 https://vimeo.com/..."
+            : platform === "dailymotion"
+              ? "例如 x84sh87 或 https://www.dailymotion.com/video/..."
+              : platform === "twitch"
+                ? "例如 twitchdev、40464143 或 Twitch 網址"
+                : "影片網址或 ID";
+      }
+    }
 
     const searchable =
       PLATFORMS[
@@ -13337,7 +13655,9 @@
     state.playbackAwaitingActualStart = false;
     clearTimeout(state.playbackActualStartTimer);
     state.playbackActualStartTimer = null;
-     detachPlaybackControlRequestListener();
+    state.playbackNativeEventSuppressKind = "";
+    state.playbackNativeEventSuppressUntil = 0;
+    detachPlaybackControlRequestListener();
     cancelScheduledLocalPause();
     cancelScheduledRemotePause();
     cancelScheduledRemotePlay();
@@ -14146,6 +14466,14 @@
         updateModalPlatformUI
       );
 
+    $("sourceTypeInput")
+      ?.addEventListener(
+        "change",
+        updatePlatformInputUI
+      );
+
+    updatePlatformInputUI();
+
 
     /*
      * ESC
@@ -14363,52 +14691,10 @@
     /*
      * REALTIME YOUTUBE SEARCH
      */
-    let wtRealtimeYoutubeSearchTimer = null;
-
-    $("modalVideoSearchInput")
-      ?.addEventListener(
-        "input",
-        () => {
-          clearTimeout(
-            wtRealtimeYoutubeSearchTimer
-          );
-
-          const value =
-            $("modalVideoSearchInput")
-              ?.value
-              ?.trim() ||
-            "";
-
-          if (
-            value.length < 2
-          ) {
-            return;
-          }
-
-          wtRealtimeYoutubeSearchTimer =
-            setTimeout(
-              () => {
-                const button =
-                  $("modalSearchVideoBtn");
-
-                if (
-                  !button ||
-                  button.disabled
-                ) {
-                  return;
-                }
-
-                button.click();
-              },
-              520
-            );
-        }
-      );
-
     $("modalVideoSearchInput")
       ?.setAttribute(
         "data-wt-realtime-youtube-search",
-        "1"
+        "0"
       );
 
 
