@@ -81,6 +81,31 @@
     return currentRole === "master" || currentRole === "admin";
   }
 
+  const ROLE_LEVELS = {
+    viewer: 1,
+    admin: 2,
+    master: 3
+  };
+
+  function getRoleLevel(role) {
+    return ROLE_LEVELS[String(role || "").trim().toLowerCase()] || 0;
+  }
+
+  function canCurrentUserSelfUnblock(block, uid) {
+    if (!currentUser || !block || String(uid || "") !== String(currentUser.uid || "")) {
+      return false;
+    }
+
+    if (currentRole === "master") {
+      return true;
+    }
+
+    const actorLevel = getRoleLevel(currentRole);
+    const blockerLevel = getRoleLevel(block.blockedByRole);
+
+    return actorLevel > 0 && blockerLevel > 0 && actorLevel >= blockerLevel;
+  }
+
   async function loadAccounts() {
     if (!currentHasAdminAccess) {
       accounts = {};
@@ -251,9 +276,15 @@
           let actions = '<div class="row-actions"><button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
-          } else if (active) {
-            actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
-          } else {
+           } else if (active) {
+             if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
+               actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
+             } else if (uid === currentUser?.uid) {
+               actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
+             } else {
+               actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
+             }
+           } else {
             actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
           }
           actions += '</div>';
@@ -539,7 +570,8 @@
       blockedUntil,
       blockedAt:firebase.database.ServerValue.TIMESTAMP,
       blockedByUid:currentUser.uid,
-      blockedByEmail:currentUser.email || ""
+      blockedByEmail:currentUser.email || "",
+       blockedByRole:currentRole
     });
 
     await loadBlocks();
@@ -547,15 +579,26 @@
     toast(permanent ? "已永久封鎖使用者" : "已封鎖使用者");
   }
 
-  async function unblockUser(uid) {
-    if (!isAdminOperator()) return;
-    const item = accounts[uid];
-    if (!item) return;
-    if (!window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
-    await db.ref("admin/blocksByUid/" + uid).remove();
-    await loadBlocks();
-    toast("已解除封鎖");
-  }
+   async function unblockUser(uid) {
+     if (!isAdminOperator()) return;
+     const item = accounts[uid];
+     if (!item) return;
+
+     const block = blocks[uid];
+     if (!block) {
+       await loadBlocks();
+       return;
+     }
+
+     if (String(uid) === String(currentUser?.uid || "") && !canCurrentUserSelfUnblock(block, uid)) {
+       throw new Error("這個封鎖是由權限更高的管理員建立，你不能自行解除");
+     }
+
+     if (!window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
+     await db.ref("admin/blocksByUid/" + uid).remove();
+     await loadBlocks();
+     toast("已解除封鎖");
+   }
 
   async function deleteRoom(roomId) {
     if (!isAdminOperator()) return;
