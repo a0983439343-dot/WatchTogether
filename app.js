@@ -683,15 +683,28 @@
   }
 
 
+  function isGuestName(name) {
+    return /^訪客\d{3}$/.test(
+      String(name || "").trim()
+    );
+  }
+
   function getMemberName() {
     let name =
       localStorage.getItem(
         "wt_name"
       );
 
+    if (
+      !isGuestName(name) &&
+      state.user?.isAnonymous !== false
+    ) {
+      name = "";
+    }
+
     if (!name) {
       name =
-        "玩家" +
+        "訪客" +
         Math.floor(
           Math.random() * 900 + 100
         );
@@ -1293,14 +1306,24 @@
           if (
             !user.isAnonymous &&
             user.displayName &&
-            !localStorage.getItem(
-              "wt_name"
+            (
+              !localStorage.getItem("wt_name") ||
+              isGuestName(localStorage.getItem("wt_name"))
             )
           ) {
             try {
               setMemberName(
                 user.displayName
               );
+            } catch (_) {}
+          }
+
+          if (user.isAnonymous) {
+            if (!isGuestName(localStorage.getItem("wt_name"))) {
+              localStorage.removeItem("wt_name");
+            }
+            try {
+              state.memberName = getMemberName();
             } catch (_) {}
           }
         } else {
@@ -1618,8 +1641,9 @@
 
         if (
           user.displayName &&
-          !localStorage.getItem(
-            "wt_name"
+          (
+            !localStorage.getItem("wt_name") ||
+            isGuestName(localStorage.getItem("wt_name"))
           )
         ) {
           try {
@@ -1682,6 +1706,8 @@
         await exitCurrentRoom();
       }
 
+      localStorage.removeItem("wt_name");
+      state.memberName = "訪客";
       await auth.signOut();
 
       await ensureAnonymousAuth();
