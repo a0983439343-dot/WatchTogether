@@ -836,11 +836,40 @@ body[data-wt-theme="aurora"] .wt-modal-card {
 }
 
 
+.wt-search-history-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 3px 3px 0 0;
+  vertical-align: middle;
+}
+
+.wt-search-history-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--wt-border);
+  border-radius: 50%;
+  background: rgba(255,255,255,.045);
+  color: var(--wt-muted);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.wt-search-history-delete:hover {
+  color: var(--wt-text);
+  background: rgba(255,255,255,.085);
+}
+
 .wt-search-history-chip {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  margin: 3px 3px 0 0;
+  margin: 0;
   padding: 4px 9px;
   border: 1px solid var(--wt-border);
   border-radius: 999px;
