@@ -160,10 +160,19 @@ function formatDate(value) {
 }
 
 function currentName() {
+  var user = state.user || wt.auth.currentUser || null;
+  if (user && user.isAnonymous) {
+    var guest = String(localStorage.getItem("wt_guest_name") || "").trim();
+    if (/^訪客\d{3}$/.test(guest)) return guest;
+    guest = "訪客" + Math.floor(Math.random() * 900 + 100);
+    localStorage.setItem("wt_guest_name",guest);
+    localStorage.removeItem("wt_name");
+    return guest;
+  }
   var local = String(localStorage.getItem("wt_name") || "").trim();
   if (local) return local.slice(0,30);
   if (state.profile && state.profile.displayName) return String(state.profile.displayName).slice(0,30);
-  if (state.user && state.user.displayName) return String(state.user.displayName).slice(0,30);
+  if (user && user.displayName) return String(user.displayName).slice(0,30);
   return "玩家";
 }
 
@@ -871,7 +880,9 @@ async function updateCurrentRoomMember(name,avatar) {
   var ref = wt.db.ref("members/" + room + "/" + user.uid);
   var snapshot = await ref.once("value").catch(function(){ return null; });
   if (!snapshot || !snapshot.exists()) return;
-  await ref.update({name:name,avatarEmoji:avatar,lastSeen:wt.serverTs(),online:true}).catch(function(){});
+  var payload = {name:name,avatarEmoji:avatar,lastSeen:wt.serverTs(),online:true};
+  if (wt.state.profile && wt.state.profile.publicCode) payload.publicCode = String(wt.state.profile.publicCode).toUpperCase().slice(0,6);
+  await ref.update(payload).catch(function(){});
 }
 
 async function copyFriendCode() {
@@ -2287,12 +2298,11 @@ function setupAuthListeners() {
         }
       });
     } else {
-      wt.stopDmListener &&
-        wt.stopDmListener();
-      if (user && user.isAnonymous) {
-        wt.state.profile = null;
-        window.WT_CORE?.setGuestName?.();
-      }
+      wt.stopDmListener && wt.stopDmListener();
+      wt.state.profile = null;
+      localStorage.removeItem("wt_name");
+      const guestName = window.WT_CORE?.setGuestName?.() || wt.currentName();
+      wt.state.memberName = guestName;
 
       if (
         typeof wt.stopRequestListener ===
@@ -2539,11 +2549,12 @@ function bindHomeSearch() {
     }
   });
   input.addEventListener("input",function(){
-    clearTimeout(searchTimer);
     var value = String(input.value || "").trim();
     if (value.length < 2) {
       renderHomeSearchMessage("按「搜尋」或 Enter 才會開始搜尋。");
       renderHistory();
+    } else {
+      renderHomeSearchMessage("按「搜尋」或 Enter 才會開始搜尋。");
     }
   });
   $("clearSelectedVideoBtn") && $("clearSelectedVideoBtn").addEventListener("click",function(){
