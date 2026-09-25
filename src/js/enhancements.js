@@ -2378,7 +2378,11 @@ function setupAuthListeners() {
     var sequence = Number(wt.state.authStateSequence || 0) + 1;
     wt.state.authStateSequence = sequence;
     wt.state.user = user || null;
-    if (typeof wt.updateAdminButton === "function") {\n      void wt.updateAdminButton(user).catch(function(error){\n        console.warn("WatchTogether admin button update failed", error);\n      });\n    }
+    if (typeof wt.updateAdminButton === "function") {
+      void wt.updateAdminButton(user).catch(function(error){
+        console.warn("WatchTogether admin button update failed", error);
+      });
+    }
 
     if (user && !user.isAnonymous) {
       void wt.saveLoginAccount(user);
