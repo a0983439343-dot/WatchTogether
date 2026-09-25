@@ -13,5 +13,5 @@ window.WATCHTOGETHER_CONFIG = {
   youtubeSearchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   dailymotionPlayerId: "",
-  adminEmail: ""
+  adminEmail: "a0983439343@gmail.com"
 };
