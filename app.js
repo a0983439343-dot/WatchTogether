@@ -10128,7 +10128,7 @@
       const value = snapshot.val();
 
       if (value === true) {
-        return true;
+        return false;
       }
 
       if (!value || typeof value !== "object") {
@@ -10158,7 +10158,7 @@
       const value = snapshot.val();
 
       if (value === true) {
-        return 5 * 60 * 1000;
+        return 0;
       }
 
       const kickedAt = Number(value?.kickedAt || 0);
@@ -12618,6 +12618,21 @@
             console.error(
               error
             );
+
+            const friendlyError =
+              getFriendlyAuthError(error);
+
+            setError(
+              $("homeError"),
+              friendlyError
+            );
+
+            setTimeout(() => {
+              const current = $("homeError")?.textContent || "";
+              if (current === friendlyError) {
+                setError($("homeError"), "");
+              }
+            }, 4500);
 
             toast(
               error.message ||
