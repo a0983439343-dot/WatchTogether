@@ -967,6 +967,8 @@
 
     auth.onAuthStateChanged(async user => {
       stopAccountsListener();
+      stopReportsListener();
+      stopAuditLogsListener();
       currentUser = user || null;
       currentHasAdminAccess = false;
       currentRole = null;
@@ -974,6 +976,8 @@
       whitelist = {};
       blocks = {};
       rooms = {};
+      reports = {};
+      auditLogs = {};
 
       hide("loadingScreen");
       hide("setupScreen");
@@ -1003,9 +1007,13 @@
           loadAccounts(),
           loadWhitelist(),
           loadBlocks(),
-          loadRooms()
+          loadRooms(),
+          loadReports(),
+          loadAuditLogs()
         ]);
         startAccountsListener();
+        startReportsListener();
+        startAuditLogsListener();
       } catch (error) {
         console.error(error);
         show("deniedScreen");
@@ -1038,7 +1046,7 @@
     });
 
     $("refreshBtn")?.addEventListener("click", () => Promise.all([
-      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms()
+      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs()
     ]).then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("accountsRefreshBtn")?.addEventListener("click", () => Promise.all([
@@ -1046,6 +1054,12 @@
     ]).then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("roomsRefreshBtn")?.addEventListener("click", () => loadRooms().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
+
+    $("reportsRefreshBtn")?.addEventListener("click", () => loadReports().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
+    $("reportsExportBtn")?.addEventListener("click", exportReports);
+    $("auditSearch")?.addEventListener("input", renderAuditLogs);
+    $("auditActionFilter")?.addEventListener("change", renderAuditLogs);
+    $("auditRefreshBtn")?.addEventListener("click", () => loadAuditLogs().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("logoutBtn")?.addEventListener("click", () => auth.signOut());
 
