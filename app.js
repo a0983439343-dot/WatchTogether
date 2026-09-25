@@ -10277,7 +10277,7 @@
         state.uid
       );
 
-    if (await isMemberKicked()) {
+    if (!state.adminJoinOverride && await isMemberKicked()) {
       await leaveRoomLocally("你已被房主移出房間");
       return false;
     }
@@ -11314,6 +11314,7 @@
               state.uid
             ) &&
             !state.isOwner &&
+            !state.adminJoinOverride &&
             !state.kickedLocally
           ) {
             const kicked =
