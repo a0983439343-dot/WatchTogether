@@ -7379,11 +7379,9 @@
     state.currentVideoId = video.id;
     state.currentVideoUrl = video.url || null;
     state.playerType = "dailymotion";
-    state.playerReady = true;
+    state.playerReady = false;
 
     updateRoomOwnerUI();
-    startLocalTimeUpdate();
-    void updateTimeUI();
 
     const refreshPlaybackState = () => {
       if (state.player !== player) return;
@@ -7393,7 +7391,11 @@
     };
 
     player.on(dailymotion.events.PLAYER_VIDEOCHANGE, refreshPlaybackState);
-    player.on(dailymotion.events.PLAYER_CRITICALPATHREADY, refreshPlaybackState);
+
+    player.on(dailymotion.events.PLAYER_CRITICALPATHREADY, () => {
+      if (state.player !== player) return;
+      void updateTimeUI();
+    });
 
     player.on(dailymotion.events.VIDEO_PLAYING, () => {
       if (state.player !== player) return;
@@ -7424,6 +7426,26 @@
       void updateTimeUI();
     });
 
+    await new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (state.player === player) {
+          state.playerReady = true;
+          updateRoomOwnerUI();
+        }
+        resolve();
+      };
+      player.on(dailymotion.events.PLAYER_CRITICALPATHREADY, finish);
+      player.on(dailymotion.events.PLAYER_PLAYBACKPERMISSION, finish);
+      setTimeout(finish, 10000);
+    });
+
+    if (state.player !== player) return;
+
+    startLocalTimeUpdate();
+    void updateTimeUI();
     await applyLatestRoomPlaybackState(true);
     startPlaybackSeekDetector();
   }
@@ -7588,13 +7610,9 @@
     state.playerReady = false;
 
     if (player.addEventListener) {
-      player.addEventListener(Twitch.Player.PLAY, () => {
-        if (state.player !== player) return;
-        void handlePlatformNativeEvent("play");
-      });
-
       player.addEventListener(Twitch.Player.PLAYING, () => {
         if (state.player !== player) return;
+        void handlePlatformNativeEvent("play");
         void updateTimeUI();
       });
 
