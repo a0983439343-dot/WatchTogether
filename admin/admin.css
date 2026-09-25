@@ -447,3 +447,51 @@ html[data-device="phone"][data-orientation="portrait"] .toast{
     min-width: 880px;
   }
 }
+
+
+.section-head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.audit-table td {
+  vertical-align: top;
+}
+
+.audit-action {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.audit-target {
+  min-width: 150px;
+}
+
+.audit-content {
+  min-width: 280px;
+  max-width: 520px;
+  white-space: normal;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .section-head-actions {
+    width: 100%;
+  }
+
+  .section-head-actions .btn {
+    flex: 1;
+  }
+
+  .audit-table {
+    min-width: 900px;
+  }
+}
