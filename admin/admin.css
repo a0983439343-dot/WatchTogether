@@ -1,5 +1,6 @@
 :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#edf2ff;background:#080d18}
 *{box-sizing:border-box}
+html{min-width:320px}
 body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,rgba(87,110,255,.16),transparent 34%),#080d18}
 button,input,select{font:inherit}
 button,a,.btn,.nav-item,.icon-btn{touch-action:manipulation;-webkit-user-select:none;user-select:none}
@@ -80,7 +81,125 @@ tbody tr:last-child td{border-bottom:0}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .target-card{padding:13px 15px;margin-bottom:14px;border-radius:12px;background:#0a1221;border:1px solid rgba(255,255,255,.07);overflow-wrap:anywhere}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);padding:11px 15px;border-radius:12px;background:#131d31;border:1px solid rgba(255,255,255,.1);color:#fff;opacity:0;pointer-events:none;transition:.2s;z-index:80}
-.toast.show{opacity:1;transform:translate(-50%,0)}
-@media(max-width:1200px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{display:flex;overflow:auto;border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}.nav-item{width:auto;white-space:nowrap;margin:0 7px 0 0}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info-grid{grid-template-columns:1fr}.content{padding:18px}.topbar{padding:14px 16px;align-items:flex-start}.topbar-actions{justify-content:flex-end}.account-chip{display:none}}
-@media(max-width:560px){.stats-grid{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.section-head .btn{width:100%}.section-head h2{font-size:26px}.form-grid{grid-template-columns:1fr}.span-2{grid-column:auto}.modal-actions{flex-direction:column}.modal-actions .btn{width:100%}}
+
+html[data-device="desktop"] .content{padding-left:32px;padding-right:32px}
+html[data-device="desktop"] .panel,html[data-device="desktop"] .stat-card{box-shadow:0 14px 40px rgba(0,0,0,.08)}
+html[data-device="tablet"] .content{padding:22px}
+html[data-device="tablet"] .stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+html[data-device="tablet"] .layout{grid-template-columns:190px minmax(0,1fr)}
+html[data-device="tablet"] .sidebar{padding:18px 12px}
+html[data-device="tablet"] .nav-item{font-size:14px;padding:11px 12px}
+html[data-device="other"] .content{max-width:1680px;padding:32px}
+html[data-device="other"] .stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+@media(max-width:1200px){
+  .stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:flex;overflow:auto;border-right:0;border-bottom:1px solid rgba(255,255,255,.07);padding:10px 12px;scrollbar-width:none}
+  .sidebar::-webkit-scrollbar{display:none}
+  .nav-item{width:auto;white-space:nowrap;margin:0 7px 0 0}
+  .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .info-grid{grid-template-columns:1fr}
+  .content{padding:18px}
+  .topbar{padding:14px 16px;align-items:flex-start}
+  .topbar-actions{justify-content:flex-end}
+  .account-chip{display:none}
+}
+
+@media(max-width:640px){
+  body{background:#080d18}
+  .screen{padding:14px}
+  .denied-card{padding:22px;border-radius:18px}
+  .denied-card h1{font-size:25px}
+  .topbar{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px 12px}
+  .topbar h1{font-size:20px}
+  .topbar-actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .topbar-actions .btn{width:100%;text-align:center}
+  .layout{min-height:0}
+  .sidebar{padding:8px 10px}
+  .nav-item{flex:0 0 auto;padding:10px 12px}
+  .content{padding:12px}
+  .section-head{align-items:stretch;flex-direction:column;gap:12px;margin-bottom:14px}
+  .section-head h2{font-size:26px}
+  .section-head .btn{width:100%}
+  .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+  .stat-card{padding:15px;border-radius:15px}
+  .stat-card span{font-size:12px}
+  .stat-card strong{font-size:28px}
+  .panel{padding:12px;border-radius:15px;margin-bottom:12px}
+  .toolbar{display:grid;grid-template-columns:1fr;gap:8px}
+  .toolbar .search{max-width:none}
+  .add-row{display:grid;grid-template-columns:1fr;gap:8px}
+  .add-row .search{min-height:44px}
+  .add-row .btn{width:100%}
+  .table-wrap{padding:10px;overflow:visible}
+  table{width:100%;min-width:0;border-collapse:separate;border-spacing:0 10px}
+  thead{display:none}
+  tbody{display:grid;gap:10px}
+  tbody tr{display:grid;grid-template-columns:1fr;gap:0;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:#0b1322;overflow:hidden}
+  td{display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.055);font-size:13px;min-width:0}
+  td:last-child{border-bottom:0}
+  td::before{color:#72809f;font-size:11px;font-weight:600;line-height:1.5;content:"資料"}
+  #accountsBody td:nth-child(1)::before{content:"帳號"}
+  #accountsBody td:nth-child(2)::before{content:"暱稱"}
+  #accountsBody td:nth-child(3)::before{content:"UID"}
+  #accountsBody td:nth-child(4)::before{content:"狀態"}
+  #accountsBody td:nth-child(5)::before{content:"登入方式"}
+  #accountsBody td:nth-child(6)::before{content:"最後登入"}
+  #accountsBody td:nth-child(7)::before{content:"操作"}
+  #roomsBody td:nth-child(1)::before{content:"房間"}
+  #roomsBody td:nth-child(2)::before{content:"房主"}
+  #roomsBody td:nth-child(3)::before{content:"在線人數"}
+  #roomsBody td:nth-child(4)::before{content:"目前影片"}
+  #roomsBody td:nth-child(5)::before{content:"建立時間"}
+  #roomsBody td:nth-child(6)::before{content:"操作"}
+  #whitelistBody td:nth-child(1)::before{content:"Email"}
+  #whitelistBody td:nth-child(2)::before{content:"狀態"}
+  #whitelistBody td:nth-child(3)::before{content:"加入時間"}
+  #whitelistBody td:nth-child(4)::before{content:"加入者"}
+  #whitelistBody td:nth-child(5)::before{content:"操作"}
+  .row-actions,.room-actions{min-width:0;width:100%;display:flex;align-items:flex-start;flex-wrap:wrap}
+  .row-actions .btn,.room-actions .btn{max-width:100%;white-space:normal}
+  .room-actions{gap:6px}
+  .room-actions .btn{padding:7px 9px}
+  .uid-text{word-break:break-word}
+  .info-grid{gap:8px}
+  .info-item{padding:11px}
+  .form-grid{grid-template-columns:1fr}
+  .span-2{grid-column:auto}
+  .modal-card{max-height:calc(100vh - 24px);padding:16px;border-radius:17px}
+  .modal-head h2{font-size:21px}
+  .modal-actions{flex-direction:column}
+  .modal-actions .btn{width:100%}
+  .toast{left:12px;right:12px;bottom:12px;transform:translateY(20px)}
+  .toast.show{transform:translateY(0)}
+}
+
+@media(max-width:420px){
+  .stats-grid{grid-template-columns:1fr}
+  .topbar-actions{grid-template-columns:1fr}
+  .nav-item{font-size:13px}
+  td{grid-template-columns:82px minmax(0,1fr);padding:10px}
+  .stat-card strong{font-size:26px}
+}
+
+@media(min-width:901px) and (max-width:1280px){
+  .topbar{padding:16px 20px}
+  .content{padding:22px}
+  .stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+@media(min-width:1600px){
+  .content{max-width:1650px}
+  .stats-grid{gap:16px}
+  .stat-card{padding:22px}
+}
+
+@media(orientation:landscape) and (max-height:700px){
+  .topbar{padding-top:12px;padding-bottom:12px}
+  .sidebar{padding-top:10px;padding-bottom:10px}
+  .content{padding-top:16px;padding-bottom:16px}
+}
