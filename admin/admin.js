@@ -15,8 +15,10 @@
   let whitelist = {};
   let blocks = {};
   let rooms = {};
+  let reports = {};
   let profiles = {};
   let accountsRef = null;
+  let reportsRef = null;
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -357,6 +359,181 @@
     );
   }
 
+  const REPORT_CATEGORY_LABELS = {
+    playback: "播放 / 同步",
+    search: "YouTube 搜尋",
+    room: "房間",
+    chat: "好友 / 聊天",
+    account: "登入 / 帳號",
+    ui: "畫面 / 手機",
+    other: "其他"
+  };
+
+  const REPORT_STATUS_LABELS = {
+    open: "待處理",
+    in_progress: "處理中",
+    resolved: "已處理"
+  };
+
+  function normalizeReportStatus(value) {
+    const status = String(value || "").trim().toLowerCase();
+    return REPORT_STATUS_LABELS[status] ? status : "open";
+  }
+
+  function stopReportsListener() {
+    if (!reportsRef) return;
+    try { reportsRef.off(); } catch (_) {}
+    reportsRef = null;
+  }
+
+  async function loadReports() {
+    if (!currentHasAdminAccess) {
+      reports = {};
+      renderReports();
+      updateStats();
+      return;
+    }
+    const snapshot = await db.ref("reports").once("value");
+    reports = snapshot.val() || {};
+    renderReports();
+    updateStats();
+  }
+
+  function startReportsListener() {
+    stopReportsListener();
+    if (!currentHasAdminAccess) return;
+    reportsRef = db.ref("reports");
+    reportsRef.on("value", snapshot => {
+      if (!currentHasAdminAccess) return;
+      reports = snapshot.val() || {};
+      renderReports();
+      updateStats();
+    }, error => {
+      console.error("reports realtime listener failed", error);
+    });
+  }
+
+  function renderReports() {
+    const query = String($("reportSearch")?.value || "").trim().toLowerCase();
+    const statusFilter = String($("reportStatusFilter")?.value || "all");
+    const rows = Object.entries(reports || {})
+      .filter(([id, item]) => {
+        if (!item || typeof item !== "object") return false;
+        const status = normalizeReportStatus(item.status);
+        if (statusFilter !== "all" && status !== statusFilter) return false;
+        const account = accounts[String(item.uid || "")] || {};
+        const hay = [
+          id,
+          item.uid,
+          account.email,
+          account.displayName,
+          item.roomId,
+          item.category,
+          REPORT_CATEGORY_LABELS[item.category] || "",
+          item.details
+        ].join(" ").toLowerCase();
+        return !query || hay.includes(query);
+      })
+      .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0));
+
+    $("reportCount").textContent = rows.length + " 筆";
+    $("reportsBody").innerHTML = rows.length
+      ? rows.map(([id,item]) => {
+          const uid = String(item.uid || "");
+          const account = accounts[uid] || {};
+          const status = normalizeReportStatus(item.status);
+          const statusClass = status.replace("_","-");
+          const category = REPORT_CATEGORY_LABELS[item.category] || "其他";
+          const details = String(item.details || "");
+          const preview = details.length > 120 ? details.slice(0,120) + "…" : details;
+          const room = String(item.roomId || "").trim();
+          const canManage = currentRole === "master" || currentRole === "admin";
+          const actions = canManage
+            ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
+            : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
+          return '<tr>' +
+            '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
+            '<td><span class="small">' + escapeHtml(category) + '</span></td>' +
+            '<td><div class="primary-text">' + escapeHtml(account.email || item.uid || "—") + '</div><span class="small">' + escapeHtml(account.displayName || "") + '</span></td>' +
+            '<td>' + escapeHtml(room || "—") + '</td>' +
+            '<td class="report-description-cell">' + escapeHtml(preview) + '</td>' +
+            '<td><span class="report-status ' + statusClass + '">' + escapeHtml(REPORT_STATUS_LABELS[status]) + '</span></td>' +
+            '<td><div class="row-actions">' + actions + '</div></td>' +
+          '</tr>';
+        }).join("")
+      : '<tr><td colspan="7" class="muted">目前沒有符合條件的問題回報。</td></tr>';
+
+    $("reportsBody").querySelectorAll("[data-report-open]").forEach(button => {
+      button.addEventListener("click", () => openReport(button.dataset.reportOpen));
+    });
+  }
+
+  function openReport(id) {
+    const item = reports[String(id || "")];
+    if (!item) {
+      toast("這筆回報已不存在");
+      return;
+    }
+
+    const uid = String(item.uid || "");
+    const account = accounts[uid] || {};
+    $("reportId").value = String(id || "");
+    $("reportCreatedAt").textContent = formatDate(item.createdAt);
+    $("reportCategoryLabel").textContent = REPORT_CATEGORY_LABELS[item.category] || "其他";
+    $("reportUid").textContent = uid || "—";
+    $("reportRoomId").textContent = String(item.roomId || "").trim() || "—";
+    $("reportPage").textContent = String(item.page || "").trim() || "—";
+    $("reportUserAgent").textContent = String(item.userAgent || "").trim() || "—";
+    $("reportDetails").value = String(item.details || "");
+    $("reportStatus").value = normalizeReportStatus(item.status);
+    $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || "—";
+    $("reportHint").textContent = account.email ? "回報帳號：" + account.email : "";
+    $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
+    $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
+    show("reportModal");
+  }
+
+  function closeReportModal() {
+    hide("reportModal");
+  }
+
+  async function saveReportStatus() {
+    if (currentRole !== "master" && currentRole !== "admin") return;
+    const id = String($("reportId").value || "").trim();
+    const item = reports[id];
+    if (!id || !item) {
+      toast("找不到這筆回報");
+      return;
+    }
+
+    const status = normalizeReportStatus($("reportStatus").value);
+    await db.ref("reports/" + id).update({
+      status,
+      handledAt: firebase.database.ServerValue.TIMESTAMP,
+      handledByUid: currentUser.uid,
+      handledByEmail: currentUser.email || ""
+    });
+    await loadReports();
+    $("reportHandledBy").textContent = currentUser.email || currentUser.uid || "—";
+    $("reportHint").textContent = "狀態已更新。";
+    toast("回報狀態已更新");
+  }
+
+  async function deleteReport() {
+    if (currentRole !== "master" && currentRole !== "admin") return;
+    const id = String($("reportId").value || "").trim();
+    const item = reports[id];
+    if (!id || !item) {
+      toast("找不到這筆回報");
+      return;
+    }
+    if (!window.confirm("確定刪除這筆問題回報？刪除後無法復原。")) return;
+    await db.ref("reports/" + id).remove();
+    await loadReports();
+    closeReportModal();
+    toast("問題回報已刪除");
+  }
+
   function updateStats() {
     const list = Object.values(accounts || {});
     const wl = Object.values(whitelist || {});
@@ -583,6 +760,16 @@
      if (!isAdminOperator()) return;
      const item = accounts[uid];
      if (!item) return;
+     if ((uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) && !isMasterUser(currentUser)) {
+       toast("普通管理員不能編輯最高管理員");
+       return;
+     }
+
+     if ((uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) && !isMasterUser(currentUser)) {
+       toast("普通管理員不能編輯最高管理員");
+       return;
+     }
+
 
      const block = blocks[uid];
      if (!block) {
