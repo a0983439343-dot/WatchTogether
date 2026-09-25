@@ -201,7 +201,7 @@
           const members = Number(item.__members || 0);
           const platform = String(item.video?.platform || item.sourceType || "—");
           const title = String(item.video?.title || "目前沒有影片");
-          const href = "./?room=" + encodeURIComponent(key) + "&adminJoin=1";
+          const href = "../?room=" + encodeURIComponent(key) + "&adminJoin=1";
           return '<tr>' +
             '<td><div class="primary-text">' + escapeHtml(item.name || meta.name || "一起看") + '</div><span class="small">房間碼：' + escapeHtml(key) + '</span></td>' +
             '<td>' + escapeHtml(owner?.email || item.owner || "—") + '</td>' +
