@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
 <title>WatchTogether 管理員後台</title>
-<link rel="stylesheet" href="admin.css?v=20260925-admin-v3">
+<link rel="stylesheet" href="admin.css?v=20260925-admin-v4">
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
@@ -25,6 +25,7 @@
   <aside class="sidebar">
     <button class="nav-item active" data-section="overview">總覽</button>
     <button class="nav-item" data-section="accounts">登入帳號</button>
+    <button class="nav-item" data-section="rooms">🏠 房間監控</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
   </aside>
   <section class="content">
@@ -35,6 +36,7 @@
         <article class="stat-card"><span>白名單</span><strong id="statWhitelist">—</strong></article>
         <article class="stat-card"><span>啟用白名單</span><strong id="statWhitelistEnabled">—</strong></article>
         <article class="stat-card"><span>目前管理員</span><strong id="statCurrent">—</strong></article>
+        <article class="stat-card"><span>房間總數</span><strong id="statRooms">—</strong></article>
       </div>
       <div class="panel"><div class="panel-head"><h3>目前管理員</h3></div><div id="adminInfo" class="info-grid"></div></div>
     </section>
@@ -43,6 +45,12 @@
       <div class="section-head"><div><div class="eyebrow">AUTH ACCOUNTS</div><h2>登入帳號</h2></div><button id="accountsRefreshBtn" class="btn primary">重新整理</button></div>
       <div class="toolbar"><input id="accountSearch" class="search" type="search" placeholder="搜尋 Email、暱稱或 UID"><span id="accountCount" class="muted"></span></div>
       <div class="panel table-wrap"><table><thead><tr><th>帳號</th><th>暱稱</th><th>UID</th><th>登入方式</th><th>最後登入</th></tr></thead><tbody id="accountsBody"></tbody></table></div>
+    </section>
+
+    <section id="section-rooms" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">ROOM MONITOR</div><h2>房間監控</h2></div><button id="roomsRefreshBtn" class="btn primary">重新整理</button></div>
+      <div class="toolbar"><input id="roomSearch" class="search" type="search" placeholder="搜尋房間碼、房名、房主或影片"><span id="roomCount" class="muted">0 間</span></div>
+      <div class="panel table-wrap"><table><thead><tr><th>房間</th><th>房主</th><th>在線人數</th><th>目前影片</th><th>建立時間</th><th>操作</th></tr></thead><tbody id="roomsBody"></tbody></table></div>
     </section>
 
     <section id="section-whitelist" class="admin-section hidden">
@@ -59,6 +67,6 @@
 </main>
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260925-admin-v3"></script>
+<script src="admin.js?v=20260925-admin-v4"></script>
 </body>
 </html>
