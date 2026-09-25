@@ -102,10 +102,10 @@
 
   function startAccountsListener() {
     stopAccountsListener();
-    if (!isAdminOperator()) return;
+    if (!currentHasAdminAccess) return;
     accountsRef = db.ref("accounts");
     accountsRef.on("value", snapshot => {
-      if (!isAdminOperator()) return;
+      if (!currentHasAdminAccess) return;
       accounts = snapshot.val() || {};
       renderAccounts();
       updateStats();
