@@ -1,16 +1,16 @@
 {
   "database": {
-    "rules": "database.rules.json"
+    "rules": "config/database.rules.json"
   },
   "storage": {
-    "rules": "storage.rules"
+    "rules": "config/storage.rules"
   },
   "hosting": {
     "public": ".",
     "ignore": [
       "firebase.json",
-      "database.rules.json",
-      "storage.rules",
+      "config/database.rules.json",
+      "config/storage.rules",
       "**/.*",
       "**/node_modules/**"
     ]
