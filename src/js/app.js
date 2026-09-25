@@ -12898,6 +12898,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             return;
           }
 
+          if (!window.confirm("確定要登出嗎？")) {
+            return;
+          }
+
           if (button) {
             button.disabled = true;
           }
