@@ -2499,7 +2499,7 @@
           type:
             "video",
           value:
-            /^v/i.test(parts[1]) ? parts[1] : "v" + parts[1]
+            parts[1].replace(/^v/i, "")
         };
       }
 
@@ -2511,12 +2511,12 @@
       };
     } catch (_) {}
 
-    if (/^\d+$/.test(text)) {
+    if (/^v?\d+$/i.test(text)) {
       return {
         type:
           "video",
         value:
-          "v" + text
+          text.replace(/^v/i, "")
       };
     }
 
@@ -7588,9 +7588,14 @@
     state.playerReady = false;
 
     if (player.addEventListener) {
-      player.addEventListener(Twitch.Player.PLAYING, () => {
+      player.addEventListener(Twitch.Player.PLAY, () => {
         if (state.player !== player) return;
         void handlePlatformNativeEvent("play");
+      });
+
+      player.addEventListener(Twitch.Player.PLAYING, () => {
+        if (state.player !== player) return;
+        void updateTimeUI();
       });
 
       player.addEventListener(Twitch.Player.PAUSE, () => {
@@ -7633,13 +7638,20 @@
       };
       if (player.addEventListener) {
         player.addEventListener(Twitch.Player.READY, finish);
-        setTimeout(finish, 5000);
+        setTimeout(finish, 8000);
       } else {
         setTimeout(finish, 1500);
       }
     });
 
     if (state.player !== player) return;
+
+    if (state.twitchPlaybackKind === "video") {
+      const currentVideo = await Promise.resolve(player.getVideo()).catch(() => null);
+      if (currentVideo && String(currentVideo) !== String(video.id)) {
+        player.setVideo(String(video.id));
+      }
+    }
 
     startLocalTimeUpdate();
     void updateTimeUI();
