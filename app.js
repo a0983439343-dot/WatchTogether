@@ -12970,6 +12970,16 @@
     } catch (_) {}
   }
 
+  function deleteYoutubeSearchHistory(query) {
+    const normalized = String(query || "").trim();
+    if (normalized.length < 2) return;
+    const list = getYoutubeSearchHistory().filter((item) => item !== normalized);
+    try {
+      localStorage.setItem("wt_search_history_v1", JSON.stringify(list));
+    } catch (_) {}
+    renderYoutubeSearchHistory();
+  }
+
   function renderYoutubeSearchHistory() {
     const box = $("modalSearchHistory");
     if (!box) return;
@@ -12979,7 +12989,10 @@
       return;
     }
     box.innerHTML = '<span class="muted">最近搜尋：</span> ' + list.map((item) =>
-      '<button type="button" class="wt-search-history-chip" data-wt-room-search-history="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>'
+      '<span class="wt-search-history-item">' +
+        '<button type="button" class="wt-search-history-chip" data-wt-room-search-history="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>' +
+        '<button type="button" class="wt-search-history-delete" data-wt-room-search-history-delete="' + escapeHtml(item) + '" aria-label="刪除搜尋紀錄" title="刪除搜尋紀錄">×</button>' +
+      '</span>'
     ).join(" ");
     box.querySelectorAll("[data-wt-room-search-history]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -12987,6 +13000,13 @@
         if (!input) return;
         input.value = button.dataset.wtRoomSearchHistory || "";
         $("modalSearchVideoBtn")?.click();
+      });
+    });
+    box.querySelectorAll("[data-wt-room-search-history-delete]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteYoutubeSearchHistory(button.dataset.wtRoomSearchHistoryDelete || "");
       });
     });
   }
