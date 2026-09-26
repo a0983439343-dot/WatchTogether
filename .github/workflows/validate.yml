@@ -102,6 +102,22 @@ jobs:
           if (cacheVersion !== appVersion.replace('formal-', '')) throw new Error('Service worker cache version is not aligned.');
           console.log('Synchronized room control architecture checks OK');
           NODE
+      - name: Check Gemini AI request configuration
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const server = fs.readFileSync("youtube-proxy/server.js", "utf8");
+          if (!server.includes('responseFormat:')) throw new Error("Gemini responseFormat is missing.");
+          if (!server.includes('mimeType: "application/json"')) throw new Error("Gemini JSON response format is missing.");
+          if (!server.includes('thinkingConfig:')) throw new Error("Gemini thinkingConfig is missing.");
+          if (!server.includes('thinkingLevel: isRepairPhase ? "high" : "medium"')) throw new Error("Gemini thinking levels are not configured.");
+          if (server.includes('responseSchema: schema')) throw new Error("Deprecated Gemini responseSchema remains.");
+          if (server.includes('responseMimeType: "application/json"')) throw new Error("Deprecated Gemini responseMimeType remains.");
+          if (!server.includes('function degradedAiResult(input, error)')) throw new Error("AI degraded-mode guard is missing.");
+          if (!server.includes('json.degraded !== true')) throw new Error("CI does not reject degraded AI responses.");
+          console.log("Gemini AI request configuration checks OK");
+          NODE
+
       - name: Verify deployed Bug AI endpoint
         env:
           BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
