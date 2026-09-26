@@ -756,8 +756,8 @@
     if (!isAdminOperator()) return;
     const item = accounts[uid];
     if (!item) return;
-    if ((uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) && !isMasterUser(currentUser)) {
-      toast("普通管理員不能編輯最高管理員");
+    if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
+      toast("最高管理員資料不能由後台修改");
       return;
     }
 
@@ -785,8 +785,8 @@
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
-    if ((uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) && !isMasterUser(currentUser)) {
-      toast("普通管理員不能編輯最高管理員");
+    if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
+      toast("最高管理員資料不能由後台修改");
       return;
     }
 
@@ -897,8 +897,8 @@
      if (!isAdminOperator()) return;
      const item = accounts[uid];
      if (!item) return;
-     if ((uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) && !isMasterUser(currentUser)) {
-       toast("普通管理員不能編輯最高管理員");
+     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
+       toast("最高管理員不能解除或修改封鎖");
        return;
      }
 
