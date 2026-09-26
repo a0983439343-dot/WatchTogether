@@ -533,9 +533,9 @@
       ];
     } else if (category === "room") {
       categoryChecks = [
-        {name:"create_room",ok:typeof wt.createRoom === "function"},
-        {name:"playback_control_request",ok:typeof wt.requestPlaybackControl === "function"},
-        {name:"playback_control_listener",ok:typeof wt.attachPlaybackControlRequestListener === "function"}
+        {name:"create_room",ok:typeof window.WT_CORE?.createRoom === "function" || typeof wt.createRoomWithVideo === "function"},
+        {name:"playback_control_request",ok:typeof window.WT_CORE?.requestPlaybackControl === "function" || typeof window.requestPlaybackControl === "function"},
+        {name:"playback_control_listener",ok:typeof window.WT_CORE?.attachPlaybackControlRequestListener === "function" || typeof window.attachPlaybackControlRequestListener === "function"}
       ];
     } else if (category === "playback") {
       categoryChecks = [
