@@ -122,8 +122,8 @@ jobs:
           const fs = require("fs");
           const server = fs.readFileSync("youtube-proxy/server.js", "utf8");
           if (!server.includes("let usedModel = model;")) throw new Error("usedModel state is missing.");
+          if (!server.includes("model: candidateModel")) throw new Error("Gemini fallback does not switch to candidate models.");
           if (!server.includes("usedModel = candidateModel;")) throw new Error("Fallback model is not captured.");
-          if (server.includes("model: candidateModel")) throw new Error("Out-of-scope candidateModel return remains.");
           if ((server.match(/const candidateModel of models/g) || []).length !== 1) throw new Error("Unexpected candidateModel loop count.");
           console.log("Gemini fallback implementation checks OK");
           NODE
