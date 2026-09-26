@@ -296,12 +296,8 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         parts: [{text: prompt}]
       }],
       generationConfig: {
-        responseFormat: {
-          text: {
-            mimeType: "application/json",
-            schema
-          }
-        },
+        responseMimeType: "application/json",
+        responseSchema: schema,
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
