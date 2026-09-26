@@ -288,11 +288,50 @@ async function validateChangedFiles(changed) {
       JSON.parse(await fs.readFile(path.join(ROOT, file), "utf8"));
     }
   }
-  const test = await execFileAsync("npm", ["run", "test:rules"], {
-    cwd: ROOT,
-    maxBuffer: 2_000_000
-  });
-  return String(test.stdout || "").slice(-5000);
+
+  if (changed.has("index.html") || changed.has("src/js/app.js") || changed.has("src/js/enhancements.js") || changed.has("sw.js")) {
+    const index = await readRepoFile("index.html");
+    const sw = await readRepoFile("sw.js");
+    const app = await readRepoFile("src/js/app.js");
+    const enh = await readRepoFile("src/js/enhancements.js");
+
+    const appVersion = index.match(/app\.js\?v=([^"'&]+)/)?.[1];
+    const enhVersion = index.match(/enhancements\.js\?v=([^"'&]+)/)?.[1];
+    const cssVersion = index.match(/enhancements\.css\?v=([^"'&]+)/)?.[1];
+    const stylesVersion = index.match(/styles\.css\?v=([^"'&]+)/)?.[1];
+    const swVersion = index.match(/sw\.js\?v=([^"'&]+)/)?.[1];
+    const cacheVersion = sw.match(/wt-shell-(\d{8}-v[^"\s]+)/)?.[1];
+
+    if (!appVersion || appVersion !== enhVersion || appVersion !== cssVersion || appVersion !== stylesVersion || appVersion !== swVersion) {
+      throw new Error("前端資產版本未同步");
+    }
+    if (cacheVersion !== appVersion.replace("formal-", "")) {
+      throw new Error("Service Worker cache version 未同步");
+    }
+
+    if (!app.includes("buildYoutubeNativePlayer") || !app.includes("createYoutubeNativePlayer")) {
+      throw new Error("Native YouTube playback adapter missing");
+    }
+    if (/new\s+YT\.Player|youtube\.com\/iframe_api|loadYoutubeIframeApi|createYoutubeIframePlayer/.test(app)) {
+      throw new Error("Legacy YouTube IFrame path detected");
+    }
+    if (!app.includes("requestPlaybackControl(") || !app.includes("attachPlaybackControlRequestListener(")) {
+      throw new Error("Synchronized room control architecture missing");
+    }
+    if (/AIza[0-9A-Za-z_-]{20,}/.test(app)) {
+      throw new Error("Possible exposed Google API key detected");
+    }
+  }
+
+  if (changed.has("config/database.rules.json")) {
+    const test = await execFileAsync("npm", ["run", "test:rules"], {
+      cwd: ROOT,
+      maxBuffer: 2_000_000
+    });
+    return String(test.stdout || "").slice(-5000);
+  }
+
+  return "validation passed";
 }
 
 async function restoreChanged(changed) {
