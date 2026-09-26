@@ -218,27 +218,27 @@ function cleanAiInput(value, max = 2400) {
 }
 
 const AI_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
     status: {
-      type: "STRING",
+      type: "string",
       enum: ["confirmed", "still_present", "resolved_candidate", "inconclusive"]
     },
     confidence: {
-      type: "NUMBER",
+      type: "number",
       description: "Confidence from 0 to 1."
     },
     title: {
-      type: "STRING"
+      type: "string"
     },
     summary: {
-      type: "STRING"
+      type: "string"
     },
     rootCause: {
-      type: "STRING"
+      type: "string"
     },
     suggestion: {
-      type: "STRING"
+      type: "string"
     }
   },
   required: ["status", "confidence", "title", "summary", "rootCause", "suggestion"],
@@ -246,28 +246,28 @@ const AI_SCHEMA = {
 };
 
 const REPAIR_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
     repairStatus: {
-      type: "STRING",
+      type: "string",
       enum: ["repairable", "not_repairable"]
     },
     confidence: {
-      type: "NUMBER",
+      type: "number",
       description: "Confidence from 0 to 1."
     },
     summary: {
-      type: "STRING"
+      type: "string"
     },
     patches: {
-      type: "ARRAY",
+      type: "array",
       items: {
-        type: "OBJECT",
+        type: "object",
         properties: {
-          path: {type: "STRING"},
-          find: {type: "STRING"},
-          replace: {type: "STRING"},
-          reason: {type: "STRING"}
+          path: {type: "string"},
+          find: {type: "string"},
+          replace: {type: "string"},
+          reason: {type: "string"}
         },
         required: ["path", "find", "replace", "reason"],
         propertyOrdering: ["path", "find", "replace", "reason"]
@@ -296,8 +296,12 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         parts: [{text: prompt}]
       }],
       generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
+        responseFormat: {
+          text: {
+            mimeType: "application/json",
+            schema
+          }
+        },
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
