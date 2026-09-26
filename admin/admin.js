@@ -1093,6 +1093,11 @@
     $("blockCancel")?.addEventListener("click", closeBlockModal);
     $("blockConfirm")?.addEventListener("click", () => confirmBlock().catch(error => { console.error(error); toast(error?.message || "封鎖失敗"); }));
 
+    $("reportClose")?.addEventListener("click", closeReportModal);
+    $("reportCancel")?.addEventListener("click", closeReportModal);
+    $("reportSave")?.addEventListener("click", () => saveReportStatus().catch(error => { console.error(error); $("reportHint").textContent = error?.message || "儲存狀態失敗"; toast(error?.message || "儲存狀態失敗"); }));
+    $("reportDelete")?.addEventListener("click", () => deleteReport().catch(error => { console.error(error); $("reportHint").textContent = error?.message || "刪除回報失敗"; toast(error?.message || "刪除回報失敗"); }));
+
     document.querySelectorAll(".admin-modal").forEach(modal => {
       modal.addEventListener("click", event => {
         if (event.target === modal) modal.classList.add("hidden");
