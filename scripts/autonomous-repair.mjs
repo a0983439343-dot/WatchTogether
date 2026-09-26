@@ -223,7 +223,10 @@ async function requestRepair(report, verification, files) {
   if (!result.ok || !result.json?.ok || !result.json?.repair) {
     throw new Error(clean(result.json?.error || "AI 自動修復分析失敗", 900));
   }
-  return result.json;
+  return {
+    ...result.json.repair,
+    model: result.json.model || ""
+  };
 }
 
 function normalizePatch(patch, allow) {
