@@ -9,6 +9,8 @@
   const ERROR_DEBOUNCE_MS = 15000;
   const AUTO_RESOLVE_AFTER_MS = 180000;
   const STABLE_CHECKS_REQUIRED = 2;
+  const AI_RECHECK_INTERVAL_MS = 10 * 60 * 1000;
+  const AI_TIMEOUT_MS = 12000;
   const BUILD_VERSION = (() => {
     try {
       const script = Array.from(document.scripts).find(s => /src\/js\/app\.js/.test(s.src));
@@ -22,6 +24,132 @@
   let monitorStarted = false;
   let lastErrorAt = 0;
   let originalConsoleError = null;
+
+  function getAiEndpoint() {
+    try {
+      const config = window.WATCHTOGETHER_CONFIG || {};
+      const explicit = String(config.aiBugDetectorUrl || "").trim();
+      if (explicit) return explicit;
+      const proxy = String(config.youtubeStreamProxyUrl || config.youtubeSearchProxyUrl || "").trim().replace(//+$/, "");
+      return proxy ? proxy + "/ai/analyze" : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function collectHealthEvidence() {
+    const checks = [];
+    checks.push({name:"firebase_sdk",ok:!!window.firebase});
+    checks.push({name:"firebase_database",ok:!!wt.db});
+    checks.push({name:"firebase_auth",ok:!!wt.auth});
+    checks.push({name:"wt_core",ok:!!window.WT_CORE});
+    checks.push({name:"wt_enhancements",ok:!!window.WT_ENHANCEMENTS});
+    checks.push({name:"home_search_input",ok:!!document.getElementById("videoSearchInput")});
+    checks.push({name:"home_search_button",ok:!!document.getElementById("videoSearchBtn")});
+    const missing = ["updateAdminButton","syncLatestPlayback","createRoom"].filter(name => typeof wt[name] !== "function");
+    checks.push({name:"critical_functions",ok:missing.length===0,missing});
+    return checks;
+  }
+
+  async function analyzeWithAI(reportId, phase, state, evidence) {
+    const endpoint = getAiEndpoint();
+    if (!endpoint || !reportId) return null;
+    const now = Date.now();
+    const lastAiAt = Number(state?.lastAiAt || 0);
+    if (phase === "recheck" && lastAiAt && now - lastAiAt < AI_RECHECK_INTERVAL_MS) return null;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+    try {
+      const reportSnapshot = await wt.db.ref("reports/" + reportId).once("value");
+      if (!reportSnapshot.exists()) return null;
+
+      const report = reportSnapshot.val() || {};
+      const body = {
+        phase,
+        report: {
+          category:String(report.category || "other").slice(0,40),
+          details:cleanText(report.details || "",1800),
+          fingerprint:String(report.fingerprint || "").slice(0,80),
+          buildVersion:String(report.buildVersion || "").slice(0,120),
+          occurrences:Number(report.occurrences || 1) || 1,
+          firstSeenAt:Number(report.firstSeenAt || report.createdAt || 0),
+          lastSeenAt:Number(report.lastSeenAt || report.createdAt || 0)
+        },
+        evidence:evidence || {},
+        current:{
+          page:reportLocation(),
+          roomId:typeof wt.roomIdFromUrl === "function" ? String(wt.roomIdFromUrl() || "").slice(0,20) : "",
+          buildVersion:BUILD_VERSION,
+          recentSameFingerprintSeen:Boolean(state?.lastEventAt && now - Number(state.lastEventAt) < AUTO_RESOLVE_AFTER_MS),
+          health:collectHealthEvidence()
+        }
+      };
+
+      const response = await fetch(endpoint,{
+        method:"POST",
+        cache:"no-store",
+        credentials:"omit",
+        headers:{"Content-Type":"application/json"},
+        signal:controller.signal,
+        body:JSON.stringify(body)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result || result.ok !== true || !result.analysis) {
+        throw new Error(String(result?.error || "AI 分析失敗"));
+      }
+
+      const analysis = result.analysis;
+      state.lastAiAt = now;
+      state.aiStatus = String(analysis.status || "inconclusive");
+      state.aiConfidence = Number(analysis.confidence || 0);
+      state.aiTitle = cleanText(analysis.title || "",220);
+      state.aiSummary = cleanText(analysis.summary || "",900);
+      state.aiRootCause = cleanText(analysis.rootCause || "",900);
+      state.aiSuggestion = cleanText(analysis.suggestion || "",900);
+      state.aiModel = String(result.model || "").slice(0,100);
+      saveState();
+
+      await wt.db.ref("reports/" + reportId).update({
+        aiStatus:state.aiStatus,
+        aiConfidence:state.aiConfidence,
+        aiTitle:state.aiTitle,
+        aiSummary:state.aiSummary,
+        aiRootCause:state.aiRootCause,
+        aiSuggestion:state.aiSuggestion,
+        aiModel:state.aiModel,
+        aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
+        aiResolvedCandidate:state.aiStatus === "resolved_candidate"
+      });
+
+      try {
+        await writeHistory(
+          reportId,
+          "ai_check",
+          phase === "recheck"
+            ? "AI 重新檢測：" + (state.aiStatus === "resolved_candidate" ? "判定可視為已修復候選" : "判定仍需確認")
+            : "AI 分析：" + (state.aiTitle || state.aiStatus)
+        );
+      } catch (_) {}
+
+      return analysis;
+    } catch (error) {
+      state.lastAiAt = now;
+      state.aiStatus = "unavailable";
+      saveState();
+      try {
+        await wt.db.ref("reports/" + reportId).update({
+          aiStatus:"unavailable",
+          aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
+          aiError:cleanText(error?.message || "AI 分析無法使用",500)
+        });
+      } catch (_) {}
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   function loadState() {
     try {
@@ -162,6 +290,10 @@
       createdAt: firebase.database.ServerValue.TIMESTAMP
     };
     await reportRef.set(payload);
+    void analyzeWithAI(reportId,"detect",null,{
+      trigger:source,
+      liveErrorPresent:true
+    }).catch(() => {});
     try {
       await writeHistory(reportId, "created", source + " 自動偵測到新的錯誤");
     } catch (historyError) {
@@ -201,7 +333,8 @@
       buildVersion: BUILD_VERSION,
       autoResolvedAt: null,
       autoResolvedBuild: null,
-      autoResolveReason: null
+      autoResolveReason: null,
+      aiResolvedCandidate: false
     });
 
     state.status = "open";
@@ -210,6 +343,12 @@
     state.stableChecks = 0;
     state.lastCategory = category;
     state.lastSource = source;
+    if (!state.lastAiAt || now - Number(state.lastAiAt) >= AI_RECHECK_INTERVAL_MS) {
+      void analyzeWithAI(reportId,"repeat",state,{
+        trigger:source,
+        liveErrorPresent:true
+      }).catch(() => {});
+    }
     saveState();
 
     try {
@@ -318,11 +457,21 @@
           changed = true;
           continue;
         }
+        const ai = await analyzeWithAI(state.reportId,"recheck",state,{
+          stableChecks:Number(state.stableChecks || 0),
+          sameFingerprintSeen:false,
+          liveErrorPresent:false,
+          connected:true
+        });
+        const aiApproved = !!ai && String(ai.status || "") === "resolved_candidate" && Number(ai.confidence || 0) >= 0.75;
+        const aiReason = aiApproved
+          ? "AI 判定錯誤目前未再出現，且連續健康檢查通過"
+          : "連續健康檢查未再次發現相同錯誤" + (ai ? "；AI 未達自動結案信心門檻" : "；AI 暫時不可用");
         await wt.db.ref("reports/" + state.reportId).update({
           status: "resolved",
           autoResolvedAt: firebase.database.ServerValue.TIMESTAMP,
           autoResolvedBuild: BUILD_VERSION,
-          autoResolveReason: "連續健康檢查未再次發現相同錯誤"
+          autoResolveReason: aiReason
         });
         try {
           await writeHistory(state.reportId, "auto_resolved", "連續健康檢查未再次發現相同錯誤，已自動標記為已處理");
