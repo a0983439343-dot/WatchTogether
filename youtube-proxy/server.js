@@ -301,7 +301,7 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
-        maxOutputTokens: isRepairPhase ? 16000 : 1800
+        maxOutputTokens: isRepairPhase ? 32768 : 4096
       }
     })
   });
