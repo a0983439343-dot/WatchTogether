@@ -1,0 +1,41 @@
+name: WatchTogether 24/7 Bug Monitor
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watchtogether-24-7-bug-monitor
+  cancel-in-progress: false
+
+jobs:
+  synthetic-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      WATCHTOGETHER_SITE_URL: https://a0983439343-dot.github.io/WatchTogether
+      WATCHTOGETHER_BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
+      FIREBASE_DATABASE_URL: https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Checkout WatchTogether
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install monitor dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run autonomous browser monitor
+        run: npm run monitor:synthetics
