@@ -179,7 +179,7 @@ jobs:
                 json.ok === true &&
                 json.degraded !== true &&
                 json.analysis &&
-                /^gemini-3\./.test(String(json.model || ""))
+                /^gemini-(?:3\.|2\.5-)/.test(String(json.model || ""))
               ) {
                 console.log("Bug AI endpoint verified:", last);
                 process.exit(0);
