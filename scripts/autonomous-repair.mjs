@@ -141,9 +141,7 @@ async function releaseLock(lock) {
 }
 
 function candidateReports(reports) {
-  const seenFingerprints = new Set();
-
-  return Object.entries(reports || {})
+  const eligible = Object.entries(reports || {})
     .filter(([, report]) => {
       if (!report || typeof report !== "object") return false;
       if (report.autoVerifyEnabled !== true) return false;
@@ -157,13 +155,6 @@ function candidateReports(reports) {
       if (!requested && (!aiConfirmed || confidence < MIN_AUTO_CONFIDENCE)) return false;
       const lastAttempt = Number(report.repairLastAttemptAt || 0);
       if (lastAttempt && Date.now() - lastAttempt < 15 * 60_000) return false;
-
-      const fingerprint = String(report.fingerprint || "").trim();
-      if (fingerprint) {
-        if (seenFingerprints.has(fingerprint)) return false;
-        seenFingerprints.add(fingerprint);
-      }
-
       return true;
     })
     .sort((a,b) => {
@@ -182,8 +173,20 @@ function candidateReports(reports) {
       const al = Number(a[1]?.lastSeenAt || a[1]?.createdAt || 0);
       const bl = Number(b[1]?.lastSeenAt || b[1]?.createdAt || 0);
       return bl - al;
-    })
-    .slice(0, MAX_REPORTS);
+    });
+
+  const unique = [];
+  const seenFingerprints = new Set();
+
+  for (const candidate of eligible) {
+    const fingerprint = String(candidate[1]?.fingerprint || "").trim();
+    if (fingerprint && seenFingerprints.has(fingerprint)) continue;
+    if (fingerprint) seenFingerprints.add(fingerprint);
+    unique.push(candidate);
+    if (unique.length >= MAX_REPORTS) break;
+  }
+
+  return unique;
 }
 
 async function fetchJson(url, options = {}) {
