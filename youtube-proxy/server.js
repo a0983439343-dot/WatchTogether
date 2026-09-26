@@ -419,7 +419,7 @@ async function analyzeBugWithGemini(input) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         analysis = await requestGeminiModel({
-          model: usedModel,
+          model: candidateModel,
           apiKey,
           prompt,
           schema,
