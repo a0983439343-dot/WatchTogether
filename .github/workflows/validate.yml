@@ -107,12 +107,10 @@ jobs:
           node - <<'NODE'
           const fs = require("fs");
           const server = fs.readFileSync("youtube-proxy/server.js", "utf8");
-          if (!server.includes('responseFormat:')) throw new Error("Gemini responseFormat is missing.");
-          if (!server.includes('mimeType: "application/json"')) throw new Error("Gemini JSON response format is missing.");
+          if (!server.includes('responseMimeType: "application/json"')) throw new Error("Gemini JSON response MIME type is missing.");
+          if (!server.includes('responseSchema: schema')) throw new Error("Gemini JSON response schema is missing.");
           if (!server.includes('thinkingConfig:')) throw new Error("Gemini thinkingConfig is missing.");
           if (!server.includes('thinkingLevel: isRepairPhase ? "high" : "medium"')) throw new Error("Gemini thinking levels are not configured.");
-          if (server.includes('responseSchema: schema')) throw new Error("Deprecated Gemini responseSchema remains.");
-          if (server.includes('responseMimeType: "application/json"')) throw new Error("Deprecated Gemini responseMimeType remains.");
           if (!server.includes('function degradedAiResult(input, error)')) throw new Error("AI degraded-mode guard is missing.");
           if (!server.includes('degraded: true') || !server.includes('degraded: false')) throw new Error("AI degraded-mode response flags are missing.");
           console.log("Gemini AI request configuration checks OK");
