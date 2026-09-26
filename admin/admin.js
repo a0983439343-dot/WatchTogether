@@ -18,7 +18,8 @@
   let reports = {};
   let auditLogs = {};
   let profiles = {};
-  let reportsLoadError = "";
+  let reportsLoadError = {};
+  let reportHistory = {};
   let accountsRef = null;
   let reportsRef = null;
   let auditLogsRef = null;
@@ -601,9 +602,11 @@
           const actions = canManage
             ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
             : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
+          const sourceLabel = item.source === "auto" || item.autoDetected === true ? "自動偵測" : "使用者回報";
+          const occurrenceText = Number(item.occurrences || 0) > 1 ? " · " + Number(item.occurrences) + " 次" : "";
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
-            '<td><span class="small">' + escapeHtml(category) + '</span></td>' +
+            '<td><span class="report-source ' + (item.source === "auto" || item.autoDetected === true ? "auto" : "manual") + '">' + escapeHtml(sourceLabel) + '</span><span class="small">' + escapeHtml(category) + escapeHtml(occurrenceText) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(account.email || item.uid || "—") + '</div><span class="small">' + escapeHtml(account.displayName || "") + '</span></td>' +
             '<td>' + escapeHtml(room || "—") + '</td>' +
             '<td class="report-description-cell">' + escapeHtml(preview) + '</td>' +
@@ -614,11 +617,33 @@
       : '<tr><td colspan="7" class="muted">目前沒有符合條件的問題回報。</td></tr>';
 
     $("reportsBody").querySelectorAll("[data-report-open]").forEach(button => {
-      button.addEventListener("click", () => openReport(button.dataset.reportOpen));
+      button.addEventListener("click", () => openReport(button.dataset.reportOpen).catch(error => {
+        console.error(error);
+        toast(error?.message || "開啟問題回報失敗");
+      }));
     });
   }
 
-  function openReport(id) {
+  async function loadReportHistory(id) {
+    const body = $("reportHistoryBody");
+    if (!body) return;
+    body.innerHTML = '<div class="muted">載入處理紀錄…</div>';
+    try {
+      const snapshot = await db.ref("reportHistory/" + id).once("value");
+      reportHistory[id] = snapshot.val() || {};
+      const rows = Object.values(reportHistory[id]).sort((a,b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+      body.innerHTML = rows.length
+        ? rows.map(entry => '<div class="report-history-item"><div class="report-history-meta"><strong>' +
+            escapeHtml(entry.event || "事件") + '</strong><span>' + escapeHtml(formatDate(entry.createdAt)) + '</span></div><div>' +
+            escapeHtml(entry.details || "") + '</div></div>').join("")
+        : '<div class="muted">目前沒有處理紀錄。</div>';
+    } catch (error) {
+      console.error("載入問題回報處理紀錄失敗:", error);
+      body.innerHTML = '<div class="muted">處理紀錄載入失敗：' + escapeHtml(error?.message || "未知錯誤") + '</div>';
+    }
+  }
+
+  async function openReport(id) {
     const item = reports[String(id || "")];
     if (!item) {
       toast("這筆回報已不存在");
@@ -627,20 +652,31 @@
 
     const uid = String(item.uid || "");
     const account = accounts[uid] || {};
+    const auto = item.source === "auto" || item.autoDetected === true;
     $("reportId").value = String(id || "");
     $("reportCreatedAt").textContent = formatDate(item.createdAt);
+    $("reportSource").textContent = auto ? "自動偵測" : "使用者手動回報";
     $("reportCategoryLabel").textContent = REPORT_CATEGORY_LABELS[item.category] || "其他";
+    $("reportOccurrences").textContent = Number(item.occurrences || 0) || 1;
+    $("reportFirstSeenAt").textContent = formatDate(item.firstSeenAt || item.createdAt);
+    $("reportLastSeenAt").textContent = formatDate(item.lastSeenAt || item.createdAt);
+    $("reportBuildVersion").textContent = String(item.buildVersion || "—");
     $("reportUid").textContent = uid || "—";
     $("reportRoomId").textContent = String(item.roomId || "").trim() || "—";
     $("reportPage").textContent = String(item.page || "").trim() || "—";
     $("reportUserAgent").textContent = String(item.userAgent || "").trim() || "—";
+    $("reportFingerprint").textContent = String(item.fingerprint || "—");
     $("reportDetails").value = String(item.details || "");
     $("reportStatus").value = normalizeReportStatus(item.status);
-    $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || "—";
+    $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || (item.autoResolvedAt ? "自動監控" : "—");
+    $("reportAutoResolve").textContent = item.autoResolvedAt
+      ? "已自動處理 · " + formatDate(item.autoResolvedAt) + " · " + String(item.autoResolveReason || "穩定檢查通過")
+      : auto ? "監控中" : "不適用";
     $("reportHint").textContent = account.email ? "回報帳號：" + account.email : "";
     $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
     $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
     show("reportModal");
+    await loadReportHistory(String(id || ""));
   }
 
   function closeReportModal() {
@@ -661,11 +697,27 @@
       status,
       handledAt: firebase.database.ServerValue.TIMESTAMP,
       handledByUid: currentUser.uid,
-      handledByEmail: currentUser.email || ""
+      handledByEmail: currentUser.email || "",
+      ...(status !== "resolved" ? {autoResolvedAt: null, autoResolvedBuild: null, autoResolveReason: null} : {})
     });
+    try {
+      const historyRef = db.ref("reportHistory/" + id).push();
+      await historyRef.set({
+        event: "manual_status",
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        actorUid: currentUser.uid,
+        actorEmail: currentUser.email || "",
+        source: "admin",
+        details: "管理員將狀態改為 " + REPORT_STATUS_LABELS[status]
+      });
+    } catch (historyError) {
+      console.warn("寫入問題回報處理紀錄失敗:", historyError);
+    }
     await loadReports();
     $("reportHandledBy").textContent = currentUser.email || currentUser.uid || "—";
+    $("reportAutoResolve").textContent = status === "resolved" ? "已處理（手動）" : "監控中";
     $("reportHint").textContent = "狀態已更新。";
+    void loadReportHistory(id);
     void writeAuditLog("report.status", item.uid, item.uid, "回報 " + id + " 狀態改為 " + REPORT_STATUS_LABELS[status]);
     toast("回報狀態已更新");
   }
@@ -679,7 +731,10 @@
       return;
     }
     if (!window.confirm("確定刪除這筆問題回報？刪除後無法復原。")) return;
-    await db.ref("reports/" + id).remove();
+    await db.ref().update({
+      ["reports/" + id]: null,
+      ["reportHistory/" + id]: null
+    });
     await loadReports();
     closeReportModal();
     void writeAuditLog("report.delete", item.uid, item.uid, "刪除回報 " + id);
@@ -1018,6 +1073,7 @@
       rooms = {};
       reports = {};
       auditLogs = {};
+      reportHistory = {};
 
       hide("loadingScreen");
       hide("setupScreen");
