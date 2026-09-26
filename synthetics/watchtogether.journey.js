@@ -227,7 +227,7 @@ journey("WatchTogether 24/7 autonomous bug monitor", async ({ page, params, requ
     DEFAULT_SITE_URL
   )
     .trim()
-    .replace(/\\/+$ /, "");
+    .replace(/\/+$/, "");
 
   const bugServiceUrl = String(
     params?.bugServiceUrl ||
@@ -235,14 +235,14 @@ journey("WatchTogether 24/7 autonomous bug monitor", async ({ page, params, requ
     DEFAULT_BUG_SERVICE_URL
   )
     .trim()
-    .replace(/\\/+$ /, "");
+    .replace(/\/+$/, "");
 
   const verifyUrl =
-    bugServiceUrl.replace(/\\/+$ /, "") +
+    bugServiceUrl.replace(/\/+$/, "") +
     "/verify?category=all";
 
   const aiUrl =
-    bugServiceUrl.replace(/\\/+$ /, "") +
+    bugServiceUrl.replace(/\/+$/, "") +
     "/ai/analyze";
 
   const findings = [];
