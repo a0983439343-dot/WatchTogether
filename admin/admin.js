@@ -565,7 +565,7 @@
   async function writeReportHistory(id,event,details) {
     if (!id || !currentUser) return;
     try {
-      await db.ref("reportHistoryEvents").push({
+      await db.ref("reportHistoryEvents/" + id).push({
         reportId:String(id).slice(0,128),
         event,
         createdAt:firebase.database.ServerValue.TIMESTAMP,
