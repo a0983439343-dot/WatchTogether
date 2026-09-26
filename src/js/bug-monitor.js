@@ -162,7 +162,11 @@
       createdAt: firebase.database.ServerValue.TIMESTAMP
     };
     await reportRef.set(payload);
-    await writeHistory(reportId, "created", source + " 自動偵測到新的錯誤");
+    try {
+      await writeHistory(reportId, "created", source + " 自動偵測到新的錯誤");
+    } catch (historyError) {
+      try { console.warn("WatchTogether 自動回報建立紀錄失敗:", historyError); } catch (_) {}
+    }
     return { reportId, now };
   }
 
@@ -171,6 +175,24 @@
     if (!user || !reportId) return false;
 
     const now = Date.now();
+    const existing = await wt.db.ref("reports/" + reportId).once("value");
+    if (!existing.exists()) {
+      const created = await createAutoReport(
+        state.fingerprint || "",
+        category,
+        details,
+        source
+      );
+      if (!created) return false;
+      state.reportId = created.reportId;
+      state.firstSeenAt = now;
+      state.lastSeenAt = now;
+      state.occurrences = 1;
+      state.status = "open";
+      state.stableChecks = 0;
+      return true;
+    }
+
     const reopened = state.status === "resolved";
     await wt.db.ref("reports/" + reportId).update({
       status: "open",
@@ -190,10 +212,14 @@
     state.lastSource = source;
     saveState();
 
-    if (reopened) {
-      await writeHistory(reportId, "reopened", "相同錯誤再次出現，已自動重新開啟");
-    } else {
-      await writeHistory(reportId, "seen", "相同錯誤再次發生，第 " + state.occurrences + " 次");
+    try {
+      if (reopened) {
+        await writeHistory(reportId, "reopened", "相同錯誤再次出現，已自動重新開啟");
+      } else {
+        await writeHistory(reportId, "seen", "相同錯誤再次發生，第 " + state.occurrences + " 次");
+      }
+    } catch (historyError) {
+      try { console.warn("WatchTogether 自動回報紀錄寫入失敗:", historyError); } catch (_) {}
     }
     return true;
   }
@@ -236,7 +262,8 @@
           status: "open",
           stableChecks: 0,
           lastCategory: category,
-          lastSource: source
+          lastSource: source,
+          fingerprint
         };
         saveState();
         return;
@@ -283,13 +310,25 @@
       }
 
       try {
+        const reportSnapshot = await wt.db.ref("reports/" + state.reportId).once("value");
+        if (!reportSnapshot.exists()) {
+          state.reportId = "";
+          state.status = "open";
+          state.stableChecks = 0;
+          changed = true;
+          continue;
+        }
         await wt.db.ref("reports/" + state.reportId).update({
           status: "resolved",
           autoResolvedAt: firebase.database.ServerValue.TIMESTAMP,
           autoResolvedBuild: BUILD_VERSION,
           autoResolveReason: "連續健康檢查未再次發現相同錯誤"
         });
-        await writeHistory(state.reportId, "auto_resolved", "連續健康檢查未再次發現相同錯誤，已自動標記為已處理");
+        try {
+          await writeHistory(state.reportId, "auto_resolved", "連續健康檢查未再次發現相同錯誤，已自動標記為已處理");
+        } catch (historyError) {
+          try { console.warn("WatchTogether 自動處理紀錄寫入失敗:", historyError); } catch (_) {}
+        }
         state.status = "resolved";
         state.stableChecks = STABLE_CHECKS_REQUIRED;
         state.autoResolvedAt = now;
