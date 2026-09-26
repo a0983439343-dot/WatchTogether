@@ -122,8 +122,14 @@ function youtubeUrl(videoId) {
   return "https://www.youtube.com/watch?v=" + encodeURIComponent(videoId);
 }
 
-function getAiModel() {
-  return String(process.env.GEMINI_MODEL || "gemini-3.8-flash").trim() || "gemini-3.8-flash";
+function getAiModel(phase = "") {
+  const repairModel = String(
+    process.env.GEMINI_REPAIR_MODEL || "gemini-3.1-pro-preview"
+  ).trim() || "gemini-3.1-pro-preview";
+  const normalModel = String(
+    process.env.GEMINI_MODEL || "gemini-3.8-flash"
+  ).trim() || "gemini-3.8-flash";
+  return phase === "repair" ? repairModel : normalModel;
 }
 
 function aiAllowedOrigin(req) {
@@ -281,8 +287,11 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.1,
-        maxOutputTokens: isRepairPhase ? 10000 : 700
+        temperature: isRepairPhase ? 0.05 : 0.1,
+        thinkingConfig: {
+          thinkingLevel: isRepairPhase ? "high" : "medium"
+        },
+        maxOutputTokens: isRepairPhase ? 12000 : 700
       }
     })
   });
@@ -333,7 +342,7 @@ async function analyzeBugWithGemini(input) {
     throw new Error("GEMINI_API_KEY 未設定");
   }
 
-  const model = getAiModel();
+  const model = getAiModel(input.phase);
   const isRepairPhase = input.phase === "repair";
   const schema = isRepairPhase ? REPAIR_SCHEMA : AI_SCHEMA;
   const prompt = isRepairPhase
@@ -372,9 +381,18 @@ async function analyzeBugWithGemini(input) {
 
   const models = Array.from(new Set([
     model,
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash-lite"
+    ...(isRepairPhase
+      ? [
+          "gemini-3.8-flash",
+          "gemini-3.7-flash",
+          "gemini-3.6-flash",
+          "gemini-3.5-flash-lite"
+        ]
+      : [
+          "gemini-3.7-flash",
+          "gemini-3.6-flash",
+          "gemini-3.5-flash-lite"
+        ])
   ].filter(Boolean)));
 
   let analysis = null;
@@ -728,7 +746,7 @@ async function handleAiAnalyze(req, res) {
     const analysis = await analyzeBugWithGemini(input);
     send(res, 200, JSON.stringify({
       ok: true,
-      model: getAiModel(),
+      model: getAiModel(input.phase),
       analysis
     }));
   } catch (error) {
