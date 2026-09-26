@@ -123,7 +123,7 @@ function youtubeUrl(videoId) {
 }
 
 function getAiModel() {
-  return String(process.env.GEMINI_MODEL || "gemini-3.1-pro-preview").trim() || "gemini-3.1-pro-preview";
+  return String(process.env.GEMINI_MODEL || "gemini-3.8-flash").trim() || "gemini-3.8-flash";
 }
 
 function aiAllowedOrigin(req) {
