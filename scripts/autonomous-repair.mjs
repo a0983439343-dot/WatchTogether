@@ -96,7 +96,8 @@ async function git(args) {
 }
 
 async function writeHistory(database, reportId, event, details) {
-  await database.ref("reportHistory/" + reportId).push({
+  await database.ref("reportHistoryEvents").push({
+    reportId: String(reportId).slice(0, 128),
     event,
     createdAt: Date.now(),
     actorUid: "autonomous-repair",
