@@ -18,7 +18,7 @@
   let reports = {};
   let auditLogs = {};
   let profiles = {};
-  let reportsLoadError = {};
+  let reportsLoadError = "";
   let reportHistory = {};
   let accountsRef = null;
   let reportsRef = null;
