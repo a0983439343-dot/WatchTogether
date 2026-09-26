@@ -452,7 +452,7 @@ async function handleVerify(req, res, requestUrl) {
         )
       ],
       search: [
-        verifyContent("search_controls", app + "\n" + index, ["videoSearchInput", "videoSearchBtn"])
+        verifyContent("search_controls", app + "\n" + index, ["videoSearchInput", "searchVideoBtn"])
       ],
       room: [
         verifyContent("room_control", app, ["requestPlaybackControl", "attachPlaybackControlRequestListener", "controlRequests"])
@@ -464,7 +464,7 @@ async function handleVerify(req, res, requestUrl) {
         verifyContent("auth_runtime", app + "\n" + enh, ["setupAuthListeners", "signInWithPopup", "loadProfile"])
       ],
       ui: [
-        verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "videoSearchBtn", "googleLoginBtn"])
+        verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "searchVideoBtn", "googleLoginBtn"])
       ],
       other: [],
       all: [
@@ -474,11 +474,11 @@ async function handleVerify(req, res, requestUrl) {
           ["buildYoutubeNativePlayer", "createYoutubeNativePlayer", "loadVimeoSdk", "loadDailymotionSdk", "loadTwitchSdk"],
           ["new YT.Player", "youtube.com/iframe_api", "loadYoutubeIframeApi", "createYoutubeIframePlayer"]
         ),
-        verifyContent("search_controls", app + "\n" + index, ["videoSearchInput", "videoSearchBtn"]),
+        verifyContent("search_controls", app + "\n" + index, ["videoSearchInput", "searchVideoBtn"]),
         verifyContent("room_control", app, ["requestPlaybackControl", "attachPlaybackControlRequestListener", "controlRequests"]),
         verifyContent("chat_runtime", app + "\n" + enh, ["chat", "sendPrivateText"]),
         verifyContent("auth_runtime", app + "\n" + enh, ["setupAuthListeners", "signInWithPopup", "loadProfile"]),
-        verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "videoSearchBtn", "googleLoginBtn"])
+        verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "searchVideoBtn", "googleLoginBtn"])
       ]
     };
 
