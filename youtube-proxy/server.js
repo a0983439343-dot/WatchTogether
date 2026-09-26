@@ -135,22 +135,22 @@ function youtubeUrl(videoId) {
 
 function getAiModel(phase = "") {
   const repairModel = String(
-    process.env.GEMINI_REPAIR_MODEL || "gemini-3.8-flash"
-  ).trim() || "gemini-3.8-flash";
+    process.env.GEMINI_REPAIR_MODEL || "gemini-3.5-flash"
+  ).trim() || "gemini-3.5-flash";
   const normalModel = String(
-    process.env.GEMINI_MODEL || "gemini-3.8-flash"
-  ).trim() || "gemini-3.8-flash";
+    process.env.GEMINI_MODEL || "gemini-3.5-flash"
+  ).trim() || "gemini-3.5-flash";
   return phase === "repair" ? repairModel : normalModel;
 }
 
 function getAiModelFallbacks(phase = "") {
   const primary = getAiModel(phase);
   const freeFallbacks = [
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
     "gemini-2.5-flash-lite"
   ];
   return Array.from(new Set([primary, ...freeFallbacks].filter(Boolean)));
