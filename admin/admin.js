@@ -666,6 +666,19 @@
     $("reportPage").textContent = String(item.page || "").trim() || "—";
     $("reportUserAgent").textContent = String(item.userAgent || "").trim() || "—";
     $("reportFingerprint").textContent = String(item.fingerprint || "—");
+    $("reportAiStatus").textContent = item.aiStatus === "resolved_candidate"
+      ? "可自動結案"
+      : item.aiStatus === "confirmed"
+        ? "確認為問題"
+        : item.aiStatus === "still_present"
+          ? "仍存在"
+          : item.aiStatus === "unavailable"
+            ? "AI 暫不可用"
+            : item.aiStatus || "尚未分析";
+    const aiConfidence = Number(item.aiConfidence || 0);
+    $("reportAiConfidence").textContent = aiConfidence > 0 ? Math.round(aiConfidence * 100) + "%" : "—";
+    $("reportAiRootCause").textContent = String(item.aiRootCause || "—");
+    $("reportAiSuggestion").textContent = String(item.aiSuggestion || "—");
     $("reportDetails").value = String(item.details || "");
     $("reportStatus").value = normalizeReportStatus(item.status);
     $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || (item.autoResolvedAt ? "自動監控" : "—");
