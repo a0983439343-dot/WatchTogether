@@ -196,12 +196,10 @@ async function saveFinding(finding, context) {
 
   await ref.set(finalData);
 
-  const historyRef = db.ref(
-    "reportHistory/" +
-    finding.reportId
-  ).push();
+  const historyRef = db.ref("reportHistoryEvents").push();
 
   await historyRef.set({
+    reportId: String(finding.reportId).slice(0, 128),
     event: existingSnap.exists()
       ? "scanner_repeat"
       : "scanner_created",
