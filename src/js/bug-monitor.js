@@ -61,8 +61,12 @@
     checks.push({name:"wt_enhancements",ok:!!window.WT_ENHANCEMENTS});
     checks.push({name:"home_search_input",ok:!!document.getElementById("videoSearchInput")});
     checks.push({name:"home_search_button",ok:!!document.getElementById("videoSearchBtn")});
-    const missing = ["updateAdminButton","syncLatestPlayback","createRoom"].filter(name => typeof wt[name] !== "function");
-    checks.push({name:"critical_functions",ok:missing.length===0,missing});
+    const functionChecks = [
+      {name:"updateAdminButton",ok:typeof wt.updateAdminButton === "function"},
+      {name:"syncLatestPlayback",ok:typeof window.WT_CORE?.syncLatestPlayback === "function" || typeof window.syncLatestPlayback === "function"},
+      {name:"createRoom",ok:typeof window.WT_CORE?.createRoom === "function" || typeof wt.createRoomWithVideo === "function"}
+    ];
+    checks.push({name:"critical_functions",ok:functionChecks.every(check => check.ok),checks:functionChecks});
     return checks;
   }
 
