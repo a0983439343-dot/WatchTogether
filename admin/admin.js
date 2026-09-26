@@ -684,7 +684,25 @@
     $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || (item.autoResolvedAt ? "自動監控" : "—");
     $("reportAutoResolve").textContent = item.autoResolvedAt
       ? "已自動處理 · " + formatDate(item.autoResolvedAt) + " · " + String(item.autoResolveReason || "穩定檢查通過")
-      : auto ? "監控中" : "不適用";
+      : auto || item.autoVerifyEnabled === true ? "監控中" : "不適用";
+    const verification = item.verification && typeof item.verification === "object" ? item.verification : {};
+    const verificationState = String(verification.state || item.verificationState || "monitoring");
+    const stateLabel = verificationState === "approved"
+      ? "已通過"
+      : verificationState === "passed"
+        ? "檢查通過，等待穩定確認"
+        : verificationState === "needs_review"
+          ? "需要人工確認"
+          : verificationState === "failed"
+            ? "檢查未通過"
+            : "監控中";
+    $("reportVerificationState").textContent = stateLabel;
+    const failed = []
+      .concat(Array.isArray(verification.localChecks) ? verification.localChecks.filter(x => x && x.ok !== true).map(x => x.name) : [])
+      .concat(Array.isArray(verification.deploymentChecks) ? verification.deploymentChecks.filter(x => x && x.ok !== true).map(x => x.name) : []);
+    $("reportVerificationSummary").textContent = verification.checkedAt
+      ? (failed.length ? "失敗：" + failed.slice(0,4).join("、") : "所有目前檢查通過 · " + String(verification.stableChecks || 0) + " 次穩定")
+      : "尚未開始";
     $("reportHint").textContent = account.email ? "回報帳號：" + account.email : "";
     $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
     $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
