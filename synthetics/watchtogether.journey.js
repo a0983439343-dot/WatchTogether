@@ -196,7 +196,7 @@ async function saveFinding(finding, context) {
 
   await ref.set(finalData);
 
-  const historyRef = db.ref("reportHistoryEvents").push();
+  const historyRef = db.ref("reportHistoryEvents/" + finding.reportId).push();
 
   await historyRef.set({
     reportId: String(finding.reportId).slice(0, 128),
