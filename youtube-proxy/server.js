@@ -287,11 +287,10 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: isRepairPhase ? 0.05 : 0.1,
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
-        maxOutputTokens: isRepairPhase ? 12000 : 700
+        maxOutputTokens: isRepairPhase ? 16000 : 1800
       }
     })
   });
@@ -310,9 +309,16 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
 
   const outputText = extractGeminiText(data);
   if (!outputText) {
-    const error = new Error("Gemini 沒有回傳分析結果");
+    const finishReasons = Array.isArray(data?.candidates)
+      ? data.candidates.map(candidate => candidate?.finishReason || "").filter(Boolean)
+      : [];
+    const error = new Error(
+      "Gemini 沒有回傳分析結果" +
+      (finishReasons.length ? "（finishReason=" + finishReasons.join(",") + "）" : "")
+    );
     error.httpStatus = 502;
     error.model = model;
+    error.details = finishReasons;
     throw error;
   }
 
