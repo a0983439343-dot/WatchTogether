@@ -626,7 +626,7 @@
       status:"open",
       source:"scanner",
       autoScanner:true,
-      autoVerifyEnabled:false,
+      autoVerifyEnabled:true,
       fingerprint,
       buildVersion:String(scanResult?.buildVersion || "").slice(0,100),
       occurrences:1,
