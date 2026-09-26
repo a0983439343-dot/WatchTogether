@@ -251,7 +251,7 @@ test("report history: owner and admin can append, non-owner cannot append, admin
     fingerprint: "abcdef1234567890"
   }));
 
-  const event = db(USER_UID, userToken).ref("reportHistoryEvents").push();
+  const event = db(USER_UID, userToken).ref("reportHistoryEvents/history-target").push();
   await assertSucceeds(event.set({
     reportId: "history-target",
     event: "created",
@@ -266,7 +266,7 @@ test("report history: owner and admin can append, non-owner cannot append, admin
     db(OTHER_UID, {
       email: "other@example.com",
       email_verified: true
-    }).ref("reportHistoryEvents").push().set({
+    }).ref("reportHistoryEvents/history-target").push().set({
       reportId: "history-target",
       event: "forged",
       createdAt: Date.now(),
@@ -277,7 +277,7 @@ test("report history: owner and admin can append, non-owner cannot append, admin
     })
   );
 
-  const adminEvent = db(ADMIN_UID, adminToken).ref("reportHistoryEvents").push();
+  const adminEvent = db(ADMIN_UID, adminToken).ref("reportHistoryEvents/history-target").push();
   await assertSucceeds(adminEvent.set({
     reportId: "history-target",
     event: "manual_status",
