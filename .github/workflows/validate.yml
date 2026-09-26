@@ -102,6 +102,65 @@ jobs:
           if (cacheVersion !== appVersion.replace('formal-', '')) throw new Error('Service worker cache version is not aligned.');
           console.log('Synchronized room control architecture checks OK');
           NODE
+      - name: Verify deployed Bug AI endpoint
+        env:
+          BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
+        run: |
+          node - <<'NODE'
+          const url = String(process.env.BUG_SERVICE_URL || "").replace(/\/+$/, "") + "/ai/analyze";
+          const payload = JSON.stringify({
+            phase: "detect",
+            report: {
+              category: "other",
+              details: "CI AI endpoint health check",
+              fingerprint: "ci-ai-endpoint-health",
+              buildVersion: "ci",
+              source: "ci",
+              occurrences: 1,
+              createdAt: Date.now()
+            },
+            evidence: {
+              liveErrorPresent: false,
+              deployment: {
+                source: "github-actions"
+              }
+            },
+            current: {
+              healthy: true,
+              page: "https://a0983439343-dot.github.io/WatchTogether/"
+            }
+          });
+
+          let last = "";
+          for (let attempt = 1; attempt <= 15; attempt += 1) {
+            try {
+              const response = await fetch(url, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: payload
+              });
+              const text = await response.text();
+              last = "HTTP " + response.status + " " + text.slice(0, 500);
+
+              if (response.status !== 502) {
+                let json = {};
+                try { json = JSON.parse(text); } catch (_) {}
+                if (response.ok && json.ok === true && json.analysis) {
+                  console.log("Bug AI endpoint verified:", last);
+                  process.exit(0);
+                }
+              }
+            } catch (error) {
+              last = String(error?.message || error);
+            }
+
+            console.log("Bug AI endpoint not ready, attempt " + attempt + "/15:", last);
+            await new Promise(resolve => setTimeout(resolve, 30_000));
+          }
+
+          throw new Error("Bug AI endpoint verification failed after 15 attempts: " + last);
+          NODE
+
       - name: Deploy validated Firebase Realtime Database Rules
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
