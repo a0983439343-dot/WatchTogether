@@ -2,10 +2,13 @@
   "name": "watchtogether",
   "private": true,
   "scripts": {
-    "test:rules": "firebase emulators:exec --only database \"node --test tests/database.rules.test.js\""
+    "test:rules": "firebase emulators:exec --only database \"node --test tests/database.rules.test.js\"",
+    "monitor:synthetics": "npx @elastic/synthetics synthetics/watchtogether.journey.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "latest",
-    "firebase-tools": "latest"
+    "firebase-tools": "latest",
+    "@elastic/synthetics": "1.26.3",
+    "firebase-admin": "14.5.0"
   }
 }
