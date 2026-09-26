@@ -301,8 +301,9 @@
     if (!reportId) return;
     const user = wt.auth.currentUser;
     if (!user) return;
-    const ref = wt.db.ref("reportHistory/" + reportId).push();
+    const ref = wt.db.ref("reportHistoryEvents").push();
     await ref.set({
+      reportId: String(reportId).slice(0, 128),
       event: String(event || "seen").slice(0, 40),
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       actorUid: String(user.uid || "").slice(0, 128),
