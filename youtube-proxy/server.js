@@ -379,7 +379,8 @@ async function handleVerify(req, res, requestUrl) {
     "chat",
     "account",
     "ui",
-    "other"
+    "other",
+    "all"
   ]);
   const normalizedCategory = allowedCategories.has(category) ? category : "other";
 
@@ -465,7 +466,20 @@ async function handleVerify(req, res, requestUrl) {
       ui: [
         verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "videoSearchBtn", "googleLoginBtn"])
       ],
-      other: []
+      other: [],
+      all: [
+        verifyContent(
+          "playback_adapter",
+          app,
+          ["buildYoutubeNativePlayer", "createYoutubeNativePlayer", "loadVimeoSdk", "loadDailymotionSdk", "loadTwitchSdk"],
+          ["new YT.Player", "youtube.com/iframe_api", "loadYoutubeIframeApi", "createYoutubeIframePlayer"]
+        ),
+        verifyContent("search_controls", app + "\n" + index, ["videoSearchInput", "videoSearchBtn"]),
+        verifyContent("room_control", app, ["requestPlaybackControl", "attachPlaybackControlRequestListener", "controlRequests"]),
+        verifyContent("chat_runtime", app + "\n" + enh, ["chat", "sendPrivateText"]),
+        verifyContent("auth_runtime", app + "\n" + enh, ["setupAuthListeners", "signInWithPopup", "loadProfile"]),
+        verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "videoSearchBtn", "googleLoginBtn"])
+      ]
     };
 
     (categoryChecks[normalizedCategory] || []).forEach(check => checks.push(check));
