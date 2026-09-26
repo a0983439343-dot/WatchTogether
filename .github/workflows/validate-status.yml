@@ -36,7 +36,8 @@ jobs:
             conclusion: process.env.CONCLUSION,
             headSha: process.env.HEAD_SHA,
             url: process.env.HTML_URL,
-            updatedAt: process.env.UPDATED_AT
+            updatedAt: process.env.UPDATED_AT,
+            rulesDeployed: process.env.CONCLUSION === "success"
           };
           fs.writeFileSync("ci-status/validate-latest.json", JSON.stringify(data, null, 2) + "\n");
           NODE
