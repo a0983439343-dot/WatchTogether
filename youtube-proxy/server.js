@@ -18,6 +18,7 @@ const SEARCH_TIMEOUT_MS = 18_000;
 const RATE_WINDOW_MS = 60_000;
 const SEARCH_LIMIT_PER_IP = 30;
 const STREAM_LIMIT_PER_IP = 120;
+const VERIFY_LIMIT_PER_IP = 20;
 const MAX_ACTIVE_SEARCHES = 3;
 const MAX_ACTIVE_STREAMS = 6;
 const YT_STREAM_USER_AGENT =
@@ -27,6 +28,10 @@ const YT_STREAM_REFERER = "https://www.youtube.com/";
 const YT_POT_PROVIDER_URL =
   process.env.YT_POT_PROVIDER_URL ||
   "http://127.0.0.1:4416";
+const VERIFY_SITE_URL =
+  String(process.env.WATCHTOGETHER_SITE_URL || "https://a0983439343-dot.github.io/WatchTogether")
+    .trim()
+    .replace(/\\/+$/, "");
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
@@ -311,6 +316,215 @@ async function analyzeBugWithGemini(input) {
     rootCause: cleanAiInput(analysis.rootCause, 900),
     suggestion: cleanAiInput(analysis.suggestion, 900)
   };
+}
+
+async function fetchVerifyText(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      cache: "no-store",
+      signal: controller.signal
+    });
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      text
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function verifyContent(name, text, required = [], forbidden = []) {
+  const source = String(text || "");
+  const missing = required.filter(token => !source.includes(token));
+  const foundForbidden = forbidden.filter(token => source.includes(token));
+  return {
+    name,
+    ok: missing.length === 0 && foundForbidden.length === 0,
+    missing,
+    forbidden: foundForbidden
+  };
+}
+
+async function handleVerify(req, res, requestUrl) {
+  if (req.method !== "GET") {
+    send(res, 405, JSON.stringify({
+      ok: false,
+      error: "method_not_allowed"
+    }));
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "verify", VERIFY_LIMIT_PER_IP)) {
+    send(res, 429, JSON.stringify({
+      ok: false,
+      error: "verification_rate_limited"
+    }));
+    return;
+  }
+
+  const category = String(requestUrl.searchParams.get("category") || "other").trim().toLowerCase();
+  const allowedCategories = new Set([
+    "playback",
+    "search",
+    "room",
+    "chat",
+    "account",
+    "ui",
+    "other"
+  ]);
+  const normalizedCategory = allowedCategories.has(category) ? category : "other";
+
+  const checks = [];
+  const urls = {
+    page: VERIFY_SITE_URL + "/",
+    index: VERIFY_SITE_URL + "/index.html",
+    app: VERIFY_SITE_URL + "/src/js/app.js",
+    enhancements: VERIFY_SITE_URL + "/src/js/enhancements.js",
+    bugMonitor: VERIFY_SITE_URL + "/src/js/bug-monitor.js",
+    rules: VERIFY_SITE_URL + "/config/database.rules.json"
+  };
+
+  try {
+    const results = await Promise.all(
+      Object.entries(urls).map(async ([name, url]) => {
+        try {
+          return [name, url, await fetchVerifyText(url)];
+        } catch (error) {
+          return [name, url, {
+            ok: false,
+            status: 0,
+            text: "",
+            error: String(error?.message || "fetch_failed").slice(0, 300)
+          }];
+        }
+      })
+    );
+
+    const loaded = Object.fromEntries(results.map(([name, url, result]) => [
+      name,
+      {url, ...result}
+    ]));
+
+    for (const [name, result] of Object.entries(loaded)) {
+      checks.push({
+        name: "asset_" + name,
+        ok: result.ok,
+        status: result.status,
+        error: result.error || ""
+      });
+    }
+
+    const page = loaded.page?.text || "";
+    const index = loaded.index?.text || "";
+    const app = loaded.app?.text || "";
+    const enh = loaded.enhancements?.text || "";
+    const bugMonitor = loaded.bugMonitor?.text || "";
+    const rules = loaded.rules?.text || "";
+
+    const scriptCheck = verifyContent(
+      "required_frontend_scripts",
+      page + "\n" + index,
+      [
+        "src/js/app.js",
+        "src/js/enhancements.js",
+        "src/js/bug-monitor.js"
+      ]
+    );
+    checks.push(scriptCheck);
+
+    const categoryChecks = {
+      playback: [
+        verifyContent(
+          "playback_adapter",
+          app,
+          ["buildYoutubeNativePlayer", "createYoutubeNativePlayer", "loadVimeoSdk", "loadDailymotionSdk", "loadTwitchSdk"],
+          ["new YT.Player", "youtube.com/iframe_api", "loadYoutubeIframeApi", "createYoutubeIframePlayer"]
+        )
+      ],
+      search: [
+        verifyContent("search_controls", app + "\n" + index, ["videoSearchInput", "videoSearchBtn"])
+      ],
+      room: [
+        verifyContent("room_control", app, ["requestPlaybackControl", "attachPlaybackControlRequestListener", "controlRequests"])
+      ],
+      chat: [
+        verifyContent("chat_runtime", app + "\n" + enh, ["chat", "sendPrivateText"])
+      ],
+      account: [
+        verifyContent("auth_runtime", app + "\n" + enh, ["setupAuthListeners", "signInWithPopup", "loadProfile"])
+      ],
+      ui: [
+        verifyContent("ui_shell", page + "\n" + index, ["videoSearchInput", "videoSearchBtn", "googleLoginBtn"])
+      ],
+      other: []
+    };
+
+    (categoryChecks[normalizedCategory] || []).forEach(check => checks.push(check));
+
+    checks.push(
+      verifyContent(
+        "bug_monitor_runtime",
+        bugMonitor,
+        ["WT_BUG_MONITOR", "verifyReport", "stableCheck", "recordError"]
+      )
+    );
+
+    let releaseVersion = "";
+    const versionMatch = page.match(/app\.js\?v=([^"'&]+)/);
+    if (versionMatch) releaseVersion = versionMatch[1];
+
+    let rulesParsed = false;
+    try {
+      JSON.parse(rules);
+      rulesParsed = true;
+    } catch (_) {}
+
+    checks.push({
+      name: "database_rules_json",
+      ok: rulesParsed
+    });
+
+    if (normalizedCategory === "room") {
+      checks.push({
+        name: "database_rules_controlRequests",
+        ok: rules.includes('"controlRequests"')
+      });
+    }
+    if (normalizedCategory !== "other") {
+      checks.push({
+        name: "database_rules_reports",
+        ok: rules.includes('"reports"') && rules.includes('"reportHistory"')
+      });
+    }
+
+    const passed = checks.every(check => check.ok === true);
+
+    send(res, passed ? 200 : 503, JSON.stringify({
+      ok: passed,
+      status: passed ? "passed" : "failed",
+      category: normalizedCategory,
+      site: VERIFY_SITE_URL,
+      buildVersion: releaseVersion || "unknown",
+      checkedAt: new Date().toISOString(),
+      checks
+    }));
+  } catch (error) {
+    send(res, 503, JSON.stringify({
+      ok: false,
+      status: "failed",
+      category: normalizedCategory,
+      site: VERIFY_SITE_URL,
+      error: String(error?.message || "verification_failed").slice(0, 500),
+      checks
+    }));
+  }
 }
 
 async function handleAiAnalyze(req, res) {
@@ -1277,6 +1491,11 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/ai/analyze") {
     handleAiAnalyze(req, res);
+    return;
+  }
+
+  if (url.pathname === "/verify") {
+    handleVerify(req, res, url);
     return;
   }
 
