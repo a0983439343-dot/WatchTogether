@@ -8,10 +8,13 @@ const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const cache = new Map();
 const streamInflight = new Map();
 const searchInflight = new Map();
+const aiCache = new Map();
+const aiInflight = new Map();
 const CACHE_TTL_MS = 600_000;
 const SEARCH_CACHE_TTL_MS = 0;
 const MAX_CACHE_ENTRIES = 500;
 const CACHE_CLEANUP_INTERVAL_MS = 60_000;
+const AI_CACHE_TTL_MS = 120_000;
 const MAX_SEARCH_RESULTS = 25;
 const MAX_SEARCH_BATCH = 25;
 const SEARCH_TIMEOUT_MS = 18_000;
@@ -102,7 +105,15 @@ function cleanupCache() {
 }
 
 setInterval(
-  cleanupCache,
+  () => {
+    cleanupCache();
+    const now = Date.now();
+    for (const [key, value] of aiCache) {
+      if (!value || now - Number(value.createdAt || 0) >= AI_CACHE_TTL_MS) {
+        aiCache.delete(key);
+      }
+    }
+  },
   CACHE_CLEANUP_INTERVAL_MS
 ).unref();
 
@@ -290,7 +301,7 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
-        maxOutputTokens: isRepairPhase ? 16000 : 1800
+        maxOutputTokens: isRepairPhase ? 32768 : 4096
       }
     })
   });
@@ -332,17 +343,7 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
   }
 
   try {
-    return JSON.parse(parsedText);
-  } catch (_) {
-    const error = new Error("Gemini 回傳不是有效 JSON");
-    error.httpStatus = 502;
-    error.model = model;
-    error.rawOutput = parsedText.slice(0, 600);
-    throw error;
-  }
-}
-
-async function analyzeBugWithGemini(input) {
+    return JSON.paasync function analyzeBugWithGemini(input) {
   const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY 未設定");
@@ -452,10 +453,13 @@ async function analyzeBugWithGemini(input) {
         }))
       : [];
     return {
-      repairStatus: analysis.repairStatus === "repairable" ? "repairable" : "not_repairable",
-      confidence,
-      summary: cleanAiInput(analysis.summary, 1400),
-      patches
+      analysis: {
+        repairStatus: analysis.repairStatus === "repairable" ? "repairable" : "not_repairable",
+        confidence,
+        summary: cleanAiInput(analysis.summary, 1400),
+        patches
+      },
+      model: candidateModel
     };
   }
 
@@ -465,16 +469,25 @@ async function analyzeBugWithGemini(input) {
   );
 
   return {
-    status: [
-      "confirmed",
-      "still_present",
-      "resolved_candidate",
-      "inconclusive"
-    ].includes(analysis.status)
-      ? analysis.status
-      : "inconclusive",
-    confidence,
-    title: cleanAiInput(analysis.title, 220),
+    analysis: {
+      status: [
+        "confirmed",
+        "still_present",
+        "resolved_candidate",
+        "inconclusive"
+      ].includes(analysis.status)
+        ? analysis.status
+        : "inconclusive",
+      confidence,
+      title: cleanAiInput(analysis.title, 220),
+      summary: cleanAiInput(analysis.summary, 900),
+      rootCause: cleanAiInput(analysis.rootCause, 900),
+      suggestion: cleanAiInput(analysis.suggestion, 900)
+    },
+    model: candidateModel
+  };
+}
+ title: cleanAiInput(analysis.title, 220),
     summary: cleanAiInput(analysis.summary, 900),
     rootCause: cleanAiInput(analysis.rootCause, 900),
     suggestion: cleanAiInput(analysis.suggestion, 900)
@@ -704,6 +717,44 @@ async function handleVerify(req, res, requestUrl) {
   }
 }
 
+function aiCacheKey(input) {
+  return JSON.stringify({
+    phase: String(input?.phase || ""),
+    fingerprint: String(input?.report?.fingerprint || ""),
+    buildVersion: String(input?.report?.buildVersion || ""),
+    occurrences: Number(input?.report?.occurrences || 0) || 0
+  });
+}
+
+function degradedAiResult(input, error) {
+  const phase = String(input?.phase || "");
+  const reason = String(error?.message || "AI provider unavailable").slice(0, 300);
+  if (phase === "repair") {
+    return {
+      analysis: {
+        repairStatus: "not_repairable",
+        confidence: 0,
+        summary: "AI 目前暫不可用，自動修復已安全停止：" + reason,
+        patches: []
+      },
+      model: String(error?.model || getAiModel(phase)),
+      degraded: true
+    };
+  }
+  return {
+    analysis: {
+      status: "inconclusive",
+      confidence: 0,
+      title: "AI 暫不可用",
+      summary: "Gemini 暫時無法完成分析：" + reason,
+      rootCause: "",
+      suggestion: "稍後重新檢查；在 AI 不可用時不會自動宣稱問題已修復。"
+    },
+    model: String(error?.model || getAiModel(phase)),
+    degraded: true
+  };
+}
+
 async function handleAiAnalyze(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({
@@ -748,19 +799,81 @@ async function handleAiAnalyze(req, res) {
     current: body?.current || {}
   };
 
+  const cacheKey = aiCacheKey(input);
+  if (input.phase !== "repair") {
+    const cached = aiCache.get(cacheKey);
+    if (cached && Date.now() - cached.createdAt < AI_CACHE_TTL_MS) {
+      send(res, 200, JSON.stringify({
+        ok: true,
+        cached: true,
+        model: cached.model,
+        analysis: cached.analysis
+      }));
+      return;
+    }
+  }
+
+  const inflightKey = input.phase + ":" + cacheKey;
+  const existing = aiInflight.get(inflightKey);
+  if (existing) {
+    try {
+      const shared = await existing;
+      send(res, 200, JSON.stringify({
+        ok: true,
+        shared: true,
+        degraded: Boolean(shared.degraded),
+        model: shared.model,
+        analysis: shared.analysis
+      }));
+    } catch (error) {
+      const degraded = degradedAiResult(input, error);
+      send(res, 200, JSON.stringify({
+        ok: true,
+        degraded: true,
+        model: degraded.model,
+        analysis: degraded.analysis
+      }));
+    }
+    return;
+  }
+
+  const work = (async () => {
+    try {
+      return await analyzeBugWithGemini(input);
+    } catch (error) {
+      console.error("[ai-analyze]", error?.message || error);
+      throw error;
+    }
+  })();
+
+  aiInflight.set(inflightKey, work);
   try {
-    const analysis = await analyzeBugWithGemini(input);
+    const result = await work;
+    if (input.phase !== "repair") {
+      aiCache.set(cacheKey, {
+        createdAt: Date.now(),
+        model: result.model,
+        analysis: result.analysis
+      });
+    }
     send(res, 200, JSON.stringify({
       ok: true,
-      model: getAiModel(input.phase),
-      analysis
+      degraded: false,
+      model: result.model,
+      analysis: result.analysis
     }));
   } catch (error) {
-    console.error("[ai-analyze]", error?.message || error);
-    send(res, 502, JSON.stringify({
-      ok: false,
-      error: String(error?.message || "AI 分析失敗").slice(0, 500)
+    const degraded = degradedAiResult(input, error);
+    send(res, 200, JSON.stringify({
+      ok: true,
+      degraded: true,
+      model: degraded.model,
+      analysis: degraded.analysis
     }));
+  } finally {
+    if (aiInflight.get(inflightKey) === work) {
+      aiInflight.delete(inflightKey);
+    }
   }
 }
 
