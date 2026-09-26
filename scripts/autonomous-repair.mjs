@@ -245,11 +245,13 @@ function normalizePatch(patch, allow) {
 
 async function applyPatches(patches, allow) {
   const changed = new Map();
+  const original = new Map();
   const normalized = patches.map(patch => normalizePatch(patch, allow));
   if (!normalized.length || normalized.length > 8) throw new Error("AI 沒有提供有效 patch 或 patch 數量過多");
 
   for (const patch of normalized) {
     const before = changed.has(patch.file) ? changed.get(patch.file) : await readRepoFile(patch.file);
+    if (!original.has(patch.file)) original.set(patch.file, before);
     const count = before.split(patch.find).length - 1;
     if (count !== 1) throw new Error("find 無法唯一匹配：" + patch.file + "，匹配數：" + count);
     const after = before.replace(patch.find, patch.replace);
@@ -258,11 +260,22 @@ async function applyPatches(patches, allow) {
     changed.set(patch.file, after);
   }
 
+  if (changed.has("config/database.rules.json")) {
+    const before = JSON.parse(original.get("config/database.rules.json"));
+    const after = JSON.parse(changed.get("config/database.rules.json"));
+    if (after?.rules?.[".read"] === true || after?.rules?.[".write"] === true) {
+      throw new Error("拒絕自動開放 Firebase 根節點公開讀寫");
+    }
+    if (after?.rules?.["reports"]?.[".write"] === true && before?.rules?.["reports"]?.[".write"] !== true) {
+      throw new Error("拒絕自動將 reports 設為公開寫入");
+    }
+  }
+
   for (const [file, content] of changed) {
     await fs.writeFile(path.join(ROOT, file), content, "utf8");
   }
 
-  return {changed, normalized};
+  return {changed, normalized, original};
 }
 
 async function validateChangedFiles(changed) {
@@ -342,6 +355,41 @@ async function waitForFrontendDeployment(changed) {
     await sleep(30_000);
   }
   return false;
+}
+
+async function firebaseRulesCredentialsFile() {
+  const raw = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "").trim();
+  if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON 未設定");
+  const credentials = raw.startsWith("{")
+    ? JSON.parse(raw)
+    : JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+  const file = path.join("/tmp", "watchtogether-firebase-service-account.json");
+  await fs.writeFile(file, JSON.stringify(credentials), {encoding:"utf8", mode:0o600});
+  return file;
+}
+
+async function deployFirebaseRules() {
+  const credentialsFile = await firebaseRulesCredentialsFile();
+  const firebaseBin = path.join(
+    ROOT,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "firebase.cmd" : "firebase"
+  );
+  try {
+    const result = await execFileAsync(
+      firebaseBin,
+      ["deploy", "--only", "database", "--project", "watchtogether-3f4f9", "--json"],
+      {
+        cwd: ROOT,
+        env: {...process.env, GOOGLE_APPLICATION_CREDENTIALS: credentialsFile},
+        maxBuffer: 2_000_000
+      }
+    );
+    return String(result.stdout || "").slice(-4000);
+  } finally {
+    await fs.rm(credentialsFile, {force:true}).catch(() => {});
+  }
 }
 
 async function stableRecheck(report, category, changed, commitSha) {
@@ -452,6 +500,25 @@ async function repairOne(database, reportId, report) {
   }
 
   const commit = await commitAndPush([...applied.changed.keys()]);
+  if (applied.changed.has("config/database.rules.json")) {
+    try {
+      await deployFirebaseRules();
+      await writeHistory(database, reportId, "firebase_rules_deployed", "Firebase Rules 已通過測試並自動部署");
+    } catch (error) {
+      const reverted = await revertCommit(commit.sha);
+      if (reverted) {
+        await deployFirebaseRules().catch(() => {});
+      }
+      await updateReport(database, reportId, {
+        status: "in_progress",
+        repairState: reverted ? "firebase_deploy_failed_reverted" : "firebase_deploy_failed_rollback_failed",
+        repairError: clean(error?.stderr || error?.message || error, 1200),
+        repairFinishedAt: Date.now()
+      });
+      await writeHistory(database, reportId, reverted ? "firebase_deploy_failed" : "firebase_deploy_rollback_failed", reverted ? "Firebase Rules 部署失敗，程式碼已自動回滾" : "Firebase Rules 部署失敗且自動回滾失敗");
+      return false;
+    }
+  }
   await updateReport(database, reportId, {
     repairState: "committed",
     repairCommit: commit.sha,
@@ -491,6 +558,9 @@ async function repairOne(database, reportId, report) {
   }
 
   const reverted = await revertCommit(commit.sha);
+  if (reverted && applied.changed.has("config/database.rules.json")) {
+    await deployFirebaseRules().catch(() => {});
+  }
   await updateReport(database, reportId, {
     status: "in_progress",
     repairState: reverted ? "reverted_after_failed_recheck" : "recheck_failed_rollback_failed",
