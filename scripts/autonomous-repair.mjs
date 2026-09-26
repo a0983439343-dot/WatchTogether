@@ -220,11 +220,11 @@ async function requestRepair(report, verification, files) {
     body: JSON.stringify(payload),
     timeoutMs: 60_000
   });
-  if (!result.ok || !result.json?.ok || !result.json?.repair) {
+  if (!result.ok || !result.json?.ok || !result.json?.analysis) {
     throw new Error(clean(result.json?.error || "AI 自動修復分析失敗", 900));
   }
   return {
-    ...result.json.repair,
+    ...result.json.analysis,
     model: result.json.model || ""
   };
 }
