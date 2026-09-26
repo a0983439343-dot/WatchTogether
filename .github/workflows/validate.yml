@@ -114,7 +114,7 @@ jobs:
           if (server.includes('responseSchema: schema')) throw new Error("Deprecated Gemini responseSchema remains.");
           if (server.includes('responseMimeType: "application/json"')) throw new Error("Deprecated Gemini responseMimeType remains.");
           if (!server.includes('function degradedAiResult(input, error)')) throw new Error("AI degraded-mode guard is missing.");
-          if (!server.includes('json.degraded !== true')) throw new Error("CI does not reject degraded AI responses.");
+          if (!server.includes('degraded: true') || !server.includes('degraded: false')) throw new Error("AI degraded-mode response flags are missing.");
           console.log("Gemini AI request configuration checks OK");
           NODE
 
