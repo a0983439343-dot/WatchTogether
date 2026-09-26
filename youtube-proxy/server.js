@@ -143,6 +143,19 @@ function getAiModel(phase = "") {
   return phase === "repair" ? repairModel : normalModel;
 }
 
+function getAiModelFallbacks(phase = "") {
+  const primary = getAiModel(phase);
+  const freeFallbacks = [
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite"
+  ];
+  return Array.from(new Set([primary, ...freeFallbacks].filter(Boolean)));
+}
+
 function aiAllowedOrigin(req) {
   const origin = String(req.headers.origin || "").trim();
   if (!origin) return true;
@@ -396,21 +409,7 @@ async function analyzeBugWithGemini(input) {
         JSON.stringify(input, null, 2)
       ].join("\n");
 
-  const models = Array.from(new Set([
-    model,
-    ...(isRepairPhase
-      ? [
-          "gemini-3.8-flash",
-          "gemini-3.7-flash",
-          "gemini-3.6-flash",
-          "gemini-3.5-flash-lite"
-        ]
-      : [
-          "gemini-3.7-flash",
-          "gemini-3.6-flash",
-          "gemini-3.5-flash-lite"
-        ])
-  ].filter(Boolean)));
+  const models = getAiModelFallbacks(input.phase);
 
   let analysis = null;
   let usedModel = model;
@@ -439,7 +438,11 @@ async function analyzeBugWithGemini(input) {
             String(error?.message || "")
           );
 
-        if (!retryable || attempt === 1) break;
+        if (!retryable) break;
+        if (/quota|rate limit|resource exhausted|exceeded your current quota/i.test(String(error?.message || ""))) {
+          break;
+        }
+        if (attempt === 1) break;
         await new Promise(resolve => setTimeout(resolve, 1200));
       }
     }
