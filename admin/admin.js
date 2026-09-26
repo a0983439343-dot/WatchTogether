@@ -556,8 +556,8 @@
       })
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result?.ok || !result?.analysis) {
-      throw new Error(String(result?.error || "AI 分析失敗"));
+    if (!response.ok || !result?.ok || !result?.analysis || result?.degraded === true) {
+      throw new Error(String(result?.error || result?.analysis?.summary || "AI 分析目前不可用"));
     }
     return result;
   }
@@ -640,7 +640,7 @@
     return id;
   }
 
-  async function scanUserReports(limit = 5) {
+  const ADMIN_AI_REFRESH_MS = 10 * 60 * 1000;\n\n  async function scanUserReports(limit = 5) {
     const entries = Object.entries(reports || {})
       .filter(([,item]) => item && (item.source === "manual" || item.source === "auto") && normalizeReportStatus(item.status) !== "resolved")
       .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0))
@@ -649,8 +649,13 @@
     for (const [id,item] of entries) {
       try {
         const verification = await runBugServiceVerify(String(item.category || "other"));
-        const result = await analyzeReportOnAdmin(id,item,verification,"admin_review");
-        const analysis = result?.analysis || null;
+        let result = null;
+        let analysis = null;
+        const lastAiAt = Number(item.aiCheckedAt || 0);
+        if (!lastAiAt || Date.now() - lastAiAt >= ADMIN_AI_REFRESH_MS) {
+          result = await analyzeReportOnAdmin(id,item,verification,"admin_review");
+          analysis = result?.analysis || null;
+        }
         const verificationData = {
           state:verification.ok ? "passed" : "failed",
           checkedAt:firebase.database.ServerValue.TIMESTAMP,
@@ -663,14 +668,17 @@
         const updates = {
           verification:verificationData,
           verificationState:verification.ok ? "passed" : "failed",
-          aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
-          aiStatus:String(analysis?.status || "inconclusive"),
-          aiConfidence:Number(analysis?.confidence || 0),
-          aiTitle:String(analysis?.title || "").slice(0,220),
-          aiSummary:String(analysis?.summary || "").slice(0,900),
-          aiRootCause:String(analysis?.rootCause || "").slice(0,900),
-          aiSuggestion:String(analysis?.suggestion || "").slice(0,900),
-          aiModel:String(result?.model || "").slice(0,100)
+          ...(result ? {
+            aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
+            aiStatus:String(analysis?.status || "inconclusive"),
+            aiConfidence:Number(analysis?.confidence || 0),
+            aiTitle:String(analysis?.title || "").slice(0,220),
+            aiSummary:String(analysis?.summary || "").slice(0,900),
+            aiRootCause:String(analysis?.rootCause || "").slice(0,900),
+            aiSuggestion:String(analysis?.suggestion || "").slice(0,900),
+            aiModel:String(result?.model || "").slice(0,100),
+            aiError:null
+          } : {})
         };
         await db.ref("reports/" + id).update(updates);
       } catch (error) {
@@ -700,6 +708,8 @@
         if (id) {
           try {
             const item = (await db.ref("reports/" + id).once("value")).val() || reports[id] || {};
+            const lastAiAt = Number(item?.aiCheckedAt || 0);
+            if (lastAiAt && Date.now() - lastAiAt < ADMIN_AI_REFRESH_MS) continue;
             const ai = await analyzeReportOnAdmin(id,item,result,"scanner");
             if (ai?.analysis) {
               await db.ref("reports/" + id).update({
