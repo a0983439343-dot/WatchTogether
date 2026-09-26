@@ -18,6 +18,7 @@
   let reports = {};
   let auditLogs = {};
   let profiles = {};
+  let reportsLoadError = "";
   let accountsRef = null;
   let reportsRef = null;
   let auditLogsRef = null;
@@ -510,14 +511,24 @@
   async function loadReports() {
     if (!currentHasAdminAccess) {
       reports = {};
+      reportsLoadError = "";
       renderReports();
       updateStats();
       return;
     }
-    const snapshot = await db.ref("reports").once("value");
-    reports = snapshot.val() || {};
-    renderReports();
-    updateStats();
+    try {
+      const snapshot = await db.ref("reports").once("value");
+      reports = snapshot.val() || {};
+      reportsLoadError = "";
+      renderReports();
+      updateStats();
+    } catch (error) {
+      reports = {};
+      reportsLoadError = String(error?.message || "問題回報資料讀取失敗");
+      renderReports();
+      updateStats();
+      throw error;
+    }
   }
 
   function startReportsListener() {
@@ -527,10 +538,14 @@
     reportsRef.on("value", snapshot => {
       if (!currentHasAdminAccess) return;
       reports = snapshot.val() || {};
+      reportsLoadError = "";
       renderReports();
       updateStats();
     }, error => {
+      reportsLoadError = String(error?.message || "問題回報即時資料讀取失敗");
       console.error("reports realtime listener failed", error);
+      renderReports();
+      updateStats();
     });
   }
 
@@ -558,6 +573,20 @@
       .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0));
 
     $("reportCount").textContent = rows.length + " 筆";
+    if (reportsLoadError && !Object.keys(reports || {}).length) {
+      $("reportsBody").innerHTML =
+        '<tr><td colspan="7"><div class="report-load-error"><strong>問題回報資料目前無法載入</strong><span>' +
+        escapeHtml(reportsLoadError) +
+        '</span><button class="btn primary" type="button" id="reportRetryInline">重新載入</button></div></td></tr>';
+      $("reportRetryInline")?.addEventListener("click", () => {
+        loadReports().then(() => toast("問題回報已重新載入")).catch(error => {
+          console.error(error);
+          toast(error?.message || "問題回報載入失敗");
+        });
+      });
+      return;
+    }
+
     $("reportsBody").innerHTML = rows.length
       ? rows.map(([id,item]) => {
           const uid = String(item.uid || "");
@@ -1050,6 +1079,8 @@
      $("accountStatusFilter")?.addEventListener("change", renderAccounts);
     $("roomSearch")?.addEventListener("input", renderRooms);
     $("whitelistSearch")?.addEventListener("input", renderWhitelist);
+    $("reportSearch")?.addEventListener("input", renderReports);
+    $("reportStatusFilter")?.addEventListener("change", renderReports);
 
     $("addWhitelistBtn")?.addEventListener("click", () => addWhitelist().catch(error => { console.error(error); toast("加入白名單失敗"); }));
     $("whitelistEmail")?.addEventListener("keydown", event => {
@@ -1066,7 +1097,10 @@
 
     $("roomsRefreshBtn")?.addEventListener("click", () => loadRooms().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
-    $("reportsRefreshBtn")?.addEventListener("click", () => loadReports().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
+    $("reportsRefreshBtn")?.addEventListener("click", () => loadReports().then(() => toast("問題回報已重新整理")).catch(error => {
+      console.error(error);
+      toast(error?.message || "問題回報重新整理失敗");
+    }));
     $("reportsExportBtn")?.addEventListener("click", exportReports);
     $("auditSearch")?.addEventListener("input", renderAuditLogs);
     $("auditActionFilter")?.addEventListener("change", renderAuditLogs);
