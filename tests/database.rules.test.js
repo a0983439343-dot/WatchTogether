@@ -240,7 +240,7 @@ test("reports: automatic bug records can be reopened and updated only by their o
   );
 });
 
-test("report history: automatic owner and admin can append, admin can delete", async () => {
+test("report history: owner and admin can append, non-owner cannot append, admin can delete", async () => {
   const ref = db(USER_UID, userToken).ref("reports/history-target");
   await assertSucceeds(ref.set({
     uid: USER_UID,
@@ -251,8 +251,9 @@ test("report history: automatic owner and admin can append, admin can delete", a
     fingerprint: "abcdef1234567890"
   }));
 
-  const event = db(USER_UID, userToken).ref("reportHistory/history-target").push();
+  const event = db(USER_UID, userToken).ref("reportHistoryEvents").push();
   await assertSucceeds(event.set({
+    reportId: "history-target",
     event: "created",
     createdAt: Date.now(),
     actorUid: USER_UID,
@@ -261,22 +262,36 @@ test("report history: automatic owner and admin can append, admin can delete", a
     details: "created"
   }));
 
-  await assertSucceeds(
-    db(ADMIN_UID, adminToken).ref("reportHistory/history-target").push().set({
-      event: "manual_status",
+  await assertFails(
+    db(OTHER_UID, {
+      email: "other@example.com",
+      email_verified: true
+    }).ref("reportHistoryEvents").push().set({
+      reportId: "history-target",
+      event: "forged",
       createdAt: Date.now(),
-      actorUid: ADMIN_UID,
-      actorEmail: "admin@example.com",
-      source: "admin",
-      details: "resolved"
+      actorUid: OTHER_UID,
+      actorEmail: "other@example.com",
+      source: "watchdog",
+      details: "forged"
     })
   );
 
+  const adminEvent = db(ADMIN_UID, adminToken).ref("reportHistoryEvents").push();
+  await assertSucceeds(adminEvent.set({
+    reportId: "history-target",
+    event: "manual_status",
+    createdAt: Date.now(),
+    actorUid: ADMIN_UID,
+    actorEmail: "admin@example.com",
+    source: "admin",
+    details: "resolved"
+  }));
+
   await assertSucceeds(
-    db(ADMIN_UID, adminToken).ref("reportHistory/history-target").remove()
+    adminEvent.remove()
   );
 });
-
 test("reports: normal users cannot read the collection", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("reports").once("value")
