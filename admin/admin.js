@@ -969,8 +969,13 @@
     if (!body) return;
     body.innerHTML = '<div class="muted">載入處理紀錄…</div>';
     try {
-      const snapshot = await db.ref("reportHistory/" + id).once("value");
-      reportHistory[id] = snapshot.val() || {};
+      const snapshot = await db.ref("reportHistoryEvents").orderByChild("reportId").equalTo(id).once("value");
+      const legacySnapshot = await db.ref("reportHistory/" + id).once("value");
+      const merged = {
+        ...(legacySnapshot.val() || {}),
+        ...(snapshot.val() || {})
+      };
+      reportHistory[id] = merged;
       const rows = Object.values(reportHistory[id]).sort((a,b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
       body.innerHTML = rows.length
         ? rows.map(entry => '<div class="report-history-item"><div class="report-history-meta"><strong>' +
@@ -1125,10 +1130,15 @@
       return;
     }
     if (!window.confirm("確定刪除這筆問題回報？刪除後無法復原。")) return;
-    await db.ref().update({
+    const historySnapshot = await db.ref("reportHistoryEvents").orderByChild("reportId").equalTo(id).once("value");
+    const updates = {
       ["reports/" + id]: null,
       ["reportHistory/" + id]: null
+    };
+    historySnapshot.forEach(child => {
+      updates["reportHistoryEvents/" + child.key] = null;
     });
+    await db.ref().update(updates);
     await loadReports();
     closeReportModal();
     void writeAuditLog("report.delete", item.uid, item.uid, "刪除回報 " + id);
