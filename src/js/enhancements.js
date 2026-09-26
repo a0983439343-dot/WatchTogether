@@ -1239,6 +1239,12 @@ async function sendReport() {
       roomId:roomIdFromUrl(),
       page:location.href.slice(0,1000),
       userAgent:navigator.userAgent.slice(0,500),
+      status:"open",
+      source:"manual",
+      autoDetected:false,
+      occurrences:1,
+      firstSeenAt:wt.serverTs(),
+      lastSeenAt:wt.serverTs(),
       createdAt:wt.serverTs()
     });
     $("wtReportDetails").value = "";
