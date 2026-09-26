@@ -30,7 +30,7 @@
       const config = window.WATCHTOGETHER_CONFIG || {};
       const explicit = String(config.aiBugDetectorUrl || "").trim();
       if (explicit) return explicit;
-      const proxy = String(config.youtubeStreamProxyUrl || config.youtubeSearchProxyUrl || "").trim().replace(//+$/, "");
+      const proxy = String(config.youtubeStreamProxyUrl || config.youtubeSearchProxyUrl || "").trim().replace(/\/+$/, "");
       return proxy ? proxy + "/ai/analyze" : "";
     } catch (_) {
       return "";
@@ -83,7 +83,7 @@
           page:reportLocation(),
           roomId:typeof wt.roomIdFromUrl === "function" ? String(wt.roomIdFromUrl() || "").slice(0,20) : "",
           buildVersion:BUILD_VERSION,
-          recentSameFingerprintSeen:Boolean(localState.lastEventAt && now - Number(state.lastEventAt) < AUTO_RESOLVE_AFTER_MS),
+          recentSameFingerprintSeen:Boolean(localState.lastEventAt && now - Number(localState.lastEventAt) < AUTO_RESOLVE_AFTER_MS),
           health:collectHealthEvidence()
         }
       };
