@@ -12,12 +12,16 @@ const SITE_URL = String(process.env.WATCHTOGETHER_SITE_URL || "https://a09834393
 const BUG_SERVICE_URL = String(process.env.WATCHTOGETHER_BUG_SERVICE_URL || "https://watchtogether-youtube-proxy-2026.onrender.com").trim().replace(/\/+$/, "");
 const FIREBASE_DATABASE_URL = String(process.env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app").trim();
 const REPOSITORY = String(process.env.GITHUB_REPOSITORY || "").trim();
-const MAX_REPORTS = 1;
+const MAX_REPORTS = Math.max(
+  1,
+  Math.min(5, Number(process.env.AUTONOMOUS_REPAIR_MAX_REPORTS || 3))
+);
 const MAX_ATTEMPTS = 3;
 const MIN_AUTO_CONFIDENCE = 0.82;
 const MIN_REPAIR_CONFIDENCE = 0.86;
 const STABLE_CHECK_GAP_MS = 20_000;
 const DEPLOY_WAIT_MS = 8 * 60_000;
+const MAX_BATCH_DURATION_MS = 50 * 60_000;
 
 if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON 未設定");
 if (!REPOSITORY) throw new Error("GITHUB_REPOSITORY 未設定");
@@ -115,7 +119,7 @@ async function acquireLock(database) {
   const ref = database.ref("system/autonomousRepairLock");
   const owner = randomUUID();
   const now = Date.now();
-  const expiresAt = now + 30 * 60_000;
+  const expiresAt = now + 65 * 60_000;
   let committed = false;
   const result = await ref.transaction(current => {
     if (current && Number(current.expiresAt || 0) > now) return;
@@ -490,7 +494,7 @@ async function revertCommit(sha) {
   }
 }
 
-async function repairOne(database, reportId, report) {
+async function repairOne(database, reportId, report, batchId, batchPosition, batchTotal) {
   const category = normalizeCategory(report.category);
   const allow = allowedPaths(category);
   const beforeVerification = await verify(category);
@@ -499,12 +503,20 @@ async function repairOne(database, reportId, report) {
   await updateReport(database, reportId, {
     status: "in_progress",
     repairState: "analyzing",
+    repairBatchId: batchId,
+    repairBatchPosition: batchPosition,
+    repairBatchTotal: batchTotal,
     repairAttempts: Number(report.repairAttempts || 0) + 1,
     repairLastAttemptAt: Date.now(),
     repairStartedAt: Date.now(),
     repairActor: "github-actions-autorepair"
   });
-  await writeHistory(database, reportId, "repair_started", "自動修復引擎開始分析");
+  await writeHistory(
+    database,
+    reportId,
+    "repair_started",
+    "自動修復引擎開始分析 · 批次 " + batchPosition + "/" + batchTotal + " · " + batchId
+  );
 
   const files = {};
   for (const file of allow) {
@@ -615,6 +627,8 @@ async function repairOne(database, reportId, report) {
 
 async function main() {
   const database = db();
+  const batchId = randomUUID();
+  const batchStartedAt = Date.now();
   const lock = await acquireLock(database);
   if (!lock) {
     console.log("已有其他自動修復工作執行中");
@@ -625,12 +639,39 @@ async function main() {
     const snapshot = await database.ref("reports").once("value");
     const reports = snapshot.val() || {};
     const candidates = candidateReports(reports);
-    console.log("自動修復候選：" + candidates.length);
+    console.log(
+      "自動修復批次 " + batchId + " · 候選 " + candidates.length + " · 上限 " + MAX_REPORTS
+    );
 
-    for (const [id, report] of candidates) {
+    for (let index = 0; index < candidates.length; index += 1) {
+      if (Date.now() - batchStartedAt >= MAX_BATCH_DURATION_MS) {
+        console.log("已達批次時間上限，剩餘問題留待下一輪：" + (candidates.length - index));
+        for (const [remainingId] of candidates.slice(index)) {
+          await writeHistory(
+            database,
+            remainingId,
+            "repair_deferred",
+            "本批次已達時間上限，留待下一輪自動修復 · 批次 " + batchId
+          ).catch(() => {});
+        }
+        break;
+      }
+
+      const [id, report] = candidates[index];
+      const position = index + 1;
       try {
-        const resolved = await repairOne(database, id, report);
-        console.log(id, resolved ? "resolved" : "not_resolved");
+        const resolved = await repairOne(
+          database,
+          id,
+          report,
+          batchId,
+          position,
+          candidates.length
+        );
+        console.log(
+          "批次 " + position + "/" + candidates.length + " · " + id + " · " +
+          (resolved ? "resolved" : "not_resolved")
+        );
       } catch (error) {
         console.error("repair", id, error?.stack || error?.message || error);
         await updateReport(database, id, {
@@ -638,9 +679,20 @@ async function main() {
           repairError: clean(error?.message || error, 1200),
           repairFinishedAt: Date.now()
         }).catch(() => {});
-        await writeHistory(database, id, "repair_failed", clean(error?.message || error, 700)).catch(() => {});
+        await writeHistory(
+          database,
+          id,
+          "repair_failed",
+          "批次 " + position + "/" + candidates.length + " · " +
+          clean(error?.message || error, 700)
+        ).catch(() => {});
       }
     }
+
+    console.log(
+      "自動修復批次完成 · " + batchId + " · 耗時 " +
+      Math.round((Date.now() - batchStartedAt) / 1000) + " 秒"
+    );
   } finally {
     await releaseLock(lock);
   }
