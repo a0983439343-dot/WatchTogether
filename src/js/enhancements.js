@@ -1232,7 +1232,9 @@ async function sendReport() {
     return;
   }
   try {
-    await wt.db.ref("reports").push({
+    var reportRef = wt.db.ref("reports").push();
+    var reportId = reportRef.key;
+    await reportRef.set({
       uid:user && user.uid || "",
       category:String($("wtReportCategory").value || "other"),
       details:details,
@@ -1242,13 +1244,22 @@ async function sendReport() {
       status:"open",
       source:"manual",
       autoDetected:false,
+      autoVerifyEnabled:true,
+      verificationState:"monitoring",
+      verificationStableChecks:0,
+      fingerprint:typeof wt.makeReportFingerprint === "function"
+        ? wt.makeReportFingerprint(String($("wtReportCategory").value || "other"),details)
+        : "",
       occurrences:1,
       firstSeenAt:wt.serverTs(),
       lastSeenAt:wt.serverTs(),
       createdAt:wt.serverTs()
     });
+    if (typeof wt.registerReport === "function") {
+      wt.registerReport(reportId);
+    }
     $("wtReportDetails").value = "";
-    $("wtReportHint").textContent = "已送出問題回報。";
+    $("wtReportHint").textContent = "已送出問題回報，系統會持續自動驗證。";
     toast("問題回報已送出");
     setTimeout(function(){ wt.closeModal("wtReportModal"); },500);
   } catch (error) {
