@@ -31,7 +31,7 @@ const YT_POT_PROVIDER_URL =
 const VERIFY_SITE_URL =
   String(process.env.WATCHTOGETHER_SITE_URL || "https://a0983439343-dot.github.io/WatchTogether")
     .trim()
-    .replace(/\\/+$/, "");
+    .replace(/\/+$/, "");
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
