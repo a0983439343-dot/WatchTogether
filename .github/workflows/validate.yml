@@ -20,6 +20,9 @@ jobs:
       - name: Check src/js/enhancements.js syntax
         run: node --check src/js/enhancements.js
 
+      - name: Check automatic bug monitor syntax
+        run: node --check src/js/bug-monitor.js
+
       - name: Check src/js/chat.js syntax
         run: node --check src/js/chat.js
 
