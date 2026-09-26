@@ -11,6 +11,8 @@
   const STABLE_CHECKS_REQUIRED = 2;
   const AI_RECHECK_INTERVAL_MS = 10 * 60 * 1000;
   const AI_TIMEOUT_MS = 12000;
+  const REPORT_WATCH_KEY = "wt_report_watch_v1";
+  const VERIFY_TIMEOUT_MS = 12000;
   const BUILD_VERSION = (() => {
     try {
       const script = Array.from(document.scripts).find(s => /src\/js\/app\.js/.test(s.src));
@@ -21,6 +23,7 @@
   })();
 
   let states = loadState();
+  let watchedReports = loadWatchedReports();
   let monitorStarted = false;
   let lastErrorAt = 0;
   let originalConsoleError = null;
@@ -32,6 +35,18 @@
       if (explicit) return explicit;
       const proxy = String(config.youtubeStreamProxyUrl || config.youtubeSearchProxyUrl || "").trim().replace(/\/+$/, "");
       return proxy ? proxy + "/ai/analyze" : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function getVerifyEndpoint() {
+    try {
+      const config = window.WATCHTOGETHER_CONFIG || {};
+      const explicit = String(config.bugVerificationUrl || "").trim();
+      if (explicit) return explicit;
+      const proxy = String(config.youtubeStreamProxyUrl || config.youtubeSearchProxyUrl || "").trim().replace(/\/+$/, "");
+      return proxy ? proxy + "/verify" : "";
     } catch (_) {
       return "";
     }
@@ -172,6 +187,33 @@
     } catch (_) {}
   }
 
+  function loadWatchedReports() {
+    try {
+      const raw = localStorage.getItem(REPORT_WATCH_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveWatchedReports() {
+    try {
+      const entries = Object.entries(watchedReports)
+        .sort((a, b) => Number(b[1]?.lastCheckedAt || b[1]?.registeredAt || 0) - Number(a[1]?.lastCheckedAt || a[1]?.registeredAt || 0))
+        .slice(0, 50);
+      watchedReports = Object.fromEntries(entries);
+      localStorage.setItem(REPORT_WATCH_KEY, JSON.stringify(watchedReports));
+    } catch (_) {}
+  }
+
+  function forgetWatchedReport(reportId) {
+    reportId = String(reportId || "");
+    if (!reportId) return;
+    delete watchedReports[reportId];
+    saveWatchedReports();
+  }
+
   function cleanText(value, max = 1500) {
     return String(value == null ? "" : value)
       .replace(/https?:\/\/[^\s)]+/gi, "[url]")
@@ -283,12 +325,15 @@
       status: "open",
       source: "auto",
       autoDetected: true,
+      autoVerifyEnabled: true,
       fingerprint,
       buildVersion: BUILD_VERSION,
       firstSeenAt: firebase.database.ServerValue.TIMESTAMP,
       lastSeenAt: firebase.database.ServerValue.TIMESTAMP,
       occurrences: 1,
-      createdAt: firebase.database.ServerValue.TIMESTAMP
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      verificationState: "monitoring",
+      verificationStableChecks: 0
     };
     await reportRef.set(payload);
     void analyzeWithAI(reportId,"detect",null,{
@@ -344,7 +389,7 @@
     state.stableChecks = 0;
     state.lastCategory = category;
     state.lastSource = source;
-    if (!localState.lastAiAt || now - Number(localState.lastAiAt) >= AI_RECHECK_INTERVAL_MS) {
+    if (!state.lastAiAt || now - Number(state.lastAiAt) >= AI_RECHECK_INTERVAL_MS) {
       void analyzeWithAI(reportId,"repeat",state,{
         trigger:source,
         liveErrorPresent:true
@@ -422,9 +467,246 @@
     }
   }
 
+  async function runDeploymentVerification(category) {
+    const endpoint = getVerifyEndpoint();
+    if (!endpoint) {
+      return {ok:false,status:"unavailable",checks:[],error:"verification_endpoint_missing"};
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
+    try {
+      const url = endpoint + (endpoint.includes("?") ? "&" : "?") + "category=" + encodeURIComponent(String(category || "other"));
+      const response = await fetch(url,{
+        method:"GET",
+        cache:"no-store",
+        credentials:"omit",
+        signal:controller.signal
+      });
+      const result = await response.json().catch(() => ({}));
+      return {
+        ok:response.ok && result?.ok === true,
+        status:String(result?.status || (response.ok ? "passed" : "failed")),
+        buildVersion:String(result?.buildVersion || "").slice(0,100),
+        checkedAt:String(result?.checkedAt || "").slice(0,80),
+        checks:Array.isArray(result?.checks) ? result.checks : [],
+        error:response.ok ? "" : cleanText(result?.error || "deployment_verification_failed",400)
+      };
+    } catch (error) {
+      return {
+        ok:false,
+        status:"unavailable",
+        checks:[],
+        error:cleanText(error?.message || "verification_failed",400)
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function hasRecentRelevantError(category, sinceAt) {
+    const since = Number(sinceAt || 0);
+    const wanted = String(category || "other");
+    return Object.values(states || {}).some(state => {
+      if (!state || Number(state.lastEventAt || 0) < since) return false;
+      return String(state.lastCategory || "other") === wanted;
+    });
+  }
+
+  function localVerification(report) {
+    const category = String(report?.category || "other");
+    const health = collectHealthEvidence();
+    const failedHealth = health.filter(check => check && check.ok !== true);
+    let categoryChecks = [];
+
+    if (category === "search") {
+      categoryChecks = [
+        {name:"search_input",ok:!!document.getElementById("videoSearchInput")},
+        {name:"search_button",ok:!!document.getElementById("videoSearchBtn")}
+      ];
+    } else if (category === "room") {
+      categoryChecks = [
+        {name:"create_room",ok:typeof wt.createRoom === "function"},
+        {name:"playback_control_request",ok:typeof wt.requestPlaybackControl === "function"},
+        {name:"playback_control_listener",ok:typeof wt.attachPlaybackControlRequestListener === "function"}
+      ];
+    } else if (category === "playback") {
+      categoryChecks = [
+        {name:"native_video_element",ok:!!document.getElementById("directVideo") || typeof wt.createYoutubeNativePlayer === "function"},
+        {name:"native_youtube_adapter",ok:typeof wt.createYoutubeNativePlayer === "function" || typeof wt.buildYoutubeNativePlayer === "function"}
+      ];
+    } else if (category === "chat") {
+      categoryChecks = [
+        {name:"chat_runtime",ok:/chat/i.test(document.body?.innerText || "") || typeof wt.sendPrivateText === "function"}
+      ];
+    } else if (category === "account") {
+      categoryChecks = [
+        {name:"auth_runtime",ok:!!wt.auth},
+        {name:"profile_runtime",ok:typeof wt.loadProfile === "function"}
+      ];
+    } else if (category === "ui") {
+      categoryChecks = [
+        {name:"document_ready",ok:document.readyState !== "loading"},
+        {name:"body_visible",ok:!!document.body}
+      ];
+    }
+
+    const all = health.concat(categoryChecks);
+    return {
+      ok:failedHealth.length === 0 && all.every(check => check && check.ok === true),
+      checks:all,
+      failedChecks:all.filter(check => check && check.ok !== true).map(check => check.name)
+    };
+  }
+
+  async function writeVerification(reportId, data) {
+    if (!reportId) return;
+    await wt.db.ref("reports/" + reportId + "/verification").update(data);
+  }
+
+  async function verifyReport(reportId, mode = "scheduled") {
+    const user = wt.auth.currentUser;
+    reportId = String(reportId || "");
+    if (!user || !reportId) return null;
+
+    const snapshot = await wt.db.ref("reports/" + reportId).once("value");
+    if (!snapshot.exists()) {
+      forgetWatchedReport(reportId);
+      return null;
+    }
+
+    const report = snapshot.val() || {};
+    if (String(report.uid || "") !== String(user.uid || "")) return null;
+    if (report.autoVerifyEnabled !== true) return null;
+    if (report.status === "resolved" && !watchedReports[reportId]?.monitorResolved) {
+      forgetWatchedReport(reportId);
+      return {status:"resolved"};
+    }
+
+    const now = Date.now();
+    const watch = watchedReports[reportId] || {
+      registeredAt:now,
+      stableChecks:0
+    };
+    const local = localVerification(report);
+    const deployment = await runDeploymentVerification(report.category);
+    const recentRelevantError = hasRecentRelevantError(report.category, Number(report.createdAt || watch.registeredAt || now));
+    const deterministicPass = local.ok && deployment.ok && !recentRelevantError;
+
+    watch.lastCheckedAt = now;
+    watch.lastDeploymentOk = deployment.ok;
+    watch.lastLocalOk = local.ok;
+    watch.lastRecentRelevantError = recentRelevantError;
+    watch.stableChecks = deterministicPass ? Number(watch.stableChecks || 0) + 1 : 0;
+
+    const verificationPayload = {
+      state:deterministicPass ? "passed" : "failed",
+      checkedAt:firebase.database.ServerValue.TIMESTAMP,
+      buildVersion:deployment.buildVersion || BUILD_VERSION,
+      deterministicPassed:deterministicPass,
+      stableChecks:watch.stableChecks,
+      recentRelevantError,
+      localChecks:local.checks,
+      deploymentChecks:deployment.checks,
+      deploymentStatus:deployment.status,
+      deploymentError:deployment.error || "",
+      mode:String(mode || "scheduled").slice(0,30)
+    };
+
+    watchedReports[reportId] = watch;
+    saveWatchedReports();
+
+    try {
+      await writeVerification(reportId,verificationPayload);
+    } catch (_) {}
+
+    if (!deterministicPass || watch.stableChecks < STABLE_CHECKS_REQUIRED) {
+      return {status:"monitoring",deterministicPassed:deterministicPass,stableChecks:watch.stableChecks};
+    }
+
+    const ai = await analyzeWithAI(
+      reportId,
+      mode === "manual" ? "manual_verify" : "recheck",
+      {
+        lastAiAt:0,
+        lastEventAt:recentRelevantError ? now : 0
+      },
+      {
+        verification:verificationPayload,
+        stableChecks:watch.stableChecks,
+        liveErrorPresent:false,
+        sameFingerprintSeen:false,
+        connected:true,
+        deploymentVerified:deployment.ok
+      }
+    );
+
+    const aiApproved = !!ai &&
+      String(ai.status || "") === "resolved_candidate" &&
+      Number(ai.confidence || 0) >= 0.75;
+
+    if (!aiApproved) {
+      try {
+        await writeVerification(reportId,{
+          state:"needs_review",
+          aiApproved:false,
+          aiStatus:ai?.status || "unavailable",
+          aiConfidence:Number(ai?.confidence || 0)
+        });
+        await writeHistory(reportId,"verification_failed",
+          ai
+            ? "自動驗證通過，但 AI 未達自動結案條件"
+            : "自動驗證通過，但 AI 分析暫時不可用"
+        );
+      } catch (_) {}
+      return {status:"needs_review",ai};
+    }
+
+    const reason = "部署版本檢查通過、瀏覽器健康檢查通過、連續穩定檢查通過，且 AI 判定可視為已修復";
+    try {
+      await writeVerification(reportId,{
+        state:"approved",
+        approved:true,
+        aiApproved:true,
+        aiStatus:"resolved_candidate",
+        aiConfidence:Number(ai.confidence || 0),
+        approvedAt:firebase.database.ServerValue.TIMESTAMP,
+        reason
+      });
+      await writeHistory(reportId,"auto_verified",reason);
+      await wt.db.ref("reports/" + reportId).update({
+        status:"resolved",
+        autoResolvedAt:firebase.database.ServerValue.TIMESTAMP,
+        autoResolvedBuild:BUILD_VERSION,
+        autoResolveReason:reason
+      });
+    } catch (error) {
+      try { console.warn("WatchTogether 自動結案寫入失敗:",error); } catch (_) {}
+      return {status:"write_failed"};
+    }
+
+    watch.monitorResolved = true;
+    watch.stableChecks = STABLE_CHECKS_REQUIRED;
+    saveWatchedReports();
+    return {status:"resolved",ai};
+  }
+
+  function registerReport(reportId) {
+    reportId = String(reportId || "").trim();
+    const user = wt.auth.currentUser;
+    if (!user || !reportId) return;
+    watchedReports[reportId] = {
+      registeredAt:Date.now(),
+      stableChecks:0,
+      monitorResolved:false
+    };
+    saveWatchedReports();
+    void verifyReport(reportId,"manual").catch(() => {});
+  }
+
   async function stableCheck() {
     const user = wt.auth.currentUser;
-    if (!user || !Object.keys(states).length) return;
+    if (!user) return;
 
     let connected = true;
     try {
@@ -435,61 +717,36 @@
     }
     if (!connected) return;
 
-    const now = Date.now();
-    let changed = false;
-
-    for (const [fingerprint, state] of Object.entries(states)) {
+    for (const [fingerprint,state] of Object.entries(states)) {
       if (!state?.reportId || state.status !== "open") continue;
       const lastSeenAt = Number(state.lastSeenAt || 0);
-      if (!lastSeenAt || now - lastSeenAt < AUTO_RESOLVE_AFTER_MS) continue;
-
-      state.stableChecks = Number(state.stableChecks || 0) + 1;
+      if (!lastSeenAt || Date.now() - lastSeenAt < AUTO_RESOLVE_AFTER_MS) continue;
+      state.stableChecks = Number(state.stableChecks || 0);
       if (state.stableChecks < STABLE_CHECKS_REQUIRED) {
-        changed = true;
+        state.stableChecks += 1;
+      }
+      if (state.stableChecks < STABLE_CHECKS_REQUIRED) {
         continue;
       }
-
       try {
-        const reportSnapshot = await wt.db.ref("reports/" + state.reportId).once("value");
-        if (!reportSnapshot.exists()) {
-          state.reportId = "";
-          state.status = "open";
-          state.stableChecks = 0;
-          changed = true;
-          continue;
-        }
-        const ai = await analyzeWithAI(state.reportId,"recheck",state,{
-          stableChecks:Number(state.stableChecks || 0),
-          sameFingerprintSeen:false,
-          liveErrorPresent:false,
-          connected:true
-        });
-        const aiApproved = !!ai && String(ai.status || "") === "resolved_candidate" && Number(ai.confidence || 0) >= 0.75;
-        const aiReason = aiApproved
-          ? "AI 判定錯誤目前未再出現，且連續健康檢查通過"
-          : "連續健康檢查未再次發現相同錯誤" + (ai ? "；AI 未達自動結案信心門檻" : "；AI 暫時不可用");
-        await wt.db.ref("reports/" + state.reportId).update({
-          status: "resolved",
-          autoResolvedAt: firebase.database.ServerValue.TIMESTAMP,
-          autoResolvedBuild: BUILD_VERSION,
-          autoResolveReason: aiReason
-        });
-        try {
-          await writeHistory(state.reportId, "auto_resolved", "連續健康檢查未再次發現相同錯誤，已自動標記為已處理");
-        } catch (historyError) {
-          try { console.warn("WatchTogether 自動處理紀錄寫入失敗:", historyError); } catch (_) {}
-        }
-        state.status = "resolved";
-        state.stableChecks = STABLE_CHECKS_REQUIRED;
-        state.autoResolvedAt = now;
-        state.autoResolvedBuild = BUILD_VERSION;
-        changed = true;
+        const result = await verifyReport(state.reportId,"auto");
+        if (result?.status === "resolved") state.status = "resolved";
+        saveState();
       } catch (err) {
-        try { console.warn("WatchTogether 自動處理回報失敗:", err); } catch (_) {}
+        try { console.warn("WatchTogether 自動驗證失敗:",err); } catch (_) {}
       }
     }
 
-    if (changed) saveState();
+    for (const reportId of Object.keys(watchedReports)) {
+      try {
+        const result = await verifyReport(reportId,"manual");
+        if (result?.status === "resolved") forgetWatchedReport(reportId);
+      } catch (error) {
+        try { console.warn("WatchTogether 手動回報自動驗證失敗:",error); } catch (_) {}
+      }
+    }
+    saveWatchedReports();
+    saveState();
   }
 
   function expose() {
@@ -564,10 +821,18 @@
 
   expose();
   installGlobalWatchers();
+  Object.keys(watchedReports).forEach(reportId => {
+    void verifyReport(reportId,"startup").catch(() => {});
+  });
   window.WT_BUG_MONITOR = {
-    version: "1",
+    version: "2",
     buildVersion: BUILD_VERSION,
     recordError,
-    stableCheck
+    stableCheck,
+    verifyReport,
+    registerReport,
+    makeReportFingerprint: function(category, details) {
+      return hash(normalizeForFingerprint(String(category || "other") + "|" + String(details || "")));
+    }
   };
 })();
