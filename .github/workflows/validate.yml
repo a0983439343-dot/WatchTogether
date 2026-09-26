@@ -102,3 +102,20 @@ jobs:
           if (cacheVersion !== appVersion.replace('formal-', '')) throw new Error('Service worker cache version is not aligned.');
           console.log('Synchronized room control architecture checks OK');
           NODE
+      - name: Deploy validated Firebase Realtime Database Rules
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const raw = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "").trim();
+          if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is not configured");
+          const json = raw.startsWith("{")
+            ? JSON.parse(raw)
+            : JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+          fs.writeFileSync("/tmp/watchtogether-firebase-service-account.json", JSON.stringify(json), {mode:0o600});
+          NODE
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/watchtogether-firebase-service-account.json
+          node_modules/.bin/firebase deploy --only database --project watchtogether-3f4f9 --json
+          rm -f /tmp/watchtogether-firebase-service-account.json
