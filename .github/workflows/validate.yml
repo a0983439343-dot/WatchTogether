@@ -10,6 +10,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: watchtogether-validate
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
