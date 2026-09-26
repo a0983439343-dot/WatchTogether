@@ -15,6 +15,8 @@ const SEARCH_CACHE_TTL_MS = 0;
 const MAX_CACHE_ENTRIES = 500;
 const CACHE_CLEANUP_INTERVAL_MS = 60_000;
 const AI_CACHE_TTL_MS = 600_000;
+const AI_QUOTA_COOLDOWN_MS = 5 * 60_000;
+let aiQuotaBlockedUntil = 0;
 const MAX_SEARCH_RESULTS = 25;
 const MAX_SEARCH_BATCH = 25;
 const SEARCH_TIMEOUT_MS = 18_000;
@@ -135,22 +137,22 @@ function youtubeUrl(videoId) {
 
 function getAiModel(phase = "") {
   const repairModel = String(
-    process.env.GEMINI_REPAIR_MODEL || "gemini-3.5-flash"
-  ).trim() || "gemini-3.5-flash";
+    process.env.GEMINI_REPAIR_MODEL || "gemini-3.8-flash"
+  ).trim() || "gemini-3.8-flash";
   const normalModel = String(
-    process.env.GEMINI_MODEL || "gemini-3.5-flash"
-  ).trim() || "gemini-3.5-flash";
+    process.env.GEMINI_MODEL || "gemini-3.8-flash"
+  ).trim() || "gemini-3.8-flash";
   return phase === "repair" ? repairModel : normalModel;
 }
 
 function getAiModelFallbacks(phase = "") {
   const primary = getAiModel(phase);
   const freeFallbacks = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
-    "gemini-3.8-flash",
     "gemini-2.5-flash-lite"
   ];
   return Array.from(new Set([primary, ...freeFallbacks].filter(Boolean)));
@@ -314,7 +316,7 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
-        maxOutputTokens: isRepairPhase ? 32768 : 4096
+        maxOutputTokens: isRepairPhase ? 12288 : 2048
       }
     })
   });
@@ -366,10 +368,27 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
   }
 }
 
+function getGeminiApiKeys() {
+  const values = [
+    process.env.GEMINI_API_KEY,
+    ...(String(process.env.GEMINI_API_KEYS || "").split(/[\n,;]+/g))
+  ];
+  return Array.from(new Set(values.map(value => String(value || "").trim()).filter(Boolean)));
+}
+
+function isQuotaError(error) {
+  return /quota|rate limit|resource exhausted|exceeded your current quota|daily quota/i.test(String(error?.message || ""));
+}
+
 async function analyzeBugWithGemini(input) {
-  const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
-  if (!apiKey) {
+  const apiKeys = getGeminiApiKeys();
+  if (!apiKeys.length) {
     throw new Error("GEMINI_API_KEY 未設定");
+  }
+  if (Date.now() < aiQuotaBlockedUntil) {
+    const error = new Error("Gemini quota 暫時耗盡，等待冷卻後再試");
+    error.code = "quota_cooldown";
+    throw error;
   }
 
   const model = getAiModel(input.phase);
@@ -415,16 +434,17 @@ async function analyzeBugWithGemini(input) {
   let usedModel = model;
   let lastError = null;
 
-  for (const candidateModel of models) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        analysis = await requestGeminiModel({
-          model: candidateModel,
-          apiKey,
-          prompt,
-          schema,
-          isRepairPhase
-        });
+  for (const apiKey of apiKeys) {
+    for (const candidateModel of models) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          analysis = await requestGeminiModel({
+            model: candidateModel,
+            apiKey,
+            prompt,
+            schema,
+            isRepairPhase
+          });
         usedModel = candidateModel;
         break;
       } catch (error) {
@@ -438,19 +458,25 @@ async function analyzeBugWithGemini(input) {
             String(error?.message || "")
           );
 
-        if (!retryable) break;
-        if (/quota|rate limit|resource exhausted|exceeded your current quota/i.test(String(error?.message || ""))) {
-          break;
+          if (!retryable) break;
+          if (isQuotaError(error)) {
+            break;
+          }
+          if (attempt === 1) break;
+          await new Promise(resolve => setTimeout(resolve, 1200));
         }
-        if (attempt === 1) break;
-        await new Promise(resolve => setTimeout(resolve, 1200));
       }
-    }
 
+      if (analysis) break;
+    }
     if (analysis) break;
+    if (isQuotaError(lastError)) {
+      continue;
+    }
   }
 
   if (!analysis) {
+    if (isQuotaError(lastError)) aiQuotaBlockedUntil = Date.now() + AI_QUOTA_COOLDOWN_MS;
     throw lastError || new Error("Gemini 分析失敗");
   }
 
