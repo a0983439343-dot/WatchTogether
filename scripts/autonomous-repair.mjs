@@ -114,7 +114,7 @@ async function acquireLock(database) {
   const ref = database.ref("system/autonomousRepairLock");
   const owner = randomUUID();
   const now = Date.now();
-  const expiresAt = now + 14 * 60_000;
+  const expiresAt = now + 30 * 60_000;
   let committed = false;
   const result = await ref.transaction(current => {
     if (current && Number(current.expiresAt || 0) > now) return;
