@@ -243,7 +243,9 @@
             '<td><strong>' + members + '</strong></td>' +
             '<td><span class="small">' + escapeHtml(platform) + ' · ' + escapeHtml(title) + '</span></td>' +
             '<td>' + escapeHtml(formatDate(meta.createdAt || item.createdAt)) + '</td>' +
-            '<td><div class="room-actions"><a class="btn primary" href="' + href + '">🚪 進入房間</a><button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button></div></td>' +
+            '<td><div class="room-actions"><a class="btn primary" href="' + href + '">🚪 進入房間</a>' +
+              (isAdminOperator() ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
+              '</div></td>' +
           '</tr>';
         }).join("")
       : '<tr><td colspan="6" class="muted">目前沒有符合條件的房間。</td></tr>';
@@ -277,19 +279,25 @@
               ? '<span class="status off">已封鎖 · ' + escapeHtml(formatRemaining(block)) + '</span>'
               : '<span class="status">正常</span>';
 
-          let actions = '<div class="row-actions"><button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
+          const canManage = currentRole === "master" || currentRole === "admin";
+          let actions = '<div class="row-actions">';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
-           } else if (active) {
-             if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
-               actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
-             } else if (uid === currentUser?.uid) {
-               actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
-             } else {
-               actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
-             }
-           } else {
-            actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
+          } else if (!canManage) {
+            actions += '<span class="muted">僅可查看</span>';
+          } else {
+            actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
+            if (active) {
+              if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
+                actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
+              } else if (uid === currentUser?.uid) {
+                actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
+              } else {
+                actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
+              }
+            } else {
+              actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
+            }
           }
           actions += '</div>';
 
