@@ -124,8 +124,8 @@ function youtubeUrl(videoId) {
 
 function getAiModel(phase = "") {
   const repairModel = String(
-    process.env.GEMINI_REPAIR_MODEL || "gemini-3.1-pro-preview"
-  ).trim() || "gemini-3.1-pro-preview";
+    process.env.GEMINI_REPAIR_MODEL || "gemini-3.8-flash"
+  ).trim() || "gemini-3.8-flash";
   const normalModel = String(
     process.env.GEMINI_MODEL || "gemini-3.8-flash"
   ).trim() || "gemini-3.8-flash";
