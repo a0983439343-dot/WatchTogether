@@ -301,7 +301,7 @@
     if (!reportId) return;
     const user = wt.auth.currentUser;
     if (!user) return;
-    const ref = wt.db.ref("reportHistoryEvents").push();
+    const ref = wt.db.ref("reportHistoryEvents/" + reportId).push();
     await ref.set({
       reportId: String(reportId).slice(0, 128),
       event: String(event || "seen").slice(0, 40),
