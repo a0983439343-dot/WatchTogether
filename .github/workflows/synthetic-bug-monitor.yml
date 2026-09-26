@@ -15,7 +15,7 @@ concurrency:
 jobs:
   synthetic-monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     env:
       WATCHTOGETHER_SITE_URL: https://a0983439343-dot.github.io/WatchTogether
       WATCHTOGETHER_BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
