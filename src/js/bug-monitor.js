@@ -54,8 +54,9 @@
   async function analyzeWithAI(reportId, phase, state, evidence) {
     const endpoint = getAiEndpoint();
     if (!endpoint || !reportId) return null;
+    const localState = state && typeof state === "object" ? state : {};
     const now = Date.now();
-    const lastAiAt = Number(state?.lastAiAt || 0);
+    const lastAiAt = Number(localState.lastAiAt || 0);
     if (phase === "recheck" && lastAiAt && now - lastAiAt < AI_RECHECK_INTERVAL_MS) return null;
 
     const controller = new AbortController();
@@ -82,7 +83,7 @@
           page:reportLocation(),
           roomId:typeof wt.roomIdFromUrl === "function" ? String(wt.roomIdFromUrl() || "").slice(0,20) : "",
           buildVersion:BUILD_VERSION,
-          recentSameFingerprintSeen:Boolean(state?.lastEventAt && now - Number(state.lastEventAt) < AUTO_RESOLVE_AFTER_MS),
+          recentSameFingerprintSeen:Boolean(localState.lastEventAt && now - Number(state.lastEventAt) < AUTO_RESOLVE_AFTER_MS),
           health:collectHealthEvidence()
         }
       };
@@ -101,26 +102,26 @@
       }
 
       const analysis = result.analysis;
-      state.lastAiAt = now;
-      state.aiStatus = String(analysis.status || "inconclusive");
-      state.aiConfidence = Number(analysis.confidence || 0);
-      state.aiTitle = cleanText(analysis.title || "",220);
-      state.aiSummary = cleanText(analysis.summary || "",900);
-      state.aiRootCause = cleanText(analysis.rootCause || "",900);
-      state.aiSuggestion = cleanText(analysis.suggestion || "",900);
-      state.aiModel = String(result.model || "").slice(0,100);
+      localState.lastAiAt = now;
+      localState.aiStatus = String(analysis.status || "inconclusive");
+      localState.aiConfidence = Number(analysis.confidence || 0);
+      localState.aiTitle = cleanText(analysis.title || "",220);
+      localState.aiSummary = cleanText(analysis.summary || "",900);
+      localState.aiRootCause = cleanText(analysis.rootCause || "",900);
+      localState.aiSuggestion = cleanText(analysis.suggestion || "",900);
+      localState.aiModel = String(result.model || "").slice(0,100);
       saveState();
 
       await wt.db.ref("reports/" + reportId).update({
-        aiStatus:state.aiStatus,
-        aiConfidence:state.aiConfidence,
-        aiTitle:state.aiTitle,
-        aiSummary:state.aiSummary,
-        aiRootCause:state.aiRootCause,
-        aiSuggestion:state.aiSuggestion,
-        aiModel:state.aiModel,
+        aiStatus:localState.aiStatus,
+        aiConfidence:localState.aiConfidence,
+        aiTitle:localState.aiTitle,
+        aiSummary:localState.aiSummary,
+        aiRootCause:localState.aiRootCause,
+        aiSuggestion:localState.aiSuggestion,
+        aiModel:localState.aiModel,
         aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
-        aiResolvedCandidate:state.aiStatus === "resolved_candidate"
+        aiResolvedCandidate:localState.aiStatus === "resolved_candidate"
       });
 
       try {
@@ -128,15 +129,15 @@
           reportId,
           "ai_check",
           phase === "recheck"
-            ? "AI 重新檢測：" + (state.aiStatus === "resolved_candidate" ? "判定可視為已修復候選" : "判定仍需確認")
-            : "AI 分析：" + (state.aiTitle || state.aiStatus)
+            ? "AI 重新檢測：" + (localState.aiStatus === "resolved_candidate" ? "判定可視為已修復候選" : "判定仍需確認")
+            : "AI 分析：" + (localState.aiTitle || localState.aiStatus)
         );
       } catch (_) {}
 
       return analysis;
     } catch (error) {
-      state.lastAiAt = now;
-      state.aiStatus = "unavailable";
+      localState.lastAiAt = now;
+      localState.aiStatus = "unavailable";
       saveState();
       try {
         await wt.db.ref("reports/" + reportId).update({
@@ -343,7 +344,7 @@
     state.stableChecks = 0;
     state.lastCategory = category;
     state.lastSource = source;
-    if (!state.lastAiAt || now - Number(state.lastAiAt) >= AI_RECHECK_INTERVAL_MS) {
+    if (!localState.lastAiAt || now - Number(localState.lastAiAt) >= AI_RECHECK_INTERVAL_MS) {
       void analyzeWithAI(reportId,"repeat",state,{
         trigger:source,
         liveErrorPresent:true
