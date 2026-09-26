@@ -159,6 +159,79 @@ test("reports: authenticated user can create only their own report", async () =>
   }));
 });
 
+test("reports: automatic bug records can be reopened and updated only by their owner", async () => {
+  const ref = db(USER_UID, userToken).ref("reports/auto-report");
+  await assertSucceeds(ref.set({
+    uid: USER_UID,
+    category: "ui",
+    details: "automatic error",
+    createdAt: Date.now(),
+    status: "open",
+    source: "auto",
+    autoDetected: true,
+    fingerprint: "1234567890abcdef",
+    buildVersion: "formal-test-v1",
+    firstSeenAt: Date.now(),
+    lastSeenAt: Date.now(),
+    occurrences: 1
+  }));
+
+  await assertSucceeds(ref.update({
+    status: "resolved",
+    lastSeenAt: Date.now(),
+    occurrences: 1,
+    autoResolvedAt: Date.now(),
+    autoResolvedBuild: "formal-test-v2",
+    autoResolveReason: "stable"
+  }));
+
+  await assertFails(
+    db(OTHER_UID, {
+      email: "other@example.com",
+      email_verified: true
+    }).ref("reports/auto-report").update({
+      status: "open"
+    })
+  );
+});
+
+test("report history: automatic owner and admin can append, admin can delete", async () => {
+  const ref = db(USER_UID, userToken).ref("reports/history-target");
+  await assertSucceeds(ref.set({
+    uid: USER_UID,
+    category: "other",
+    details: "history target",
+    createdAt: Date.now(),
+    source: "auto",
+    fingerprint: "abcdef1234567890"
+  }));
+
+  const event = db(USER_UID, userToken).ref("reportHistory/history-target").push();
+  await assertSucceeds(event.set({
+    event: "created",
+    createdAt: Date.now(),
+    actorUid: USER_UID,
+    actorEmail: "",
+    source: "watchdog",
+    details: "created"
+  }));
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("reportHistory/history-target").push().set({
+      event: "manual_status",
+      createdAt: Date.now(),
+      actorUid: ADMIN_UID,
+      actorEmail: "admin@example.com",
+      source: "admin",
+      details: "resolved"
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("reportHistory/history-target").remove()
+  );
+});
+
 test("reports: normal users cannot read the collection", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("reports").once("value")
