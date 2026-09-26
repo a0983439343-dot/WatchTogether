@@ -8,8 +8,8 @@ const DEFAULT_BUG_SERVICE_URL = "https://watchtogether-youtube-proxy-2026.onrend
 
 function clean(value, max = 1800) {
   return String(value == null ? "" : value)
-    .replace(/[\\u0000-\\u001f\\u007f]/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
 }
