@@ -20,6 +20,8 @@
   let profiles = {};
   let reportsLoadError = "";
   let reportHistory = {};
+  let reportScanTimer = null;
+  let reportScanRunning = false;
   let accountsRef = null;
   let reportsRef = null;
   let auditLogsRef = null;
@@ -467,6 +469,343 @@
       : '<tr><td colspan="5" class="muted">目前沒有操作紀錄。</td></tr>';
   }
 
+  function getBugServiceBase() {
+    try {
+      const explicit = String(config.youtubeStreamProxyUrl || config.youtubeSearchProxyUrl || "").trim();
+      if (!explicit) return "";
+      return explicit.replace(/\/+search\/?$/, "").replace(/\/+$/, "");
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function getBugVerifyEndpoint() {
+    const base = getBugServiceBase();
+    return base ? base + "/verify" : "";
+  }
+
+  function getBugAiEndpoint() {
+    const explicit = String(config.aiBugDetectorUrl || "").trim();
+    if (explicit) return explicit;
+    const base = getBugServiceBase();
+    return base ? base + "/ai/analyze" : "";
+  }
+
+  function reportSourceLabel(item) {
+    if (item?.source === "scanner" || item?.autoScanner === true) return "系統掃描";
+    if (item?.source === "auto" || item?.autoDetected === true) return "自動偵測";
+    return "使用者回報";
+  }
+
+  function buildReportFingerprint(category, details, prefix = "scanner") {
+    let h = 2166136261;
+    const value = String(prefix + "|" + category + "|" + details).slice(0, 3000);
+    for (let i = 0; i < value.length; i++) {
+      h ^= value.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return prefix + "-" + (h >>> 0).toString(16);
+  }
+
+  async function runBugServiceVerify(category = "all") {
+    const endpoint = getBugVerifyEndpoint();
+    if (!endpoint) throw new Error("尚未設定 Bug 驗證服務");
+    const url = endpoint + "?category=" + encodeURIComponent(category);
+    const response = await fetch(url,{method:"GET",cache:"no-store",credentials:"omit"});
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) {
+      const error = new Error(String(result?.error || "網站自動檢查未通過"));
+      error.result = result;
+      throw error;
+    }
+    return result;
+  }
+
+  async function analyzeReportOnAdmin(id, report, verification, phase = "admin_review") {
+    const endpoint = getBugAiEndpoint();
+    if (!endpoint) return null;
+    const response = await fetch(endpoint,{
+      method:"POST",
+      cache:"no-store",
+      credentials:"omit",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        phase,
+        report:{
+          category:String(report?.category || "other"),
+          details:String(report?.details || "").slice(0,2000),
+          fingerprint:String(report?.fingerprint || "").slice(0,100),
+          buildVersion:String(report?.buildVersion || "").slice(0,120),
+          source:report?.source || "manual",
+          occurrences:Number(report?.occurrences || 1) || 1,
+          createdAt:Number(report?.createdAt || 0)
+        },
+        evidence:{
+          deployment:verification || {},
+          adminPage:{
+            url:location.href,
+            pageReady:document.readyState,
+            reportId:id
+          }
+        },
+        current:{
+          page:location.href,
+          buildVersion:location.pathname,
+          healthy:verification?.ok === true
+        }
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok || !result?.analysis) {
+      throw new Error(String(result?.error || "AI 分析失敗"));
+    }
+    return result;
+  }
+
+  async function writeReportHistory(id,event,details) {
+    if (!id || !currentUser) return;
+    try {
+      await db.ref("reportHistory/" + id).push({
+        event,
+        createdAt:firebase.database.ServerValue.TIMESTAMP,
+        actorUid:currentUser.uid,
+        actorEmail:currentUser.email || "",
+        source:"admin",
+        details:String(details || "").slice(0,500)
+      });
+    } catch (error) {
+      console.warn("report history write failed",error);
+    }
+  }
+
+  async function upsertScannerFinding(finding, scanResult) {
+    if (!currentUser || !isAdminOperator() || finding?.ok === true) return null;
+    const categoryMap = {
+      playback:"playback",
+      search:"search",
+      room:"room",
+      chat:"chat",
+      account:"account",
+      ui:"ui"
+    };
+    const category = categoryMap[finding.name] || "other";
+    const details = [
+      "自動網站掃描發現問題",
+      "檢查項目：" + String(finding.name || "unknown"),
+      finding.status ? "HTTP：" + finding.status : "",
+      Array.isArray(finding.missing) && finding.missing.length ? "缺少：" + finding.missing.join(", ") : "",
+      Array.isArray(finding.forbidden) && finding.forbidden.length ? "禁止內容出現：" + finding.forbidden.join(", ") : "",
+      finding.error ? "錯誤：" + finding.error : ""
+    ].filter(Boolean).join("\n");
+    const fingerprint = buildReportFingerprint(category,details);
+    const existingEntry = Object.entries(reports || {}).find(([id,item]) =>
+      item && (item.source === "scanner" || item.autoScanner === true) &&
+      String(item.fingerprint || "") === fingerprint
+    );
+    if (existingEntry) {
+      const [id,item] = existingEntry;
+      await db.ref("reports/" + id).update({
+        lastSeenAt:firebase.database.ServerValue.TIMESTAMP,
+        occurrences:Math.max(1,Number(item.occurrences || 0) + 1),
+        scanBuildVersion:String(scanResult?.buildVersion || ""),
+        scanCheckedAt:firebase.database.ServerValue.TIMESTAMP,
+        status:item.status === "resolved" ? "open" : normalizeReportStatus(item.status)
+      });
+      return id;
+    }
+
+    const ref = db.ref("reports").push();
+    const id = ref.key;
+    await ref.set({
+      uid:currentUser.uid,
+      category,
+      details,
+      roomId:"",
+      page:String(scanResult?.site || location.href).slice(0,1000),
+      userAgent:"server-verification",
+      status:"open",
+      source:"scanner",
+      autoScanner:true,
+      autoVerifyEnabled:false,
+      fingerprint,
+      buildVersion:String(scanResult?.buildVersion || "").slice(0,100),
+      occurrences:1,
+      firstSeenAt:firebase.database.ServerValue.TIMESTAMP,
+      lastSeenAt:firebase.database.ServerValue.TIMESTAMP,
+      createdAt:firebase.database.ServerValue.TIMESTAMP,
+      verificationState:"failed"
+    });
+    await writeReportHistory(id,"scanner_detected","系統網站掃描發現：" + String(finding.name || "unknown"));
+    return id;
+  }
+
+  async function scanUserReports(limit = 5) {
+    const entries = Object.entries(reports || {})
+      .filter(([,item]) => item && (item.source === "manual" || item.source === "auto") && normalizeReportStatus(item.status) !== "resolved")
+      .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0))
+      .slice(0,limit);
+
+    for (const [id,item] of entries) {
+      try {
+        const verification = await runBugServiceVerify(String(item.category || "other"));
+        const result = await analyzeReportOnAdmin(id,item,verification,"admin_review");
+        const analysis = result?.analysis || null;
+        const verificationData = {
+          state:verification.ok ? "passed" : "failed",
+          checkedAt:firebase.database.ServerValue.TIMESTAMP,
+          deterministicPassed:verification.ok === true,
+          deploymentStatus:verification.status || "",
+          deploymentChecks:Array.isArray(verification.checks) ? verification.checks : [],
+          buildVersion:String(verification.buildVersion || ""),
+          mode:"admin_auto_scan"
+        };
+        const updates = {
+          verification:verificationData,
+          verificationState:verification.ok ? "passed" : "failed",
+          aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
+          aiStatus:String(analysis?.status || "inconclusive"),
+          aiConfidence:Number(analysis?.confidence || 0),
+          aiTitle:String(analysis?.title || "").slice(0,220),
+          aiSummary:String(analysis?.summary || "").slice(0,900),
+          aiRootCause:String(analysis?.rootCause || "").slice(0,900),
+          aiSuggestion:String(analysis?.suggestion || "").slice(0,900),
+          aiModel:String(result?.model || "").slice(0,100)
+        };
+        await db.ref("reports/" + id).update(updates);
+      } catch (error) {
+        await db.ref("reports/" + id).update({
+          verificationState:"failed",
+          aiStatus:"unavailable",
+          aiError:String(error?.message || "自動檢查失敗").slice(0,500),
+          verificationCheckedAt:firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+      }
+    }
+  }
+
+  async function scanWebsiteAndReports() {
+    if (!currentHasAdminAccess || !isAdminOperator() || reportScanRunning) return;
+    reportScanRunning = true;
+    const banner = $("reportScanBanner");
+    if (banner) {
+      banner.classList.remove("hidden");
+      banner.textContent = "🔎 正在自動檢查網站與近期回報…";
+    }
+    try {
+      const result = await runBugServiceVerify("all");
+      const findings = Array.isArray(result?.checks) ? result.checks.filter(check => check && check.ok !== true) : [];
+      for (const finding of findings.slice(0,10)) {
+        const id = await upsertScannerFinding(finding,result);
+        if (id) {
+          try {
+            const item = (await db.ref("reports/" + id).once("value")).val() || reports[id] || {};
+            const ai = await analyzeReportOnAdmin(id,item,result,"scanner");
+            if (ai?.analysis) {
+              await db.ref("reports/" + id).update({
+                aiStatus:String(ai.analysis.status || "inconclusive"),
+                aiConfidence:Number(ai.analysis.confidence || 0),
+                aiTitle:String(ai.analysis.title || "").slice(0,220),
+                aiSummary:String(ai.analysis.summary || "").slice(0,900),
+                aiRootCause:String(ai.analysis.rootCause || "").slice(0,900),
+                aiSuggestion:String(ai.analysis.suggestion || "").slice(0,900),
+                aiModel:String(ai.model || "").slice(0,100),
+                aiCheckedAt:firebase.database.ServerValue.TIMESTAMP
+              });
+            }
+          } catch (_) {}
+        }
+      }
+
+      await scanUserReports(5);
+
+      if (banner) {
+        banner.textContent = findings.length
+          ? "⚠️ 自動掃描發現 " + findings.length + " 個需要查看的問題；系統已建立／更新回報。"
+          : "✅ 自動掃描目前沒有發現結構性網站問題；近期使用者回報也已重新分析。";
+      }
+    } catch (error) {
+      const result = error?.result || {};
+      const findings = Array.isArray(result?.checks) ? result.checks.filter(check => check && check.ok !== true) : [];
+      for (const finding of findings.slice(0,10)) {
+        try { await upsertScannerFinding(finding,result); } catch (_) {}
+      }
+      if (banner) banner.textContent = "⚠️ 自動掃描沒有完全通過，已把可辨識問題放入問題回報。";
+      console.error("automatic site scan failed",error);
+    } finally {
+      renderReports();
+      updateStats();
+      reportScanRunning = false;
+    }
+  }
+
+  function startReportAutomation() {
+    if (reportScanTimer) clearInterval(reportScanTimer);
+    if (!currentHasAdminAccess || !isAdminOperator()) return;
+    void scanWebsiteAndReports();
+    reportScanTimer = setInterval(() => void scanWebsiteAndReports(), 90000);
+  }
+
+  async function repairDecisionStart() {
+    if (!isAdminOperator()) return;
+    const id = String($("reportId").value || "").trim();
+    const item = reports[id];
+    if (!id || !item) return;
+    if (!window.confirm("系統已分析這個 Bug。要開始處理它嗎？")) return;
+    await db.ref("reports/" + id).update({
+      status:"in_progress",
+      handledAt:firebase.database.ServerValue.TIMESTAMP,
+      handledByUid:currentUser.uid,
+      handledByEmail:currentUser.email || "",
+      repairRequestedAt:firebase.database.ServerValue.TIMESTAMP,
+      repairRequestedByUid:currentUser.uid
+    });
+    await writeReportHistory(id,"repair_started","管理員確認開始處理這個 Bug");
+    $("reportStatus").value = "in_progress";
+    $("reportHandledBy").textContent = currentUser.email || currentUser.uid || "—";
+    $("reportRepairBtn").textContent = "處理中";
+    toast("已標記為處理中");
+  }
+
+  async function recheckCurrentReport() {
+    if (!isAdminOperator()) return;
+    const id = String($("reportId").value || "").trim();
+    const item = reports[id];
+    if (!id || !item) return;
+    $("reportHint").textContent = "正在重新檢查這個 Bug…";
+    try {
+      const verification = await runBugServiceVerify(String(item.category || "other"));
+      const ai = await analyzeReportOnAdmin(id,item,verification,"manual_verify");
+      await db.ref("reports/" + id).update({
+        verification:{
+          state:verification.ok ? "passed" : "failed",
+          checkedAt:firebase.database.ServerValue.TIMESTAMP,
+          deterministicPassed:verification.ok === true,
+          deploymentStatus:verification.status || "",
+          deploymentChecks:Array.isArray(verification.checks) ? verification.checks : [],
+          buildVersion:String(verification.buildVersion || ""),
+          mode:"manual_verify"
+        },
+        verificationState:verification.ok ? "passed" : "failed",
+        ...(ai?.analysis ? {
+          aiStatus:String(ai.analysis.status || "inconclusive"),
+          aiConfidence:Number(ai.analysis.confidence || 0),
+          aiTitle:String(ai.analysis.title || "").slice(0,220),
+          aiSummary:String(ai.analysis.summary || "").slice(0,900),
+          aiRootCause:String(ai.analysis.rootCause || "").slice(0,900),
+          aiSuggestion:String(ai.analysis.suggestion || "").slice(0,900),
+          aiModel:String(ai.model || "").slice(0,100),
+          aiCheckedAt:firebase.database.ServerValue.TIMESTAMP
+        } : {})
+      });
+      await writeReportHistory(id,"manual_verify","管理員重新檢查網站與此回報");
+      await loadReports();
+      await openReport(id);
+      $("reportHint").textContent = verification.ok ? "重新檢查通過，AI 已完成分析。" : "重新檢查發現問題，請查看診斷結果。";
+    } catch (error) {
+      $("reportHint").textContent = String(error?.message || "重新檢查失敗");
+    }
+  }
+
   function exportReports() {
     if (!currentHasAdminAccess) return;
     const payload = Object.entries(reports || {}).map(([id,item]) => ({id,...item}));
@@ -602,7 +941,7 @@
           const actions = canManage
             ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
             : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
-          const sourceLabel = item.source === "auto" || item.autoDetected === true ? "自動偵測" : "使用者回報";
+          const sourceLabel = reportSourceLabel(item);
           const occurrenceText = Number(item.occurrences || 0) > 1 ? " · " + Number(item.occurrences) + " 次" : "";
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
@@ -703,7 +1042,30 @@
     $("reportVerificationSummary").textContent = verification.checkedAt
       ? (failed.length ? "失敗：" + failed.slice(0,4).join("、") : "所有目前檢查通過 · " + String(verification.stableChecks || 0) + " 次穩定")
       : "尚未開始";
-    $("reportHint").textContent = account.email ? "回報帳號：" + account.email : "";
+    const aiStatus = String(item.aiStatus || "");
+    const aiStateText = aiStatus === "confirmed" || aiStatus === "still_present"
+      ? "已發現疑似 Bug"
+      : aiStatus === "resolved_candidate"
+        ? "目前看起來可能已修復"
+        : aiStatus === "unavailable"
+          ? "AI 暫時無法分析"
+          : "等待分析";
+    $("reportDiagnosisBadge").textContent = aiStateText;
+    $("reportDetectedBug").textContent =
+      String(item.aiTitle || "") ||
+      String(item.aiRootCause || "") ||
+      String(item.details || "").split("\n")[0] ||
+      "尚未完成診斷";
+    $("reportDetectedReason").textContent =
+      String(item.aiSummary || "") ||
+      (failed.length ? "網站驗證發現：" + failed.slice(0,4).join("、") : "目前自動檢查沒有找到結構性錯誤，但這不代表所有實際行為問題都已排除。");
+    $("reportRepairPlan").textContent =
+      String(item.aiSuggestion || "") ||
+      "先閱讀回報與驗證結果，再決定是否開始處理。";
+    const canManageReport = currentRole === "master" || currentRole === "admin";
+    $("reportRepairBtn").classList.toggle("hidden", !canManageReport || normalizeReportStatus(item.status) === "resolved");
+    $("reportRepairBtn").textContent = normalizeReportStatus(item.status) === "in_progress" ? "處理中" : "開始處理";
+    $("reportHint").textContent = account.email ? "回報帳號：" + account.email + " · 來源：" + reportSourceLabel(item) : "來源：" + reportSourceLabel(item);
     $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
     $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
     show("reportModal");
@@ -1098,6 +1460,10 @@
       currentUser = user || null;
       currentHasAdminAccess = false;
       currentRole = null;
+      if (reportScanTimer) {
+        clearInterval(reportScanTimer);
+        reportScanTimer = null;
+      }
       accounts = {};
       whitelist = {};
       blocks = {};
@@ -1141,6 +1507,7 @@
         startAccountsListener();
         startReportsListener();
         startAuditLogsListener();
+        startReportAutomation();
       } catch (error) {
         console.error(error);
         show("deniedScreen");
@@ -1189,6 +1556,12 @@
       toast(error?.message || "問題回報重新整理失敗");
     }));
     $("reportsExportBtn")?.addEventListener("click", exportReports);
+    $("reportsScanBtn")?.addEventListener("click", () => scanWebsiteAndReports().then(() => toast("自動掃描完成")).catch(error => toast(error?.message || "自動掃描失敗")));
+    $("reportRepairBtn")?.addEventListener("click", () => repairDecisionStart().catch(error => { console.error(error); toast(error?.message || "開始處理失敗"); }));
+    $("reportRecheckBtn")?.addEventListener("click", () => recheckCurrentReport().catch(error => { console.error(error); toast(error?.message || "重新檢查失敗"); }));
+    $("reportLaterBtn")?.addEventListener("click", () => {
+      $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
+    });
     $("auditSearch")?.addEventListener("input", renderAuditLogs);
     $("auditActionFilter")?.addEventListener("change", renderAuditLogs);
     $("auditRefreshBtn")?.addEventListener("click", () => loadAuditLogs().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
