@@ -116,8 +116,8 @@
         body:JSON.stringify(body)
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result || result.ok !== true || !result.analysis) {
-        throw new Error(String(result?.error || "AI 分析失敗"));
+      if (!response.ok || !result || result.ok !== true || !result.analysis || result.degraded === true) {
+        throw new Error(String(result?.error || result?.analysis?.summary || "AI 分析目前不可用"));
       }
 
       const analysis = result.analysis;
