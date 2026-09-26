@@ -107,7 +107,8 @@
     </section>
 
     <section id="section-reports" class="admin-section hidden">
-       <div class="section-head"><div><div class="eyebrow">ISSUE REPORTS</div><h2>問題回報</h2></div><div class="section-head-actions"><button id="reportsExportBtn" class="btn">匯出 JSON</button><button id="reportsRefreshBtn" class="btn primary">重新整理</button></div></div>
+       <div class="section-head"><div><div class="eyebrow">ISSUE REPORTS</div><h2>問題回報</h2></div><div class="section-head-actions"><button id="reportsScanBtn" class="btn primary">🔍 自動掃描網站</button><button id="reportsExportBtn" class="btn">匯出 JSON</button><button id="reportsRefreshBtn" class="btn">重新整理</button></div></div>
+       <div id="reportScanBanner" class="report-scan-banner hidden"></div>
        <div class="toolbar">
          <input id="reportSearch" class="search" type="search" placeholder="搜尋描述、UID、Email、房間碼">
          <select id="reportStatusFilter" class="search report-filter" aria-label="回報狀態">
@@ -216,6 +217,22 @@
      <div class="report-auto-state"><span>自動處理</span><strong id="reportAutoResolve">—</strong></div>
      <div class="report-auto-state"><span>自動驗證</span><strong id="reportVerificationState">—</strong></div>
      <div class="report-auto-state"><span>驗證摘要</span><strong id="reportVerificationSummary">—</strong></div>
+     <div class="report-diagnosis-card">
+       <div class="report-diagnosis-head"><span>系統診斷</span><span id="reportDiagnosisBadge" class="report-diagnosis-badge">等待檢查</span></div>
+       <div class="report-diagnosis-grid">
+         <div><span>發現的 Bug</span><strong id="reportDetectedBug">—</strong></div>
+         <div><span>為什麼判定</span><strong id="reportDetectedReason">—</strong></div>
+         <div class="span-2"><span>建議修法</span><strong id="reportRepairPlan">—</strong></div>
+       </div>
+       <div class="report-repair-question">
+         <strong>要修這個 Bug 嗎？</strong>
+         <div class="modal-actions-right">
+           <button id="reportRepairBtn" class="btn primary" type="button">開始處理</button>
+           <button id="reportRecheckBtn" class="btn" type="button">重新檢查</button>
+           <button id="reportLaterBtn" class="btn" type="button">先不處理</button>
+         </div>
+       </div>
+     </div>
      <div class="report-history-wrap">
        <div class="report-history-title">處理紀錄</div>
        <div id="reportHistoryBody" class="report-history-body"></div>
@@ -256,6 +273,6 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260926-admin-v21"></script>
+<script src="admin.js?v=20260926-admin-v22"></script>
 </body>
 </html>
