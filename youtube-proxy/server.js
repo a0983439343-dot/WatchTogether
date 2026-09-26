@@ -413,18 +413,20 @@ async function analyzeBugWithGemini(input) {
   ].filter(Boolean)));
 
   let analysis = null;
+  let usedModel = model;
   let lastError = null;
 
   for (const candidateModel of models) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         analysis = await requestGeminiModel({
-          model: candidateModel,
+          model: usedModel,
           apiKey,
           prompt,
           schema,
           isRepairPhase
         });
+        usedModel = candidateModel;
         break;
       } catch (error) {
         lastError = error;
@@ -469,7 +471,7 @@ async function analyzeBugWithGemini(input) {
         summary: cleanAiInput(analysis.summary, 1400),
         patches
       },
-      model: candidateModel
+      model: usedModel
     };
   }
 
@@ -494,7 +496,7 @@ async function analyzeBugWithGemini(input) {
       rootCause: cleanAiInput(analysis.rootCause, 900),
       suggestion: cleanAiInput(analysis.suggestion, 900)
     },
-    model: candidateModel
+    model: usedModel
   };
 }
 
