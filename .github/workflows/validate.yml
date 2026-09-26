@@ -148,7 +148,13 @@ jobs:
               let json = {};
               try { json = JSON.parse(text); } catch (_) {}
 
-              if (response.ok && json.ok === true && json.analysis) {
+              if (
+                response.ok &&
+                json.ok === true &&
+                json.degraded !== true &&
+                json.analysis &&
+                /^gemini-3\./.test(String(json.model || ""))
+              ) {
                 console.log("Bug AI endpoint verified:", last);
                 process.exit(0);
               }
