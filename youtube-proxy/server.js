@@ -463,10 +463,13 @@ async function analyzeBugWithGemini(input) {
         }))
       : [];
     return {
-      repairStatus: analysis.repairStatus === "repairable" ? "repairable" : "not_repairable",
-      confidence,
-      summary: cleanAiInput(analysis.summary, 1400),
-      patches
+      analysis: {
+        repairStatus: analysis.repairStatus === "repairable" ? "repairable" : "not_repairable",
+        confidence,
+        summary: cleanAiInput(analysis.summary, 1400),
+        patches
+      },
+      model: candidateModel
     };
   }
 
@@ -476,19 +479,22 @@ async function analyzeBugWithGemini(input) {
   );
 
   return {
-    status: [
-      "confirmed",
-      "still_present",
-      "resolved_candidate",
-      "inconclusive"
-    ].includes(analysis.status)
-      ? analysis.status
-      : "inconclusive",
-    confidence,
-    title: cleanAiInput(analysis.title, 220),
-    summary: cleanAiInput(analysis.summary, 900),
-    rootCause: cleanAiInput(analysis.rootCause, 900),
-    suggestion: cleanAiInput(analysis.suggestion, 900)
+    analysis: {
+      status: [
+        "confirmed",
+        "still_present",
+        "resolved_candidate",
+        "inconclusive"
+      ].includes(analysis.status)
+        ? analysis.status
+        : "inconclusive",
+      confidence,
+      title: cleanAiInput(analysis.title, 220),
+      summary: cleanAiInput(analysis.summary, 900),
+      rootCause: cleanAiInput(analysis.rootCause, 900),
+      suggestion: cleanAiInput(analysis.suggestion, 900)
+    },
+    model: candidateModel
   };
 }
 
