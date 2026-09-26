@@ -158,7 +158,12 @@
     try {
       const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
       const value = snapshot.val();
-      return Boolean(value && value.enabled === true);
+      const role = value && String(value.role || "admin").trim().toLowerCase();
+      return Boolean(
+        value &&
+        value.enabled === true &&
+        (role === "admin" || role === "master")
+      );
     } catch (_) {
       return false;
     }
