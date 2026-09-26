@@ -141,6 +141,8 @@ async function releaseLock(lock) {
 }
 
 function candidateReports(reports) {
+  const seenFingerprints = new Set();
+
   return Object.entries(reports || {})
     .filter(([, report]) => {
       if (!report || typeof report !== "object") return false;
@@ -155,13 +157,31 @@ function candidateReports(reports) {
       if (!requested && (!aiConfirmed || confidence < MIN_AUTO_CONFIDENCE)) return false;
       const lastAttempt = Number(report.repairLastAttemptAt || 0);
       if (lastAttempt && Date.now() - lastAttempt < 15 * 60_000) return false;
+
+      const fingerprint = String(report.fingerprint || "").trim();
+      if (fingerprint) {
+        if (seenFingerprints.has(fingerprint)) return false;
+        seenFingerprints.add(fingerprint);
+      }
+
       return true;
     })
     .sort((a,b) => {
-      const ar = Number(a[1]?.repairRequestedAt || 0);
-      const br = Number(b[1]?.repairRequestedAt || 0);
+      const ar = Number(a[1]?.repairRequestedAt || 0) > 0 ? 1 : 0;
+      const br = Number(b[1]?.repairRequestedAt || 0) > 0 ? 1 : 0;
       if (ar !== br) return br - ar;
-      return Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0);
+
+      const ac = Number(a[1]?.aiConfidence || 0);
+      const bc = Number(b[1]?.aiConfidence || 0);
+      if (ac !== bc) return bc - ac;
+
+      const ao = Number(a[1]?.occurrences || 0);
+      const bo = Number(b[1]?.occurrences || 0);
+      if (ao !== bo) return bo - ao;
+
+      const al = Number(a[1]?.lastSeenAt || a[1]?.createdAt || 0);
+      const bl = Number(b[1]?.lastSeenAt || b[1]?.createdAt || 0);
+      return bl - al;
     })
     .slice(0, MAX_REPORTS);
 }
