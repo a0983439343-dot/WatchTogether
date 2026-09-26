@@ -261,6 +261,72 @@ const REPAIR_SCHEMA = {
   propertyOrdering: ["repairStatus", "confidence", "summary", "patches"]
 };
 
+async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}) {
+  const url =
+    "https://generativelanguage.googleapis.com/v1beta/models/" +
+    encodeURIComponent(model) +
+    ":generateContent";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
+    body: JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [{text: prompt}]
+      }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+        temperature: 0.1,
+        maxOutputTokens: isRepairPhase ? 10000 : 700
+      }
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  const message = data?.error?.message || "";
+
+  if (!response.ok) {
+    const error = new Error(
+      String(message || ("Gemini HTTP " + response.status)).slice(0, 500)
+    );
+    error.httpStatus = response.status;
+    error.model = model;
+    throw error;
+  }
+
+  const outputText = extractGeminiText(data);
+  if (!outputText) {
+    const error = new Error("Gemini 沒有回傳分析結果");
+    error.httpStatus = 502;
+    error.model = model;
+    throw error;
+  }
+
+  let parsedText = outputText.trim();
+
+  if (parsedText.startsWith("```")) {
+    parsedText = parsedText
+      .replace(/^\`\`\`(?:json)?\s*/i, "")
+      .replace(/\s*\`\`\`$/i, "")
+      .trim();
+  }
+
+  try {
+    return JSON.parse(parsedText);
+  } catch (_) {
+    const error = new Error("Gemini 回傳不是有效 JSON");
+    error.httpStatus = 502;
+    error.model = model;
+    error.rawOutput = parsedText.slice(0, 600);
+    throw error;
+  }
+}
+
 async function analyzeBugWithGemini(input) {
   const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
@@ -304,48 +370,48 @@ async function analyzeBugWithGemini(input) {
         JSON.stringify(input, null, 2)
       ].join("\n");
 
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(model) +
-      ":generateContent",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
-      },
-      body: JSON.stringify({
-        contents: [{
-          role: "user",
-          parts: [{text: prompt}]
-        }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-          temperature: 0.1,
-          maxOutputTokens: isRepairPhase ? 10000 : 700
-        }
-      })
+  const models = Array.from(new Set([
+    model,
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite"
+  ].filter(Boolean)));
+
+  let analysis = null;
+  let lastError = null;
+
+  for (const candidateModel of models) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        analysis = await requestGeminiModel({
+          model: candidateModel,
+          apiKey,
+          prompt,
+          schema,
+          isRepairPhase
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+        const retryable =
+          Number(error?.httpStatus) === 429 ||
+          Number(error?.httpStatus) === 500 ||
+          Number(error?.httpStatus) === 502 ||
+          Number(error?.httpStatus) === 503 ||
+          /high demand|quota|rate limit|temporarily|try again/i.test(
+            String(error?.message || "")
+          );
+
+        if (!retryable || attempt === 1) break;
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
     }
-  );
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const message = data?.error?.message || ("Gemini HTTP " + response.status);
-    throw new Error(String(message).slice(0, 500));
+    if (analysis) break;
   }
 
-  const outputText = extractGeminiText(data);
-  if (!outputText) {
-    throw new Error("Gemini 沒有回傳分析結果");
-  }
-
-  let analysis;
-  try {
-    analysis = JSON.parse(outputText);
-  } catch (_) {
-    throw new Error("Gemini 回傳不是有效 JSON");
+  if (!analysis) {
+    throw lastError || new Error("Gemini 分析失敗");
   }
 
   if (isRepairPhase) {
