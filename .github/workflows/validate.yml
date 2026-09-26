@@ -133,25 +133,29 @@ jobs:
 
           let last = "";
           for (let attempt = 1; attempt <= 15; attempt += 1) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 20_000);
             try {
               const response = await fetch(url, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: payload
+                body: payload,
+                signal: controller.signal
               });
               const text = await response.text();
               last = "HTTP " + response.status + " " + text.slice(0, 500);
 
-              if (response.status !== 502) {
-                let json = {};
-                try { json = JSON.parse(text); } catch (_) {}
-                if (response.ok && json.ok === true && json.analysis) {
-                  console.log("Bug AI endpoint verified:", last);
-                  process.exit(0);
-                }
+              let json = {};
+              try { json = JSON.parse(text); } catch (_) {}
+
+              if (response.ok && json.ok === true && json.analysis) {
+                console.log("Bug AI endpoint verified:", last);
+                process.exit(0);
               }
             } catch (error) {
               last = String(error?.message || error);
+            } finally {
+              clearTimeout(timeout);
             }
 
             console.log("Bug AI endpoint not ready, attempt " + attempt + "/15:", last);
