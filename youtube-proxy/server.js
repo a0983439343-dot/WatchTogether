@@ -323,7 +323,7 @@ async function analyzeBugWithGemini(input) {
           responseMimeType: "application/json",
           responseSchema: schema,
           temperature: 0.1,
-          maxOutputTokens: 700
+          maxOutputTokens: isRepairPhase ? 10000 : 700
         }
       })
     }
