@@ -1,9 +1,9 @@
 {
   "workflow": "Validate WatchTogether",
-  "runId": 36234972572,
-  "runNumber": 752,
+  "runId": 36235074225,
+  "runNumber": 753,
   "conclusion": "failure",
-  "headSha": "3adc27942b17881d67a41b242fed69c999fb4b28",
-  "url": "https://github.com/a0983439343-dot/WatchTogether/actions/runs/36234972572",
-  "updatedAt": "2026-09-26T10:11:03Z"
+  "headSha": "8de50cfba29a1d262f23096ad1ce42fa1b468f2a",
+  "url": "https://github.com/a0983439343-dot/WatchTogether/actions/runs/36235074225",
+  "updatedAt": "2026-09-26T10:13:16Z"
 }
