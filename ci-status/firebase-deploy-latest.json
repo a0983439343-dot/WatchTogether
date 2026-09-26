@@ -1,9 +1,0 @@
-{
-  "workflow": "Deploy Firebase Rules after Validation",
-  "runId": 36235350253,
-  "runNumber": 24,
-  "conclusion": "success",
-  "headSha": "6a89131a2f56cee2286666305c269ba987418620",
-  "url": "https://github.com/a0983439343-dot/WatchTogether/actions/runs/36235350253",
-  "updatedAt": "2026-09-26T10:18:21Z"
-}
