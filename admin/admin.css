@@ -513,3 +513,103 @@ html[data-device="phone"][data-orientation="portrait"] .toast{
     min-width: 900px;
   }
 }
+
+
+.report-scan-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, rgba(255,255,255,.1));
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.report-diagnosis-card {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border, rgba(255,255,255,.1));
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+}
+
+.report-diagnosis-head,
+.report-repair-question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-diagnosis-head > span:first-child {
+  font-weight: 800;
+}
+
+.report-diagnosis-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(125,185,255,.12);
+  color: #9dc8ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-diagnosis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.report-diagnosis-grid > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 11px;
+  background: rgba(255,255,255,.025);
+}
+
+.report-diagnosis-grid span {
+  font-size: 11px;
+  color: var(--muted, #8b93a7);
+}
+
+.report-diagnosis-grid strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.report-repair-question {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, rgba(255,255,255,.08));
+}
+
+.report-repair-question > strong {
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .report-diagnosis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-repair-question {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .report-repair-question .modal-actions-right {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .report-repair-question .modal-actions-right .btn {
+    flex: 1 1 130px;
+  }
+}
