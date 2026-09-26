@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test:rules": "firebase emulators:exec --only database \"node --test tests/database.rules.test.js\"",
-    "monitor:synthetics": "npx @elastic/synthetics synthetics/watchtogether.journey.js"
+    "monitor:synthetics": "npx @elastic/synthetics synthetics/watchtogether.journey.js",
+    "monitor:repair": "node scripts/autonomous-repair.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "latest",
