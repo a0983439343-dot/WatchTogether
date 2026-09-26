@@ -138,6 +138,39 @@ test.after(async () => {
   await env.cleanup();
 });
 
+test("reports: manually submitted reports can store verification but cannot self-resolve before approval", async () => {
+  const ref = db(USER_UID, userToken).ref("reports/manual-verify");
+  await assertSucceeds(ref.set({
+    uid: USER_UID,
+    category: "playback",
+    details: "manual verification target",
+    createdAt: Date.now(),
+    status: "open",
+    source: "manual",
+    autoVerifyEnabled: true,
+    verificationState: "monitoring",
+    fingerprint: "manual-verify-123456"
+  }));
+
+  await assertSucceeds(ref.child("verification").set({
+    state: "passed",
+    checkedAt: Date.now(),
+    deterministicPassed: true,
+    stableChecks: 1
+  }));
+
+  await assertFails(ref.child("status").set("resolved"));
+
+  await assertSucceeds(ref.child("verification").update({
+    state: "approved",
+    approved: true,
+    stableChecks: 2,
+    checkedAt: Date.now()
+  }));
+
+  await assertSucceeds(ref.child("status").set("resolved"));
+});
+
 test("reports: authenticated user can create only their own report", async () => {
   const ref = db(USER_UID, userToken).ref("reports/new-report");
 
@@ -169,11 +202,23 @@ test("reports: automatic bug records can be reopened and updated only by their o
     status: "open",
     source: "auto",
     autoDetected: true,
+    autoVerifyEnabled: true,
     fingerprint: "1234567890abcdef",
     buildVersion: "formal-test-v1",
     firstSeenAt: Date.now(),
     lastSeenAt: Date.now(),
     occurrences: 1
+  }));
+
+  await assertFails(ref.update({
+    status: "resolved"
+  }));
+
+  await assertSucceeds(ref.child("verification").set({
+    approved: true,
+    state: "approved",
+    checkedAt: Date.now(),
+    stableChecks: 2
   }));
 
   await assertSucceeds(ref.update({
