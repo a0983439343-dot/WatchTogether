@@ -301,7 +301,7 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         thinkingConfig: {
           thinkingLevel: isRepairPhase ? "high" : "medium"
         },
-        maxOutputTokens: isRepairPhase ? 32768 : 4096
+        maxOutputTokens: isRepairPhase ? 16000 : 1800
       }
     })
   });
@@ -343,7 +343,17 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
   }
 
   try {
-    return JSON.paasync function analyzeBugWithGemini(input) {
+    return JSON.parse(parsedText);
+  } catch (_) {
+    const error = new Error("Gemini 回傳不是有效 JSON");
+    error.httpStatus = 502;
+    error.model = model;
+    error.rawOutput = parsedText.slice(0, 600);
+    throw error;
+  }
+}
+
+async function analyzeBugWithGemini(input) {
   const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY 未設定");
@@ -453,13 +463,10 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         }))
       : [];
     return {
-      analysis: {
-        repairStatus: analysis.repairStatus === "repairable" ? "repairable" : "not_repairable",
-        confidence,
-        summary: cleanAiInput(analysis.summary, 1400),
-        patches
-      },
-      model: candidateModel
+      repairStatus: analysis.repairStatus === "repairable" ? "repairable" : "not_repairable",
+      confidence,
+      summary: cleanAiInput(analysis.summary, 1400),
+      patches
     };
   }
 
@@ -469,25 +476,16 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
   );
 
   return {
-    analysis: {
-      status: [
-        "confirmed",
-        "still_present",
-        "resolved_candidate",
-        "inconclusive"
-      ].includes(analysis.status)
-        ? analysis.status
-        : "inconclusive",
-      confidence,
-      title: cleanAiInput(analysis.title, 220),
-      summary: cleanAiInput(analysis.summary, 900),
-      rootCause: cleanAiInput(analysis.rootCause, 900),
-      suggestion: cleanAiInput(analysis.suggestion, 900)
-    },
-    model: candidateModel
-  };
-}
- title: cleanAiInput(analysis.title, 220),
+    status: [
+      "confirmed",
+      "still_present",
+      "resolved_candidate",
+      "inconclusive"
+    ].includes(analysis.status)
+      ? analysis.status
+      : "inconclusive",
+    confidence,
+    title: cleanAiInput(analysis.title, 220),
     summary: cleanAiInput(analysis.summary, 900),
     rootCause: cleanAiInput(analysis.rootCause, 900),
     suggestion: cleanAiInput(analysis.suggestion, 900)
@@ -729,6 +727,7 @@ function aiCacheKey(input) {
 function degradedAiResult(input, error) {
   const phase = String(input?.phase || "");
   const reason = String(error?.message || "AI provider unavailable").slice(0, 300);
+
   if (phase === "repair") {
     return {
       analysis: {
@@ -741,6 +740,7 @@ function degradedAiResult(input, error) {
       degraded: true
     };
   }
+
   return {
     analysis: {
       status: "inconclusive",
@@ -800,12 +800,14 @@ async function handleAiAnalyze(req, res) {
   };
 
   const cacheKey = aiCacheKey(input);
+
   if (input.phase !== "repair") {
     const cached = aiCache.get(cacheKey);
     if (cached && Date.now() - cached.createdAt < AI_CACHE_TTL_MS) {
       send(res, 200, JSON.stringify({
         ok: true,
         cached: true,
+        degraded: false,
         model: cached.model,
         analysis: cached.analysis
       }));
@@ -838,17 +840,14 @@ async function handleAiAnalyze(req, res) {
   }
 
   const work = (async () => {
-    try {
-      return await analyzeBugWithGemini(input);
-    } catch (error) {
-      console.error("[ai-analyze]", error?.message || error);
-      throw error;
-    }
+    return await analyzeBugWithGemini(input);
   })();
 
   aiInflight.set(inflightKey, work);
+
   try {
     const result = await work;
+
     if (input.phase !== "repair") {
       aiCache.set(cacheKey, {
         createdAt: Date.now(),
@@ -856,6 +855,7 @@ async function handleAiAnalyze(req, res) {
         analysis: result.analysis
       });
     }
+
     send(res, 200, JSON.stringify({
       ok: true,
       degraded: false,
@@ -863,6 +863,7 @@ async function handleAiAnalyze(req, res) {
       analysis: result.analysis
     }));
   } catch (error) {
+    console.error("[ai-analyze]", error?.message || error);
     const degraded = degradedAiResult(input, error);
     send(res, 200, JSON.stringify({
       ok: true,
