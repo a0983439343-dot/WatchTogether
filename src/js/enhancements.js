@@ -1249,7 +1249,7 @@ async function sendReport() {
       verificationStableChecks:0,
       fingerprint:typeof wt.makeReportFingerprint === "function"
         ? wt.makeReportFingerprint(String($("wtReportCategory").value || "other"),details)
-        : "",
+        : "manual-" + Date.now().toString(36),
       occurrences:1,
       firstSeenAt:wt.serverTs(),
       lastSeenAt:wt.serverTs(),
