@@ -2,7 +2,7 @@
   "use strict";
   const $=id=>document.getElementById(id);
   const DB=()=>window.db||window.firebase?.database?.();
-  const state={maintenance:null,chart:null,restrictionSelection:new Set(),rolePermissions:new Set()};
+  const state={maintenance:null,chart:null,restrictionSelection:new Set(),rolePermissions:new Set(),customRoleId:"",customPermissions:new Set(),hasCustomRole:false};
   const features=[
     ["建立房間","create_room"],["加入公開房間","join_public_room"],["聊天室","chat"],["播放控制","playback_control"],["AI","ai"],["AI Agent","ai_agent"],
     ["檔案/圖片上傳","uploads"],["好友系統","friends"],["投票","polls"],["播放清單","playlists"],["公開房間探索","public_explore"]
@@ -18,6 +18,69 @@
     document.querySelectorAll("#app .nav-item[data-section]").forEach(b=>b.classList.toggle("active",b.dataset.section===name));
     try{history.replaceState(null,"","#"+name);sessionStorage.setItem("watchtogether-admin-section",name)}catch(_){}
   }
+  function isMaster(){
+    const user=window.firebase?.auth?.().currentUser;
+    return Boolean(
+      user &&
+      (String(user.email||"").trim().toLowerCase()==="a0983439343@gmail.com" ||
+       String(user.uid||"")==="35d45a23-b648-4caf-a6d5-a69112860551")
+    );
+  }
+
+  function hasPermission(permission){
+    if(isMaster())return true;
+    if(!state.hasCustomRole)return true;
+    return state.customPermissions.has(permission);
+  }
+
+  async function loadAdminPermissionContext(){
+    const db=DB(),user=window.firebase?.auth?.().currentUser;
+    if(!db||!user||user.isAnonymous)return;
+    if(isMaster()){state.hasCustomRole=false;state.customPermissions=new Set();return;}
+    try{
+      const roleSnap=await db.ref("admin/userRoles/"+user.uid).once("value");
+      const roleId=String(roleSnap.val()?.roleId||"").trim();
+      if(!roleId){
+        state.hasCustomRole=false;
+        state.customPermissions=new Set();
+        return;
+      }
+      const roleSnap2=await db.ref("admin/roles/"+roleId).once("value");
+      const role=roleSnap2.val()||{};
+      state.customRoleId=roleId;
+      state.hasCustomRole=true;
+      state.customPermissions=new Set(
+        Object.entries(role.permissions||{}).filter(([,v])=>v===true).map(([k])=>k)
+      );
+    }catch(error){
+      console.warn("[WT2 Admin] role context:",error);
+      state.hasCustomRole=false;
+      state.customPermissions=new Set();
+    }
+  }
+
+  function applyPermissionVisibility(){
+    const sectionPermissions={
+      security:"audit.view",
+      analytics:"analytics.view",
+      maintenance:"maintenance.manage",
+      restrictions:"restrictions.manage",
+      roles:"roles.manage",
+      ai:"ai.use",
+      debug:"audit.view",
+      versions:"settings.edit",
+      settings:"settings.edit"
+    };
+    Object.entries(sectionPermissions).forEach(([section,permission])=>{
+      const allowed=hasPermission(permission);
+      document.querySelectorAll('#app [data-section="'+section+'"]').forEach(node=>{
+        node.classList.toggle("hidden",!allowed);
+      });
+      const sectionNode=$("section-"+section);
+      if(sectionNode && !allowed)sectionNode.classList.add("hidden");
+    });
+  }
+
   function addNav(name,label,icon){
     const sidebar=document.querySelector("#app .sidebar");if(!sidebar||sidebar.querySelector('[data-section="'+name+'"]'))return;
     const b=document.createElement("button");b.type="button";b.className="nav-item";b.dataset.section=name;b.textContent=(icon?icon+" ":"")+label;sidebar.appendChild(b);
@@ -210,9 +273,11 @@
     $("ad2RestrictionHint").textContent=clear?"限制已解除。":"功能限制已套用。";await loadRestriction();
   }
   function refreshAll(){renderAnalytics();renderSecurity();readMaintenance();loadRestriction();}
-  function boot(){
+  async function boot(){
     if(!document.querySelector("#app"))return;
     renderNewUI();renderFeatureChecks();bindNav();
+    await loadAdminPermissionContext();
+    applyPermissionVisibility();
     $("ad2MaintenanceReload")?.addEventListener("click",readMaintenance);
     $("ad2SetPasswordBtn")?.addEventListener("click",()=>setPassword().catch(e=>{console.error(e);$("ad2MaintHint").textContent="設定密碼失敗。"}));
     $("ad2CloseSiteBtn")?.addEventListener("click",()=>closeSite().catch(e=>{console.error(e);$("ad2MaintHint").textContent=e?.message||"關站失敗。"}));
