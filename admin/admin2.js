@@ -186,7 +186,7 @@
     try{
       const snap=await db.ref("admin/roles").once("value"); const values=snap.val()||{};
       const entries=Object.entries(values).sort((a,b)=>String(a[1]?.name||a[0]).localeCompare(String(b[1]?.name||b[0])));
-      wrap.innerHTML=entries.length?entries.map(([id,v])=>'<button type="button" class="ad2-list-row" data-role-id="'+escapeHtml(id)+'" style="width:100%;text-align:left;color:inherit"><strong>'+escapeHtml(v?.name||id)+'</strong><span>'+Object.keys(v?.permissions||{}).filter(k=>v.permissions[k]===true).length+' 個權限</span></button>').join(""):'<div class="ad2-muted">尚未建立自訂角色。</div>';
+      wrap.innerHTML=entries.length?entries.map(([id,v])=>'<button type="button" class="ad2-list-row" data-role-id="'+escapeHtml(id)+'" style="width:100%;text-align:left;color:inherit"><strong>'+escapeHtml(v?.name||id)+'</strong><span>'+Object.keys(decodePermissions(v?.permissions||{})).length+' 個權限</span></button>').join(""):'<div class="ad2-muted">尚未建立自訂角色。</div>';
       wrap.querySelectorAll("[data-role-id]").forEach(b=>b.addEventListener("click",()=>loadRoleIntoEditor(b.dataset.roleId)));
     }catch(e){wrap.innerHTML='<div class="ad2-muted">無法讀取角色資料。</div>';console.warn("[WT2 Admin] roles:",e)}
   }
@@ -194,7 +194,8 @@
     try{
       const s=await DB().ref("admin/roles/"+roleId).once("value"); const v=s.val(); if(!v)return;
       if($("ad2RoleId"))$("ad2RoleId").value=roleId; if($("ad2RoleName"))$("ad2RoleName").value=v.name||"";
-      document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=v.permissions?.[x.dataset.permission]===true);
+      const decoded=decodePermissions(v.permissions||{});
+      document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=decoded[x.dataset.permission]===true);
     }catch(e){console.warn("[WT2 Admin] load role:",e)}
   }
   async function saveRole(){
