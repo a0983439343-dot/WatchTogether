@@ -11301,6 +11301,19 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     state.room =
       roomSnapshot.val();
 
+    try {
+      const roomMetaSnapshot = await db
+        .ref("roomMeta/" + state.roomId)
+        .once("value");
+      const roomMetaValue = roomMetaSnapshot.val() || {};
+      state.room.visibility = String(roomMetaValue.visibility || "personal");
+      state.room.isPersonal = state.room.visibility === "personal";
+      state.room.joinMode = String(roomMetaValue.joinMode || (state.room.isPersonal ? "invite_only" : "open"));
+    } catch (_) {
+      state.room.visibility = state.room.visibility || "personal";
+      state.room.isPersonal = state.room.visibility === "personal";
+    }
+
     state.isOwner =
       state.room.owner ===
       state.uid;
