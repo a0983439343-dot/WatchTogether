@@ -7969,6 +7969,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       !state.adminJoinOverride &&
       !isRoomOwner &&
       !isExistingMember &&
+      String(metaData.joinMode || "open") === "invite_only"
+    ) {
+      const inviteSnapshot = await db.ref("roomInvites/" + roomId + "/" + state.uid).once("value");
+      if (inviteSnapshot.val() !== true) {
+        throw new Error("這個房間是邀請制，你目前不在邀請名單中");
+      }
+    }
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      !isExistingMember &&
       String(metaData.visibility || "personal") === "public" &&
       String(metaData.joinMode || "open") === "approval"
     ) {
