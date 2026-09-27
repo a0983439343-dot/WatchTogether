@@ -734,6 +734,11 @@ test("2.0: public room index is readable but owner-controlled", async () => {
       .ref("publicRooms/ABC123")
       .update({ name: "forged" })
   );
+  await assertFails(
+    db(VIEWER_UID, viewerToken)
+      .ref("publicRooms/ABC123")
+      .update({ name: "viewer-forged" })
+  );
 });
 
 
