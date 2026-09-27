@@ -509,7 +509,7 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
   );
 });
 
-test("audit logs: admin can append but cannot modify or delete", async () => {
+test("audit logs: admin can append and delete, but cannot modify an existing entry", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs");
 
   await assertSucceeds(ref.push({
@@ -553,8 +553,12 @@ test("audit logs: admin can append but cannot modify or delete", async () => {
     })
   );
 
-  await assertFails(
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + existing).remove()
+  );
+
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/auditLogs/" + existing).remove()
   );
 });
 
@@ -667,6 +671,45 @@ test("2.0: public maintenance state is public-readable but admin-write only", as
   );
 });
 
+test("2.0: active per-user feature restrictions are enforced and expire", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("admin/restrictionsByUid/" + USER_UID).set({
+      features: {chat: true, create_room: true, friends: true},
+      reason: "temporary test",
+      blockedUntil: Date.now() + 120000,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    });
+  });
+
+  await assertFails(
+    db(USER_UID, userToken).ref("chat/ABC123").push({
+      uid: USER_UID, name: "User", type: "text", text: "blocked", createdAt: Date.now()
+    })
+  );
+
+  await assertFails(
+    db(USER_UID, userToken).ref("rooms/NEW123").set({
+      owner: USER_UID, name: "Blocked Room", sourceType: "youtube"
+    })
+  );
+
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("admin/restrictionsByUid/" + USER_UID + "/blockedUntil").set(Date.now() - 1000);
+  });
+
+  await assertSucceeds(
+    db(USER_UID, userToken).ref("rooms/NEW123").set({
+      owner: USER_UID, name: "Expired Restriction Room", sourceType: "youtube"
+    })
+  );
+
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("admin/restrictionsByUid/" + USER_UID).remove();
+    await context.database().ref("rooms/NEW123").remove();
+  });
+});
+
 test("2.0: user feature restrictions can only be written by admin", async () => {
   const path = "admin/restrictionsByUid/" + USER_UID;
   await assertFails(
@@ -688,6 +731,40 @@ test("2.0: user feature restrictions can only be written by admin", async () => 
     })
   );
   await assertSucceeds(db(USER_UID, userToken).ref(path).once("value"));
+});
+
+test("2.0: custom admin role permissions are enforced", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  await master.ref("admin/roles/restricted_admin").set({
+    name: "Restricted Admin",
+    permissions: {"rooms.view": true, "audit.view": true},
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "restricted_admin",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("rooms/ABC123").once("value")
+  );
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("rooms/ABC123/name").set("forged")
+  );
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("admin/restrictionsByUid/" + USER_UID).set({
+      features: {chat: true},
+      reason: "denied",
+      blockedUntil: 0,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/restricted_admin").remove();
 });
 
 test("2.0: role definitions and assignments are master-only writes", async () => {
