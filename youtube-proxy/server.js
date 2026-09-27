@@ -141,7 +141,7 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
     "Content-Type": type,
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Authorization",
     "Access-Control-Expose-Headers": "Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified",
     "Cache-Control": "no-store"
   });
@@ -1590,7 +1590,7 @@ function setStreamResponseHeaders(res, upstream) {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Authorization",
     "Cache-Control": "no-store"
   };
 
@@ -1939,7 +1939,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-      "Access-Control-Allow-Headers": "Range,Content-Type"
+      "Access-Control-Allow-Headers": "Range,Content-Type,Authorization"
     });
     res.end();
     return;
