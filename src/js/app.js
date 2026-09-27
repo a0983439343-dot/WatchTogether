@@ -299,6 +299,8 @@
     roomRolesRef: null,
     roomRoles: {},
     roomFeatureRestrictions: {},
+    systemFeatureFlags: {},
+    globalFeatureFlagsLoaded: false,
     lastMembers: {},
 
     kickedRef: null,
@@ -594,6 +596,28 @@
       ":" +
       String(secs).padStart(2, "0")
     );
+  }
+
+
+  async function refreshGlobalFeatureFlags() {
+    if (!db) {
+      state.systemFeatureFlags = {};
+      state.globalFeatureFlagsLoaded = false;
+      return;
+    }
+    try {
+      const snapshot = await db.ref("system/featureFlags").once("value");
+      state.systemFeatureFlags = snapshot.val() || {};
+      state.globalFeatureFlagsLoaded = true;
+    } catch (error) {
+      state.systemFeatureFlags = {};
+      state.globalFeatureFlagsLoaded = false;
+      console.warn("讀取全站功能旗標失敗:", error);
+    }
+  }
+
+  function isGlobalFeatureEnabled(feature) {
+    return state.systemFeatureFlags?.[String(feature || "")] !== false;
   }
 
 
@@ -3828,6 +3852,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (await isCurrentUserFeatureRestricted("playlists")) {
       throw new Error("你的帳號目前無法使用播放清單");
+    }
+
+    if (!isGlobalFeatureEnabled("playlists")) {
+      throw new Error("目前暫停使用播放清單");
     }
 
     if (!video?.id) {
@@ -7301,6 +7329,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (await isCurrentUserFeatureRestricted("create_room")) {
       throw new Error("你的帳號目前無法建立房間");
+    }
+
+    if (!isGlobalFeatureEnabled("create_room")) {
+      throw new Error("目前暫停建立新房間");
     }
 
     await ensureNotGloballyBlocked(auth?.currentUser || null);
@@ -12161,6 +12193,10 @@ roleLabel
       throw new Error("你的帳號目前無法使用聊天室");
     }
 
+    if (!isGlobalFeatureEnabled("chat")) {
+      throw new Error("目前暫停使用聊天室");
+    }
+
     if (state.room && !state.isOwner && !hasRoomPermission("chat")) {
       throw new Error("你在這個房間沒有聊天權限");
     }
@@ -14415,6 +14451,21 @@ roleLabel
 
     if (!auth) {
       await initializeFirebase();
+
+      await refreshGlobalFeatureFlags();
+      if (db) {
+        db.ref("system/featureFlags").on("value", snapshot => {
+          state.systemFeatureFlags = snapshot.val() || {};
+          state.globalFeatureFlagsLoaded = true;
+          try {
+            window.dispatchEvent(new CustomEvent("watchtogether:feature-flags-changed", {
+              detail: { ...state.systemFeatureFlags }
+            }));
+          } catch (_) {}
+        }, error => {
+          console.warn("全站功能旗標監聽失敗:", error);
+        });
+      }
     }
 
     const currentUser =
