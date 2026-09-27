@@ -59,7 +59,7 @@ function decodeB64UrlJson(value){
 }
 
 function parseJwkMaxAge(cacheControl){
-  const match=String(cacheControl||"").match(/max-age=(\\d+)/i);
+  const match=String(cacheControl||"").match(/max-age=(\d+)/i);
   const seconds=match ? Number(match[1]) : 3600;
   return Math.max(300,Math.min(21600,Number.isFinite(seconds)?seconds:3600))*1000;
 }
@@ -337,7 +337,7 @@ function extractGeminiText(value) {
 function cleanAiInput(value, max = 2400) {
   return String(value == null ? "" : value)
     .replace(/[\\u0000-\\u001f\\u007f]/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
 }
