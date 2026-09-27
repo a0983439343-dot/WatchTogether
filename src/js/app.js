@@ -7235,6 +7235,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
     }
 
+    if (await isCurrentUserFeatureRestricted("create_room")) {
+      throw new Error("你的帳號目前無法建立房間");
+    }
+
     await ensureNotGloballyBlocked(auth?.currentUser || null);
 
     let roomId =
@@ -11843,6 +11847,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       return;
     }
 
+    if (await isCurrentUserFeatureRestricted("chat")) {
+      throw new Error("你的帳號目前無法使用聊天室");
+    }
+
     if (
       state.databaseConnected !== true
     ) {
@@ -14519,6 +14527,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   window.WT_CORE.createRoomWithVideo =
     createRoomWithVideo;
+  window.WT_CORE.joinRoom = joinRoom;
+  window.WT_CORE.sendChat = sendChat;
 
   window.WT_CORE.setMemberName = setMemberName;
   window.WT_CORE.getMemberName = getMemberName;
