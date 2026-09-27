@@ -767,6 +767,26 @@ test("2.0: custom admin role permissions are enforced", async () => {
   await master.ref("admin/roles/restricted_admin").remove();
 });
 
+test("2.0: assigned admin can read its own custom role definition", async () => {
+  const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
+  await master.ref("admin/roles/read_test").set({
+    name: "Read Test",
+    permissions: { rooms__view: true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "read_test",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/roles/read_test").once("value")
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/read_test").remove();
+});
+
 test("2.0: role definitions and assignments are master-only writes", async () => {
   await assertFails(
     db(ADMIN_UID, adminToken).ref("admin/roles/core_admin").set({
