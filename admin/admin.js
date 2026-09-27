@@ -385,7 +385,8 @@
     "whitelist.add": "加入白名單",
     "whitelist.role": "調整權限",
     "whitelist.toggle": "啟用 / 停用",
-    "whitelist.remove": "移除白名單"
+    "whitelist.remove": "移除白名單",
+    "audit.delete": "刪除操作紀錄"
   };
 
   function stopAuditLogsListener() {
@@ -520,6 +521,37 @@
     });
   }
 
+  async function deleteAuditLog(id) {
+    if (!isAdminOperator()) {
+      toast("沒有刪除操作紀錄的權限");
+      return;
+    }
+    const key = String(id || "").trim();
+    if (!key || !auditLogs?.[key]) {
+      toast("找不到這筆操作紀錄");
+      return;
+    }
+    const item = auditLogs[key];
+    const label = AUDIT_ACTION_LABELS[String(item.action || "other")] || String(item.action || "other");
+    const confirmed = window.confirm(
+      "確定要刪除這筆操作紀錄嗎？\n\n" +
+      "時間：" + formatDate(item.createdAt) + "\n" +
+      "操作：" + label + "\n" +
+      "內容：" + String(item.details || "—").slice(0, 300) + "\n\n" +
+      "刪除後無法復原。"
+    );
+    if (!confirmed) return;
+
+    await db.ref("admin/auditLogs/" + key).remove();
+    await writeAuditLog(
+      "audit.delete",
+      String(item.targetUid || ""),
+      String(item.targetName || "操作紀錄"),
+      "刪除操作紀錄 " + key + "（原操作：" + label + "）"
+    );
+    toast("操作紀錄已刪除");
+  }
+
   function renderAuditLogs() {
     const query = String($("auditSearch")?.value || "").trim().toLowerCase();
     const filter = String($("auditActionFilter")?.value || "all");
@@ -544,15 +576,22 @@
           const label = AUDIT_ACTION_LABELS[action] || action;
           const actor = String(item.actorEmail || item.actorUid || "—");
           const target = String(item.targetName || item.targetUid || "—");
+          const canDelete = isAdminOperator();
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
             '<td><span class="audit-action">' + escapeHtml(label) + '</span></td>' +
             '<td class="audit-target"><div class="primary-text">' + escapeHtml(target) + '</div><span class="small">' + escapeHtml(item.targetUid || "") + '</span></td>' +
             '<td class="audit-content">' + escapeHtml(item.details || "") + '</td>' +
+            '<td><div class="row-actions">' + (canDelete ? '<button class="btn danger" type="button" data-audit-delete="' + escapeHtml(id) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') + '</div></td>' +
           '</tr>';
         }).join("")
-      : '<tr><td colspan="5" class="muted">目前沒有操作紀錄。</td></tr>';
+      : '<tr><td colspan="6" class="muted">目前沒有操作紀錄。</td></tr>';
+
+    $("auditBody").querySelectorAll("[data-audit-delete]").forEach(button => {
+      button.addEventListener("click", () => deleteAuditLog(button.dataset.auditDelete)
+        .catch(error => { console.error(error); toast(error?.message || "刪除操作紀錄失敗"); }));
+    });
   }
 
   function getBugServiceBase() {
