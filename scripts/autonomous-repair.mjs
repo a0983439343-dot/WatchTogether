@@ -69,14 +69,92 @@ function allowedPaths(category) {
     "src/js/app.js",
     "src/js/enhancements.js",
     "src/js/bug-monitor.js",
+    "src/js/chat.js",
     "sw.js",
     "admin/admin.js",
     "admin/admin.html",
     "admin/admin.css"
   ]);
-  if (category === "room" || category === "account") base.add("config/database.rules.json");
-  if (category === "playback" || category === "search") base.add("youtube-proxy/server.js");
+
+  if (category === "room" || category === "account" || category === "chat") {
+    base.add("config/database.rules.json");
+  }
+
+  if (category === "playback" || category === "search") {
+    base.add("youtube-proxy/server.js");
+  }
+
+  if (category === "search") {
+    base.add("workers/youtube-search.js");
+  }
+
   return base;
+}
+
+function repairContextPaths(category) {
+  const maps = {
+    playback: [
+      "index.html",
+      "src/js/app.js",
+      "src/js/enhancements.js",
+      "src/js/bug-monitor.js",
+      "youtube-proxy/server.js"
+    ],
+    search: [
+      "index.html",
+      "src/js/enhancements.js",
+      "src/js/bug-monitor.js",
+      "youtube-proxy/server.js",
+      "workers/youtube-search.js"
+    ],
+    room: [
+      "index.html",
+      "src/js/app.js",
+      "src/js/enhancements.js",
+      "src/js/chat.js",
+      "src/js/bug-monitor.js",
+      "config/database.rules.json"
+    ],
+    chat: [
+      "index.html",
+      "src/js/app.js",
+      "src/js/enhancements.js",
+      "src/js/chat.js",
+      "src/js/bug-monitor.js",
+      "config/database.rules.json"
+    ],
+    account: [
+      "index.html",
+      "src/js/app.js",
+      "src/js/enhancements.js",
+      "src/js/bug-monitor.js",
+      "admin/admin.js",
+      "admin/admin.html",
+      "admin/admin.css",
+      "config/database.rules.json"
+    ],
+    ui: [
+      "index.html",
+      "src/js/app.js",
+      "src/js/enhancements.js",
+      "src/js/bug-monitor.js",
+      "admin/admin.js",
+      "admin/admin.html",
+      "admin/admin.css"
+    ],
+    other: [
+      "index.html",
+      "src/js/app.js",
+      "src/js/enhancements.js",
+      "src/js/bug-monitor.js",
+      "src/js/chat.js",
+      "admin/admin.js",
+      "admin/admin.html",
+      "admin/admin.css",
+      "sw.js"
+    ]
+  };
+  return maps[category] || maps.other;
 }
 
 function publicPath(file) {
@@ -248,8 +326,8 @@ async function requestRepair(report, verification, files) {
     body: JSON.stringify(payload),
     timeoutMs: 60_000
   });
-  if (!result.ok || !result.json?.ok || !result.json?.analysis) {
-    throw new Error(clean(result.json?.error || "AI 自動修復分析失敗", 900));
+  if (!result.ok || !result.json?.ok || result.json?.degraded === true || !result.json?.analysis) {
+    throw new Error(clean(result.json?.error || "AI 自動修復分析失敗或處於降級模式", 900));
   }
   return {
     ...result.json.analysis,
@@ -257,12 +335,13 @@ async function requestRepair(report, verification, files) {
   };
 }
 
-function normalizePatch(patch, allow) {
+function normalizePatch(patch, allow, contextFiles) {
   const file = String(patch?.path || "").trim().replace(/^\//, "");
   const find = String(patch?.find || "");
   const replace = String(patch?.replace || "");
   const reason = clean(patch?.reason, 700);
   if (!allow.has(file)) throw new Error("AI 嘗試修改未允許檔案：" + file);
+  if (!contextFiles.has(file)) throw new Error("AI 嘗試修改沒有提供給它的檔案：" + file);
   if (!find || find.length < 8) throw new Error("AI patch 的 find 太短：" + file);
   if (find.length > 24_000 || replace.length > 24_000) throw new Error("AI patch 過大：" + file);
   if (/\.github\/|package\.json|package-lock\.json|node_modules|\.env|credentials|secret/i.test(file)) {
@@ -271,10 +350,10 @@ function normalizePatch(patch, allow) {
   return {file, find, replace, reason};
 }
 
-async function applyPatches(patches, allow) {
+async function applyPatches(patches, allow, contextFiles) {
   const changed = new Map();
   const original = new Map();
-  const normalized = patches.map(patch => normalizePatch(patch, allow));
+  const normalized = patches.map(patch => normalizePatch(patch, allow, contextFiles));
   if (!normalized.length || normalized.length > 8) throw new Error("AI 沒有提供有效 patch 或 patch 數量過多");
 
   for (const patch of normalized) {
@@ -378,8 +457,19 @@ async function commitAndPush(changedFiles) {
   await git(["diff", "--cached", "--check"]);
   const staged = await git(["diff", "--cached", "--name-only"]);
   if (!staged) throw new Error("沒有可提交的修復變更");
-  const commitMessage = "fix: autonomous repair";
+  const commitMessage = "fix: autonomous repair [report:" + String(process.env.AUTONOMOUS_REPAIR_REPORT_ID || "unknown").slice(0,128) + "]";
   const commitSha = await git(["commit", "-m", commitMessage]);
+
+  try {
+    await execFileAsync("git", ["pull", "--rebase", "origin", "main"], {
+      cwd: ROOT,
+      maxBuffer: 2_000_000
+    });
+  } catch (error) {
+    try { await execFileAsync("git", ["rebase", "--abort"], {cwd: ROOT}); } catch (_) {}
+    throw new Error("GitHub main 分支在修復提交期間發生衝突：" + clean(error?.stderr || error?.message || error, 1200));
+  }
+
   await execFileAsync("git", ["push", "origin", "HEAD:main"], {cwd: ROOT, maxBuffer: 2_000_000});
   const sha = await git(["rev-parse", "HEAD"]);
   return {commitSha: String(commitSha || "").slice(-80), sha, files: staged.split(/\r?\n/).filter(Boolean)};
@@ -541,8 +631,10 @@ async function repairOne(database, reportId, report, batchId, batchPosition, bat
     "自動修復引擎開始分析 · 批次 " + batchPosition + "/" + batchTotal + " · " + batchId
   );
 
+  const contextPaths = repairContextPaths(category);
   const files = {};
-  for (const file of allow) {
+  for (const file of contextPaths) {
+    if (!allow.has(file)) throw new Error("修復上下文包含未允許檔案：" + file);
     files[file] = await readRepoFile(file);
   }
 
@@ -560,7 +652,7 @@ async function repairOne(database, reportId, report, batchId, batchPosition, bat
     return false;
   }
 
-  const applied = await applyPatches(repair.patches, allow);
+  const applied = await applyPatches(repair.patches, allow, new Set(Object.keys(files)));
   try {
     await validateChangedFiles(applied.changed);
   } catch (error) {
@@ -721,4 +813,10 @@ async function main() {
   }
 }
 
-await main();
+try {
+  await main();
+  process.exit(0);
+} catch (error) {
+  console.error("自動修復程序未預期失敗", error?.stack || error?.message || error);
+  process.exit(1);
+}
