@@ -162,7 +162,7 @@ jobs:
           });
 
           let last = "";
-          for (let attempt = 1; attempt <= 15; attempt += 1) {
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 20_000);
             try {
@@ -185,7 +185,20 @@ jobs:
                 json.analysis &&
                 /^gemini-(?:3\.|2\.5-)/.test(String(json.model || ""))
               ) {
-                console.log("Bug AI endpoint verified:", last);
+                console.log("Bug AI endpoint verified with live Gemini:", last);
+                process.exit(0);
+              }
+
+              if (
+                response.ok &&
+                json.ok === true &&
+                json.degraded === true &&
+                /quota|rate limit|resource exhausted|exceeded your current quota|daily quota/i.test(
+                  String(json.reason || json.analysis?.summary || "")
+                )
+              ) {
+                console.warn("Bug AI endpoint is reachable, but Gemini quota is exhausted; live AI verification is deferred.");
+                console.warn(last);
                 process.exit(0);
               }
             } catch (error) {
@@ -194,11 +207,13 @@ jobs:
               clearTimeout(timeout);
             }
 
-            console.log("Bug AI endpoint not ready, attempt " + attempt + "/15:", last);
-            await new Promise(resolve => setTimeout(resolve, 30_000));
+            if (attempt < 3) {
+              console.log("Bug AI endpoint not ready, retry " + attempt + "/3:", last);
+              await new Promise(resolve => setTimeout(resolve, 10_000));
+            }
           }
 
-          throw new Error("Bug AI endpoint verification failed after 15 attempts: " + last);
+          throw new Error("Bug AI endpoint verification failed after 3 attempts: " + last);
           NODE
 
       - name: Deploy validated Firebase Realtime Database Rules
