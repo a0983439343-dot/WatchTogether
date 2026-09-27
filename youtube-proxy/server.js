@@ -1,6 +1,10 @@
 const http = require("node:http");
 const { spawn } = require("node:child_process");
 const { Readable } = require("node:stream");
+const { webcrypto } = require("node:crypto");
+
+const FIREBASE_TOKEN_JWK_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const firebaseJwkCache = { expiresAt:0, keys:[] };
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -47,6 +51,72 @@ const VERIFY_SITE_URL =
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
+
+function decodeB64UrlJson(value){
+  const normalized=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
+  const padded=normalized+"=".repeat((4-normalized.length%4)%4);
+  return JSON.parse(Buffer.from(padded,"base64").toString("utf8"));
+}
+
+function parseJwkMaxAge(cacheControl){
+  const match=String(cacheControl||"").match(/max-age=(\\d+)/i);
+  const seconds=match ? Number(match[1]) : 3600;
+  return Math.max(300,Math.min(21600,Number.isFinite(seconds)?seconds:3600))*1000;
+}
+
+async function getFirebaseJwks(){
+  const now=Date.now();
+  if(firebaseJwkCache.keys.length && now<firebaseJwkCache.expiresAt) return firebaseJwkCache.keys;
+  const response=await fetch(FIREBASE_TOKEN_JWK_URL);
+  if(!response.ok) throw new Error("Firebase 公開金鑰取得失敗");
+  const data=await response.json();
+  firebaseJwkCache.keys=Array.isArray(data?.keys) ? data.keys : [];
+  firebaseJwkCache.expiresAt=now+parseJwkMaxAge(response.headers.get("cache-control"));
+  return firebaseJwkCache.keys;
+}
+
+async function verifyFirebaseIdTokenRender(token,projectId){
+  const parts=String(token||"").split(".");
+  if(parts.length!==3) throw new Error("Firebase Token 格式錯誤");
+  const header=decodeB64UrlJson(parts[0]);
+  const payload=decodeB64UrlJson(parts[1]);
+  if(header?.alg!=="RS256" || !header?.kid) throw new Error("Firebase Token 演算法錯誤");
+  const now=Math.floor(Date.now()/1000);
+  if(typeof payload?.sub!=="string" || !payload.sub || payload.sub.length>128) throw new Error("Firebase Token 使用者錯誤");
+  if(payload.aud!==projectId) throw new Error("Firebase Token 專案錯誤");
+  if(payload.iss!=="https://securetoken.google.com/"+projectId) throw new Error("Firebase Token 發行者錯誤");
+  if(typeof payload.exp!=="number" || payload.exp<=now) throw new Error("Firebase Token 已過期");
+  if(typeof payload.iat!=="number" || payload.iat<=0 || payload.iat>now+120) throw new Error("Firebase Token 核發時間錯誤");
+  if(typeof payload.auth_time!=="number" || payload.auth_time<=0 || payload.auth_time>now+120) throw new Error("Firebase Token 驗證時間錯誤");
+
+  let jwks=await getFirebaseJwks();
+  let jwk=jwks.find(item=>item?.kid===header.kid);
+  if(!jwk){
+    firebaseJwkCache.expiresAt=0;
+    firebaseJwkCache.keys=[];
+    jwks=await getFirebaseJwks();
+    jwk=jwks.find(item=>item?.kid===header.kid);
+  }
+  if(!jwk) throw new Error("Firebase 公開金鑰不存在");
+
+  const key=await webcrypto.subtle.importKey(
+    "jwk",
+    {kty:"RSA",n:jwk.n,e:jwk.e,alg:"RS256",use:"sig"},
+    {name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},
+    false,
+    ["verify"]
+  );
+
+  const signature=Buffer.from(parts[2].replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-parts[2].length%4)%4),"base64");
+  const valid=await webcrypto.subtle.verify(
+    {name:"RSASSA-PKCS1-v1_5"},
+    key,
+    signature,
+    Buffer.from(parts[0]+"."+parts[1],"utf8")
+  );
+  if(!valid) throw new Error("Firebase Token 簽章驗證失敗");
+  return payload;
+}
 
 function getClientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -897,6 +967,16 @@ async function handleAiAgent(req, res) {
   const authorization = String(req.headers.authorization || "");
   if (!authorization.startsWith("Bearer ")) {
     send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+  let firebaseUser;
+  try {
+    firebaseUser = await verifyFirebaseIdTokenRender(
+      authorization.slice(7).trim(),
+      FIREBASE_PROJECT_ID
+    );
+  } catch (error) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
     return;
   }
 
