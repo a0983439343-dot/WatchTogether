@@ -14,27 +14,35 @@ jobs:
           node-version: 22
       - name: Check JavaScript syntax
         run: |
-          set -e
-          for f in \
-            src/js/app.js \
-            src/js/enhancements.js \
-            src/js/chat.js \
-            src/js/i18n.js \
-            src/js/bug-monitor.js \
-            src/js/watchtogether2.js \
-            admin/admin.js \
-            admin/admin2.js
-          do
-            echo "Checking $f"
-            node --check "$f"
-          done
-          for f in \
-            workers/youtube-search.js \
-            workers/admin-control/admin-control.js
-          do
-            echo "Checking ESM $f"
-            node -e "const fs=require('fs'); let s=fs.readFileSync(process.argv[1],'utf8').replace(/^[\\s\\S]*?export default /,''); new Function(s); console.log('ESM syntax OK')" "$f"
-          done
+          node <<'NODE'
+          const fs = require('fs');
+          const common = [
+            'src/js/app.js',
+            'src/js/enhancements.js',
+            'src/js/chat.js',
+            'src/js/i18n.js',
+            'src/js/bug-monitor.js',
+            'src/js/watchtogether2.js',
+            'admin/admin.js',
+            'admin/admin2.js'
+          ];
+          const esm = [
+            'workers/youtube-search.js',
+            'workers/admin-control/admin-control.js'
+          ];
+          for (const file of [...common, ...esm]) {
+            let source = fs.readFileSync(file, 'utf8');
+            if (esm.includes(file)) source = source.replace('export default {', 'const __worker = {');
+            try {
+              new Function(source);
+              console.log('Syntax OK:', file);
+            } catch (error) {
+              console.error('Syntax ERROR:', file);
+              console.error(error.message);
+              process.exitCode = 1;
+            }
+          }
+          NODE
       - name: Validate JSON configuration
         run: |
           python - <<'PY'
