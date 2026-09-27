@@ -28,9 +28,17 @@ jobs:
             src/js/bug-monitor.js \
             src/js/watchtogether2.js \
             src/js/translation.js \
+            src/js/translator.js \
             src/js/ai-core.js \
+            src/js/ai-agent.js \
+            src/js/notifications2.js \
+            src/js/schedules.js \
+            src/js/command-palette.js \
             admin/admin.js \
-            admin/admin2.js
+            admin/admin2.js \
+            admin/admin-agent.js \
+            config/firebase-config.js \
+            youtube-proxy/server.js
           do
             echo "Checking $f"
             node --check "$f"
@@ -51,6 +59,22 @@ jobs:
           npx --yes wrangler@4.136.0 deploy --dry-run --config workers/wrangler.toml
           npx --yes wrangler@4.136.0 deploy --dry-run --config workers/wrangler-ai.toml
           npx --yes wrangler@4.136.0 deploy --dry-run --config workers/admin-control/wrangler.toml
+
+      - name: Validate local HTML references
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          for html_path in [Path("index.html"), Path("admin/admin.html")]:
+              html = html_path.read_text(encoding="utf-8")
+              refs = re.findall(r'''(?:src|href)=["']([^"']+)["']''', html)
+              for ref in refs:
+                  if ref.startswith(("http://", "https://", "//", "#", "data:")):
+                      continue
+                  target = (html_path.parent / ref.split("?", 1)[0].split("#", 1)[0]).resolve()
+                  if not target.exists():
+                      raise SystemExit(f"{html_path}: missing local reference {ref} -> {target}")
+              print(f"{html_path}: local references OK")
 
       - name: Validate JSON configuration
         run: |
