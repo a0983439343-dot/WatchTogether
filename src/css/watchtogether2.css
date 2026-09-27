@@ -301,3 +301,7 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-room-setting-check{display:flex!important;grid-template-columns:none!important;align-items:flex-start;gap:9px;padding:11px;border:1px solid var(--wt2-border);border-radius:12px;background:rgba(255,255,255,.025);cursor:pointer}
 .wt2-room-setting-check input{width:auto!important;min-height:0!important;margin-top:3px!important}
 .wt2-room-setting-check strong{display:block;color:var(--wt2-text);font-size:11px}.wt2-room-setting-check small{display:block;margin-top:3px;line-height:1.5}
+
+.wt2-feature-off{opacity:.45!important;filter:grayscale(.3)!important;cursor:not-allowed!important}
+.wt2-feature-notice{position:fixed;left:18px;top:74px;z-index:999;max-width:min(520px,calc(100vw - 36px));padding:9px 12px;border:1px solid rgba(243,191,99,.25);border-radius:12px;background:rgba(35,27,12,.95);color:#ffe7b1;font-size:11px;font-weight:800;box-shadow:0 14px 42px rgba(0,0,0,.35);backdrop-filter:blur(14px)}
+@media(max-width:760px){.wt2-feature-notice{left:12px;right:12px;top:62px;max-width:none}}
