@@ -9248,6 +9248,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.playbackApplyingRemote
     ) return null;
 
+    if (await isCurrentUserFeatureRestricted("playback_control")) {
+      throw new Error("你的帳號目前無法控制播放");
+    }
+
     const ref = playbackSyncRef();
     if (!ref) return null;
 
