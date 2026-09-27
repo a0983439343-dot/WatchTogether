@@ -298,6 +298,7 @@
 
     roomRolesRef: null,
     roomRoles: {},
+    roomFeatureRestrictions: {},
     lastMembers: {},
 
     kickedRef: null,
@@ -593,6 +594,24 @@
       ":" +
       String(secs).padStart(2, "0")
     );
+  }
+
+
+  async function refreshRoomFeatureRestrictions() {
+    const uid = String(state.uid || "").trim();
+    const dbRef = db;
+    if (!uid || !state.roomId || !dbRef) {
+      state.roomFeatureRestrictions = {};
+      return;
+    }
+    try {
+      const snapshot = await dbRef.ref(
+        "admin/restrictionsByUid/" + uid + "/features"
+      ).once("value");
+      state.roomFeatureRestrictions = snapshot.val() || {};
+    } catch (_) {
+      state.roomFeatureRestrictions = {};
+    }
   }
 
 
@@ -3803,6 +3822,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       throw new Error("目前不在房間內");
     }
 
+    if (state.room && !state.isOwner && !hasRoomPermission("queue_manage")) {
+      throw new Error("你目前沒有管理待播放清單的權限");
+    }
+
+    if (await isCurrentUserFeatureRestricted("playlists")) {
+      throw new Error("你的帳號目前無法使用播放清單");
+    }
+
     if (!video?.id) {
       throw new Error("無效的影片");
     }
@@ -4353,8 +4380,24 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     );
   }
 
+  function hasRoomPermission(permission) {
+    if (state.isOwner) return true;
+    const roleEntry = state.roomRoles?.[state.uid] || {};
+    if (String(roleEntry.role || "").toLowerCase() !== "cohost") return false;
+
+    const permissions = roleEntry.permissions;
+    if (!permissions || typeof permissions !== "object") {
+      return permission === "playback_control" || permission === "queue_manage";
+    }
+
+    return permissions[permission] === true;
+  }
+
   function canControlRoomPlayback() {
-    return state.isOwner || isRoomCoHost();
+    return (
+      hasRoomPermission("playback_control") &&
+      !Boolean(state.roomFeatureRestrictions?.playback_control)
+    );
   }
 
   function nativeYoutubeGuestActionAllowed(
@@ -9252,6 +9295,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       throw new Error("你的帳號目前無法控制播放");
     }
 
+    if (state.room && !hasRoomPermission("playback_control")) {
+      throw new Error("你在這個房間沒有播放控制權限");
+    }
+
     const ref = playbackSyncRef();
     if (!ref) return null;
 
@@ -11469,6 +11516,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     state.isOwner =
       state.room.owner ===
       state.uid;
+    void refreshRoomFeatureRestrictions();
 
     if (
       !state.isOwner &&
@@ -12034,7 +12082,7 @@ roleLabel
   }
 
 
-  async function setRoomMemberRole(uid, role) {
+  async function setRoomMemberRole(uid, role, permissions = null) {
     uid = String(uid || "").trim();
     role = String(role || "").trim().toLowerCase();
 
@@ -12050,11 +12098,26 @@ roleLabel
       state.roomRolesRef = db.ref("roomRoles/" + state.roomId);
     }
 
-    await state.roomRolesRef.child(uid).set({
+    const entry = {
       role,
       updatedAt: firebase.database.ServerValue.TIMESTAMP,
       updatedBy: state.uid
-    });
+    };
+
+    if (role === "cohost") {
+      const current = state.roomRoles?.[uid]?.permissions || {};
+      const next = permissions && typeof permissions === "object"
+        ? permissions
+        : current;
+      entry.permissions = {
+        playback_control: next.playback_control !== false,
+        queue_manage: next.queue_manage !== false,
+        chat: next.chat === true,
+        member_manage: next.member_manage === true
+      };
+    }
+
+    await state.roomRolesRef.child(uid).set(entry);
   }
 
   /*
@@ -12084,6 +12147,10 @@ roleLabel
 
     if (await isCurrentUserFeatureRestricted("chat")) {
       throw new Error("你的帳號目前無法使用聊天室");
+    }
+
+    if (state.room && !state.isOwner && !hasRoomPermission("chat")) {
+      throw new Error("你在這個房間沒有聊天權限");
     }
 
     if (
@@ -14785,6 +14852,7 @@ roleLabel
   window.WT_CORE.playQueueItem = playQueueItem;
   window.WT_CORE.refreshQueue = renderQueue;
   window.WT_CORE.canControlRoomPlayback = canControlRoomPlayback;
+  window.WT_CORE.hasRoomPermission = hasRoomPermission;
   window.WT_CORE.sendChat = sendChat;
 
   window.WT_CORE.setMemberName = setMemberName;
