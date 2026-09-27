@@ -30,25 +30,11 @@ jobs:
           HTML_URL: ${{ github.event.workflow_run.html_url }}
           UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
         run: |
-          mkdir -p ci-status
-          node - <<'NODE'
-          const fs = require("fs");
-          const data = {
-            workflow: "Validate WatchTogether",
-            runId: Number(process.env.RUN_ID),
-            runNumber: Number(process.env.RUN_NUMBER),
-            conclusion: process.env.CONCLUSION,
-            headSha: process.env.HEAD_SHA,
-            url: process.env.HTML_URL,
-            updatedAt: process.env.UPDATED_AT,
-            rulesDeployed: process.env.CONCLUSION === "success"
-          };
-          fs.writeFileSync("ci-status/validate-latest.json", JSON.stringify(data, null, 2) + "\n");
-          NODE
-
-          git config user.name "WatchTogether CI"
-          git config user.email "watchtogether-ci@users.noreply.github.com"
-          git add ci-status/validate-latest.json
-          git diff --cached --quiet && exit 0
-          git commit -m "ci: record validation status"
-          git push origin HEAD:main
+          {
+            echo "## WatchTogether Validate"
+            echo "- Run: #$RUN_NUMBER"
+            echo "- Conclusion: $CONCLUSION"
+            echo "- Commit: $HEAD_SHA"
+            echo "- Updated: $UPDATED_AT"
+            echo "- URL: $HTML_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
