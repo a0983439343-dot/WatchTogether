@@ -533,7 +533,7 @@
     if(!window.Sortable || !$("queueList")) return;
     const list=$("queueList");
     if(list.dataset.wt2Sortable==="1") return;
-    if(!window.WT_CORE?.state?.isOwner) return;
+    if(!window.WT_CORE?.canControlRoomPlayback?.() && !window.WT_CORE?.state?.isOwner) return;
 
     try{
       Sortable.create(list,{
@@ -546,7 +546,7 @@
         onEnd:async()=>{
           const roomId=window.WT_CORE?.getRoomId?.();
           const db=window.db||window.firebase?.database?.();
-          if(!roomId||!db||!window.WT_CORE?.state?.isOwner)return;
+          if(!roomId||!db||(!window.WT_CORE?.canControlRoomPlayback?.() && !window.WT_CORE?.state?.isOwner))return;
 
           const rows=[...list.querySelectorAll(".queue-item[data-queue-id]")];
           const base=Date.now();
