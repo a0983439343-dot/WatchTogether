@@ -246,6 +246,9 @@
             },
             "playback_control": {
               ".validate": "newData.isBoolean()"
+            },
+            "schedules": {
+              ".validate": "newData.isBoolean()"
             }
           },
           "reason": {
