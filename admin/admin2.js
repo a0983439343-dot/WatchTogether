@@ -114,40 +114,19 @@
 
   async function askAdminAi(){
     const prompt=String($("ad2AiPrompt")?.value||"").trim().slice(0,2000);
-    const output=$("ad2AiOutput");
-    if(!prompt){if(output)output.textContent="請輸入要分析的內容。";return;}
-    const endpoint=String(window.WATCHTOGETHER_CONFIG?.aiCoreUrl||"").trim().replace(/\/$/,"");
-    const user=window.firebase?.auth?.().currentUser;
-    if(!endpoint)throw new Error("AI Core 尚未設定");
-    if(!user||user.isAnonymous)throw new Error("目前管理員登入狀態無效");
-    if(output)output.textContent="分析中…";
-    const token=await user.getIdToken();
-    const context={
-      accounts:readStat("statAccounts"),
-      whitelist:readStat("statWhitelist"),
-      blocked:readStat("statBlocked"),
-      rooms:readStat("statRooms"),
-      openReports:readStat("statOpenReports"),
-      maintenance:Boolean(state.maintenance?.enabled),
-      roleId:state.customRoleId||"legacy-admin"
-    };
-    const response=await fetch(endpoint+"/chat",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
-      body:JSON.stringify({
-        messages:[
-          {role:"system",content:"你是 WatchTogether Admin 2.0 的管理分析助手。你只能根據提供的資料做分析，不要捏造事件。對封鎖、刪除、停權、關站等高風險操作，只能提出建議，不能宣稱已執行。"},
-          {role:"user",content:prompt+"\n\n目前後台摘要："+JSON.stringify(context)}
-        ],
-        temperature:0.2,
-        max_tokens:900
-      })
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(String(data?.error?.message||"AI Core 請求失敗"));
-    const message=String(data?.message?.content||"AI 沒有返回內容");
-    if(output)output.textContent=message;
+    if(!prompt){
+      if($("ad2AiOutput"))$("ad2AiOutput").textContent="請輸入要分析的內容。";
+      return;
+    }
+    if(window.WT2_ADMIN_AI?.run){
+      $("ad2AiOutput").textContent="";
+      await window.WT2_ADMIN_AI.run(prompt);
+      $("ad2AiPrompt").value="";
+      return;
+    }
+    throw new Error("Admin AI 模組尚未載入");
   }
+
 
   async function loadRoles(){
     const db=DB(); const wrap=$("ad2RoleList"); if(!db||!wrap)return;
