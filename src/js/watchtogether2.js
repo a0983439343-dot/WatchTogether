@@ -224,7 +224,7 @@
       const value=snap.val()||{};
       const entries=Object.values(value).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
       list.innerHTML=entries.length?entries.map(room=>'<button type="button" class="wt2-room-row" data-open-room="'+escapeHtml(room.roomId)+'"><span class="room-icon">🔐</span><span class="room-main"><strong>'+escapeHtml(room.name||"一起看")+'</strong><small>'+escapeHtml(room.roomId||"")+'</small></span><span class="room-go">進入 →</span></button>').join(""):'<div class="wt2-empty">還沒有專屬房間。建立一個就會永久保存在這裡。</div>';
-      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.joinRoom?.(b.dataset.openRoom)));
+      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.WT_CORE?.joinRoom?.(b.dataset.openRoom)));
     }catch(e){list.innerHTML='<div class="wt2-empty">無法載入專屬房間。</div>';console.warn("[WT2] personal room list",e);}
   }
   async function renderPublicRooms(){
@@ -233,7 +233,7 @@
       const snap=await db.ref("publicRooms").once("value");
       const entries=Object.values(snap.val()||{}).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0)).slice(0,50);
       list.innerHTML=entries.length?entries.map(room=>'<button type="button" class="wt2-room-row" data-open-room="'+escapeHtml(room.roomId)+'"><span class="room-icon">🌎</span><span class="room-main"><strong>'+escapeHtml(room.name||"公開房間")+'</strong><small>'+escapeHtml(room.roomId||"")+" · "+Number(room.memberCount||0)+" 人</small></span><span class="room-go">加入 →</span></button>').join(""):'<div class="wt2-empty">目前沒有公開房間。</div>';
-      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.joinRoom?.(b.dataset.openRoom)));
+      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.WT_CORE?.joinRoom?.(b.dataset.openRoom)));
     }catch(e){list.innerHTML='<div class="wt2-empty">公開房間暫時無法載入。</div>';console.warn("[WT2] public room list",e);}
   }
   function bindDirectoryTabs(){
