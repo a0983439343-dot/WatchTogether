@@ -715,7 +715,8 @@
       uploads:[],
       friends:[],
       polls:[],
-      public_explore:[]
+      public_explore:[],
+      schedules:[]
     };
     const blocked=[];
     Object.entries(map).forEach(([feature,ids])=>{
@@ -794,6 +795,7 @@
       chat:["chatForm","chatInput"],
       playlists:["queueList"],
       public_explore:["wt2PublicRoomList"],
+      schedules:["wt2SchedulePanel"],
       ai:["wt2AiCenter"]
     };
     const disabled=[];
