@@ -44,18 +44,18 @@
     if (!original || !host) return;
 
     const key = messageId + "|" + target + "|" + original;
+    if (button.dataset.translated === "1") {
+      host.classList.remove("show");
+      button.textContent = "[翻譯]";
+      button.dataset.translated = "0";
+      return;
+    }
+
     if (cache.has(key)) {
       host.textContent = cache.get(key);
       host.classList.add("show");
       button.textContent = "[隱藏翻譯]";
       button.dataset.translated = "1";
-      return;
-    }
-
-    if (button.dataset.translated === "1") {
-      host.classList.remove("show");
-      button.textContent = "[翻譯]";
-      button.dataset.translated = "0";
       return;
     }
 
