@@ -24,7 +24,8 @@ jobs:
             src/js/watchtogether2.js \
             admin/admin.js \
             admin/admin2.js \
-            workers/youtube-search.js
+            workers/youtube-search.js \
+            workers/admin-control/admin-control.js
           do
             echo "Checking $f"
             node --check "$f"
