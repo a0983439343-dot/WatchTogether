@@ -61,6 +61,11 @@
 
   function applyPermissionVisibility(){
     const sectionPermissions={
+      accounts:"users.view",
+      rooms:"rooms.view",
+      whitelist:"users.ban",
+      reports:"reports.handle",
+      audit:"audit.view",
       security:"audit.view",
       analytics:"analytics.view",
       maintenance:"maintenance.manage",
@@ -76,9 +81,21 @@
       document.querySelectorAll('#app [data-section="'+section+'"]').forEach(node=>{
         node.classList.toggle("hidden",!allowed);
       });
+      if(sectionNode) {}
+      if(section === "accounts" || section === "rooms" || section === "reports"){
+        // Fine-grained button visibility for legacy Admin 2.0 sections is applied below.
+      }
       const sectionNode=$("section-"+section);
       if(sectionNode && !allowed)sectionNode.classList.add("hidden");
     });
+  }
+
+  function publishPermissionContext(){
+    window.__WT2_ADMIN_PERMISSION_CONTEXT__={
+      hasCustomRole:Boolean(state.hasCustomRole),
+      roleId:String(state.customRoleId||""),
+      permissions:Array.from(state.customPermissions||[])
+    };
   }
 
   function addNav(name,label,icon){
@@ -414,6 +431,7 @@
     renderNewUI();renderFeatureChecks();bindNav();
     ensureAdminCommandPalette();
     await loadAdminPermissionContext();
+    publishPermissionContext();
     applyPermissionVisibility();
     $("ad2MaintenanceReload")?.addEventListener("click",readMaintenance);
     $("ad2SetPasswordBtn")?.addEventListener("click",()=>setPassword().catch(e=>{console.error(e);$("ad2MaintHint").textContent="設定密碼失敗。"}));
