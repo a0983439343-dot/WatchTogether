@@ -713,7 +713,7 @@ test("2.0: co-host can reorder but cannot rewrite queue item", async () => {
       addedAt: 1,
       queueOrder: 1
     });
-    await context.database().ref("rooms/ABC123/owner").set(ADMIN_UID);
+    await context.database().ref("rooms/ABC123/owner").set(USER_UID);
     await context.database().ref("members/ABC123/" + ADMIN_UID).set({
       name: "Admin",
       joinedAt: 1,
