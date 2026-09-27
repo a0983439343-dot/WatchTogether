@@ -431,6 +431,7 @@
   }
 
   async function setPassword(){
+    if(!isMaster()){toast("只有最高管理員可以修改維護密碼");return}
     const currentPassword=prompt("請輸入目前維護密碼（首次設定可留空）：")||"";
     const newPassword=prompt("請輸入新的維護密碼（至少 8 個字元）：")||"";
     if(newPassword.length<8){alert("密碼至少 8 個字元");return}
@@ -439,6 +440,7 @@
   }
 
   async function closeSite(){
+    if(!hasPermission("maintenance.manage")){toast("你沒有網站維護權限");return}
     const message=String($("ad2MaintMessage")?.value||"系統維護").trim()||"系統維護";
     const raw=$("ad2MaintEnds")?.value||"";
     const ends=raw?Date.parse(raw):0;
@@ -452,6 +454,7 @@
   }
 
   async function openSite(){
+    if(!hasPermission("maintenance.manage")){toast("你沒有網站維護權限");return}
     if(!confirm("確定要恢復網站嗎？"))return;
     const password=$("ad2MaintPassword")?.value||"";
     if(!password){$("ad2MaintHint").textContent="請輸入維護密碼後再恢復網站。";return}
@@ -496,6 +499,7 @@
     }catch(e){box.innerHTML='<div class="ad2-muted">無法讀取限制資料。</div>'}
   }
   async function applyRestriction(clear=false){
+    if(!hasPermission("restrictions.manage")){toast("你沒有管理指定使用者功能限制的權限");return}
     const uid=String($("ad2RestrictionUid")?.value||"").trim();if(!uid){$("ad2RestrictionHint").textContent="請輸入 UID。";return}
     const featuresOut={};document.querySelectorAll("#ad2RestrictionChecks input").forEach(x=>featuresOut[x.dataset.feature]=x.checked);
     if(clear)Object.keys(featuresOut).forEach(k=>featuresOut[k]=false);
