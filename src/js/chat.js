@@ -215,6 +215,7 @@ function listenRequests() {
 
 async function sendFriendRequest(code) {
   if (!ensureLogin()) return;
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var me = user();
   code = String(code || "").trim().toUpperCase();
   if (!wt.FRIEND_CODE_RE.test(code)) throw new Error("ID 必須是 6 碼英數字");
@@ -341,6 +342,7 @@ async function updateSummary(id,message,targetUid) {
 
 async function sendMessagePayload(payload,targetUid) {
   var me = user();
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友聊天");
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("請先選擇好友");
   var conversationId = await ensureConversation(targetUid);
