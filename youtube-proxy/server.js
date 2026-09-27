@@ -977,17 +977,6 @@ async function handleAiAgent(req, res) {
     send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
     return;
   }
-  let firebaseUser;
-  try {
-    firebaseUser = await verifyFirebaseIdTokenRender(
-      authorization.slice(7).trim(),
-      FIREBASE_PROJECT_ID
-    );
-  } catch (error) {
-    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
-    return;
-  }
-
   const identity = await verifyFirebaseBearer(authorization);
   if (!identity.ok) {
     send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
