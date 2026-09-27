@@ -30,7 +30,10 @@
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
-  const hide = id => $(id)?.classList.add("hidden");
+  const hide = id => $(id)?.classList.add("hidden");  function redirectAdmin404(){
+    try{window.location.replace("../404.html");}catch(_){window.location.href="../404.html";}
+  }
+
 
   function toast(message) {
     const el = $("toast");
@@ -1696,14 +1699,11 @@
 
   async function initialize() {
     if (!window.firebase || !window.FIREBASE_CONFIG) {
-      hide("loadingScreen");
-      show("deniedScreen");
-      $("deniedMessage").textContent = "Firebase 設定未載入。";
+      redirectAdmin404();
       return;
     }
     if (adminEmail !== MASTER_EMAIL) {
-      hide("loadingScreen");
-      show("setupScreen");
+      redirectAdmin404();
       return;
     }
     if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
@@ -1736,8 +1736,7 @@
       hide("deniedScreen");
 
       if (!user || user.isAnonymous) {
-        show("deniedScreen");
-        $("deniedMessage").textContent = "請先使用 Google 帳號登入。";
+        redirectAdmin404();
         return;
       }
 
@@ -1745,8 +1744,7 @@
         currentRole = await resolveAdminRole(user);
         currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
-          show("deniedScreen");
-          $("deniedMessage").textContent = "目前登入的 Google 帳號沒有管理員權限。";
+          redirectAdmin404();
           return;
         }
 
@@ -1777,8 +1775,7 @@
         startReportAutomation();
       } catch (error) {
         console.error(error);
-        show("deniedScreen");
-        $("deniedMessage").textContent = "管理員資料載入失敗，請檢查 Firebase Rules。";
+        redirectAdmin404();
       }
     });
   }
