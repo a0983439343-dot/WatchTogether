@@ -111,11 +111,11 @@
     roomToggle.innerHTML='<button type="button" class="active" data-room-tab="personal">🔐 專屬房間</button><button type="button" data-room-tab="public">🌎 公開房間</button>';
     home?.insertBefore(roomToggle,home.querySelector(".home-grid"));
 
-    const empty=document.createElement("div");
-    empty.id="wt2PublicRoomsEmpty";
-    empty.className="wt2-empty hidden";
-    empty.innerHTML="<strong>公開房間中心</strong><div style='margin-top:6px'>公開房間資料層正在接入 2.0 房間架構；目前仍完整保留舊房間建立／加入流程。</div>";
-    roomToggle.parentNode?.insertBefore(empty,home.querySelector(".home-grid"));
+    const directory=document.createElement("section");
+    directory.id="wt2RoomDirectory";
+    directory.className="wt2-room-directory";
+    directory.innerHTML='<div class="wt2-directory-head"><div><strong id="wt2DirectoryTitle">我的專屬房間</strong><span id="wt2DirectoryHint">與帳號綁定、可永久重新進入</span></div><button type="button" class="wt2-directory-refresh" id="wt2DirectoryRefresh">重新整理</button></div><div id="wt2RoomDirectoryBody" class="wt2-directory-grid"></div>';
+    roomToggle.parentNode?.insertBefore(directory,home.querySelector(".home-grid"));
 
     const mobileNav=document.createElement("nav");
     mobileNav.className="wt2-mobile-nav";
@@ -128,6 +128,7 @@
     bindNavigation();
     bindQuickActions();
     bindRoomTabs();
+    initRoomDirectory();
     watchRoomState();
   }
 
@@ -160,6 +161,57 @@
       if(action==="search"){ safeShowView("home"); scrollToId("videoSearchInput"); $("videoSearchInput")?.focus(); }
       if(action==="ai"){ safeShowView("home"); scrollToId("videoSearchInput"); $("videoSearchInput")?.focus(); }
     }));
+  }
+
+  function renderRoomCard(item, kind){
+    const card=document.createElement("article");
+    card.className="wt2-directory-card";
+    const roomId=String(item.roomId||item.id||"").toUpperCase();
+    const title=escapeHtml(item.name||"一起看");
+    const platform=escapeHtml(item.sourceType||"youtube");
+    const count=Number(item.memberCount||0);
+    card.innerHTML='<div class="wt2-directory-icon">'+(kind==="public"?"🌎":"🔐")+'</div><div class="wt2-directory-info"><strong>'+title+'</strong><span>'+roomId+' · '+platform+(kind==="public"&&count>0?' · '+count+' 人在線索引':"")+'</span></div><button type="button" class="wt2-directory-join">'+(kind==="public"?"加入":"重新進入")+'</button>';
+    card.querySelector(".wt2-directory-join")?.addEventListener("click",()=>{
+      const input=$("joinCodeInput");const btn=$("joinRoomBtn");
+      if(input) input.value=roomId;
+      safeShowView("home");
+      scrollToId("joinCodeInput");
+      btn?.click();
+    });
+    return card;
+  }
+
+  function renderDirectory(items,kind){
+    const body=$("wt2RoomDirectoryBody");if(!body)return;
+    body.innerHTML="";
+    const list=Object.values(items||{}).filter(x=>x&&typeof x==="object").sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+    if(!list.length){body.innerHTML='<div class="wt2-empty">'+(kind==="public"?"目前沒有可探索的公開房間。":"登入後建立專屬房間，它會永久出現在這裡。")+"</div>";return}
+    list.slice(0,30).forEach(x=>body.appendChild(renderRoomCard(x,kind)));
+  }
+
+  function setDirectoryTab(kind){
+    const title=$("wt2DirectoryTitle"),hint=$("wt2DirectoryHint");
+    if(kind==="public"){if(title)title.textContent="公開房間";if(hint)hint.textContent="可探索、可直接加入的公開房間";loadPublicRooms();}
+    else{if(title)title.textContent="我的專屬房間";if(hint)hint.textContent="與帳號綁定、可永久重新進入";loadPersonalRooms();}
+  }
+
+  async function loadPublicRooms(){
+    const db=window.db||window.firebase?.database?.();if(!db)return;
+    try{const s=await db.ref("publicRooms").limitToLast(50).once("value");renderDirectory(s.val()||{},"public");}
+    catch(e){console.warn("[WT2] public room load:",e);renderDirectory({},"public");}
+  }
+
+  async function loadPersonalRooms(){
+    const db=window.db||window.firebase?.database?.();const user=window.firebase?.auth?.().currentUser;
+    if(!db||!user||user.isAnonymous){renderDirectory({},"personal");return}
+    try{const s=await db.ref("profiles/"+user.uid+"/personalRooms").limitToLast(50).once("value");renderDirectory(s.val()||{},"personal");}
+    catch(e){console.warn("[WT2] personal room load:",e);renderDirectory({},"personal");}
+  }
+
+  function initRoomDirectory(){
+    document.querySelectorAll("[data-room-tab]").forEach(b=>b.addEventListener("click",()=>setDirectoryTab(b.dataset.roomTab==="public"?"public":"personal")));
+    $("wt2DirectoryRefresh")?.addEventListener("click",()=>setDirectoryTab(document.querySelector("[data-room-tab].active")?.dataset.roomTab==="public"?"public":"personal"));
+    setDirectoryTab("personal");
   }
 
   function bindRoomTabs(){
