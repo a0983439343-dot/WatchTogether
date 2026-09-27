@@ -138,6 +138,133 @@ test.after(async () => {
   await env.cleanup();
 });
 
+
+test("public room join approval: requester can apply but cannot self-approve", async () => {
+  const roomId = "APR123";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room",
+      visibility: "public",
+      joinMode: "approval",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+  });
+
+  const requestRef = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  }).ref("roomJoinRequests/" + roomId + "/" + OTHER_UID);
+
+  await assertSucceeds(requestRef.set({
+    uid: OTHER_UID,
+    name: "Other",
+    status: "pending",
+    approved: false,
+    requestedAt: Date.now()
+  }));
+
+  await assertFails(requestRef.update({
+    status: "approved",
+    approved: true,
+    approvedAt: Date.now(),
+    approvedBy: OTHER_UID
+  }));
+
+  await assertSucceeds(requestRef.remove());
+});
+
+test("public room join approval: owner can approve and approved user can become a member", async () => {
+  const roomId = "APR456";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room 2",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room 2",
+      visibility: "public",
+      joinMode: "approval",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+  });
+
+  const requester = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+  const owner = db(USER_UID, userToken);
+
+  await assertSucceeds(
+    requester.ref("roomJoinRequests/" + roomId + "/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      name: "Other",
+      status: "pending",
+      approved: false,
+      requestedAt: Date.now()
+    })
+  );
+
+  await assertSucceeds(
+    owner.ref("roomJoinRequests/" + roomId + "/" + OTHER_UID).update({
+      status: "approved",
+      approved: true,
+      approvedAt: Date.now(),
+      approvedBy: USER_UID
+    })
+  );
+
+  await assertSucceeds(
+    requester.ref("members/" + roomId + "/" + OTHER_UID).set({
+      name: "Other",
+      joinedAt: Date.now(),
+      online: true,
+      lastSeen: Date.now()
+    })
+  );
+});
+
+test("personal room: an offline former owner cannot be replaced through the owner-takeover write path", async () => {
+  const roomId = "PER123";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Personal",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Personal",
+      visibility: "personal",
+      joinMode: "invite_only",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+    await context.database().ref("members/" + roomId + "/" + USER_UID).set({
+      name: "User", joinedAt: 1, online: false, lastSeen: 1
+    });
+    await context.database().ref("members/" + roomId + "/" + OTHER_UID).set({
+      name: "Other", joinedAt: Date.now(), online: true, lastSeen: Date.now()
+    });
+  });
+
+  await assertFails(
+    db(OTHER_UID, {
+      email: "other@example.com",
+      email_verified: true
+    }).ref("rooms/" + roomId + "/owner").set(OTHER_UID)
+  );
+});
+
 test("reports: manually submitted reports can store verification but cannot self-resolve before approval", async () => {
   const ref = db(USER_UID, userToken).ref("reports/manual-verify");
   await assertSucceeds(ref.set({
