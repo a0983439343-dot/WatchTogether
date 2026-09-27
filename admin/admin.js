@@ -494,9 +494,11 @@
     "featureFlags.update": "更新全站功能開關",
     "role.save": "儲存角色",
     "role.masterEquivalent": "授予主帳號同等權限",
+    "role.clearAssignment": "清除角色指派",
     "maintenance.enable": "啟用網站維護",
     "maintenance.disable": "恢復網站",
-    "maintenance.password": "更新維護密碼"
+    "maintenance.password.update": "更新維護密碼",
+    "adminControl.url.update": "更新 Worker URL"
   };
 
   function stopAuditLogsListener() {
