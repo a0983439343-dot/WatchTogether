@@ -7448,16 +7448,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       `?room=${encodeURIComponent(roomId)}${state.adminJoinOverride ? "&adminJoin=1" : ""}`
     );
 
-    try {
-      await db.ref("profiles/" + state.uid + "/personalRooms/" + roomId).set({
-        roomId,
-        name: roomName,
-        visibility,
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-      });
-    } catch (error) {
-      console.warn("寫入房間帳號索引失敗:", error);
+    if (visibility === "personal") {
+      try {
+        await db.ref("profiles/" + state.uid + "/personalRooms/" + roomId).set({
+          roomId,
+          name: roomName,
+          visibility: "personal",
+          createdAt: firebase.database.ServerValue.TIMESTAMP,
+          updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+      } catch (error) {
+        console.warn("寫入專屬房間帳號索引失敗:", error);
+      }
     }
 
     if (visibility === "public") {
@@ -10593,6 +10595,31 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  async function syncPublicRoomIndex(members = {}) {
+    if (
+      String(state.room?.visibility || "personal") !== "public" ||
+      !state.isOwner ||
+      !state.roomId ||
+      !db
+    ) {
+      return;
+    }
+
+    const count = Object.values(members || {}).filter(member =>
+      isMemberPresenceLive(member)
+    ).length;
+
+    try {
+      await db.ref("publicRooms/" + state.roomId).update({
+        memberCount: count,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+    } catch (error) {
+      console.warn("更新公開房間索引失敗:", error);
+    }
+  }
+
+
   async function heartbeatMember() {
     if (
       !state.membersRef ||
@@ -11533,6 +11560,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           const members =
             snapshot.val() ||
             {};
+
+          void syncPublicRoomIndex(members);
 
           /*
            * 自己原本已經進來，
