@@ -35,8 +35,20 @@
     $("wt2ScheduleSave")?.addEventListener("click",()=>void saveSchedule());
   }
 
-  function openModal(prefillRoom=""){
+  async function openModal(prefillRoom=""){
     ensureModal();
+    const user=currentUser(), database=db();
+    if(!user || !database){ $("wt2ScheduleError").textContent="請先登入。"; $("wt2ScheduleModal").classList.remove("hidden"); return; }
+    try{
+      const snap=await database.ref("admin/restrictionsByUid/"+user.uid).once("value");
+      const value=snap.val()||{}, until=Number(value.blockedUntil||0);
+      if((until===0 || until>Date.now()) && value.features && value.features.schedules===true){
+        $("wt2ScheduleError").textContent="你的帳號目前無法使用預約觀看。";
+        $("wt2ScheduleModal").classList.remove("hidden");
+        return;
+      }
+    }catch(_){}
+
     const user=currentUser();
     if(!user){
       $("wt2ScheduleError").textContent="請先使用 Google 登入。";
