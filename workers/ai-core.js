@@ -188,7 +188,7 @@ export default {
     if(!apiUrl){
       return jsonResponse({error:{message:"AI Core 尚未設定 AI_API_URL"}},503,origin,allowedOrigin);
     }
-    if(!/^https:\\/\\//i.test(apiUrl)){
+    if(!/^https:\/\//i.test(apiUrl)){
       return jsonResponse({error:{message:"AI_API_URL 必須使用 HTTPS"}},503,origin,allowedOrigin);
     }
 
