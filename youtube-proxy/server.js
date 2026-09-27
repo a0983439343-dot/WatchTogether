@@ -1161,6 +1161,22 @@ async function handleAiTranslate(req, res) {
     return;
   }
 
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) {
+    send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+  let firebaseUser;
+  try {
+    firebaseUser = await verifyFirebaseIdTokenRender(
+      authorization.slice(7).trim(),
+      FIREBASE_PROJECT_ID
+    );
+  } catch (_) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
+    return;
+  }
+
   const ip = getClientIp(req);
   if (!allowRate(ip, "translate", 30)) {
     send(res, 429, JSON.stringify({ok:false,error:"翻譯請求過於頻繁，請稍後再試"}));
@@ -1253,6 +1269,22 @@ async function handleAiAnalyze(req, res) {
       ok: false,
       error: "origin_not_allowed"
     }));
+    return;
+  }
+
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) {
+    send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+  let firebaseUser;
+  try {
+    firebaseUser = await verifyFirebaseIdTokenRender(
+      authorization.slice(7).trim(),
+      FIREBASE_PROJECT_ID
+    );
+  } catch (_) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
     return;
   }
 
