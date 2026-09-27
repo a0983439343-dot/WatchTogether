@@ -737,7 +737,7 @@ test("2.0: custom admin role permissions are enforced", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   await master.ref("admin/roles/restricted_admin").set({
     name: "Restricted Admin",
-    permissions: {"rooms.view": true, "audit.view": true},
+    permissions: {rooms:{view:true},audit:{view:true}},
     updatedAt: Date.now()
   });
   await master.ref("admin/userRoles/" + ADMIN_UID).set({
@@ -771,14 +771,14 @@ test("2.0: role definitions and assignments are master-only writes", async () =>
   await assertFails(
     db(ADMIN_UID, adminToken).ref("admin/roles/core_admin").set({
       name: "Core Admin",
-      permissions: { "rooms.manage": true },
+      permissions: { rooms: { manage: true } },
       updatedAt: Date.now()
     })
   );
   await assertSucceeds(
     db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true }).ref("admin/roles/core_admin").set({
       name: "Core Admin",
-      permissions: { "rooms.manage": true, "users.view": true },
+      permissions: { rooms: { manage: true }, users: { view: true } },
       updatedAt: Date.now()
     })
   );
