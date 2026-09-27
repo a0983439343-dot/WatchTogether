@@ -87,6 +87,65 @@
     return item.role === "viewer" ? "viewer" : "admin";
   }
 
+  function publishAdminContext() {
+    window.WT_ADMIN_CONTEXT = {
+      getRole: () => currentRole,
+      isAuthorized: () => currentHasAdminAccess,
+      overview: () => ({
+        role: currentRole,
+        users: Object.keys(accounts || {}).length,
+        whitelist: Object.values(whitelist || {}).filter(item => item?.enabled === true).length,
+        blocked: Object.keys(blocks || {}).length,
+        rooms: Object.keys(rooms || {}).length,
+        openReports: Object.values(reports || {}).filter(item => String(item?.status || "open") === "open").length,
+        auditEntries: Object.keys(auditLogs || {}).length
+      }),
+      searchUsers: query => {
+        const q=String(query||"").trim().toLowerCase();
+        return Object.values(accounts || {}).filter(item => {
+          if(!q) return true;
+          return [item?.uid,item?.email,item?.displayName].some(value=>String(value||"").toLowerCase().includes(q));
+        }).slice(0,30).map(item=>({
+          uid:String(item?.uid||""),
+          email:String(item?.email||""),
+          displayName:String(item?.displayName||""),
+          provider:String(item?.provider||""),
+          createdAt:Number(item?.createdAt||0),
+          lastLoginAt:Number(item?.lastLoginAt||0)
+        }));
+      },
+      searchRooms: query => {
+        const q=String(query||"").trim().toLowerCase();
+        return Object.values(rooms || {}).filter(item => !q || [item?.roomId,item?.name,item?.owner].some(value=>String(value||"").toLowerCase().includes(q)))
+          .slice(0,30).map(item=>({
+            roomId:String(item?.roomId||""),
+            name:String(item?.name||""),
+            owner:String(item?.owner||""),
+            sourceType:String(item?.sourceType||"")
+          }));
+      },
+      reportsSummary: () => Object.values(reports || {}).slice(-50).map(item=>({
+        uid:String(item?.uid||""),
+        category:String(item?.category||""),
+        status:String(item?.status||""),
+        createdAt:Number(item?.createdAt||0),
+        details:String(item?.details||"").slice(0,300)
+      })),
+      recentAudit: () => Object.values(auditLogs || {}).slice(-50).map(item=>({
+        action:String(item?.action||""),
+        actorUid:String(item?.actorUid||""),
+        actorRole:String(item?.actorRole||""),
+        targetUid:String(item?.targetUid||""),
+        details:String(item?.details||"").slice(0,300),
+        createdAt:Number(item?.createdAt||0)
+      })),
+      maintenance: () => ({
+        enabled:Boolean(document.querySelector("#autonomousMaintenanceEnabled")?.checked),
+        autonomous:Boolean(autonomousMaintenanceEnabled)
+      })
+    };
+  }
+
   function isAdminOperator() {
     return currentRole === "master" || currentRole === "admin";
   }
@@ -1658,6 +1717,7 @@
         show("app");
         restoreAdminSection();
         applyRoleUi();
+        publishAdminContext();
 
         await Promise.all([
           loadAccounts(),
