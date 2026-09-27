@@ -1,3 +1,5 @@
+const passwordAttempts = new Map();
+
 const json=(data,status=200,origin="*")=>new Response(JSON.stringify(data),{
   status,
   headers:{
@@ -70,11 +72,37 @@ async function getCredential(env,ctx){
   const r=await dbFetch(env,"admin/security/maintenanceCredential",ctx.token);
   return r.data;
 }
+function allowPasswordAttempt(key){
+  const now=Date.now();
+  const item=passwordAttempts.get(key);
+  if(!item || now-item.windowStartedAt >= 10*60*1000){
+    passwordAttempts.set(key,{windowStartedAt:now,failures:0,lockedUntil:0});
+    return true;
+  }
+  if(item.lockedUntil && now<item.lockedUntil) return false;
+  return true;
+}
+function recordPasswordFailure(key){
+  const now=Date.now();
+  const item=passwordAttempts.get(key)||{windowStartedAt:now,failures:0,lockedUntil:0};
+  if(now-item.windowStartedAt >= 10*60*1000){
+    item.windowStartedAt=now;item.failures=0;item.lockedUntil=0;
+  }
+  item.failures += 1;
+  if(item.failures >= 5) item.lockedUntil=now+10*60*1000;
+  passwordAttempts.set(key,item);
+}
+function clearPasswordFailures(key){passwordAttempts.delete(key);}
+
 async function verifyMaintenancePassword(env,ctx,password){
+  const key=ctx.uid+":"+String(ctx.requestIp||"unknown");
+  if(!allowPasswordAttempt(key)) return false;
   const credential=await getCredential(env,ctx);
   if(!credential?.hash||!credential?.salt||!credential?.iterations)return false;
   const hash=await pbkdf2Hex(password,credential.salt,Number(credential.iterations));
-  return constantTimeEqual(hash,credential.hash);
+  const ok=constantTimeEqual(hash,credential.hash);
+  if(ok) clearPasswordFailures(key); else recordPasswordFailure(key);
+  return ok;
 }
 async function writeMaintenance(env,ctx,data){
   return dbFetch(env,"system/maintenance",ctx.token,"PUT",data);
@@ -91,6 +119,7 @@ export default {
 
     const ctx=await authenticateAdmin(request,env);
     if(!ctx.ok)return json({ok:false,error:"not_found"},ctx.status||404,origin);
+  ctx.requestIp = String(request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
 
     const url=new URL(request.url);
     if(request.method==="GET" && url.pathname==="/maintenance"){
