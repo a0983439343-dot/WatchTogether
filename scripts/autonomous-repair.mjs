@@ -218,7 +218,7 @@ async function releaseLock(lock) {
   } catch (_) {}
 }
 
-function candidateReports(reports) {
+function candidateReports(reports, fullAutoMaintenance = false) {
   const eligible = Object.entries(reports || {})
     .filter(([, report]) => {
       if (!report || typeof report !== "object") return false;
@@ -230,7 +230,13 @@ function candidateReports(reports) {
       const requested = Number(report.repairRequestedAt || 0) > 0;
       const aiConfirmed = ["confirmed","still_present"].includes(String(report.aiStatus || ""));
       const confidence = Number(report.aiConfidence || 0);
-      if (!requested && (!aiConfirmed || confidence < MIN_AUTO_CONFIDENCE)) return false;
+      const verification = report.verification && typeof report.verification === "object" ? report.verification : {};
+      const verificationFailed = String(verification.state || report.verificationState || "") === "failed";
+      if (fullAutoMaintenance) {
+        if (!requested && !aiConfirmed && !verificationFailed) return false;
+      } else if (!requested && (!aiConfirmed || confidence < MIN_AUTO_CONFIDENCE)) {
+        return false;
+      }
       const lastAttempt = Number(report.repairLastAttemptAt || 0);
       if (lastAttempt && Date.now() - lastAttempt < 15 * 60_000) return false;
       return true;
@@ -787,7 +793,7 @@ async function revertCommit(sha) {
   }
 }
 
-async function repairOne(database, reportId, report, batchId, batchPosition, batchTotal) {
+async function repairOne(database, reportId, report, batchId, batchPosition, batchTotal, fullAutoMaintenance = false) {
   const category = normalizeCategory(report.category);
   const allow = allowedPaths(category);
   const beforeVerification = await verify(category);
@@ -802,13 +808,15 @@ async function repairOne(database, reportId, report, batchId, batchPosition, bat
     repairAttempts: Number(report.repairAttempts || 0) + 1,
     repairLastAttemptAt: Date.now(),
     repairStartedAt: Date.now(),
-    repairActor: "github-actions-autorepair"
+    repairActor: "github-actions-autorepair",
+    repairMode: fullAutoMaintenance ? "full_auto" : "standard_auto"
   });
   await writeHistory(
     database,
     reportId,
     "repair_started",
-    "自動修復引擎開始分析 · 批次 " + batchPosition + "/" + batchTotal + " · " + batchId
+    (fullAutoMaintenance ? "全自動維護開始分析" : "自動修復引擎開始分析") +
+    " · 批次 " + batchPosition + "/" + batchTotal + " · " + batchId
   );
 
   const contextPaths = repairContextPaths(category);
@@ -922,6 +930,9 @@ async function repairOne(database, reportId, report, batchId, batchPosition, bat
 
 async function main() {
   const database = db();
+  const maintenanceSnapshot = await database.ref("admin/autonomousMaintenance").once("value");
+  const maintenanceValue = maintenanceSnapshot.val();
+  const fullAutoMaintenance = maintenanceValue === true || maintenanceValue?.enabled === true;
   const batchId = randomUUID();
   const batchStartedAt = Date.now();
   const lock = await acquireLock(database);
@@ -933,9 +944,10 @@ async function main() {
   try {
     const snapshot = await database.ref("reports").once("value");
     const reports = snapshot.val() || {};
-    const candidates = candidateReports(reports);
+    const candidates = candidateReports(reports, fullAutoMaintenance);
     console.log(
-      "自動修復批次 " + batchId + " · 候選 " + candidates.length + " · 上限 " + MAX_REPORTS
+      "自動修復批次 " + batchId + " · 模式 " + (fullAutoMaintenance ? "全自動維護" : "標準自動修復") +
+      " · 候選 " + candidates.length + " · 上限 " + MAX_REPORTS
     );
 
     for (let index = 0; index < candidates.length; index += 1) {
@@ -961,7 +973,8 @@ async function main() {
           report,
           batchId,
           position,
-          candidates.length
+          candidates.length,
+          fullAutoMaintenance
         );
         console.log(
           "批次 " + position + "/" + candidates.length + " · " + id + " · " +
