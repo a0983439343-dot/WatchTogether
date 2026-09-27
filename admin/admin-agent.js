@@ -90,17 +90,8 @@
     throw new Error("AI 分析步驟過多，已停止。");
   }
 
-  function init(){
-    const button=$("ad2AiAsk");
-    if(!button||button.dataset.wt2AgentBound==="1")return;
-    button.dataset.wt2AgentBound="1";
-    const prompt=$("ad2AiPrompt");
-    button.addEventListener("click",async()=>{
-      const value=prompt?.value||"";
-      if(prompt)prompt.value="";
-      try{button.disabled=true;await run(value);}catch(e){render(e?.message||"Admin AI 失敗","error");}finally{button.disabled=false;}
-    });
-  }
+  // Admin 2.0 binds this Agent from admin2.js after role/permission context is loaded.
+
 
   window.WT2_ADMIN_AI={run,tools};
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
