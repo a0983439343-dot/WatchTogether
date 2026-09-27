@@ -13,49 +13,30 @@ jobs:
         with:
           node-version: 22
       - name: Check JavaScript syntax
+        shell: bash
         run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const common = [
-            'src/js/app.js',
-            'src/js/enhancements.js',
-            'src/js/chat.js',
-            'src/js/i18n.js',
-            'src/js/bug-monitor.js',
-            'src/js/watchtogether2.js',
-            'admin/admin.js',
-            'admin/admin2.js'
-          ];
-          const esm = [
-            'workers/youtube-search.js',
-            'workers/admin-control/admin-control.js'
-          ];
-          for (const file of common) {
-            const source = fs.readFileSync(file, 'utf8');
-            try {
-              new Function(source);
-              console.log('Syntax OK:', file);
-            } catch (error) {
-              console.error('Syntax ERROR:', file);
-              console.error(error.message);
-              process.exitCode = 1;
-            }
-          }
-          for (const file of esm) {
-            const source = fs.readFileSync(file, 'utf8');
-            const temp = '/tmp/' + file.split('/').join('_') + '.mjs';
-            fs.writeFileSync(temp, source);
-            const { spawnSync } = require('child_process');
-            const check = spawnSync(process.execPath, ['--check', temp], { encoding: 'utf8' });
-            if (check.status !== 0) {
-              console.error('ESM SYNTAX ERROR:', file);
-              console.error(check.stderr || check.stdout);
-              process.exitCode = 1;
-            } else {
-              console.log('ESM Syntax OK:', file);
-            }
-          }
-          NODE
+          set -euo pipefail
+          for f in \
+            src/js/app.js \
+            src/js/enhancements.js \
+            src/js/chat.js \
+            src/js/i18n.js \
+            src/js/bug-monitor.js \
+            src/js/watchtogether2.js \
+            admin/admin.js \
+            admin/admin2.js
+          do
+            echo "Checking $f"
+            node --check "$f"
+          done
+          for f in \
+            workers/youtube-search.js \
+            workers/admin-control/admin-control.js
+          do
+            echo "Checking Worker ESM: $f"
+            node --input-type=module --check < "$f"
+          done
+
       - name: Validate JSON configuration
         run: |
           python - <<'PY'
