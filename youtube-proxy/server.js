@@ -955,6 +955,34 @@ function degradedAiResult(input, error) {
   };
 }
 
+async function isFeatureRestrictedForUser(identity, feature) {
+  if (!identity?.uid || !feature) return false;
+  const token = String(identity.token || "");
+  if (!token) return false;
+
+  const url = FIREBASE_DATABASE_URL +
+    "/admin/restrictionsByUid/" + encodeURIComponent(identity.uid) +
+    "/features/" + encodeURIComponent(feature) +
+    ".json?auth=" + encodeURIComponent(token);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(url, {
+      method:"GET",
+      cache:"no-store",
+      signal:controller.signal
+    });
+    if (!response.ok) return false;
+    const value = await response.json().catch(() => false);
+    return value === true;
+  } catch (_) {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleAiAgent(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
@@ -985,6 +1013,11 @@ async function handleAiAgent(req, res) {
   const identity = await verifyFirebaseBearer(authorization);
   if (!identity.ok) {
     send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
+    return;
+  }
+
+  if (await isFeatureRestrictedForUser(identity, "ai_agent")) {
+    send(res, 403, JSON.stringify({ok:false,error:"AI Agent 已被此帳號停用"}));
     return;
   }
 
@@ -1153,6 +1186,12 @@ async function handleAiAgent(req, res) {
 async function handleAiTranslate(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+
+  const identity = await verifyFirebaseBearer(String(req.headers.authorization || ""));
+  if (identity.ok && await isFeatureRestrictedForUser(identity, "ai")) {
+    send(res, 403, JSON.stringify({ok:false,error:"AI 功能已被此帳號停用"}));
     return;
   }
 
