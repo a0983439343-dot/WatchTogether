@@ -670,7 +670,7 @@
           const label = AUDIT_ACTION_LABELS[action] || action;
           const actor = String(item.actorEmail || item.actorUid || "—");
           const target = String(item.targetName || item.targetUid || "—");
-          const canDelete = isAdminOperator();
+          const canDelete = hasAdminPermission("audit.delete");
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
