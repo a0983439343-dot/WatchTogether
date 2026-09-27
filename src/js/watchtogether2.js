@@ -440,6 +440,51 @@
     }catch(error){console.warn("[WT2] Sortable init failed",error);}
   }
 
+  function applyGlobalFeatureFlags(flags){
+    const normalized=flags&&typeof flags==="object"?flags:{};
+    const map={
+      create_room:["createRoomBtn"],
+      chat:["chatForm","chatInput"],
+      playlists:["queueList","playQueueNowBtn"],
+      ai:[],
+      ai_agent:[],
+      uploads:[],
+      friends:[],
+      polls:[],
+      public_explore:[]
+    };
+    const blocked=[];
+    Object.entries(map).forEach(([feature,ids])=>{
+      const isBlocked=normalized[feature]===false;
+      ids.forEach(id=>{
+        const node=$(id);if(!node)return;
+        node.disabled=isBlocked;
+        node.classList.toggle("wt2-feature-disabled",isBlocked);
+        node.setAttribute("aria-disabled",isBlocked?"true":"false");
+      });
+      if(isBlocked)blocked.push(feature);
+    });
+    const existing=document.getElementById("wt2GlobalFeatureNotice");
+    if(blocked.length){
+      const notice=existing||document.createElement("div");
+      notice.id="wt2GlobalFeatureNotice";
+      notice.className="wt2-global-feature-notice";
+      notice.textContent="部分網站功能目前暫停使用。";
+      if(!existing)document.body.appendChild(notice);
+    }else existing?.remove();
+  }
+
+  function initGlobalFeatureFlagListener(){
+    const wait=()=>{
+      const db=window.db||window.firebase?.database?.();
+      if(!db){setTimeout(wait,1000);return;}
+      db.ref("system/featureFlags").on("value",snap=>{
+        applyGlobalFeatureFlags(snap.val()||{});
+      },error=>console.warn("[WT2] feature flags:",error));
+    };
+    wait();
+  }
+
   function applyUserRestrictions(value){
     const features=value?.features||{};
     const map={
@@ -547,6 +592,7 @@
     initSortableQueue();
     initMaintenanceListener();
     initRestrictionListener();
+    initGlobalFeatureFlagListener();
     window.WatchTogether2={build:BUILD,refresh:()=>{renderShell();initSortableQueue();}};
     const observer=new MutationObserver(()=>initSortableQueue());
     const queue=$("queueList"); if(queue) observer.observe(queue,{childList:true,subtree:true});
