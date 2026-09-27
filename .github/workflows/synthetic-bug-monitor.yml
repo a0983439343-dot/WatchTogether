@@ -15,7 +15,7 @@ concurrency:
 jobs:
   synthetic-monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     env:
       WATCHTOGETHER_SITE_URL: https://a0983439343-dot.github.io/WatchTogether
       WATCHTOGETHER_BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
@@ -38,13 +38,6 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run autonomous browser monitor
+        timeout-minutes: 12
         run: npm run monitor:synthetics
         continue-on-error: true
-
-      - name: Run autonomous repair worker
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_WORKSPACE: ${{ github.workspace }}
-          AUTONOMOUS_REPAIR_MAX_REPORTS: "3"
-        run: npm run monitor:repair
