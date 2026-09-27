@@ -42,17 +42,30 @@ async function authenticateAdmin(request,env){
   const auth=String(request.headers.get("authorization")||"");
   const token=auth.startsWith("Bearer ")?auth.slice(7).trim():"";
   if(!token)return {ok:false,status:401};
+
   const claims=decodeJwtPayload(token);
   const uid=String(claims?.user_id||claims?.sub||"").trim();
   if(!uid)return {ok:false,status:401};
-  if(uid===env.MASTER_ADMIN_UID)return {ok:true,uid,token,role:"master"};
-  const r=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
-  const item=r.data;
+
+  // Do not trust decoded JWT claims by themselves. The Realtime Database
+  // REST API validates the Firebase ID token supplied in ?auth=<token>.
+  const whitelist=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
+  if(!whitelist.ok && whitelist.status!==404){
+    return {ok:false,status:401};
+  }
+
+  if(uid===env.MASTER_ADMIN_UID){
+    return {ok:true,uid,token,role:"master"};
+  }
+
+  const item=whitelist.data;
   if(item?.enabled===true && ["admin","master"].includes(String(item.role||"admin"))){
     return {ok:true,uid,token,role:String(item.role||"admin")};
   }
+
   return {ok:false,status:404};
 }
+
 async function getCredential(env,ctx){
   const r=await dbFetch(env,"admin/security/maintenanceCredential",ctx.token);
   return r.data;
