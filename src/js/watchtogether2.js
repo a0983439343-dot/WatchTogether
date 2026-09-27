@@ -117,7 +117,7 @@
     const directory=document.createElement("section");
     directory.id="wt2RoomDirectory";
     directory.className="wt2-room-directory";
-    directory.innerHTML='<div class="wt2-directory-head"><div><strong>房間中心</strong><span>專屬房間永久保存；公開房間可探索</span></div><button type="button" class="wt2-directory-refresh" id="wt2DirectoryRefresh">重新整理</button></div><div class="wt2-room-toggle"><button type="button" class="active" data-directory-tab="personal">🔐 專屬房間</button><button type="button" data-directory-tab="public">🌎 公開房間</button></div><div id="wt2PersonalRoomList"></div><div id="wt2PublicRoomList" class="hidden"></div>';
+    directory.innerHTML='<div class="wt2-directory-head"><div><strong>房間中心</strong><span>專屬房間永久保存；公開房間可探索</span></div><button type="button" class="wt2-directory-refresh" id="wt2DirectoryRefresh">重新整理</button></div><div class="wt2-room-toggle"><button type="button" class="active" data-directory-tab="personal">🔐 專屬房間</button><button type="button" data-directory-tab="public">🌎 公開房間</button></div><div id="wt2PublicRoomSearchWrap" class="hidden wt2-public-room-search"><input id="wt2PublicRoomSearch" type="search" maxlength="80" placeholder="搜尋公開房間名稱或房間碼"><span id="wt2PublicRoomCount"></span></div><div id="wt2PersonalRoomList"></div><div id="wt2PublicRoomList" class="hidden"></div>';
     home?.insertBefore(directory,home.querySelector(".home-grid"));
 
     const aiPanel=document.createElement("section");
@@ -434,6 +434,7 @@
     }));
     const auth=window.firebase?.auth?.();
     auth?.onAuthStateChanged(()=>void renderPersonalRooms());
+    $("wt2DirectoryRefresh")?.addEventListener("click",()=>{ const active=document.querySelector("[data-directory-tab].active")?.dataset.directoryTab; if(active==="public") void renderPublicRooms(); else void renderPersonalRooms(); });
     void renderPersonalRooms();
   }
 
