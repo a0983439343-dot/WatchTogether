@@ -90,6 +90,7 @@ async function authenticateAdmin(request,env){
     "audit.view":"audit__view","audit.delete":"audit__delete"
   };
   const DB_TO_PERMISSION=Object.fromEntries(Object.entries(PERMISSION_DB_KEYS).map(([key,value])=>[value,key]));
+  const decodePermissionObject=(value)=>Object.fromEntries(Object.entries(value||{}).filter(([,enabled])=>enabled===true).map(([key])=>[DB_TO_PERMISSION[key]||key,true]));
   let permissions={};
   let deny={};
   let allow={};
@@ -100,8 +101,8 @@ async function authenticateAdmin(request,env){
     });
   }
   const override=await dbFetch(env,"admin/userPermissionOverrides/"+uid,token);
-  allow=override.data?.allow||{};
-  deny=override.data?.deny||{};
+  allow=decodePermissionObject(override.data?.allow||{});
+  deny=decodePermissionObject(override.data?.deny||{});
   Object.entries(allow).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
   Object.entries(deny).forEach(([key,value])=>{if(value===true)delete permissions[key];});
 
