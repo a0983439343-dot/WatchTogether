@@ -31,6 +31,10 @@
     if(isMaster())return true;
     if(state.permissionOverrides?.deny?.[permission]===true)return false;
     if(state.permissionOverrides?.allow?.[permission]===true)return true;
+    const role=String(window.WT2_ADMIN_ROLE||window.WT_ADMIN_CONTEXT?.getRole?.()||"").trim().toLowerCase();
+    if(role==="viewer"){
+      return new Set(["users.view","rooms.view","analytics.view","audit.view"]).has(permission);
+    }
     if(!state.hasCustomRole)return true;
     return state.customPermissions.has(permission);
   }
@@ -478,6 +482,7 @@
     await loadAdminPermissionContext();
     publishPermissionContext();
     applyPermissionVisibility();
+    window.addEventListener("wt2-admin-role-ready",()=>applyPermissionVisibility());
     $("ad2MaintenanceReload")?.addEventListener("click",readMaintenance);
     $("ad2SetPasswordBtn")?.addEventListener("click",()=>setPassword().catch(e=>{console.error(e);$("ad2MaintHint").textContent="設定密碼失敗。"}));
     $("ad2CloseSiteBtn")?.addEventListener("click",()=>closeSite().catch(e=>{console.error(e);$("ad2MaintHint").textContent=e?.message||"關站失敗。"}));
