@@ -639,10 +639,7 @@ async function waitForFrontendDeployment(changed) {
     if (file === "youtube-proxy/server.js") continue;
     expected.push([file, sha256(content)]);
   }
-  if (!expected.length) {
-    await sleep(90_000);
-    return true;
-  }
+  if (!expected.length) return true;
 
   const deadline = Date.now() + DEPLOY_WAIT_MS;
   while (Date.now() < deadline) {
@@ -655,8 +652,29 @@ async function waitForFrontendDeployment(changed) {
       }
     }
     if (all) return true;
-    await sleep(30_000);
+  await sleep(30_000);
   }
+  return false;
+}
+
+async function waitForRenderDeployment(changed, commitSha) {
+  if (!changed.has("youtube-proxy/server.js")) return true;
+  const expectedCommit = String(commitSha || "").trim();
+  if (!expectedCommit) return false;
+
+  const deadline = Date.now() + DEPLOY_WAIT_MS;
+  while (Date.now() < deadline) {
+    const result = await fetchJson(BUG_SERVICE_URL + "/health", {timeoutMs: 15_000});
+    if (
+      result.ok &&
+      result.json?.ok === true &&
+      String(result.json?.commit || "").trim() === expectedCommit
+    ) {
+      return true;
+    }
+    await sleep(20_000);
+  }
+
   return false;
 }
 
@@ -696,12 +714,18 @@ async function deployFirebaseRules() {
 }
 
 async function stableRecheck(report, category, changed, commitSha) {
-  const first = await verify(category);
-  if (!first.ok || !first.json?.ok) return {ok:false, verification:first.json || first};
   if (!(await waitForFrontendDeployment(changed))) {
     return {ok:false, verification:{ok:false, reason:"frontend_deploy_timeout"}};
   }
+  if (!(await waitForRenderDeployment(changed, commitSha))) {
+    return {ok:false, verification:{ok:false, reason:"render_deploy_timeout"}};
+  }
+
+  const first = await verify(category);
+  if (!first.ok || !first.json?.ok) return {ok:false, verification:first.json || first};
+
   await sleep(STABLE_CHECK_GAP_MS);
+
   const second = await verify(category);
   if (!second.ok || !second.json?.ok) return {ok:false, verification:second.json || second};
 
