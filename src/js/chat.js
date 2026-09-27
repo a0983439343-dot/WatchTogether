@@ -504,6 +504,7 @@ async function uploadMediaBlob(blob,type,name,targetUid) {
 }
 
 async function sendImageFile(file,targetUid) {
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("uploads")) throw new Error("你的帳號目前無法使用圖片上傳");
   targetUid = String(targetUid || state.activeUid || "");
   if (!targetUid) throw new Error("請先選擇好友");
   var prepared = await blobFromFile(file,8 * 1024 * 1024);
