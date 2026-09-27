@@ -628,7 +628,7 @@ export default {
 
       const authorization = request.headers.get("Authorization") || "";
       const fallbackToken = request.headers.get("X-Firebase-ID-Token") || "";
-      const tokenMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+      const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
       const firebaseIdToken =
         tokenMatch?.[1]?.trim() ||
         fallbackToken.trim();
