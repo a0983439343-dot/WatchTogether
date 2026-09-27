@@ -460,7 +460,9 @@
   async function saveControlUrl(){
     if(!hasPermission("settings.edit")){toast("你沒有設定 Admin Control Worker 的權限");return}
     const current=controlUrl();
-    const value=String(prompt("輸入 Admin Control Worker URL",current)||"").trim().replace(/\/+$/,"");
+    const entered=prompt("輸入 Admin Control Worker URL",current);
+    if(entered===null)return;
+    const value=String(entered).trim().replace(/\/+$/,"");
     if(value && !/^https:\/\//i.test(value)){toast("Worker URL 必須使用 HTTPS");return}
     try{
       await DB().ref("admin/settings/adminControlUrl").set(value);
