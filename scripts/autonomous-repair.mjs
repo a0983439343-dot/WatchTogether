@@ -406,6 +406,10 @@ async function syncAssetVersions(changed, original) {
         "$1" + version.formal
       );
       indexAfter = indexAfter.replace(
+        /(src\/css\/enhancements\.css\?v=)[^"'&]+/,
+        "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
         /(sw\.js\?v=)[^"'&]+/,
         "$1" + version.formal
       );
@@ -549,12 +553,18 @@ async function validateChangedFiles(changed) {
 
     const appVersion = index.match(/app\.js\?v=([^"'&]+)/)?.[1];
     const enhVersion = index.match(/enhancements\.js\?v=([^"'&]+)/)?.[1];
-    const cssVersion = index.match(/enhancements\.css\?v=([^"'&]+)/)?.[1];
+    const enhancementsCssVersion = index.match(/enhancements\.css\?v=([^"'&]+)/)?.[1];
     const stylesVersion = index.match(/styles\.css\?v=([^"'&]+)/)?.[1];
     const swVersion = index.match(/sw\.js\?v=([^"'&]+)/)?.[1];
     const cacheVersion = sw.match(/wt-shell-(\d{8}-v[^"\s]+)/)?.[1];
 
-    if (!appVersion || appVersion !== enhVersion || appVersion !== cssVersion || appVersion !== stylesVersion || appVersion !== swVersion) {
+    if (
+      !appVersion ||
+      appVersion !== enhVersion ||
+      appVersion !== enhancementsCssVersion ||
+      appVersion !== stylesVersion ||
+      appVersion !== swVersion
+    ) {
       throw new Error("前端資產版本未同步");
     }
     if (cacheVersion !== appVersion.replace("formal-", "")) {
