@@ -1,0 +1,40 @@
+name: WatchTogether 2.0 CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: |
+          set -e
+          for f in \
+            src/js/app.js \
+            src/js/enhancements.js \
+            src/js/chat.js \
+            src/js/i18n.js \
+            src/js/bug-monitor.js \
+            src/js/watchtogether2.js \
+            admin/admin.js \
+            admin/admin2.js \
+            workers/youtube-search.js
+          do
+            echo "Checking $f"
+            node --check "$f"
+          done
+      - name: Validate JSON configuration
+        run: |
+          python - <<'PY'
+          import json
+          for path in ["config/database.rules.json","manifest.webmanifest","package.json"]:
+              print("Checking", path)
+              with open(path, encoding="utf-8") as f:
+                  json.load(f)
+          PY
