@@ -38,26 +38,38 @@
   async function loadAdminPermissionContext(){
     const db=DB(),user=window.firebase?.auth?.().currentUser;
     if(!db||!user||user.isAnonymous)return;
-    if(isMaster()){state.hasCustomRole=false;state.customPermissions=new Set();return;}
+    if(isMaster()){
+      state.hasCustomRole=false;
+      state.customPermissions=new Set();
+      state.permissionOverrides={allow:{},deny:{}};
+      return;
+    }
     try{
       const roleSnap=await db.ref("admin/userRoles/"+user.uid).once("value");
       const roleId=String(roleSnap.val()?.roleId||"").trim();
-      if(!roleId){
-        state.hasCustomRole=false;
-        state.customPermissions=new Set();
-        return;
-      }
-      const roleSnap2=await db.ref("admin/roles/"+roleId).once("value");
-      const role=roleSnap2.val()||{};
       state.customRoleId=roleId;
-      state.hasCustomRole=true;
-      state.customPermissions=new Set(
-        Object.entries(role.permissions||{}).filter(([,v])=>v===true).map(([k])=>k)
-      );
+      state.hasCustomRole=Boolean(roleId);
+      state.customPermissions=new Set();
+
+      if(roleId){
+        const roleSnap2=await db.ref("admin/roles/"+roleId).once("value");
+        const role=roleSnap2.val()||{};
+        state.customPermissions=new Set(
+          Object.entries(role.permissions||{}).filter(([,v])=>v===true).map(([k])=>k)
+        );
+      }
+
+      const overrideSnap=await db.ref("admin/userPermissionOverrides/"+user.uid).once("value").catch(()=>null);
+      const override=overrideSnap?.val?.()||{};
+      state.permissionOverrides={
+        allow:override.allow||{},
+        deny:override.deny||{}
+      };
     }catch(error){
-      console.warn("[WT2 Admin] role context:",error);
+      console.warn("[WT2 Admin] role/override context:",error);
       state.hasCustomRole=false;
       state.customPermissions=new Set();
+      state.permissionOverrides={allow:{},deny:{}};
     }
   }
 
