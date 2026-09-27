@@ -516,6 +516,17 @@ export function isRateLimited(
   );
 }
 
+async function isUserFeatureBlocked(env, token, uid, feature){
+  if(!token || !uid || !feature) return false;
+  const base=String(env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app").trim().replace(/\/+$/,"");
+  const response=await fetch(base+"/admin/restrictionsByUid/"+encodeURIComponent(uid)+".json?auth="+encodeURIComponent(token),{method:"GET",cache:"no-store"});
+  if(!response.ok)return true;
+  const value=await response.json().catch(()=>null);
+  if(!value || typeof value!=="object")return false;
+  const until=Number(value.blockedUntil||0);
+  return (until===0 || until>Date.now()) && value.features?.[feature]===true;
+}
+
 function parseIsoDuration(
   value
 ) {
@@ -656,6 +667,15 @@ export default {
         return jsonResponse(
           { error: { message: "登入驗證失敗" } },
           401,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      if (await isUserFeatureBlocked(env, firebaseIdToken, firebaseUser.sub, "translation")) {
+        return jsonResponse(
+          { error: { message: "你的帳號目前無法使用聊天翻譯" } },
+          403,
           origin,
           allowedOrigin
         );
@@ -886,6 +906,15 @@ export default {
           }
         },
         401,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    if (await isUserFeatureBlocked(env, firebaseIdToken, firebaseUser.sub, "youtube_search")) {
+      return jsonResponse(
+        { error: { message: "你的帳號目前無法使用 YouTube 搜尋" } },
+        403,
         origin,
         allowedOrigin
       );

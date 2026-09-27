@@ -874,6 +874,8 @@
       playlists:["queueList"],
       public_explore:["wt2PublicRoomList"],
       schedules:["wt2SchedulePanel"],
+      youtube_search:["videoSearchArea","searchVideoBtn","videoSearchInput"],
+      translation:["wt2ChatCenter","chatMessages"],
       ai:["wt2AiCenter"]
     };
     const disabled=[];

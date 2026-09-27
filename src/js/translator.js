@@ -37,6 +37,14 @@
 
   async function translateMessage(button) {
     if (!button) return;
+    if (window.WT_ENHANCEMENTS?.isFeatureBlocked && await window.WT_ENHANCEMENTS.isFeatureBlocked("translation")) {
+      const host = button.parentElement?.querySelector(".wt2-chat-translation");
+      if (host) {
+        host.textContent = "你的帳號目前無法使用聊天翻譯。";
+        host.classList.add("show","error");
+      }
+      return;
+    }
     const messageId = String(button.dataset.chatTranslate || "").trim();
     const original = String(button.dataset.chatOriginal || "");
     const target = targetLanguage();

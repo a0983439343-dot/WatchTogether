@@ -233,11 +233,12 @@
   }
 
   async function loadWhitelist() {
-    const ref = isMasterUser(currentUser)
+    const canManageWhitelist = hasAdminPermission("whitelist.manage");
+    const ref = canManageWhitelist
       ? db.ref("admin/whitelistByUid")
       : db.ref("admin/whitelistByUid/" + currentUser.uid);
     const snapshot = await ref.once("value");
-    if (isMasterUser(currentUser)) {
+    if (canManageWhitelist) {
       whitelist = snapshot.val() || {};
     } else {
       const item = snapshot.val();
@@ -441,6 +442,7 @@
 
   function renderWhitelist() {
     const master = isMasterUser(currentUser);
+    const canManageWhitelist = hasAdminPermission("whitelist.manage");
     const query = String($("whitelistSearch")?.value || "").trim().toLowerCase();
     const rows = Object.entries(whitelist || {})
       .map(([key,item]) => ({key,item}))
@@ -453,9 +455,11 @@
           const enabled = item.enabled === true;
           const role = item.role === "viewer" ? "viewer" : "admin";
           const roleLabel = role === "viewer" ? "觀察員" : "管理員";
-          const actions = master
+          const actions = canManageWhitelist && key !== MASTER_UID
             ? '<div class="row-actions"><select class="search" data-role-select="' + escapeHtml(key) + '" aria-label="權限級別"><option value="admin"' + (role === "admin" ? " selected" : "") + '>管理員</option><option value="viewer"' + (role === "viewer" ? " selected" : "") + '>觀察員</option></select><button class="btn" data-role-save="' + escapeHtml(key) + '">套用</button><button class="btn" data-toggle="' + escapeHtml(key) + '">' + (enabled ? "停用" : "啟用") + '</button><button class="btn" data-remove="' + escapeHtml(key) + '">刪除</button></div>'
-            : '<span class="muted">僅最高管理員可管理</span>';
+            : key === MASTER_UID
+              ? '<span class="muted">最高管理員不可修改</span>'
+              : '<span class="muted">僅可查看</span>';
           return '<tr><td><div class="primary-text">' + escapeHtml(item.email || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || key) + '</span></td><td><span class="status admin">' + escapeHtml(roleLabel) + '</span></td><td><span class="status ' + (enabled ? "" : "off") + '">' + (enabled ? "啟用" : "停用") + '</span></td><td>' + escapeHtml(formatDate(item.addedAt)) + '</td><td>' + escapeHtml(item.addedByEmail || "—") + '</td><td>' + actions + '</td></tr>';
         }).join("")
       : '<tr><td colspan="5" class="muted">目前沒有白名單帳號。</td></tr>';

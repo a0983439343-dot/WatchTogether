@@ -2828,6 +2828,9 @@ function renderHomeSearch(results) {
 }
 
 async function searchHome(query) {
+  if (await isFeatureBlocked("youtube_search")) {
+    throw new Error("你的帳號目前無法使用 YouTube 搜尋");
+  }
   var config = window.WATCHTOGETHER_CONFIG || {};
   var base = String(config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/search");
   if (!base) throw new Error("YouTube 搜尋服務未設定");
@@ -2837,7 +2840,14 @@ async function searchHome(query) {
   searchController = new AbortController();
   var version = ++searchVersion;
   var url = base + "?q=" + encodeURIComponent(query) + "&maxResults=8&regionCode=TW&relevanceLanguage=zh-Hant&safeSearch=moderate";
-  var response = await fetch(url,{method:"GET",headers:{Accept:"application/json"},credentials:"omit",cache:"no-store",signal:searchController.signal});
+  var headers = {Accept:"application/json"};
+  try {
+    var currentUser = wt.auth && wt.auth.currentUser;
+    if (currentUser && typeof currentUser.getIdToken === "function") {
+      headers.Authorization = "Bearer " + await currentUser.getIdToken();
+    }
+  } catch (_) {}
+  var response = await fetch(url,{method:"GET",headers:headers,credentials:"omit",cache:"no-store",signal:searchController.signal});
   if (!response.ok) throw new Error("YouTube 搜尋失敗");
   var data = await response.json();
   if (version !== searchVersion) return;

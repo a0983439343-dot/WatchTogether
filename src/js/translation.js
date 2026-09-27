@@ -57,6 +57,9 @@
   }
 
   async function translate(text){
+    if (window.WT_ENHANCEMENTS?.isFeatureBlocked && await window.WT_ENHANCEMENTS.isFeatureBlocked("translation")) {
+      throw new Error("你的帳號目前無法使用聊天翻譯");
+    }
     const source = String(text || "").trim().slice(0,2000);
     if(!source) throw new Error("沒有可翻譯的內容");
 

@@ -256,6 +256,7 @@ export default {
 
     if(action==="disable"){
       if(!hasPermission(ctx,"maintenance.manage"))return json({ok:false,error:"forbidden"},403,origin);
+      const password=String(body.password||"");
 
       if(password.length<1 || !await verifyMaintenancePassword(env,ctx,password)){
         return json({ok:false,error:"invalid_password"},403,origin);

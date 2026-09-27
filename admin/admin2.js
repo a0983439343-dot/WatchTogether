@@ -5,7 +5,7 @@
   const state={maintenance:null,chart:null,restrictionSelection:new Set(),rolePermissions:new Set(),customRoleId:"",customPermissions:new Set(),hasCustomRole:false,permissionOverrides:{allow:{},deny:{}}};
   const features=[
     ["建立房間","create_room"],["加入公開房間","join_public_room"],["聊天室","chat"],["播放控制","playback_control"],["AI","ai"],["AI Agent","ai_agent"],
-    ["檔案/圖片上傳","uploads"],["好友系統","friends"],["投票","polls"],["播放清單","playlists"],["公開房間探索","public_explore"],["預約觀看","schedules"]
+    ["檔案/圖片上傳","uploads"],["好友系統","friends"],["投票","polls"],["播放清單","playlists"],["公開房間探索","public_explore"],["預約觀看","schedules"],["YouTube 搜尋","youtube_search"],["聊天翻譯","translation"]
   ];
   const permissions=["users.view","users.ban","users.manage","rooms.view","rooms.manage","reports.handle","chat.moderate","analytics.view","settings.edit","maintenance.manage","restrictions.manage","roles.manage","whitelist.manage","ai.use","audit.view","audit.delete"];
 
