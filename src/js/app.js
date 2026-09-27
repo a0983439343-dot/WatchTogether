@@ -3912,6 +3912,49 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  async function reorderQueue(queueIds) {
+    if (!state.queueRef || !state.roomId) {
+      throw new Error("目前不在房間內");
+    }
+
+    if (!canControlRoomPlayback()) {
+      throw new Error("只有房主或副房主可以重新排序待播放清單");
+    }
+
+    const current = getSortedQueue().filter(item => !isCurrentVideo(item));
+    const allowed = new Set(current.map(item => String(item.queueId || "")));
+    const requested = Array.from(new Set(
+      (Array.isArray(queueIds) ? queueIds : [])
+        .map(item => String(item || "").trim())
+        .filter(id => allowed.has(id))
+    ));
+
+    const finalOrder = [
+      ...requested,
+      ...current.map(item => String(item.queueId || "")).filter(id => !requested.includes(id))
+    ];
+
+    const updates = {};
+    let order = Date.now();
+    finalOrder.forEach(queueId => {
+      updates[queueId + "/queueOrder"] = order++;
+    });
+
+    if (Object.keys(updates).length) {
+      await state.queueRef.update(updates);
+    }
+
+    finalOrder.forEach((queueId, index) => {
+      if (state.queue?.[queueId]) {
+        state.queue[queueId].queueOrder = Date.now() + index;
+      }
+    });
+
+    renderQueue();
+    toast("待播放清單已重新排序");
+  }
+
+
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
@@ -14896,6 +14939,8 @@ roleLabel
 
   window.WT_CORE.removeFromQueue =
     removeFromQueue;
+  window.WT_CORE.reorderQueue =
+    reorderQueue;
 
   window.WT_CORE.playQueueItem =
     playQueueItem;
