@@ -14778,6 +14778,7 @@ roleLabel
   window.WT_CORE.removeFromQueue = removeFromQueue;
   window.WT_CORE.playQueueItem = playQueueItem;
   window.WT_CORE.refreshQueue = renderQueue;
+  window.WT_CORE.canControlRoomPlayback = canControlRoomPlayback;
   window.WT_CORE.sendChat = sendChat;
 
   window.WT_CORE.setMemberName = setMemberName;
