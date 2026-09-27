@@ -10,17 +10,26 @@
 
   function targetLanguage(){
     const map = {
-      "zh-Hant":"zh",
-      "zh-TW":"zh",
-      "zh-HK":"zh",
-      "zh":"zh",
+      "zh-Hant":"zh-TW",
+      "zh-TW":"zh-TW",
+      "zh-HK":"zh-TW",
+      "zh":"zh-TW",
+      "zh-CN":"zh-CN",
       "en":"en",
       "ja":"ja",
       "ko":"ko",
       "es":"es",
       "fr":"fr",
       "de":"de",
-      "pt":"pt"
+      "pt-BR":"pt-BR",
+      "pt":"pt-BR",
+      "ru":"ru",
+      "it":"it",
+      "th":"th",
+      "vi":"vi",
+      "id":"id",
+      "tr":"tr",
+      "ar":"ar"
     };
     const i18nLocale = String(
       window.WT_I18N?.getMode?.() ||
