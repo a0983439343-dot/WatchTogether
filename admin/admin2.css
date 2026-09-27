@@ -101,3 +101,8 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;ba
 .ad2-command-search input{width:100%;border:0!important;outline:0;background:transparent!important;color:var(--ad2-text)!important;font-size:13px!important}
 .ad2-command-search span{color:var(--ad2-muted);font-weight:950}.ad2-command-search kbd{padding:3px 6px;border:1px solid var(--ad2-border);border-radius:6px;color:var(--ad2-muted);font-size:9px}
 .ad2-command-list{display:grid;gap:5px;max-height:360px;overflow:auto;margin-top:8px}.ad2-command-list button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--ad2-text);text-align:left;cursor:pointer}.ad2-command-list button:hover,.ad2-command-list button.active{background:rgba(110,168,255,.09);border-color:rgba(110,168,255,.18)}.ad2-command-list small{color:var(--ad2-muted);font-size:9px}
+
+.ad2-ai-msg{padding:9px 11px;border:1px solid var(--ad2-border);border-radius:11px;background:rgba(255,255,255,.025);font-size:11px;line-height:1.65;white-space:pre-wrap;margin-top:7px}
+.ad2-ai-msg.user{background:rgba(110,168,255,.08);border-color:rgba(110,168,255,.18)}
+.ad2-ai-msg.tool{background:rgba(65,211,154,.05);border-color:rgba(65,211,154,.16);color:#a4efd0}
+.ad2-ai-msg.error{background:rgba(255,107,125,.06);border-color:rgba(255,107,125,.2);color:#ffd3da}
