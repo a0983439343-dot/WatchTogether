@@ -790,6 +790,48 @@ test("2.0: role definitions and assignments are master-only writes", async () =>
   );
 });
 
+test("2.0: permissioned same-level admin can update an existing whitelist entry", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  await master.ref("admin/roles/master_equivalent").set({
+    name: "Master Equivalent",
+    permissions: {
+      whitelist__manage: true,
+      roles__manage: true,
+      users__manage: true,
+      rooms__manage: true,
+      audit__view: true
+    },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "master_equivalent",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/whitelistByUid/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      email: "other@example.com",
+      enabled: true,
+      role: "admin",
+      addedAt: Date.now(),
+      addedByUid: ADMIN_UID,
+      addedByEmail: "admin@example.com"
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/whitelistByUid/" + OTHER_UID).update({
+      enabled: false,
+      role: "viewer"
+    })
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/master_equivalent").remove();
+  await master.ref("admin/whitelistByUid/" + OTHER_UID).remove();
+});
+
 test("2.0: public room index is readable but owner-controlled", async () => {
   await assertSucceeds(
     db(USER_UID, userToken).ref("publicRooms/ABC123").set({
