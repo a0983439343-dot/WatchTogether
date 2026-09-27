@@ -231,3 +231,23 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-ai-input>button:disabled{opacity:.55;cursor:wait}
 .wt2-ai-status{margin-top:7px;color:var(--wt2-muted);font-size:9px;min-height:14px}
 @media(max-width:760px){.wt2-ai-head{display:grid}.wt2-ai-input{grid-template-columns:1fr}.wt2-ai-input>button{min-height:42px}.wt2-ai-message{max-width:96%}}
+
+.wt2-notification-button{position:relative;display:inline-grid;place-items:center;width:40px;height:40px;border:1px solid var(--wt2-border)!important;border-radius:11px!important;background:rgba(255,255,255,.045)!important;color:var(--wt2-text)!important;cursor:pointer}
+.wt2-notification-icon{font-size:15px}.wt2-notification-count{position:absolute;right:-4px;top:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;display:grid;place-items:center;background:var(--wt2-danger);color:#fff;font-size:9px;font-weight:950;border:2px solid var(--wt2-bg)}
+.wt2-notification-panel{position:fixed;right:18px;top:66px;z-index:120;width:min(390px,calc(100vw - 24px));max-height:min(70vh,640px);overflow:auto;border:1px solid var(--wt2-border);border-radius:18px;background:rgba(10,16,27,.96);box-shadow:0 30px 100px rgba(0,0,0,.45);backdrop-filter:blur(18px)}
+.wt2-notification-panel.hidden{display:none}
+.wt2-notification-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:14px 15px;border-bottom:1px solid var(--wt2-border)}
+.wt2-notification-head strong{display:block;font-size:13px}.wt2-notification-head span{display:block;margin-top:3px;color:var(--wt2-muted);font-size:10px}
+.wt2-notification-head>button{border:0;background:transparent;color:var(--wt2-muted);font-size:20px;cursor:pointer}
+.wt2-notification-list{display:grid;gap:7px;padding:9px}
+.wt2-notification-item{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:10px;border:1px solid var(--wt2-border);border-radius:13px;background:rgba(255,255,255,.025)}
+.wt2-notification-avatar{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:rgba(110,168,255,.08);font-size:16px}
+.wt2-notification-main strong{font-size:11px}.wt2-notification-main p{margin:3px 0 8px;color:var(--wt2-muted);font-size:10px;line-height:1.5}
+.wt2-notification-actions{display:flex;gap:5px;flex-wrap:wrap}.wt2-notification-actions button{border:1px solid var(--wt2-border);border-radius:8px;background:rgba(255,255,255,.045);color:var(--wt2-text);padding:6px 8px;font-size:9px;font-weight:900;cursor:pointer}
+.wt2-command-palette{width:min(640px,calc(100vw - 24px));padding:0;border:1px solid var(--wt2-border);border-radius:18px;background:rgba(9,14,24,.98);color:var(--wt2-text);box-shadow:0 30px 120px rgba(0,0,0,.62)}
+.wt2-command-palette::backdrop{background:rgba(2,4,8,.55);backdrop-filter:blur(4px)}
+.wt2-command-inner{padding:10px}.wt2-command-search{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px;border:1px solid var(--wt2-border);border-radius:12px;background:rgba(255,255,255,.025)}
+.wt2-command-search input{width:100%;border:0!important;outline:0;background:transparent!important;color:var(--wt2-text)!important;font-size:13px!important}
+.wt2-command-search span{color:var(--wt2-muted);font-weight:950}.wt2-command-search kbd{padding:3px 6px;border:1px solid var(--wt2-border);border-radius:6px;color:var(--wt2-muted);font-size:9px}
+.wt2-command-list{display:grid;gap:5px;max-height:330px;overflow:auto;margin-top:8px}.wt2-command-list button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--wt2-text);text-align:left;cursor:pointer}.wt2-command-list button:hover,.wt2-command-list button.active{background:rgba(110,168,255,.09);border-color:rgba(110,168,255,.18)}.wt2-command-list small{color:var(--wt2-muted);font-size:9px}
+.wt2-command-foot{display:flex;gap:14px;justify-content:flex-end;padding:8px 3px 2px;color:var(--wt2-muted);font-size:9px}
