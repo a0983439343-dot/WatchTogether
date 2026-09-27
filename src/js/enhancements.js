@@ -1836,6 +1836,8 @@ function openFriends() {
 
 wt.isFriend = isFriend;
 wt.addFriendByCode = addFriendByCode;
+wt.acceptFriend = acceptFriend;
+wt.declineFriend = declineFriend;
 wt.openFriends = openFriends;
 wt.renderFriends = renderFriends;
 wt.listenRequests = listenRequests;
