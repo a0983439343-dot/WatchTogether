@@ -98,6 +98,12 @@
       });
     });
 
+    const accountCard=document.createElement("div");
+    accountCard.id="wt2AccountCard";
+    accountCard.className="wt2-account-card";
+    accountCard.innerHTML='<div class="wt2-account-avatar" id="wt2AccountAvatar">👤</div><div class="wt2-account-main"><strong id="wt2AccountName">訪客</strong><span id="wt2AccountCode">未登入</span></div><button type="button" id="wt2AccountAction">登入</button>';
+    sidebar.querySelector(".wt2-sidebar-foot")?.prepend(accountCard);
+
     const moduleStrip=document.createElement("div");
     moduleStrip.className="wt2-module-strip";
     moduleStrip.innerHTML=
@@ -134,7 +140,10 @@
     bindQuickActions();
     bindDirectoryTabs();
     bindAiPanel();
+    bindThemePicker();
+    bindAccountCard();
     watchRoomState();
+    updateAccountCard();
   }
 
   function appendAiMessage(role,text){
@@ -187,6 +196,65 @@
     });
     document.querySelectorAll("[data-ai-quick]").forEach(button=>{
       button.addEventListener("click",()=>{if($("wt2AiInput"))$("wt2AiInput").value=button.dataset.aiQuick||"";openAICenter();});
+    });
+  }
+
+  function updateAccountCard(){
+    const auth=window.firebase?.auth?.(),user=auth?.currentUser;
+    const name=$("wt2AccountName"),code=$("wt2AccountCode"),avatar=$("wt2AccountAvatar"),action=$("wt2AccountAction");
+    const enhancement=window.WT_ENHANCEMENTS;
+    if(!user||user.isAnonymous){
+      if(name)name.textContent="訪客";
+      if(code)code.textContent="匿名觀看";
+      if(avatar)avatar.textContent="👤";
+      if(action){action.textContent="Google 登入";action.onclick=()=>document.getElementById("googleLoginBtn")?.click();}
+      return;
+    }
+    const profile=enhancement?.state?.profile||{};
+    if(name)name.textContent=String(user.displayName||"已登入").slice(0,30);
+    if(code)code.textContent=String(profile.publicCode||"已登入").slice(0,20);
+    if(avatar){
+      avatar.innerHTML=user.photoURL?'<img src="'+escapeHtml(user.photoURL)+'" alt="">':'👤';
+    }
+    if(action){action.textContent="登出";action.onclick=()=>document.getElementById("logoutBtn")?.click();}
+  }
+
+  function bindAccountCard(){
+    const auth=window.firebase?.auth?.();
+    auth?.onAuthStateChanged(()=>updateAccountCard());
+  }
+
+  function bindThemePicker(){
+    let panel=$("wt2ThemePanel");
+    if(panel)return;
+    panel=document.createElement("section");
+    panel.id="wt2ThemePanel";
+    panel.className="wt2-theme-panel hidden";
+    panel.innerHTML='<div class="wt2-theme-head"><strong>主題</strong><button type="button" id="wt2ThemeClose">×</button></div><div id="wt2ThemeGrid" class="wt2-theme-grid"></div>';
+    document.body.appendChild(panel);
+    const themes=window.WT_ENHANCEMENTS?.THEMES||window.WT_ENHANCEMENTS?.themes||[];
+    const source=Array.isArray(themes)?themes:[];
+    const grid=$("wt2ThemeGrid");
+    if(grid){
+      grid.innerHTML=source.map(theme=>{
+        const id=String(theme.id||"");
+        return '<button type="button" class="wt2-theme-choice" data-theme="'+escapeHtml(id)+'"><strong>'+escapeHtml(theme.name||id)+'</strong><small>'+escapeHtml(theme.desc||"")+'</small></button>';
+      }).join("")||'<div class="wt2-empty">目前沒有可用主題。</div>';
+      grid.querySelectorAll("[data-theme]").forEach(button=>{
+        button.addEventListener("click",()=>{
+          const id=String(button.dataset.theme||"");
+          if(window.WT_ENHANCEMENTS?.applyTheme)window.WT_ENHANCEMENTS.applyTheme(id);
+          panel.classList.add("hidden");
+        });
+      });
+    }
+    $("wt2ThemeClose")?.addEventListener("click",()=>panel.classList.add("hidden"));
+    const settingsAction=document.querySelector('[data-action="settings"]');
+    settingsAction?.addEventListener("dblclick",()=>{
+      panel.classList.toggle("hidden");
+    });
+    window.addEventListener("watchtogether:settings-ready",()=>{
+      panel.classList.add("hidden");
     });
   }
 
