@@ -220,6 +220,7 @@
   }
 
   function bindAccountCard(){
+    $("wt2PublicRoomSearch")?.addEventListener("input",renderPublicRoomEntries);
     const auth=window.firebase?.auth?.();
     auth?.onAuthStateChanged(()=>updateAccountCard());
   }
@@ -377,26 +378,45 @@
     }
   }
 
+  let cachedPublicRooms=[];
+
+  function currentPublicRoomQuery(){
+    return String($("wt2PublicRoomSearch")?.value||"").trim().toLowerCase();
+  }
+
+  function renderPublicRoomEntries(){
+    const list=$("wt2PublicRoomList"),count=$("wt2PublicRoomCount");
+    if(!list)return;
+    const query=currentPublicRoomQuery();
+    const filtered=cachedPublicRooms.filter(room=>{
+      if(!query)return true;
+      return [room.name,room.roomId,room.sourceType].join(" ").toLowerCase().includes(query);
+    });
+    if(count)count.textContent=filtered.length+" 間";
+    list.innerHTML=filtered.length
+      ? filtered.map(room=>{
+          const name=escapeHtml(room.name||"公開房間");
+          const roomId=escapeHtml(room.roomId||"");
+          const people=Number(room.memberCount||0);
+          const mode=String(room.joinMode||"open")==="approval"?"需房主審核":"立即加入";
+          return '<button type="button" class="wt2-room-row" data-open-room="'+roomId+'"><span class="room-icon">🌎</span><span class="room-main"><strong>'+name+'</strong><small>'+roomId+(people>0?" · "+people+" 人":"")+" · "+mode+'</small></span><span class="room-go">加入 →</span></button>';
+        }).join("")
+      : '<div class="wt2-empty">'+(query?"找不到符合的公開房間。":"目前沒有公開房間。")+'</div>';
+    list.querySelectorAll("[data-open-room]").forEach(button=>button.addEventListener("click",()=>{
+      window.WT_CORE?.joinRoom?.(button.dataset.openRoom).catch?.(error=>console.warn("[WT2] room join:",error));
+    }));
+  }
+
   async function renderPublicRooms(){
     const db=window.db||window.firebase?.database?.(),list=$("wt2PublicRoomList");
     if(!list||!db)return;
     try{
       const snap=await db.ref("publicRooms").once("value");
-      const entries=Object.values(snap.val()||{})
+      cachedPublicRooms=Object.values(snap.val()||{})
         .filter(room=>room&&typeof room==="object")
         .sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0))
-        .slice(0,50);
-      list.innerHTML=entries.length
-        ? entries.map(room=>{
-            const name=escapeHtml(room.name||"公開房間");
-            const roomId=escapeHtml(room.roomId||"");
-            const count=Number(room.memberCount||0);
-            return '<button type="button" class="wt2-room-row" data-open-room="'+roomId+'"><span class="room-icon">🌎</span><span class="room-main"><strong>'+name+'</strong><small>'+roomId+(count>0?" · "+count+" 人":"")+'</small></span><span class="room-go">加入 →</span></button>';
-          }).join("")
-        : '<div class="wt2-empty">目前沒有公開房間。</div>';
-      list.querySelectorAll("[data-open-room]").forEach(button=>{
-        button.addEventListener("click",()=>window.WT_CORE?.joinRoom?.(button.dataset.openRoom));
-      });
+        .slice(0,100);
+      renderPublicRoomEntries();
     }catch(error){
       list.innerHTML='<div class="wt2-empty">公開房間暫時無法載入。</div>';
       console.warn("[WT2] public room list",error);
@@ -409,6 +429,7 @@
       document.querySelectorAll("[data-directory-tab]").forEach(x=>x.classList.toggle("active",x===b));
       $("wt2PersonalRoomList")?.classList.toggle("hidden",tab!=="personal");
       $("wt2PublicRoomList")?.classList.toggle("hidden",tab!=="public");
+      $("wt2PublicRoomSearchWrap")?.classList.toggle("hidden",tab!=="public");
       if(tab==="personal")void renderPersonalRooms();else void renderPublicRooms();
     }));
     const auth=window.firebase?.auth?.();
