@@ -94,3 +94,10 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;ba
   #app .content{padding:12px 12px 70px!important}
   .ad2-grid.cols-2,.ad2-grid.cols-3,.ad2-grid.cols-4{grid-template-columns:1fr}
 }
+
+.ad2-command-palette{width:min(640px,calc(100vw - 24px));padding:0;border:1px solid var(--ad2-border);border-radius:18px;background:rgba(9,14,24,.98);color:var(--ad2-text);box-shadow:0 30px 120px rgba(0,0,0,.62)}
+.ad2-command-palette::backdrop{background:rgba(2,4,8,.55);backdrop-filter:blur(4px)}
+.ad2-command-inner{padding:10px}.ad2-command-search{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px;border:1px solid var(--ad2-border);border-radius:12px;background:rgba(255,255,255,.025)}
+.ad2-command-search input{width:100%;border:0!important;outline:0;background:transparent!important;color:var(--ad2-text)!important;font-size:13px!important}
+.ad2-command-search span{color:var(--ad2-muted);font-weight:950}.ad2-command-search kbd{padding:3px 6px;border:1px solid var(--ad2-border);border-radius:6px;color:var(--ad2-muted);font-size:9px}
+.ad2-command-list{display:grid;gap:5px;max-height:360px;overflow:auto;margin-top:8px}.ad2-command-list button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--ad2-text);text-align:left;cursor:pointer}.ad2-command-list button:hover,.ad2-command-list button.active{background:rgba(110,168,255,.09);border-color:rgba(110,168,255,.18)}.ad2-command-list small{color:var(--ad2-muted);font-size:9px}
