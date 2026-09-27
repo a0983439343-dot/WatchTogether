@@ -609,12 +609,13 @@
     const panel=document.createElement("section");
     panel.id="wt2RoomSettings";
     panel.className="panel wt2-room-settings hidden";
-    panel.innerHTML='<div class="wt2-room-settings-head"><div><strong>房間設定</strong><small>只有房主可以修改</small></div><button type="button" id="wt2RoomSettingsClose">×</button></div><div class="wt2-room-settings-form"><label class="wt2-room-setting-check"><input id="wt2RoomLocked" type="checkbox"><span><strong>鎖定新成員</strong><small>開啟後，不再接受新的成員加入；目前成員不受影響。</small></span></label><label>最大成員數<select id="wt2RoomMaxMembers"><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option><option value="5">5 人</option><option value="6">6 人</option><option value="7">7 人</option><option value="8">8 人</option><option value="9">9 人</option><option value="10">10 人</option></select></label><div id="wt2RoomSettingsHint" class="wt2-muted"></div><button type="button" class="primary-btn" id="wt2RoomSettingsSave">儲存設定</button></div>';
+    panel.innerHTML='<div class="wt2-room-settings-head"><div><strong>房間設定</strong><small>只有房主可以修改</small></div><button type="button" id="wt2RoomSettingsClose">×</button></div><div class="wt2-room-settings-form"><label class="wt2-room-setting-check"><input id="wt2RoomLocked" type="checkbox"><span><strong>鎖定新成員</strong><small>開啟後，不再接受新的成員加入；目前成員不受影響。</small></span></label><label>最大成員數<select id="wt2RoomMaxMembers"><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option><option value="5">5 人</option><option value="6">6 人</option><option value="7">7 人</option><option value="8">8 人</option><option value="9">9 人</option><option value="10">10 人</option></select></label><label>新成員加入方式<select id="wt2RoomJoinMode"><option value="open">立即加入</option><option value="approval">房主審核</option><option value="invite_only">邀請制</option></select></label><div id="wt2InviteManager" class="wt2-invite-manager hidden"><div class="wt2-section-label">邀請名單</div><div class="wt2-invite-form"><input id="wt2InviteUid" maxlength="128" placeholder="輸入要邀請的使用者 UID"><button type="button" class="tiny-btn" id="wt2InviteAdd">加入邀請名單</button></div><div id="wt2InviteList" class="wt2-invite-list"></div></div><div id="wt2RoomSettingsHint" class="wt2-muted"></div><button type="button" class="primary-btn" id="wt2RoomSettingsSave">儲存設定</button></div>';
     roomView.appendChild(panel);
 
     $("wt2RoomSettingsBtn")?.addEventListener("click",()=>{refreshRoomSettingsPanel();panel.classList.toggle("hidden");});
     $("wt2RoomSettingsClose")?.addEventListener("click",()=>panel.classList.add("hidden"));
     $("wt2RoomSettingsSave")?.addEventListener("click",()=>void saveRoomSettings());
+    $("wt2InviteAdd")?.addEventListener("click",()=>void addRoomInvite());
   }
 
   function refreshRoomSettingsPanel(){
@@ -627,9 +628,65 @@
     const settings=state.room?.settings||{};
     const locked=settings.locked===true;
     const max=Math.max(2,Math.min(10,Number(settings.maxMembers||2)));
+    const visibility=String(state.room?.visibility||"personal");
+    const joinMode=visibility==="personal"?"invite_only":String(state.room?.joinMode||"open");
     if($("wt2RoomLocked"))$("wt2RoomLocked").checked=locked;
     if($("wt2RoomMaxMembers"))$("wt2RoomMaxMembers").value=String(max);
+    if($("wt2RoomJoinMode")){
+      $("wt2RoomJoinMode").value=joinMode;
+      $("wt2RoomJoinMode").disabled=visibility==="personal";
+      $("wt2InviteManager")?.classList.toggle("hidden",joinMode!=="invite_only");
+    }
+    if(joinMode==="invite_only")void renderRoomInvites();
   }
+
+  async function renderRoomInvites(){
+    const state=window.WT_CORE?.state;
+    const db=window.db||window.firebase?.database?.();
+    const roomId=String(state?.roomId||"").trim().toUpperCase();
+    const list=$("wt2InviteList");
+    if(!state?.isOwner||!db||!roomId||!list)return;
+    try{
+      const snap=await db.ref("roomInvites/"+roomId).once("value");
+      const entries=Object.entries(snap.val()||{}).filter(([,v])=>v===true);
+      list.innerHTML=entries.length
+        ? entries.map(([uid])=>'<div class="wt2-invite-row"><span>'+escapeHtml(uid)+'</span><button type="button" class="tiny-btn" data-remove-invite="'+escapeHtml(uid)+'">移除</button></div>').join("")
+        : '<div class="wt2-empty">目前沒有邀請成員。</div>';
+      list.querySelectorAll("[data-remove-invite]").forEach(button=>{
+        button.addEventListener("click",async()=>{
+          const uid=String(button.dataset.removeInvite||"").trim();
+          if(!uid)return;
+          button.disabled=true;
+          try{await db.ref("roomInvites/"+roomId+"/"+uid).remove();await renderRoomInvites();}
+          catch(error){button.disabled=false;console.warn("[WT2] remove invite:",error);}
+        });
+      });
+    }catch(error){
+      list.innerHTML='<div class="wt2-empty">無法讀取邀請名單。</div>';
+      console.warn("[WT2] room invites:",error);
+    }
+  }
+
+  async function addRoomInvite(){
+    const state=window.WT_CORE?.state;
+    const db=window.db||window.firebase?.database?.();
+    const roomId=String(state?.roomId||"").trim().toUpperCase();
+    const uid=String($("wt2InviteUid")?.value||"").trim();
+    const hint=$("wt2RoomSettingsHint");
+    if(!state?.isOwner||!db||!roomId||!uid)return;
+    if(uid.length<8||uid.length>128){if(hint)hint.textContent="UID 長度不正確。";return}
+    try{
+      await db.ref("roomInvites/"+roomId+"/"+uid).set(true);
+      $("wt2InviteUid").value="";
+      if(hint)hint.textContent="已加入邀請名單。";
+      await renderRoomInvites();
+      setTimeout(()=>{if(hint)hint.textContent=""},1600);
+    }catch(error){
+      if(hint)hint.textContent="加入邀請名單失敗："+String(error?.message||error);
+      console.warn("[WT2] add invite:",error);
+    }
+  }
+
 
   async function saveRoomSettings(){
     const state=window.WT_CORE?.state;
@@ -638,13 +695,18 @@
     if(!state?.isOwner||!db||!roomId){return}
     const locked=Boolean($("wt2RoomLocked")?.checked);
     const maxMembers=Math.max(2,Math.min(10,Number($("wt2RoomMaxMembers")?.value||2)));
+    const visibility=String(state.room?.visibility||"personal");
+    const joinMode=visibility==="personal"?"invite_only":String($("wt2RoomJoinMode")?.value||"open");
+    const allowedJoinModes=new Set(["open","approval","invite_only"]);
+    const safeJoinMode=allowedJoinModes.has(joinMode)?joinMode:"open";
     const hint=$("wt2RoomSettingsHint");
     try{
-      await db.ref("roomMeta/"+roomId+"/settings").update({
-        locked,
-        maxMembers
+      await db.ref("roomMeta/"+roomId).update({
+        joinMode:safeJoinMode,
+        settings:{locked,maxMembers}
       });
       if(state.room) state.room.settings={...(state.room.settings||{}),locked,maxMembers};
+      if(state.room) state.room.joinMode=safeJoinMode;
       if(hint)hint.textContent="設定已儲存。";
       setTimeout(()=>hint&&(hint.textContent=""),1600);
     }catch(error){
