@@ -317,6 +317,7 @@
     const text=String(prompt || "").trim().slice(0,2000);
     if(!text) throw new Error("請先輸入內容");
     if(await isFeatureBlocked("ai")) throw new Error("你的帳號目前無法使用 AI");
+    if(await isFeatureBlocked("ai_agent")) throw new Error("你的帳號目前無法使用 AI Agent");
 
     const system = {
       role:"system",
