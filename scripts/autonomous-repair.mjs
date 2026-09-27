@@ -168,7 +168,7 @@ function publicPath(file) {
 async function readRepoFile(file) {
   const full = path.join(ROOT, file);
   const value = await fs.readFile(full, "utf8");
-  if (value.length > 180000) throw new Error("檔案過大，拒絕自動修復：" + file);
+  if (value.length > 450000) throw new Error("檔案過大，拒絕自動修復：" + file);
   return value;
 }
 
