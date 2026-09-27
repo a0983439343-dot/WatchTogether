@@ -438,6 +438,61 @@
     void renderPersonalRooms();
   }
 
+  async function renderCohostPanel(){
+    const roomState=window.WT_CORE?.state;
+    const roomView=$("roomView");
+    if(!roomView||!roomState)return;
+    const show=Boolean(!roomView.classList.contains("hidden") && roomState.isOwner===true && roomState.roomId);
+    let panel=$("wt2CohostPanel");
+    if(!show){panel?.classList.add("hidden");return;}
+    if(!panel){
+      panel=document.createElement("section");
+      panel.id="wt2CohostPanel";
+      panel.className="wt2-cohost-panel";
+      roomView.appendChild(panel);
+    }
+    panel.classList.remove("hidden");
+    const db=window.db||window.firebase?.database?.();
+    if(!db){panel.innerHTML='<strong>副房主管理</strong><div class="wt2-empty">資料庫尚未就緒。</div>';return;}
+    try{
+      const snapshot=await db.ref("members/"+roomState.roomId).once("value");
+      const members=Object.entries(snapshot.val()||{}).filter(([uid])=>String(uid)!==String(roomState.uid));
+      const roles=roomState.roomRoles||{};
+      panel.innerHTML='<div class="wt2-approval-head"><div><strong>副房主管理</strong><span>可授予播放與佇列管理權</span></div><button type="button" id="wt2CohostRefresh">重新整理</button></div><div id="wt2CohostList"></div>';
+      const list=$("wt2CohostList");
+      if(!members.length){list.innerHTML='<div class="wt2-empty">目前沒有其他成員。</div>';return;}
+      list.innerHTML=members.map(([uid,member])=>{
+        const role=String(roles?.[uid]?.role||"viewer").toLowerCase();
+        const name=escapeHtml(member?.name||uid);
+        const safeUid=escapeHtml(uid);
+        return '<div class="wt2-approval-row"><div><strong>'+name+'</strong><small>'+safeUid+' · '+(role==="cohost"?"副房主":"一般成員")+'</small></div><div class="wt2-approval-actions"><button type="button" data-cohost="'+safeUid+'" data-role="'+(role==="cohost"?"viewer":"cohost")+'">'+(role==="cohost"?"降為一般":"升為副房主")+'</button></div></div>';
+      }).join("");
+      list.querySelectorAll("[data-cohost]").forEach(button=>{
+        button.addEventListener("click",async()=>{
+          const uid=String(button.dataset.cohost||"").trim();
+          const role=String(button.dataset.role||"viewer");
+          if(!uid)return;
+          button.disabled=true;
+          try{
+            await db.ref("roomRoles/"+roomState.roomId+"/"+uid).set({
+              role,
+              updatedAt:firebase.database.ServerValue.TIMESTAMP,
+              updatedBy:roomState.uid
+            });
+            await renderCohostPanel();
+          }catch(error){
+            console.error("副房主設定失敗:",error);
+            button.disabled=false;
+          }
+        });
+      });
+      $("wt2CohostRefresh")?.addEventListener("click",()=>void renderCohostPanel());
+    }catch(error){
+      console.warn("[WT2] cohost panel:",error);
+      panel.innerHTML='<strong>副房主管理</strong><div class="wt2-empty">目前無法讀取成員。</div>';
+    }
+  }
+
   async function renderJoinApprovalPanel(){
     const roomState=window.WT_CORE?.state;
     const roomView=$("roomView");
@@ -607,9 +662,10 @@
     });
     observer.observe(roomView,{attributes:true,attributeFilter:["class"]});
     void renderJoinApprovalPanel();
+    void renderCohostPanel();
     const timer=setInterval(()=>void renderJoinApprovalPanel(),5000);
     roomView.dataset.wt2ApprovalTimer="1";
-    roomView.addEventListener("wt2-room-state-changed",()=>void renderJoinApprovalPanel());
+    roomView.addEventListener("wt2-room-state-changed",()=>{ void renderJoinApprovalPanel(); void renderCohostPanel(); });
   }
 
     function initSortableQueue(){
