@@ -9,13 +9,16 @@ const cache = new Map();
 const streamInflight = new Map();
 const searchInflight = new Map();
 const aiCache = new Map();
+const aiLastGoodCache = new Map();
 const aiInflight = new Map();
 const CACHE_TTL_MS = 600_000;
 const SEARCH_CACHE_TTL_MS = 0;
 const MAX_CACHE_ENTRIES = 500;
 const CACHE_CLEANUP_INTERVAL_MS = 60_000;
-const AI_CACHE_TTL_MS = 600_000;
-const AI_QUOTA_COOLDOWN_MS = 5 * 60_000;
+const AI_CACHE_TTL_MS = 30 * 60_000;
+const AI_STALE_CACHE_TTL_MS = 24 * 60 * 60_000;
+const AI_QUOTA_COOLDOWN_MS = 30 * 60_000;
+const AI_STALE_CACHE_MAX_ENTRIES = 250;
 let aiQuotaBlockedUntil = 0;
 const MAX_SEARCH_RESULTS = 25;
 const MAX_SEARCH_BATCH = 25;
@@ -113,6 +116,20 @@ setInterval(
     for (const [key, value] of aiCache) {
       if (!value || now - Number(value.createdAt || 0) >= AI_CACHE_TTL_MS) {
         aiCache.delete(key);
+      }
+    }
+    for (const [key, value] of aiLastGoodCache) {
+      if (!value || now - Number(value.createdAt || 0) >= AI_STALE_CACHE_TTL_MS) {
+        aiLastGoodCache.delete(key);
+      }
+    }
+    if (aiLastGoodCache.size > AI_STALE_CACHE_MAX_ENTRIES) {
+      const entries = [...aiLastGoodCache.entries()].sort(
+        (a, b) => Number(a[1]?.createdAt || 0) - Number(b[1]?.createdAt || 0)
+      );
+      const removeCount = aiLastGoodCache.size - AI_STALE_CACHE_MAX_ENTRIES;
+      for (let i = 0; i < removeCount; i += 1) {
+        aiLastGoodCache.delete(entries[i][0]);
       }
     }
   },
@@ -460,7 +477,8 @@ async function analyzeBugWithGemini(input) {
 
           if (!retryable) break;
           if (isQuotaError(error)) {
-            break;
+            error.code = "gemini_quota_exhausted";
+            throw error;
           }
           if (attempt === 1) break;
           await new Promise(resolve => setTimeout(resolve, 1200));
@@ -471,7 +489,7 @@ async function analyzeBugWithGemini(input) {
     }
     if (analysis) break;
     if (isQuotaError(lastError)) {
-      continue;
+      throw lastError;
     }
   }
 
@@ -756,8 +774,7 @@ function aiCacheKey(input) {
   return JSON.stringify({
     phase: String(input?.phase || ""),
     fingerprint: String(input?.report?.fingerprint || ""),
-    buildVersion: String(input?.report?.buildVersion || ""),
-    occurrences: Number(input?.report?.occurrences || 0) || 0
+    buildVersion: String(input?.report?.buildVersion || "")
   });
 }
 
@@ -886,11 +903,13 @@ async function handleAiAnalyze(req, res) {
     const result = await work;
 
     if (input.phase !== "repair") {
-      aiCache.set(cacheKey, {
+      const entry = {
         createdAt: Date.now(),
         model: result.model,
         analysis: result.analysis
-      });
+      };
+      aiCache.set(cacheKey, entry);
+      aiLastGoodCache.set(cacheKey, entry);
     }
 
     send(res, 200, JSON.stringify({
@@ -901,6 +920,20 @@ async function handleAiAnalyze(req, res) {
     }));
   } catch (error) {
     console.error("[ai-analyze]", error?.message || error);
+    if (input.phase !== "repair") {
+      const stale = aiLastGoodCache.get(cacheKey);
+      if (stale && Date.now() - Number(stale.createdAt || 0) < AI_STALE_CACHE_TTL_MS) {
+        send(res, 200, JSON.stringify({
+          ok: true,
+          degraded: true,
+          stale: true,
+          model: stale.model,
+          analysis: stale.analysis,
+          reason: String(error?.message || "AI 暫時不可用").slice(0, 300)
+        }));
+        return;
+      }
+    }
     const degraded = degradedAiResult(input, error);
     send(res, 200, JSON.stringify({
       ok: true,
