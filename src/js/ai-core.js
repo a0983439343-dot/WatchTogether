@@ -346,8 +346,10 @@
     const user=auth?.currentUser;
     if(!user||user.isAnonymous||!db||!feature)return false;
     try{
-      const snap=await db.ref("admin/restrictionsByUid/"+user.uid+"/features/"+feature).once("value");
-      return snap.val()===true;
+      const snap=await db.ref("admin/restrictionsByUid/"+user.uid).once("value");
+      const value=snap.val()||{};
+      const until=Number(value.blockedUntil||0);
+      return (until===0 || until>Date.now()) && value.features?.[feature]===true;
     }catch(_){return false;}
   }
 
