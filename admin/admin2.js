@@ -42,11 +42,48 @@
     addSection("analytics",'<div class="section-head"><div><div class="eyebrow">ANALYTICS</div><h2>Analytics</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>平台概況</h3><canvas id="ad2StatsChart" height="130"></canvas></div><div class="ad2-card"><h3>資料說明</h3><p>這裡只繪製目前 Admin 已讀取到的資料，不用假數據填圖。後續可再接 DAU、WAU、MAU、觀看時長等事件統計。</p><div class="ad2-list" id="ad2AnalyticsList"></div></div></div>');
     addSection("maintenance",'<div class="section-head"><div><div class="eyebrow">MAINTENANCE CENTER</div><h2>網站維護 / 關站</h2></div><button class="btn" id="ad2MaintenanceReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-row"><div><div class="ad2-kicker">CURRENT STATUS</div><h3 id="ad2MaintStatus">讀取中…</h3></div><span id="ad2MaintChip" class="ad2-chip off">OFF</span></div><div class="ad2-list"><div class="ad2-list-row"><strong>開始時間</strong><span id="ad2MaintStart">—</span></div><div class="ad2-list-row"><strong>預計恢復</strong><span id="ad2MaintEnd">—</span></div></div></div><div class="ad2-card ad2-danger"><h3>🔴 關閉網站</h3><p>這會啟用全站維護畫面。一般使用者被擋下，管理員仍可進入 Admin。</p><div class="ad2-form"><label>維護原因<input id="ad2MaintMessage" maxlength="200" placeholder="例如：系統更新"></label><label>預計恢復時間<input id="ad2MaintEnds" type="datetime-local"></label><label>維護密碼<input id="ad2MaintPassword" type="password" autocomplete="current-password" placeholder="輸入已設定的維護密碼"></label><div class="ad2-confirm-box">按下確認前會再次詢問「確定要關閉網站嗎？」；密碼通過後才會寫入維護狀態。</div><div class="ad2-row"><button class="btn" id="ad2SetPasswordBtn">設定/變更維護密碼</button><button class="btn danger" id="ad2CloseSiteBtn">🔴 確定要關閉網站嗎？</button></div><button class="btn primary" id="ad2OpenSiteBtn">🟢 恢復網站</button><div class="ad2-muted" id="ad2MaintHint"></div></div></div></div>');
     addSection("restrictions",'<div class="section-head"><div><div class="eyebrow">USER RESTRICTIONS</div><h2>指定使用者功能限制</h2></div><button class="btn" id="ad2RestrictionReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-form"><label>使用者 UID<input id="ad2RestrictionUid" placeholder="Google 使用者 UID"></label><label>限制時間<select id="ad2RestrictionDuration"><option value="permanent">永久</option><option value="3600000">1 小時</option><option value="86400000">1 天</option><option value="604800000">7 天</option><option value="2592000000">30 天</option></select></label><label>原因<textarea id="ad2RestrictionReason" maxlength="300" placeholder="限制原因"></textarea></label></div><h3 style="margin-top:14px">限制功能</h3><div class="ad2-checks" id="ad2RestrictionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn danger" id="ad2ApplyRestriction">套用限制</button><button class="btn" id="ad2ClearRestriction">解除限制</button></div><div class="ad2-muted" id="ad2RestrictionHint"></div></div><div class="ad2-card"><h3>目前限制</h3><div id="ad2RestrictionCurrent" class="ad2-list"><div class="ad2-muted">輸入 UID 後讀取。</div></div></div></div>');
-    addSection("roles",'<div class="section-head"><div><div class="eyebrow">ROLES & PERMISSIONS</div><h2>角色與權限</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>角色</h3><div class="ad2-list"><div class="ad2-list-row"><strong>Super Admin</strong><span>全部權限</span></div><div class="ad2-list-row"><strong>Admin</strong><span>管理核心功能</span></div><div class="ad2-list-row"><strong>Moderator</strong><span>房間 / Chat / 檢舉</span></div><div class="ad2-list-row"><strong>Support</strong><span>使用者支援</span></div><div class="ad2-list-row"><strong>Analyst</strong><span>僅統計與稽核</span></div></div><p class="ad2-muted" style="margin-top:10px">角色資料會集中於 Admin 2.0；同角色使用者自動同步權限，另可加個別禁止項目。</p></div><div class="ad2-card"><h3>目前權限模型</h3><div class="ad2-checks" id="ad2PermissionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn" id="ad2CopyRoleBtn">複製目前角色權限</button><button class="btn primary" id="ad2SaveRoleBtn">儲存角色</button></div></div></div>');
+    addSection("roles",'<div class="section-head"><div><div class="eyebrow">ROLES & PERMISSIONS</div><h2>角色與權限</h2></div><button class="btn" id="ad2RoleReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>共用角色</h3><div class="ad2-form"><label>角色 ID<input id="ad2RoleId" maxlength="80" placeholder="例如 core_admin"></label><label>角色名稱<input id="ad2RoleName" maxlength="80" placeholder="例如 核心管理員"></label><label>指定使用者 UID（可留空）<input id="ad2RoleAssignUid" maxlength="128" placeholder="把此角色套用給一個使用者"></label></div><div class="ad2-list" id="ad2RoleList" style="margin-top:12px"></div><p class="ad2-muted" style="margin-top:10px">同一角色的使用者共用同一份權限定義；修改角色後，所有套用該角色的人一起更新。</p></div><div class="ad2-card"><h3>角色權限</h3><div class="ad2-checks" id="ad2PermissionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn" id="ad2CopyRoleBtn">全部允許</button><button class="btn primary" id="ad2SaveRoleBtn">儲存角色</button></div><div class="ad2-muted" id="ad2RoleHint" style="margin-top:9px"></div></div></div>');
     addSection("ai",'<div class="section-head"><div><div class="eyebrow">AI CENTER</div><h2>AI 管理中心</h2></div></div><div class="ad2-grid cols-3"><div class="ad2-card"><h3>🧠 診斷</h3><p>分析錯誤、檢舉、房間與 API 異常。</p></div><div class="ad2-card"><h3>🔎 查詢</h3><p>用自然語言查 Admin 已授權資料。</p></div><div class="ad2-card"><h3>⚙️ Agent</h3><p>可執行管理工具，但刪除、停權、關站等高風險操作仍需人工確認。</p></div></div><div class="ad2-card" style="margin-top:14px"><div class="ad2-form"><label>詢問 AI<textarea id="ad2AiPrompt" placeholder="例如：最近有哪些房間異常？"></textarea></label><button class="btn primary" id="ad2AiAsk">送出分析</button></div><div id="ad2AiOutput" class="ad2-code" style="margin-top:12px"></div></div>');
     addSection("debug",'<div class="section-head"><div><div class="eyebrow">DEBUG CENTER</div><h2>Debug Center</h2></div><button class="btn" id="ad2DebugRefresh">重新整理</button></div><div class="ad2-card"><div class="ad2-list" id="ad2DebugList"></div></div>');
     addSection("versions",'<div class="section-head"><div><div class="eyebrow">VERSION CENTER</div><h2>版本中心</h2></div></div><div class="ad2-card"><div class="ad2-list"><div class="ad2-list-row"><strong>目前前台 build</strong><span id="ad2Build">—</span></div><div class="ad2-list-row"><strong>目前 Admin build</strong><span>20260927-admin-v30</span></div><div class="ad2-list-row"><strong>下一階段</strong><span>2.0 功能模組逐項接入</span></div></div></div>');
     addSection("settings",'<div class="section-head"><div><div class="eyebrow">SYSTEM SETTINGS</div><h2>系統設定</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>功能旗標</h3><div class="ad2-list" id="ad2FeatureFlags"></div></div><div class="ad2-card"><h3>系統資訊</h3><div class="ad2-list"><div class="ad2-list-row"><strong>Firebase</strong><span>Realtime Database + Auth</span></div><div class="ad2-list-row"><strong>YouTube 搜尋</strong><span>Cloudflare Worker Proxy</span></div><div class="ad2-list-row"><strong>UI Base</strong><span>Tabler 1.6</span></div></div></div></div>');
+  }
+
+  async function loadRoles(){
+    const db=DB(); const wrap=$("ad2RoleList"); if(!db||!wrap)return;
+    try{
+      const snap=await db.ref("admin/roles").once("value"); const values=snap.val()||{};
+      const entries=Object.entries(values).sort((a,b)=>String(a[1]?.name||a[0]).localeCompare(String(b[1]?.name||b[0])));
+      wrap.innerHTML=entries.length?entries.map(([id,v])=>'<button type="button" class="ad2-list-row" data-role-id="'+escapeHtml(id)+'" style="width:100%;text-align:left;color:inherit"><strong>'+escapeHtml(v?.name||id)+'</strong><span>'+Object.keys(v?.permissions||{}).filter(k=>v.permissions[k]===true).length+' 個權限</span></button>').join(""):'<div class="ad2-muted">尚未建立自訂角色。</div>';
+      wrap.querySelectorAll("[data-role-id]").forEach(b=>b.addEventListener("click",()=>loadRoleIntoEditor(b.dataset.roleId)));
+    }catch(e){wrap.innerHTML='<div class="ad2-muted">無法讀取角色資料。</div>';console.warn("[WT2 Admin] roles:",e)}
+  }
+  async function loadRoleIntoEditor(roleId){
+    try{
+      const s=await DB().ref("admin/roles/"+roleId).once("value"); const v=s.val(); if(!v)return;
+      if($("ad2RoleId"))$("ad2RoleId").value=roleId; if($("ad2RoleName"))$("ad2RoleName").value=v.name||"";
+      document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=v.permissions?.[x.dataset.permission]===true);
+    }catch(e){console.warn("[WT2 Admin] load role:",e)}
+  }
+  async function saveRole(){
+    const user=window.firebase?.auth?.().currentUser;
+    if(!user || String(user.email||"").trim().toLowerCase()!=="a0983439343@gmail.com"){ $("ad2RoleHint").textContent="只有最高管理員可以修改角色定義。"; return; }
+    const roleId=String($("ad2RoleId")?.value||"").trim().replace(/[^A-Za-z0-9_-]/g,"").slice(0,80);
+    const name=String($("ad2RoleName")?.value||"").trim().slice(0,80);
+    if(!roleId||!name){$("ad2RoleHint").textContent="請填寫角色 ID 與名稱。";return}
+    const permissionsOut={}; document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>permissionsOut[x.dataset.permission]=x.checked);
+    await DB().ref("admin/roles/"+roleId).set({name,permissions:permissionsOut,updatedAt:Date.now(),updatedBy:user.uid});
+    const assignUid=String($("ad2RoleAssignUid")?.value||"").trim();
+    if(assignUid) await DB().ref("admin/userRoles/"+assignUid).set({roleId,updatedAt:Date.now(),updatedBy:user.uid});
+    $("ad2RoleHint").textContent=assignUid?"角色已儲存，並套用給指定 UID。":"角色已儲存。";
+    await loadRoles();
+  }
+  async function assignSelectedRole(){
+    const user=window.firebase?.auth?.().currentUser; const uid=String($("ad2RoleAssignUid")?.value||"").trim(); const roleId=String($("ad2RoleId")?.value||"").trim();
+    if(String(user?.email||"").trim().toLowerCase()!=="a0983439343@gmail.com"){toast("只有最高管理員可以套用角色");return}
+    if(!uid||!roleId){$("ad2RoleHint").textContent="請先填角色 ID 與使用者 UID。";return}
+    await DB().ref("admin/userRoles/"+uid).set({roleId,updatedAt:Date.now(),updatedBy:user.uid});
+    $("ad2RoleHint").textContent="角色已套用。";
   }
 
   function renderFeatureChecks(){
@@ -155,7 +192,9 @@
     $("ad2Build")&&( $("ad2Build").textContent=window.__WATCHTOGETHER_BUILD__||"—");
     $("ad2AiAsk")?.addEventListener("click",()=>{$("ad2AiOutput").textContent="AI 管理代理的工具層已預留；目前這個 UI 不會假裝有分析結果。下一階段會接入真正的 AI Core / tools。"});
     $("ad2CopyRoleBtn")?.addEventListener("click",()=>{document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=true);});
-    $("ad2SaveRoleBtn")?.addEventListener("click",()=>alert("角色 UI 已建立；角色資料模型與 Firebase Rules 將在下一個資料層提交中。"));
+    $("ad2SaveRoleBtn")?.addEventListener("click",()=>saveRole().catch(e=>{console.error(e);$("ad2RoleHint").textContent="角色儲存失敗。";}));
+    $("ad2RoleReload")?.addEventListener("click",()=>loadRoles());
+    loadRoles();
     const denied=new MutationObserver(()=>{const d=$("deniedScreen"),s=$("setupScreen");if((d&&!d.classList.contains("hidden"))||(s&&!s.classList.contains("hidden"))){try{location.replace("../404.html")}catch(_){}}});
     denied.observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
     refreshAll();
