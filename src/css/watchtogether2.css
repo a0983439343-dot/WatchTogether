@@ -196,3 +196,10 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-directory-info{min-width:0}.wt2-directory-info strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}.wt2-directory-info span{display:block;margin-top:3px;color:var(--wt2-muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wt2-directory-join{border:1px solid var(--wt2-border);border-radius:9px;padding:7px 9px;background:rgba(255,255,255,.05);color:var(--wt2-text);font-size:10px;font-weight:900}
 @media(max-width:760px){.wt2-visibility-options,.wt2-directory-grid{grid-template-columns:1fr}.wt2-directory-card{grid-template-columns:auto minmax(0,1fr) auto}}
+
+.wt2-chat-translate-btn{border:0!important;background:transparent!important;color:var(--wt2-accent)!important;padding:3px 0!important;font-size:10px!important;font-weight:900!important;min-height:0!important;cursor:pointer}
+.wt2-chat-translate-btn:disabled{opacity:.55;cursor:wait}
+.wt2-chat-translation{display:none;margin:6px 0 2px;padding:8px 10px;border-left:2px solid var(--wt2-accent);border-radius:0 10px 10px 0;background:rgba(110,168,255,.055);font-size:12px;line-height:1.65}
+.wt2-chat-translation.show{display:block}
+.wt2-chat-translation small{display:block;color:var(--wt2-muted);font-size:9px;font-weight:900;letter-spacing:.06em;margin-bottom:3px}
+.wt2-chat-translation.error{border-left-color:var(--wt2-warning);background:rgba(243,191,99,.06)}
