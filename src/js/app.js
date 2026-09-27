@@ -296,6 +296,10 @@
 
     membersRef: null,
 
+    roomRolesRef: null,
+    roomRoles: {},
+    lastMembers: {},
+
     kickedRef: null,
 
     chatRef: null,
@@ -11691,6 +11695,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             return;
           }
 
+          state.lastMembers = members;
           renderMembers(
             members
           );
@@ -11706,6 +11711,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
       state.membersListenerAttached =
         true;
+    }
+
+    if (!state.roomRolesRef) {
+      state.roomRolesRef = db.ref("roomRoles/" + state.roomId);
+      state.roomRolesRef.on("value", (snapshot) => {
+        state.roomRoles = snapshot.val() || {};
+        renderMembers(state.lastMembers || {});
+      });
     }
 
     if (
@@ -11820,6 +11833,37 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               member?.online !==
               false;
 
+            const role =
+              owner
+                ? "owner"
+                : String(
+                    state.roomRoles?.[uid]?.role ||
+                    "viewer"
+                  );
+
+            const roleLabel =
+              role === "cohost"
+                ? "副房主"
+                : role === "owner"
+                  ? "房主"
+                  : online
+                    ? "在線"
+                    : "離線";
+
+            const roleButton =
+              state.isOwner &&
+              !owner &&
+              uid !== state.uid
+                ? `
+                  <button
+                    type="button"
+                    class="tiny-btn wt2-member-role-btn"
+                    data-member-role-toggle="${escapeHtml(uid)}"
+                    data-member-role-name="${escapeHtml(name)}"
+                  >${role === "cohost" ? "降為一般" : "升為副房主"}</button>
+                `
+                : "";
+
             /*
              * 房主可以踢其他人，
              * 但不能踢自己。
@@ -11887,11 +11931,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
                   <span>
                     ${
-                      owner
-                        ? "房主"
-                        : online
-                          ? "在線"
-                          : "離線"
+roleLabel
                     }
                   </span>
 
@@ -11908,6 +11948,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   "
                 ></span>
 
+                ${roleButton}
+
                 ${kickButton}
 
               </div>
@@ -11915,6 +11957,31 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           }
         )
         .join("");
+
+    $("memberList")
+      .querySelectorAll("[data-member-role-toggle]")
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          const uid = button.dataset.memberRoleToggle;
+          const current = String(
+            state.roomRoles?.[uid]?.role || "viewer"
+          );
+
+          try {
+            await setRoomMemberRole(
+              uid,
+              current === "cohost"
+                ? "viewer"
+                : "cohost"
+            );
+          } catch (error) {
+            toast(
+              error?.message ||
+              "修改房間角色失敗"
+            );
+          }
+        });
+      });
 
     $("memberList")
       .querySelectorAll(
@@ -11937,6 +12004,29 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
   }
 
+
+  async function setRoomMemberRole(uid, role) {
+    uid = String(uid || "").trim();
+    role = String(role || "").trim().toLowerCase();
+
+    if (!uid || uid === state.uid || !state.isOwner) {
+      return;
+    }
+
+    if (!["cohost", "viewer"].includes(role)) {
+      throw new Error("不支援的房間角色");
+    }
+
+    if (!state.roomRolesRef) {
+      state.roomRolesRef = db.ref("roomRoles/" + state.roomId);
+    }
+
+    await state.roomRolesRef.child(uid).set({
+      role,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedBy: state.uid
+    });
+  }
 
   /*
    * =========================================================
@@ -14653,6 +14743,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   window.WT_CORE.changeVideo =
     changeVideo;
+
+  window.WT_CORE.setRoomMemberRole =
+    setRoomMemberRole;
 
   window.WT_CORE.createRoomWithVideo =
     createRoomWithVideo;
