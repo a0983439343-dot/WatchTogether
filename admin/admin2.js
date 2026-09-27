@@ -109,7 +109,7 @@
     addSection("ai",'<div class="section-head"><div><div class="eyebrow">AI CENTER</div><h2>AI 管理中心</h2></div></div><div class="ad2-grid cols-3"><div class="ad2-card"><h3>🧠 診斷</h3><p>分析錯誤、檢舉、房間與 API 異常。</p></div><div class="ad2-card"><h3>🔎 查詢</h3><p>用自然語言查 Admin 已授權資料。</p></div><div class="ad2-card"><h3>⚙️ Agent</h3><p>可執行管理工具，但刪除、停權、關站等高風險操作仍需人工確認。</p></div></div><div class="ad2-card" style="margin-top:14px"><div class="ad2-form"><label>詢問 AI<textarea id="ad2AiPrompt" placeholder="例如：最近有哪些房間異常？"></textarea></label><button class="btn primary" id="ad2AiAsk">送出分析</button></div><div id="ad2AiOutput" class="ad2-code" style="margin-top:12px"></div></div>');
     addSection("debug",'<div class="section-head"><div><div class="eyebrow">DEBUG CENTER</div><h2>Debug Center</h2></div><button class="btn" id="ad2DebugRefresh">重新整理</button></div><div class="ad2-card"><div class="ad2-list" id="ad2DebugList"></div></div>');
     addSection("versions",'<div class="section-head"><div><div class="eyebrow">VERSION CENTER</div><h2>版本中心</h2></div></div><div class="ad2-card"><div class="ad2-list"><div class="ad2-list-row"><strong>目前前台 build</strong><span id="ad2Build">—</span></div><div class="ad2-list-row"><strong>目前 Admin build</strong><span>20260927-admin-v30</span></div><div class="ad2-list-row"><strong>下一階段</strong><span>2.0 功能模組逐項接入</span></div></div></div>');
-    addSection("settings",'<div class="section-head"><div><div class="eyebrow">SYSTEM SETTINGS</div><h2>系統設定</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>功能旗標</h3><div class="ad2-list" id="ad2FeatureFlags"></div></div><div class="ad2-card"><h3>系統資訊</h3><div class="ad2-list"><div class="ad2-list-row"><strong>Firebase</strong><span>Realtime Database + Auth</span></div><div class="ad2-list-row"><strong>YouTube 搜尋</strong><span>Cloudflare Worker Proxy</span></div><div class="ad2-list-row"><strong>UI Base</strong><span>Tabler 1.6</span></div></div></div></div>');
+    addSection("settings",'<div class="section-head"><div><div class="eyebrow">SYSTEM SETTINGS</div><h2>系統設定</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-row"><h3 style="margin:0">功能旗標</h3><button class="btn primary" id="ad2FeatureFlagsSave">儲存</button></div><div class="ad2-list" id="ad2FeatureFlags"></div><p class="ad2-muted" style="margin-top:10px">關閉後重要資料寫入也會由 Firebase Rules 拒絕，不只是隱藏按鈕。</p></div><div class="ad2-card"><h3>系統資訊</h3><div class="ad2-list"><div class="ad2-list-row"><strong>Firebase</strong><span>Realtime Database + Auth</span></div><div class="ad2-list-row"><strong>YouTube 搜尋</strong><span>Cloudflare Worker Proxy</span></div><div class="ad2-list-row"><strong>UI Base</strong><span>Tabler 1.6</span></div></div></div></div>');
   }
 
   async function askAdminAi(){
@@ -188,9 +188,46 @@
   }
 
   function renderFeatureChecks(){
-    const wrap=$("ad2RestrictionChecks");if(wrap)wrap.innerHTML=features.map(([label,key])=>'<label class="ad2-check"><input type="checkbox" data-feature="'+key+'"> '+label+"</label>").join("");
-    const pw=$("ad2PermissionChecks");if(pw)pw.innerHTML=permissions.map(p=>'<label class="ad2-check"><input type="checkbox" data-permission="'+p+'"> '+p+"</label>").join("");
-    const ff=$("ad2FeatureFlags");if(ff)ff.innerHTML=features.map(([label,key])=>'<div class="ad2-list-row"><strong>'+label+'</strong><span class="ad2-chip on">ON</span></div>').join("");
+    const wrap=$("ad2RestrictionChecks");
+    if(wrap)wrap.innerHTML=features.map(([label,key])=>'<label class="ad2-check"><input type="checkbox" data-feature="'+key+'"> '+label+"</label>").join("");
+    const pw=$("ad2PermissionChecks");
+    if(pw)pw.innerHTML=permissions.map(p=>'<label class="ad2-check"><input type="checkbox" data-permission="'+p+'"> '+p+"</label>").join("");
+  }
+
+  async function loadFeatureFlags(){
+    const db=DB(),wrap=$("ad2FeatureFlags");
+    if(!db||!wrap)return;
+    try{
+      const snap=await db.ref("system/featureFlags").once("value");
+      const values=snap.val()||{};
+      wrap.innerHTML=features.map(([label,key])=>{
+        const enabled=values[key]!==false;
+        return '<label class="ad2-list-row" style="cursor:pointer"><span><strong>'+label+'</strong><small style="display:block;color:var(--ad2-muted);font-size:9px;margin-top:3px">'+key+"</small></span><input type=\"checkbox\" data-global-feature=\""+key+"\" "+(enabled?"checked":"")+" aria-label=\""+label+"\"></label>";
+      }).join("");
+    }catch(error){
+      wrap.innerHTML='<div class="ad2-muted">無法讀取功能旗標。</div>';
+      console.warn("[WT2 Admin] feature flags:",error);
+    }
+  }
+
+  async function saveFeatureFlags(){
+    const db=DB();if(!db)return;
+    const user=window.firebase?.auth?.().currentUser;
+    if(!user||user.isAnonymous){toast("管理員登入狀態無效");return}
+    if(!hasPermission("settings.edit")){toast("你沒有修改系統功能旗標的權限");return}
+    const updates={};
+    document.querySelectorAll("[data-global-feature]").forEach(input=>{
+      updates[input.dataset.globalFeature]=input.checked;
+    });
+    try{
+      await db.ref("system/featureFlags").update(updates);
+      await writeAudit("featureFlags.update",user.uid,"系統","更新全站功能旗標");
+      toast("功能旗標已更新");
+      await loadFeatureFlags();
+    }catch(error){
+      console.error("[WT2 Admin] feature flags:",error);
+      toast("功能旗標更新失敗");
+    }
   }
 
   function ensureAdminCommandPalette(){
@@ -393,6 +430,8 @@
     $("ad2CopyRoleBtn")?.addEventListener("click",()=>{document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=true);});
     $("ad2SaveRoleBtn")?.addEventListener("click",()=>saveRole().catch(e=>{console.error(e);$("ad2RoleHint").textContent="角色儲存失敗。";}));
     $("ad2RoleReload")?.addEventListener("click",()=>loadRoles());
+    $("ad2FeatureFlagsSave")?.addEventListener("click",()=>saveFeatureFlags());
+    void loadFeatureFlags();
     loadRoles();
     const denied=new MutationObserver(()=>{const d=$("deniedScreen"),s=$("setupScreen");if((d&&!d.classList.contains("hidden"))||(s&&!s.classList.contains("hidden"))){try{location.replace("../404.html")}catch(_){}}});
     denied.observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
