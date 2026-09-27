@@ -496,6 +496,15 @@
           }
         }
       }
+    },
+    "roomRoles": {
+      "$roomId": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('members').child($roomId).child(auth.uid).exists() || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com'))",
+          ".write": "auth != null && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com'))",
+          ".validate": "newData.hasChildren(['role','updatedAt','updatedBy']) && newData.child('role').isString() && (newData.child('role').val() === 'cohost' || newData.child('role').val() === 'viewer' || newData.child('role').val() === 'owner') && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length <= 128"
+        }
+      }
     }
   }
 }
