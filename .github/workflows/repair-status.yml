@@ -8,7 +8,7 @@ on:
       - completed
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: watchtogether-repair-status
