@@ -7733,10 +7733,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       if (value.status === "approved" && value.approved === true) {
         requestRef.off();
         try {
-          await requestRef.remove();
-        } catch (_) {}
-        try {
           await joinRoom(roomId);
+          await requestRef.remove();
         } catch (error) {
           toast(error?.message || "核准後加入房間失敗");
         }
@@ -7919,7 +7917,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       !isRoomOwner &&
       !isExistingMember &&
       metaData.visibility === "public" &&
-      metaData.joinMode === "approval"
+      metaData.joinMode === "approval" &&
+      !approvedJoinRequest
     ) {
       await requestRoomJoinApproval(roomId);
       return;
@@ -14656,6 +14655,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   window.WT_CORE.setMemberName = setMemberName;
   window.WT_CORE.getMemberName = getMemberName;
+  window.WT_CORE.getRoomId = () => String(state.roomId || "");
   window.WT_CORE.setGuestName = function() {
     const key = "wt_guest_name";
     let name =
