@@ -265,6 +265,74 @@ test("personal room: an offline former owner cannot be replaced through the owne
   );
 });
 
+
+test("invite-only room: a non-invited user cannot create membership", async () => {
+  const roomId = "INV123";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room",
+      visibility: "personal",
+      joinMode: "invite_only",
+      settings: {locked:false,maxMembers:10,controlMode:"host"},
+      createdAt: Date.now()
+    });
+  });
+
+  const requester = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertFails(
+    requester.ref("members/" + roomId + "/" + OTHER_UID).set({
+      name:"Other",
+      joinedAt:Date.now(),
+      online:true,
+      lastSeen:Date.now()
+    })
+  );
+});
+
+test("invite-only room: an invited user can create membership", async () => {
+  const roomId = "INV456";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room 2",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room 2",
+      visibility: "personal",
+      joinMode: "invite_only",
+      settings: {locked:false,maxMembers:10,controlMode:"host"},
+      createdAt: Date.now()
+    });
+    await context.database().ref("roomInvites/" + roomId + "/" + OTHER_UID).set(true);
+  });
+
+  const requester = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(
+    requester.ref("members/" + roomId + "/" + OTHER_UID).set({
+      name:"Other",
+      joinedAt:Date.now(),
+      online:true,
+      lastSeen:Date.now()
+    })
+  );
+});
+
 test("reports: manually submitted reports can store verification but cannot self-resolve before approval", async () => {
   const ref = db(USER_UID, userToken).ref("reports/manual-verify");
   await assertSucceeds(ref.set({
