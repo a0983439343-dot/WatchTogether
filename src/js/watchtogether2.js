@@ -1,0 +1,231 @@
+(() => {
+  "use strict";
+
+  const BUILD = "watchtogether-2.0-ui-v1";
+  const $ = (id) => document.getElementById(id);
+
+  function makeButton(icon, label, action, active=false) {
+    const b=document.createElement("button");
+    b.type="button";
+    b.dataset.action=action;
+    b.className=active ? "active" : "";
+    b.innerHTML='<span class="wt2-nav-icon" aria-hidden="true">'+icon+'</span><span class="label">'+label+"</span>";
+    return b;
+  }
+
+  function safeShowView(name){
+    try {
+      if(typeof window.showView === "function"){ window.showView(name); return true; }
+      if(name==="home"){ $("homeView")?.classList.remove("hidden"); $("roomView")?.classList.add("hidden"); return true; }
+      if(name==="room"){ $("homeView")?.classList.add("hidden"); $("roomView")?.classList.remove("hidden"); return true; }
+    } catch(error){ console.warn("[WT2] view switch failed", error); }
+    return false;
+  }
+
+  function scrollToId(id){
+    const node=$(id);
+    node?.scrollIntoView({behavior:"smooth",block:"center"});
+  }
+
+  function renderShell(){
+    if(document.body.dataset.wt2Ready==="1") return;
+    document.body.dataset.wt2Ready="1";
+    document.body.classList.add("wt2-theme");
+
+    const shell=document.querySelector(".app-shell");
+    const header=shell?.querySelector(":scope > .topbar");
+    const main=shell?.querySelector(":scope > main");
+    if(!shell || !header || !main) return;
+
+    const frame=document.createElement("div");
+    frame.className="wt2-frame";
+
+    const sidebar=document.createElement("aside");
+    sidebar.className="wt2-sidebar";
+    sidebar.innerHTML=
+      '<div class="wt2-brand"><div class="wt2-brand-mark">▶</div><div class="wt2-brand-text">WATCHTOGETHER<span>VERSION 2.0</span></div></div>' +
+      '<div class="wt2-nav" role="navigation" aria-label="主導覽"></div>' +
+      '<div class="wt2-sidebar-foot"><div class="wt2-status-card"><div class="k">SYSTEM</div><div class="v" id="wt2SystemStatus">ONLINE</div></div></div>';
+
+    const nav=sidebar.querySelector(".wt2-nav");
+    const items=[
+      ["⌂","首頁","home",true],
+      ["▣","我的房間","rooms"],
+      ["◇","探索","explore"],
+      ["✦","AI","ai"],
+      ["♟","好友","friends"],
+      ["⚙","設定","settings"]
+    ];
+    items.forEach(([icon,label,action,active])=>nav.appendChild(makeButton(icon,label,action,active)));
+
+    const content=document.createElement("div");
+    content.className="wt2-main";
+    const top=document.createElement("div");
+    top.className="wt2-topbar";
+    top.innerHTML='<div class="wt2-top-left"><div><div class="wt2-page-title" id="wt2PageTitle">首頁</div><div class="wt2-breadcrumb">WatchTogether 2.0</div></div></div><div class="wt2-top-actions" id="wt2TopActions"></div>';
+
+    const mainContent=document.createElement("div");
+    mainContent.className="wt2-content";
+    content.append(top,mainContent);
+    mainContent.appendChild(main);
+
+    shell.innerHTML="";
+    frame.append(sidebar,content);
+    shell.appendChild(frame);
+
+    const topActions=$("wt2TopActions");
+    if(topActions){
+      const auth=document.querySelector("#authStatus");
+      const login=document.querySelector("#googleLoginBtn");
+      const logout=document.querySelector("#logoutBtn");
+      [auth,login,logout].forEach(node=>{ if(node) topActions.appendChild(node); });
+      header.remove();
+    }
+
+    const moduleStrip=document.createElement("div");
+    moduleStrip.className="wt2-module-strip";
+    moduleStrip.innerHTML=
+      '<button class="wt2-module-card" type="button" data-quick="create"><div class="icon">＋</div><strong>建立房間</strong><span>建立新的專屬或公開房間</span></button>'+
+      '<button class="wt2-module-card" type="button" data-quick="join"><div class="icon">↗</div><strong>加入房間</strong><span>輸入房間碼快速加入</span></button>'+
+      '<button class="wt2-module-card" type="button" data-quick="search"><div class="icon">⌕</div><strong>搜尋影片</strong><span>使用現有 YouTube 搜尋功能</span></button>'+
+      '<button class="wt2-module-card" type="button" data-quick="ai"><div class="icon">✦</div><strong>AI 中心</strong><span>AI 搜尋與房間助手入口</span></button>';
+    const home=$("homeView");
+    home?.parentNode?.insertBefore(moduleStrip,home);
+
+    const roomToggle=document.createElement("div");
+    roomToggle.className="wt2-room-toggle";
+    roomToggle.innerHTML='<button type="button" class="active" data-room-tab="personal">🔐 專屬房間</button><button type="button" data-room-tab="public">🌎 公開房間</button>';
+    home?.insertBefore(roomToggle,home.querySelector(".home-grid"));
+
+    const empty=document.createElement("div");
+    empty.id="wt2PublicRoomsEmpty";
+    empty.className="wt2-empty hidden";
+    empty.innerHTML="<strong>公開房間中心</strong><div style='margin-top:6px'>公開房間資料層正在接入 2.0 房間架構；目前仍完整保留舊房間建立／加入流程。</div>";
+    roomToggle.parentNode?.insertBefore(empty,home.querySelector(".home-grid"));
+
+    const mobileNav=document.createElement("nav");
+    mobileNav.className="wt2-mobile-nav";
+    mobileNav.setAttribute("aria-label","行動版主導覽");
+    items.slice(0,5).forEach(([icon,label,action,active])=>{
+      const b=document.createElement("button");b.type="button";b.dataset.action=action;b.textContent=icon+" "+label;if(active)b.classList.add("active");mobileNav.appendChild(b);
+    });
+    document.body.appendChild(mobileNav);
+
+    bindNavigation();
+    bindQuickActions();
+    bindRoomTabs();
+    watchRoomState();
+  }
+
+  function setActive(action){
+    document.querySelectorAll("[data-action]").forEach(b=>b.classList.toggle("active",b.dataset.action===action));
+    const titleMap={home:"首頁",rooms:"我的房間",explore:"探索",ai:"AI 中心",friends:"好友",settings:"設定"};
+    if($("wt2PageTitle")) $("wt2PageTitle").textContent=titleMap[action]||"WatchTogether 2.0";
+  }
+
+  function bindNavigation(){
+    document.querySelectorAll("[data-action]").forEach(button=>{
+      button.addEventListener("click",()=>{
+        const action=button.dataset.action;
+        setActive(action);
+        if(action==="home"){ safeShowView("home"); scrollToId("homeView"); return; }
+        if(action==="rooms"){ safeShowView("home"); scrollToId("homeView"); const t=document.querySelector('[data-room-tab="personal"]'); t?.click(); return; }
+        if(action==="explore"){ safeShowView("home"); scrollToId("videoSearchArea"); $("videoSearchInput")?.focus(); return; }
+        if(action==="ai"){ safeShowView("home"); scrollToId("videoSearchArea"); $("videoSearchInput")?.focus(); if($("searchHint")) $("searchHint").textContent="AI 搜尋入口已就緒；自然語言搜尋會使用後續 AI Core。"; return; }
+        if(action==="friends"){ safeShowView("home"); const node=document.querySelector(".wt-friends-layout"); node ? scrollToId(node.id||"homeView") : scrollToId("homeView"); return; }
+        if(action==="settings"){ safeShowView("home"); const node=document.querySelector(".wt-settings-grid"); node ? node.scrollIntoView({behavior:"smooth"}) : scrollToId("homeView"); return; }
+      });
+    });
+  }
+
+  function bindQuickActions(){
+    document.querySelectorAll("[data-quick]").forEach(b=>b.addEventListener("click",()=>{
+      const action=b.dataset.quick;
+      if(action==="create"){ safeShowView("home"); scrollToId("roomNameInput"); $("roomNameInput")?.focus(); }
+      if(action==="join"){ safeShowView("home"); scrollToId("joinCodeInput"); $("joinCodeInput")?.focus(); }
+      if(action==="search"){ safeShowView("home"); scrollToId("videoSearchInput"); $("videoSearchInput")?.focus(); }
+      if(action==="ai"){ safeShowView("home"); scrollToId("videoSearchInput"); $("videoSearchInput")?.focus(); }
+    }));
+  }
+
+  function bindRoomTabs(){
+    document.querySelectorAll("[data-room-tab]").forEach(b=>b.addEventListener("click",()=>{
+      const value=b.dataset.roomTab;
+      document.querySelectorAll("[data-room-tab]").forEach(x=>x.classList.toggle("active",x===b));
+      const empty=$("wt2PublicRoomsEmpty");
+      const grid=document.querySelector(".home-grid");
+      if(value==="public"){
+        empty?.classList.remove("hidden");
+        if(grid) grid.classList.add("hidden");
+      }else{
+        empty?.classList.add("hidden");
+        if(grid) grid.classList.remove("hidden");
+      }
+    }));
+  }
+
+  function watchRoomState(){
+    const roomView=$("roomView");
+    if(!roomView) return;
+    const observer=new MutationObserver(()=>{
+      const inRoom=!roomView.classList.contains("hidden");
+      if(inRoom) setActive("rooms");
+    });
+    observer.observe(roomView,{attributes:true,attributeFilter:["class"]});
+  }
+
+  function initSortableQueue(){
+    if(!window.Sortable || !$("queueList")) return;
+    const list=$("queueList");
+    if(list.dataset.wt2Sortable==="1") return;
+    try{
+      Sortable.create(list,{animation:160,ghostClass:"wt2-sort-ghost",handle:".queue-drag-handle",fallbackOnBody:true});
+      list.dataset.wt2Sortable="1";
+    }catch(error){console.warn("[WT2] Sortable init failed",error);}
+  }
+
+  function initMaintenanceListener(){
+    const db=window.db || window.firebase?.database?.();
+    if(!db) return;
+    try{
+      db.ref("system/maintenance").on("value",snap=>{
+        const state=snap.val();
+        if(!state || state.enabled!==true){ hideMaintenance(); return; }
+        const u=window.firebase?.auth?.().currentUser;
+        const privileged=window.__WT2_ADMIN_AUTHORIZED__===true;
+        if(privileged){ hideMaintenance(); return; }
+        showMaintenance(state);
+      });
+    }catch(error){ console.warn("[WT2] maintenance listener:",error); }
+  }
+
+  function showMaintenance(state){
+    let screen=$("wt2MaintenanceScreen");
+    if(!screen){
+      screen=document.createElement("div");
+      screen.id="wt2MaintenanceScreen";
+      screen.className="wt2-maintenance-screen hidden";
+      document.body.appendChild(screen);
+    }
+    const ends=Number(state.endsAt||0);
+    screen.innerHTML='<div class="wt2-maintenance-card"><div class="wt2-maintenance-icon">🔧</div><h1>WatchTogether 維護中</h1><p>'+escapeHtml(state.message||"系統正在進行維護，請稍後再回來。")+'</p><div class="wt2-maintenance-meta"><div class="box"><small>狀態</small><strong>🔴 維護中</strong></div><div class="box"><small>預計恢復</small><strong>'+(ends?new Date(ends).toLocaleString():"尚未設定")+'</strong></div></div></div>';
+    screen.classList.remove("hidden");
+  }
+
+  function hideMaintenance(){ $("wt2MaintenanceScreen")?.classList.add("hidden"); }
+
+  function escapeHtml(value){
+    return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  }
+
+  function boot(){
+    renderShell();
+    initSortableQueue();
+    initMaintenanceListener();
+    window.WatchTogether2={build:BUILD,refresh:()=>{renderShell();initSortableQueue();}};
+    const observer=new MutationObserver(()=>initSortableQueue());
+    const queue=$("queueList"); if(queue) observer.observe(queue,{childList:true,subtree:true});
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
+})();
