@@ -59,6 +59,26 @@
         required: ["queueId"]
       }
     },
+    reorderQueue: {
+      risk: "confirm",
+      description: "重新排序目前房間待播放清單",
+      parameters: {
+        type: "object",
+        properties: {
+          queueIds: { type: "array", items: { type: "string" } }
+        },
+        required: ["queueIds"]
+      }
+    },
+    removeFromQueue: {
+      risk: "confirm",
+      description: "從目前房間待播放清單移除指定項目",
+      parameters: {
+        type: "object",
+        properties: { queueId: { type: "string" } },
+        required: ["queueId"]
+      }
+    },
     listQueue: {
       risk: "safe",
       description: "讀取目前房間待播放清單",
@@ -236,6 +256,24 @@
       if(!text) throw new Error("訊息不能為空");
       await fn(text);
       return {ok:true,message:"訊息已送出"};
+    }
+
+    if(name === "removeFromQueue"){
+      const fn = window.WT_CORE?.removeFromQueue;
+      if(typeof fn !== "function") throw new Error("待播放清單移除功能尚未準備完成");
+      const queueId = String(parsed.queueId || "").trim();
+      if(!queueId) throw new Error("缺少 queueId");
+      await fn(queueId);
+      return {ok:true,message:"已移除待播放項目"};
+    }
+
+    if(name === "reorderQueue"){
+      const fn = window.WT_CORE?.reorderQueue;
+      if(typeof fn !== "function") throw new Error("待播放清單排序功能尚未準備完成");
+      const queueIds = Array.isArray(parsed.queueIds) ? parsed.queueIds.map(x=>String(x||"").trim()).filter(Boolean).slice(0,100) : [];
+      if(!queueIds.length) throw new Error("queueIds 不可為空");
+      await fn(queueIds);
+      return {ok:true,message:"待播放清單已重新排序"};
     }
 
     throw new Error("未知 AI 工具");
