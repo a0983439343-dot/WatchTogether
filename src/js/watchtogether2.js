@@ -184,9 +184,64 @@
     }catch(error){console.warn("[WT2] Sortable init failed",error);}
   }
 
+  function applyUserRestrictions(value){
+    const features=value?.features||{};
+    const map={
+      create_room:["createRoomBtn"],
+      join_public_room:["joinRoomBtn"],
+      chat:["chatForm","chatInput"],
+      ai:[],
+      ai_agent:[],
+      uploads:[],
+      friends:[],
+      polls:[],
+      playlists:["queueList"],
+      public_explore:[]
+    };
+    Object.entries(map).forEach(([feature,ids])=>{
+      const blocked=features[feature]===true;
+      ids.forEach(id=>{
+        const node=$(id); if(!node) return;
+        node.disabled=blocked;
+        node.setAttribute("aria-disabled",blocked?"true":"false");
+        node.classList.toggle("wt2-restricted",blocked);
+      });
+    });
+    const disabledLabels=[];
+    if(features.create_room) disabledLabels.push("建立房間");
+    if(features.chat) disabledLabels.push("聊天室");
+    if(features.playlists) disabledLabels.push("播放佇列");
+    const existing=document.getElementById("wt2RestrictionNotice");
+    if(disabledLabels.length){
+      const notice=existing||document.createElement("div");
+      notice.id="wt2RestrictionNotice";notice.className="wt2-restriction-notice";
+      notice.textContent="此帳號目前有部分功能受到限制："+disabledLabels.join("、")+"。";
+      if(!existing) document.body.appendChild(notice);
+    }else existing?.remove();
+    document.body.classList.toggle("wt2-user-restricted",Object.values(features).some(Boolean));
+  }
+
+  function initRestrictionListener(){
+    const tryAttach=()=>{
+      const auth=window.firebase?.auth?.();
+      const db=window.firebase?.database?.();
+      if(!auth||!db){setTimeout(tryAttach,1000);return;}
+      auth.onAuthStateChanged(user=>{
+        if(!user||user.isAnonymous){applyUserRestrictions(null);return;}
+        db.ref("admin/restrictionsByUid/"+user.uid).on("value",snap=>{
+          const value=snap.val()||null;
+          const until=Number(value?.blockedUntil||0);
+          if(value && until!==0 && until<=Date.now()){applyUserRestrictions(null);return;}
+          applyUserRestrictions(value);
+        },error=>console.warn("[WT2] restriction listener:",error));
+      });
+    };
+    tryAttach();
+  }
+
   function initMaintenanceListener(){
     const db=window.db || window.firebase?.database?.();
-    if(!db) return;
+    if(!db){setTimeout(initMaintenanceListener,1000); return;}
     try{
       db.ref("system/maintenance").on("value",snap=>{
         const state=snap.val();
@@ -222,6 +277,7 @@
     renderShell();
     initSortableQueue();
     initMaintenanceListener();
+    initRestrictionListener();
     window.WatchTogether2={build:BUILD,refresh:()=>{renderShell();initSortableQueue();}};
     const observer=new MutationObserver(()=>initSortableQueue());
     const queue=$("queueList"); if(queue) observer.observe(queue,{childList:true,subtree:true});
