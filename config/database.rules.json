@@ -450,9 +450,14 @@
     },
     "system": {
       "maintenance": {
-        ".read": true,
+        ".read": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))",
         ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))))",
         ".validate": "newData.hasChildren(['enabled']) && newData.child('enabled').isBoolean() && (!newData.child('mode').exists() || newData.child('mode').isString()) && (!newData.child('message').exists() || (newData.child('message').isString() && newData.child('message').val().length <= 200)) && (!newData.child('startedAt').exists() || newData.child('startedAt').isNumber()) && (!newData.child('endsAt').exists() || newData.child('endsAt').isNumber()) && (!newData.child('updatedAt').exists() || newData.child('updatedAt').isNumber()) && (!newData.child('updatedBy').exists() || newData.child('updatedBy').isString())"
+      },
+      "publicMaintenance": {
+        ".read": true,
+        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))",
+        ".validate": "newData.hasChildren(['enabled']) && newData.child('enabled').isBoolean() && (!newData.child('mode').exists() || newData.child('mode').isString()) && (!newData.child('message').exists() || (newData.child('message').isString() && newData.child('message').val().length <= 200)) && (!newData.child('startedAt').exists() || newData.child('startedAt').isNumber()) && (!newData.child('endsAt').exists() || newData.child('endsAt').isNumber())"
       }
     },
     "publicRooms": {
