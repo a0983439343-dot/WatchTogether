@@ -84,6 +84,22 @@
          <article class="stat-card"><span>待處理回報</span><strong id="statOpenReports">—</strong></article>
       </div>
       <div class="panel"><div class="panel-head"><h3>目前管理員</h3></div><div id="adminInfo" class="info-grid"></div></div>
+      <div class="panel maintenance-panel" id="autonomousMaintenancePanel">
+        <div class="panel-head">
+          <div>
+            <h3>🛠️ 全自動維護</h3>
+            <p class="maintenance-description">啟用後，符合自動驗證條件的 Bug 不需要人工確認，系統會自行分析、修復、部署、重新驗證；驗證失敗會自動回滾。</p>
+          </div>
+          <label class="maintenance-toggle" aria-label="全自動維護開關">
+            <input id="autonomousMaintenanceToggle" type="checkbox">
+            <span class="maintenance-slider"></span>
+          </label>
+        </div>
+        <div class="maintenance-status-row">
+          <strong id="autonomousMaintenanceStatus">未啟用</strong>
+          <span id="autonomousMaintenanceHint">目前需要人工確認後才會開始修復。</span>
+        </div>
+      </div>
     </section>
 
     <section id="section-accounts" class="admin-section hidden">
