@@ -1,10 +1,10 @@
 {
   "workflow": "Validate WatchTogether",
-  "runId": 36306502835,
-  "runNumber": 812,
-  "conclusion": "success",
-  "headSha": "4129745c1b7881612ec336752b0471a769de9000",
-  "url": "https://github.com/a0983439343-dot/WatchTogether/actions/runs/36306502835",
-  "updatedAt": "2026-09-27T08:33:35Z",
-  "rulesDeployed": true
+  "runId": 36307743571,
+  "runNumber": 813,
+  "conclusion": "cancelled",
+  "headSha": "828e1c70c5788e9313092e6f8ceed0bf1e5e0a9e",
+  "url": "https://github.com/a0983439343-dot/WatchTogether/actions/runs/36307743571",
+  "updatedAt": "2026-09-27T08:56:13Z",
+  "rulesDeployed": false
 }
