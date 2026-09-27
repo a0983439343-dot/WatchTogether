@@ -43,7 +43,7 @@ const certCache =
     certs: null
   };
 
-function corsHeaders(
+export function corsHeaders(
   origin,
   allowedOrigin,
   requestedHeaders = ""
@@ -77,7 +77,7 @@ function corsHeaders(
   };
 }
 
-function jsonResponse(
+export function jsonResponse(
   body,
   status = 200,
   origin = "",
@@ -327,7 +327,7 @@ async function getVerifyKey(kid) {
   return key;
 }
 
-async function verifyFirebaseIdToken(
+export async function verifyFirebaseIdToken(
   token,
   projectId
 ) {
@@ -476,7 +476,7 @@ async function verifyFirebaseIdToken(
   return payload;
 }
 
-function isRateLimited(
+export function isRateLimited(
   bucketMap,
   key,
   limit
