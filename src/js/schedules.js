@@ -71,6 +71,16 @@
 
   async function saveSchedule(){
     const user=currentUser(),database=db(),error=$("wt2ScheduleError");
+    if(user && database){
+      try{
+        const snap=await database.ref("admin/restrictionsByUid/"+user.uid).once("value");
+        const value=snap.val()||{}, until=Number(value.blockedUntil||0);
+        if((until===0 || until>Date.now()) && value.features && value.features.schedules===true){
+          if(error)error.textContent="你的帳號目前無法使用預約觀看。";
+          return;
+        }
+      }catch(_){}
+    }
     if(!user||!database){if(error)error.textContent="登入狀態尚未準備完成。";return}
     const roomId=String($("wt2ScheduleRoom")?.value||"").trim().toUpperCase();
     const name=String($("wt2ScheduleName")?.value||"預約觀看").trim().slice(0,80)||"預約觀看";
