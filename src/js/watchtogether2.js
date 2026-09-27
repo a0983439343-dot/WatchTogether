@@ -114,6 +114,14 @@
     directory.innerHTML='<div class="wt2-directory-head"><div><strong>房間中心</strong><span>專屬房間永久保存；公開房間可探索</span></div><button type="button" class="wt2-directory-refresh" id="wt2DirectoryRefresh">重新整理</button></div><div class="wt2-room-toggle"><button type="button" class="active" data-directory-tab="personal">🔐 專屬房間</button><button type="button" data-directory-tab="public">🌎 公開房間</button></div><div id="wt2PersonalRoomList"></div><div id="wt2PublicRoomList" class="hidden"></div>';
     home?.insertBefore(directory,home.querySelector(".home-grid"));
 
+    const aiPanel=document.createElement("section");
+    aiPanel.id="wt2AiCenter";
+    aiPanel.className="wt2-ai-center";
+    aiPanel.innerHTML='<div class="wt2-ai-head"><div><div class="wt2-ai-kicker">AI CORE</div><h2>AI 中心</h2><p>用自然語言搜尋影片、查看房間、整理佇列與執行需要你確認的操作。</p></div><button type="button" id="wt2AiClear">清除對話</button></div><div class="wt2-ai-quick"><button type="button" data-ai-quick="找三部兩小時內的科幻片">找三部兩小時內的科幻片</button><button type="button" data-ai-quick="查看目前房間狀態">查看目前房間狀態</button><button type="button" data-ai-quick="幫我整理目前待播放清單">整理目前待播放清單</button></div><div class="wt2-ai-chat" id="wt2AiChat"><div class="wt2-ai-empty">還沒有 AI 對話。輸入你的需求開始。</div></div><div class="wt2-ai-input"><textarea id="wt2AiInput" rows="3" maxlength="2000" placeholder="例如：幫我找 5 部兩小時內的科幻片，然後挑出最適合大家看的。"></textarea><button type="button" id="wt2AiSend">送出</button></div><div id="wt2AiStatus" class="wt2-ai-status"></div>';
+    const directoryNode=document.getElementById("wt2RoomDirectory");
+    if(directoryNode) directoryNode.parentNode?.insertBefore(aiPanel,directoryNode);
+    else home?.parentNode?.insertBefore(aiPanel,home);
+
     const mobileNav=document.createElement("nav");
     mobileNav.className="wt2-mobile-nav";
     mobileNav.setAttribute("aria-label","行動版主導覽");
@@ -125,7 +133,61 @@
     bindNavigation();
     bindQuickActions();
     bindDirectoryTabs();
+    bindAiPanel();
     watchRoomState();
+  }
+
+  function appendAiMessage(role,text){
+    const chat=$("wt2AiChat");if(!chat)return;
+    chat.querySelector(".wt2-ai-empty")?.remove();
+    const item=document.createElement("div");
+    item.className="wt2-ai-message "+(role==="user"?"user":"assistant");
+    item.innerHTML='<div class="wt2-ai-role">'+(role==="user"?"你":"AI")+'</div><div class="wt2-ai-message-body">'+escapeHtml(String(text||""))+"</div>";
+    chat.appendChild(item);
+    chat.scrollTop=chat.scrollHeight;
+  }
+
+  async function sendAiPrompt(prompt){
+    const input=$("wt2AiInput"),status=$("wt2AiStatus"),button=$("wt2AiSend");
+    const text=String(prompt||input?.value||"").trim();
+    if(!text)return;
+    appendAiMessage("user",text);
+    if(input)input.value="";
+    if(button)button.disabled=true;
+    if(status)status.textContent="AI 處理中…";
+    try{
+      if(!window.WT2_AI?.ask)throw new Error("AI Core 尚未載入");
+      const message=await window.WT2_AI.ask(text);
+      appendAiMessage("assistant",String(message?.content||"操作已完成。"));
+      if(status)status.textContent="完成";
+    }catch(error){
+      appendAiMessage("assistant","⚠️ "+String(error?.message||error||"AI 操作失敗"));
+      if(status)status.textContent="未完成";
+    }finally{
+      if(button)button.disabled=false;
+    }
+  }
+
+  function openAICenter(){
+    const panel=$("wt2AiCenter");
+    if(panel){panel.scrollIntoView({behavior:"smooth",block:"start"});$("wt2AiInput")?.focus();}
+  }
+
+  function bindAiPanel(){
+    $("wt2AiSend")?.addEventListener("click",()=>void sendAiPrompt());
+    $("wt2AiInput")?.addEventListener("keydown",event=>{
+      if(event.key==="Enter" && !event.shiftKey){
+        event.preventDefault();
+        void sendAiPrompt();
+      }
+    });
+    $("wt2AiClear")?.addEventListener("click",()=>{
+      window.WT2_AI?.clear?.();
+      const chat=$("wt2AiChat");if(chat)chat.innerHTML='<div class="wt2-ai-empty">還沒有 AI 對話。輸入你的需求開始。</div>';
+    });
+    document.querySelectorAll("[data-ai-quick]").forEach(button=>{
+      button.addEventListener("click",()=>{if($("wt2AiInput"))$("wt2AiInput").value=button.dataset.aiQuick||"";openAICenter();});
+    });
   }
 
   function setActive(action){
@@ -142,7 +204,7 @@
         if(action==="home"){ safeShowView("home"); scrollToId("homeView"); return; }
         if(action==="rooms"){ safeShowView("home"); scrollToId("homeView"); const t=document.querySelector('[data-directory-tab="personal"]'); t?.click(); return; }
         if(action==="explore"){ safeShowView("home"); scrollToId("videoSearchArea"); $("videoSearchInput")?.focus(); return; }
-        if(action==="ai"){ safeShowView("home"); scrollToId("videoSearchArea"); $("videoSearchInput")?.focus(); if($("searchHint")) $("searchHint").textContent="AI 搜尋入口已就緒；自然語言搜尋會使用後續 AI Core。"; return; }
+        if(action==="ai"){ safeShowView("home"); openAICenter(); return; }
         if(action==="friends"){ safeShowView("home"); const node=document.querySelector(".wt-friends-layout"); node ? scrollToId(node.id||"homeView") : scrollToId("homeView"); return; }
         if(action==="settings"){ safeShowView("home"); const node=document.querySelector(".wt-settings-grid"); node ? node.scrollIntoView({behavior:"smooth"}) : scrollToId("homeView"); return; }
       });
