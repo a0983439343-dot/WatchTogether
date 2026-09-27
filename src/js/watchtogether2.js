@@ -334,7 +334,7 @@
       showMaintenance(state);
     };
     try{
-      db.ref("system/maintenance").on("value",snap=>{ void apply(snap.val()); });
+      db.ref("system/publicMaintenance").on("value",snap=>{ void apply(snap.val()); });
       const auth=window.firebase?.auth?.();
       auth?.onAuthStateChanged(()=>{ void db.ref("system/maintenance").once("value").then(snap=>apply(snap.val())); });
     }catch(error){ console.warn("[WT2] maintenance listener:", error); }
