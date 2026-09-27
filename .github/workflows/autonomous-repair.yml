@@ -1,0 +1,44 @@
+name: WatchTogether Autonomous Repair
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watchtogether-autonomous-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      WATCHTOGETHER_SITE_URL: https://a0983439343-dot.github.io/WatchTogether
+      WATCHTOGETHER_BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
+      FIREBASE_DATABASE_URL: https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_WORKSPACE: ${{ github.workspace }}
+      AUTONOMOUS_REPAIR_MAX_REPORTS: "2"
+    steps:
+      - name: Checkout WatchTogether
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install repair dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run autonomous repair engine
+        run: npm run monitor:repair
