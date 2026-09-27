@@ -1865,6 +1865,7 @@ function openFriends() {
   updatePrivateHeader();
 }
 
+wt.isFeatureBlocked = isFeatureBlocked;
 wt.isFriend = isFriend;
 wt.addFriendByCode = addFriendByCode;
 wt.acceptFriend = acceptFriend;
