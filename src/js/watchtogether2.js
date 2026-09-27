@@ -143,6 +143,8 @@
     bindThemePicker();
     bindAccountCard();
     watchRoomState();
+    applyGlobalFeatureFlags(window.WT_CORE?.state?.systemFeatureFlags||{});
+    window.addEventListener("watchtogether:feature-flags-changed",event=>applyGlobalFeatureFlags(event.detail||{}));
     updateAccountCard();
   }
 
