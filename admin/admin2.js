@@ -210,6 +210,10 @@
     if(!isMaster()){if(hint)hint.textContent="只有最高管理員可以套用主帳號同權限角色。";return}
     if(!uid){if(hint)hint.textContent="請先輸入要授予同等權限的使用者 UID。";return}
     if(uid===String(user?.uid||"")){if(hint)hint.textContent="主帳號本身不需要套用。";return}
+    const targetSnap=await DB().ref("accounts/"+uid).once("value");
+    const target=targetSnap.val()||{};
+    const targetEmail=String(target.email||"").trim().toLowerCase();
+    if(!targetEmail){if(hint)hint.textContent="找不到此 UID 對應的已登入帳號。請先讓對方登入一次。";return}
     const permissionsOut={};permissions.forEach(p=>permissionsOut[p]=true);
     await DB().ref("admin/roles/master_equivalent").set({
       name:"主帳號同權限",
@@ -217,6 +221,15 @@
       managedEquivalent:true,
       updatedAt:Date.now(),
       updatedBy:user.uid
+    });
+    await DB().ref("admin/whitelistByUid/"+uid).set({
+      uid,
+      email:targetEmail,
+      role:"admin",
+      enabled:true,
+      addedAt:firebase.database.ServerValue.TIMESTAMP,
+      addedByUid:user.uid,
+      addedByEmail:String(user.email||"").trim().toLowerCase()
     });
     await DB().ref("admin/userRoles/"+uid).set({
       roleId:"master_equivalent",
