@@ -367,24 +367,6 @@ function nextFrontendVersion() {
   };
 }
 
-function replaceUnique(text, pattern, replacement, label) {
-  const matches = String(text || "").match(pattern);
-  if (!matches || matches.length !== 1) {
-    throw new Error("無法唯一更新資產版本：" + label);
-  }
-  return String(text || "").replace(pattern, replacement);
-}
-
-function ensureChangedFile(changed, original, file) {
-  if (!original.has(file)) {
-    const before = fs.readFile(path.join(ROOT, file), "utf8");
-    original.set(file, before);
-  }
-  return changed.has(file)
-    ? changed.get(file)
-    : original.get(file);
-}
-
 async function syncAssetVersions(changed, original) {
   const frontendChanged = [
     "index.html",
