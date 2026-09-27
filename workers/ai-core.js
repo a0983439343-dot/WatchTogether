@@ -175,11 +175,6 @@ export default {
       return jsonResponse({error:{message:"請求內容必須是 JSON 物件"}},400,origin,allowedOrigin);
     }
 
-    const feature= url.pathname==="/agent" ? "ai_agent" : "ai";
-    if(await isUserFeatureBlocked(env,firebaseIdToken,firebaseUser.sub,feature)){
-      return jsonResponse({error:{message:"此帳號目前無法使用此 AI 功能"}},403,origin,allowedOrigin);
-    }
-
     const messages=normalizeMessages(body?.messages);
     if(!messages.length){
       return jsonResponse({error:{message:"缺少 messages"}},400,origin,allowedOrigin);
