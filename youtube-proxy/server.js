@@ -316,13 +316,18 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
     encodeURIComponent(model) +
     ":generateContent";
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    body: JSON.stringify({
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), isRepairPhase ? 55_000 : 30_000);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      body: JSON.stringify({
       contents: [{
         role: "user",
         parts: [{text: prompt}]
@@ -335,8 +340,12 @@ async function requestGeminiModel({model, apiKey, prompt, schema, isRepairPhase}
         },
         maxOutputTokens: isRepairPhase ? 12288 : 2048
       }
-    })
-  });
+      }),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   const data = await response.json().catch(() => ({}));
   const message = data?.error?.message || "";
