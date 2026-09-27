@@ -53,7 +53,7 @@
     if(role==="viewer"){
       return new Set(["users.view","rooms.view","analytics.view","audit.view"]).has(permission);
     }
-    if(!state.hasCustomRole)return true;
+    if(!state.hasCustomRole) return permission === "roles.manage" ? false : true;
     return state.customPermissions.has(permission);
   }
 
