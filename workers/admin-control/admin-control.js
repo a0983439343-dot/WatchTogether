@@ -69,15 +69,45 @@ async function authenticateAdmin(request,env){
   const uid=String(claims?.sub||claims?.user_id||"").trim();
   if(!uid)return {ok:false,status:401};
 
-  if(uid===env.MASTER_ADMIN_UID)return {ok:true,uid,token,role:"master",email:String(claims.email||"")};
-
-  const r=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
-  const item=r.data;
-  if(item?.uid===uid && item?.enabled===true && ["admin","master"].includes(String(item.role||"admin"))){
-    return {ok:true,uid,token,role:String(item.role||"admin"),email:String(claims.email||"")};
+  if(uid===env.MASTER_ADMIN_UID){
+    return {ok:true,uid,token,role:"master",email:String(claims.email||""),hasCustomRole:false,permissions:{}};
   }
 
-  return {ok:false,status:404};
+  const whitelist=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
+  const item=whitelist.data;
+  if(!(item?.uid===uid && item?.enabled===true && ["admin","master"].includes(String(item.role||"admin")))){
+    return {ok:false,status:404};
+  }
+
+  const roleSnap=await dbFetch(env,"admin/userRoles/"+uid,token);
+  const roleId=String(roleSnap.data?.roleId||"").trim();
+  let permissions=null;
+  if(roleId){
+    const roleSnap2=await dbFetch(env,"admin/roles/"+roleId,token);
+    permissions={};
+    Object.entries(roleSnap2.data?.permissions||{}).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
+    const override=await dbFetch(env,"admin/userPermissionOverrides/"+uid,token);
+    const allow=override.data?.allow||{};
+    const deny=override.data?.deny||{};
+    Object.entries(allow).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
+    Object.entries(deny).forEach(([key,value])=>{if(value===true)delete permissions[key];});
+  }
+
+  return {
+    ok:true,
+    uid,
+    token,
+    role:"admin",
+    email:String(claims.email||""),
+    hasCustomRole:Boolean(roleId),
+    roleId,
+    permissions:permissions||{}
+  };
+}
+function hasPermission(ctx,permission){
+  if(ctx.role==="master")return true;
+  if(ctx.hasCustomRole!==true)return true;
+  return ctx.permissions?.[permission]===true;
 }
 async function getCredential(env,ctx){
   const r=await dbFetch(env,"admin/security/maintenanceCredential",ctx.token);
@@ -165,6 +195,7 @@ export default {
 
     const url=new URL(request.url);
     if(request.method==="GET" && url.pathname==="/maintenance"){
+      if(!hasPermission(ctx,"maintenance.manage"))return json({ok:false,error:"forbidden"},403,origin);
       const r=await dbFetch(env,"system/maintenance",ctx.token);
       return json(r.data||{enabled:false},r.ok?200:502,origin);
     }
@@ -192,6 +223,7 @@ export default {
     }
 
     if(action==="enable"){
+      if(!hasPermission(ctx,"maintenance.manage"))return json({ok:false,error:"forbidden"},403,origin);
       const password=String(body.password||"");
       if(password.length<1 || !await verifyMaintenancePassword(env,ctx,password)){
         return json({ok:false,error:"invalid_password"},403,origin);
@@ -207,7 +239,8 @@ export default {
     }
 
     if(action==="disable"){
-      const password=String(body.password||"");
+      if(!hasPermission(ctx,"maintenance.manage"))return json({ok:false,error:"forbidden"},403,origin);
+
       if(password.length<1 || !await verifyMaintenancePassword(env,ctx,password)){
         return json({ok:false,error:"invalid_password"},403,origin);
       }
