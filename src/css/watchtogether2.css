@@ -203,3 +203,13 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-chat-translation.show{display:block}
 .wt2-chat-translation small{display:block;color:var(--wt2-muted);font-size:9px;font-weight:900;letter-spacing:.06em;margin-bottom:3px}
 .wt2-chat-translation.error{border-left-color:var(--wt2-warning);background:rgba(243,191,99,.06)}
+
+.wt2-join-approval-panel{margin-top:14px;padding:14px;border:1px solid rgba(243,191,99,.22);border-radius:16px;background:rgba(243,191,99,.035)}
+.wt2-approval-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px}
+.wt2-approval-head strong{font-size:13px}.wt2-approval-head span{display:block;color:var(--wt2-muted);font-size:10px;margin-top:3px}
+.wt2-approval-head button,.wt2-approval-actions button{border:1px solid var(--wt2-border);border-radius:9px;background:rgba(255,255,255,.04);color:var(--wt2-text);padding:7px 9px;font-size:10px;font-weight:900;cursor:pointer}
+.wt2-approval-list{display:grid;gap:7px}
+.wt2-approval-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--wt2-border);border-radius:12px;background:rgba(255,255,255,.02)}
+.wt2-approval-row strong{display:block;font-size:11px}.wt2-approval-row small{display:block;margin-top:3px;color:var(--wt2-muted);font:9px ui-monospace,SFMono-Regular,Menlo,monospace}
+.wt2-approval-actions{display:flex;gap:6px}.wt2-approval-actions button:first-child{border-color:rgba(65,211,154,.25);background:rgba(65,211,154,.08)}.wt2-approval-actions button:last-child{border-color:rgba(255,107,125,.25);background:rgba(255,107,125,.08)}
+.wt2-join-approval-panel.hidden{display:none}
