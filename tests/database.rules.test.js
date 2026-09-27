@@ -616,17 +616,21 @@ test("unauthenticated users cannot access protected admin paths", async () => {
 });
 
 
-test("2.0: maintenance state is public-readable but admin-write only", async () => {
-  await assertSucceeds(db(USER_UID, userToken).ref("system/maintenance").once("value"));
+test("2.0: public maintenance state is public-readable but admin-write only", async () => {
+  await assertSucceeds(db(USER_UID, userToken).ref("system/publicMaintenance").once("value"));
   await assertFails(
-    db(USER_UID, userToken).ref("system/maintenance").set({
+    db(USER_UID, userToken).ref("system/publicMaintenance").set({
       enabled: true,
       mode: "maintenance",
       message: "forged",
-      updatedAt: Date.now(),
-      updatedBy: USER_UID
+      startedAt: Date.now(),
+      endsAt: 0
     })
   );
+  await assertFails(
+    db(USER_UID, userToken).ref("system/maintenance").once("value")
+  );
+
   await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("system/maintenance").set({
       enabled: true,
@@ -640,10 +644,25 @@ test("2.0: maintenance state is public-readable but admin-write only", async () 
   );
 
   await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/publicMaintenance").set({
+      enabled: true,
+      mode: "maintenance",
+      message: "test",
+      startedAt: Date.now(),
+      endsAt: 0
+    })
+  );
+
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("system/maintenance").set({
       enabled: false,
       updatedAt: Date.now(),
       updatedBy: ADMIN_UID
+    })
+  );
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/publicMaintenance").set({
+      enabled: false
     })
   );
 });
