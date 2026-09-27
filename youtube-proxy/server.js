@@ -36,6 +36,10 @@ const YT_STREAM_REFERER = "https://www.youtube.com/";
 const YT_POT_PROVIDER_URL =
   process.env.YT_POT_PROVIDER_URL ||
   "http://127.0.0.1:4416";
+const FIREBASE_DATABASE_URL = String(
+  process.env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app"
+).trim().replace(/\/+$/, "");
+const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || "watchtogether-3f4f9").trim();
 const VERIFY_SITE_URL =
   String(process.env.WATCHTOGETHER_SITE_URL || "https://a0983439343-dot.github.io/WatchTogether")
     .trim()
@@ -182,6 +186,45 @@ function aiAllowedOrigin(req) {
     origin === "http://localhost:3000" ||
     origin === "http://127.0.0.1:3000";
 }
+async function verifyFirebaseBearer(authorization) {
+  const value = String(authorization || "");
+  if (!value.startsWith("Bearer ")) return {ok:false};
+  const token = value.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return {ok:false};
+
+  let payload;
+  try {
+    const normalized = parts[1].replace(/-/g,"+").replace(/_/g,"/") + "=".repeat((4 - parts[1].length % 4) % 4);
+    payload = JSON.parse(Buffer.from(normalized, "base64").toString("utf8"));
+  } catch (_) {
+    return {ok:false};
+  }
+
+  const uid = String(payload?.user_id || payload?.sub || "").trim();
+  if (!uid) return {ok:false};
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(
+      FIREBASE_DATABASE_URL + "/admin/whitelistByUid/" + encodeURIComponent(uid) + ".json?auth=" + encodeURIComponent(token),
+      {method:"GET",cache:"no-store",signal:controller.signal}
+    );
+    if (response.status === 401 || response.status === 403) return {ok:false};
+    const whitelist = await response.json().catch(() => null);
+    if (uid === "35d45a23-b648-4caf-a6d5-a69112860551") {
+      return {ok:true,uid,role:"master"};
+    }
+    return {ok:true,uid,role:String(whitelist?.role || "user"),whitelist};
+  } catch (_) {
+    return {ok:false};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
 
 async function readJsonBody(req, maxBytes = 32768) {
   return await new Promise((resolve, reject) => {
@@ -854,6 +897,12 @@ async function handleAiAgent(req, res) {
   const authorization = String(req.headers.authorization || "");
   if (!authorization.startsWith("Bearer ")) {
     send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+
+  const identity = await verifyFirebaseBearer(authorization);
+  if (!identity.ok) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
     return;
   }
 
