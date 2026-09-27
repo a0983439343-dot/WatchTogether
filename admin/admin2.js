@@ -75,6 +75,7 @@
     await DB().ref("admin/roles/"+roleId).set({name,permissions:permissionsOut,updatedAt:Date.now(),updatedBy:user.uid});
     const assignUid=String($("ad2RoleAssignUid")?.value||"").trim();
     if(assignUid) await DB().ref("admin/userRoles/"+assignUid).set({roleId,updatedAt:Date.now(),updatedBy:user.uid});
+    await writeAudit("role.save",assignUid||roleId,name,assignUid?"儲存角色並套用給指定 UID":"儲存共用角色");
     $("ad2RoleHint").textContent=assignUid?"角色已儲存，並套用給指定 UID。":"角色已儲存。";
     await loadRoles();
   }
@@ -90,6 +91,33 @@
     const wrap=$("ad2RestrictionChecks");if(wrap)wrap.innerHTML=features.map(([label,key])=>'<label class="ad2-check"><input type="checkbox" data-feature="'+key+'"> '+label+"</label>").join("");
     const pw=$("ad2PermissionChecks");if(pw)pw.innerHTML=permissions.map(p=>'<label class="ad2-check"><input type="checkbox" data-permission="'+p+'"> '+p+"</label>").join("");
     const ff=$("ad2FeatureFlags");if(ff)ff.innerHTML=features.map(([label,key])=>'<div class="ad2-list-row"><strong>'+label+'</strong><span class="ad2-chip on">ON</span></div>').join("");
+  }
+
+  function toast(message){
+    const el=$("toast");
+    if(!el)return;
+    el.textContent=String(message||"");
+    el.classList.add("show");
+    clearTimeout(toast.timer);
+    toast.timer=setTimeout(()=>el.classList.remove("show"),2400);
+  }
+
+  async function writeAudit(action,targetUid,targetName,details){
+    const db=DB();
+    const user=window.firebase?.auth?.().currentUser;
+    if(!db||!user||user.isAnonymous)return;
+    try{
+      await db.ref("admin/auditLogs").push({
+        action:String(action||"admin").slice(0,40),
+        actorUid:String(user.uid||"").slice(0,128),
+        actorEmail:String(user.email||"").slice(0,320),
+        actorRole:String(window.WT2_ADMIN_ROLE||"admin").slice(0,40),
+        targetUid:String(targetUid||"").slice(0,128),
+        targetName:String(targetName||"").slice(0,200),
+        details:String(details||"").slice(0,1000),
+        createdAt:firebase.database.ServerValue.TIMESTAMP
+      });
+    }catch(error){console.warn("[WT2 Admin] audit:",error);}
   }
 
   function readStat(id){return Number(($(id)?.textContent||"").replace(/[^d.-]/g,""))||0}
@@ -178,6 +206,7 @@
     if(clear)Object.keys(featuresOut).forEach(k=>featuresOut[k]=false);
     const duration=$("ad2RestrictionDuration")?.value||"permanent";const until=duration==="permanent"?0:Date.now()+Number(duration);
     await DB().ref("admin/restrictionsByUid/"+uid).set({features:featuresOut,reason:String($("ad2RestrictionReason")?.value||"").trim().slice(0,300),blockedUntil:until,updatedAt:Date.now(),updatedBy:window.firebase?.auth?.().currentUser?.uid||""});
+    await writeAudit(clear?"userRestriction.clear":"userRestriction.apply",uid,uid,clear?"解除指定使用者功能限制":"套用指定使用者功能限制");
     $("ad2RestrictionHint").textContent=clear?"限制已解除。":"功能限制已套用。";await loadRestriction();
   }
   function refreshAll(){renderAnalytics();renderSecurity();readMaintenance();loadRestriction();}
