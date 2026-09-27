@@ -251,3 +251,7 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-command-search span{color:var(--wt2-muted);font-weight:950}.wt2-command-search kbd{padding:3px 6px;border:1px solid var(--wt2-border);border-radius:6px;color:var(--wt2-muted);font-size:9px}
 .wt2-command-list{display:grid;gap:5px;max-height:330px;overflow:auto;margin-top:8px}.wt2-command-list button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--wt2-text);text-align:left;cursor:pointer}.wt2-command-list button:hover,.wt2-command-list button.active{background:rgba(110,168,255,.09);border-color:rgba(110,168,255,.18)}.wt2-command-list small{color:var(--wt2-muted);font-size:9px}
 .wt2-command-foot{display:flex;gap:14px;justify-content:flex-end;padding:8px 3px 2px;color:var(--wt2-muted);font-size:9px}
+
+.wt2-feature-disabled{opacity:.5!important;cursor:not-allowed!important;filter:grayscale(.2)}
+.wt2-global-feature-notice{position:fixed;left:18px;bottom:18px;z-index:999;max-width:min(360px,calc(100vw - 36px));padding:9px 12px;border:1px solid rgba(243,191,99,.25);border-radius:12px;background:rgba(35,27,12,.96);color:#ffe7b1;font-size:10px;font-weight:850;box-shadow:0 15px 45px rgba(0,0,0,.38)}
+@media(max-width:760px){.wt2-global-feature-notice{left:12px;right:12px;bottom:76px;max-width:none;text-align:center}}
