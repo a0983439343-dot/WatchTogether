@@ -213,3 +213,21 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-approval-row strong{display:block;font-size:11px}.wt2-approval-row small{display:block;margin-top:3px;color:var(--wt2-muted);font:9px ui-monospace,SFMono-Regular,Menlo,monospace}
 .wt2-approval-actions{display:flex;gap:6px}.wt2-approval-actions button:first-child{border-color:rgba(65,211,154,.25);background:rgba(65,211,154,.08)}.wt2-approval-actions button:last-child{border-color:rgba(255,107,125,.25);background:rgba(255,107,125,.08)}
 .wt2-join-approval-panel.hidden{display:none}
+
+.wt2-ai-center{margin:16px 0;padding:16px;border:1px solid rgba(139,124,255,.18);border-radius:20px;background:linear-gradient(145deg,rgba(139,124,255,.07),rgba(110,168,255,.035))}
+.wt2-ai-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.wt2-ai-head h2{margin:5px 0 4px;font-size:21px}.wt2-ai-head p{margin:0;color:var(--wt2-muted);font-size:11px;line-height:1.6}
+.wt2-ai-kicker{font-size:9px;font-weight:950;letter-spacing:.12em;color:var(--wt2-accent)}
+.wt2-ai-head>button,.wt2-ai-quick button,.wt2-ai-input>button{border:1px solid var(--wt2-border);border-radius:10px;background:rgba(255,255,255,.05);color:var(--wt2-text);padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer}
+.wt2-ai-quick{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+.wt2-ai-quick button:hover{background:rgba(255,255,255,.09)}
+.wt2-ai-chat{min-height:160px;max-height:360px;overflow:auto;padding:10px;border:1px solid var(--wt2-border);border-radius:14px;background:rgba(0,0,0,.14)}
+.wt2-ai-empty{display:grid;place-items:center;min-height:130px;color:var(--wt2-muted);font-size:11px}
+.wt2-ai-message{max-width:90%;padding:9px 11px;border-radius:13px;margin:7px 0;background:rgba(255,255,255,.045)}
+.wt2-ai-message.user{margin-left:auto;background:rgba(110,168,255,.10)}
+.wt2-ai-role{font-size:9px;color:var(--wt2-muted);font-weight:900;margin-bottom:3px}.wt2-ai-message-body{font-size:11px;line-height:1.65;white-space:pre-wrap}
+.wt2-ai-input{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:9px}
+.wt2-ai-input textarea{min-height:74px!important;resize:vertical}.wt2-ai-input>button{align-self:stretch;min-width:72px;background:linear-gradient(135deg,#6ea8ff,#897cff);color:#07101c;border-color:transparent}
+.wt2-ai-input>button:disabled{opacity:.55;cursor:wait}
+.wt2-ai-status{margin-top:7px;color:var(--wt2-muted);font-size:9px;min-height:14px}
+@media(max-width:760px){.wt2-ai-head{display:grid}.wt2-ai-input{grid-template-columns:1fr}.wt2-ai-input>button{min-height:42px}.wt2-ai-message{max-width:96%}}
