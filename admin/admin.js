@@ -1475,7 +1475,7 @@
   }
 
   async function removeWhitelist(uid) {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有管理白名單權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     if (!window.confirm("確定刪除 " + (item.email || "這個帳號") + " 的管理員資格？")) return;
