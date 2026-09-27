@@ -106,16 +106,11 @@
     const home=$("homeView");
     home?.parentNode?.insertBefore(moduleStrip,home);
 
-    const roomToggle=document.createElement("div");
-    roomToggle.className="wt2-room-toggle";
-    roomToggle.innerHTML='<button type="button" class="active" data-room-tab="personal">🔐 專屬房間</button><button type="button" data-room-tab="public">🌎 公開房間</button>';
-    home?.insertBefore(roomToggle,home.querySelector(".home-grid"));
-
     const directory=document.createElement("section");
     directory.id="wt2RoomDirectory";
     directory.className="wt2-room-directory";
-    directory.innerHTML='<div class="wt2-directory-head"><div><strong id="wt2DirectoryTitle">我的專屬房間</strong><span id="wt2DirectoryHint">與帳號綁定、可永久重新進入</span></div><button type="button" class="wt2-directory-refresh" id="wt2DirectoryRefresh">重新整理</button></div><div id="wt2RoomDirectoryBody" class="wt2-directory-grid"></div>';
-    roomToggle.parentNode?.insertBefore(directory,home.querySelector(".home-grid"));
+    directory.innerHTML='<div class="wt2-directory-head"><div><strong>房間中心</strong><span>專屬房間永久保存；公開房間可探索</span></div><button type="button" class="wt2-directory-refresh" id="wt2DirectoryRefresh">重新整理</button></div><div class="wt2-room-toggle"><button type="button" class="active" data-directory-tab="personal">🔐 專屬房間</button><button type="button" data-directory-tab="public">🌎 公開房間</button></div><div id="wt2PersonalRoomList"></div><div id="wt2PublicRoomList" class="hidden"></div>';
+    home?.insertBefore(directory,home.querySelector(".home-grid"));
 
     const mobileNav=document.createElement("nav");
     mobileNav.className="wt2-mobile-nav";
@@ -127,9 +122,7 @@
 
     bindNavigation();
     bindQuickActions();
-    bindRoomTabs();
     bindDirectoryTabs();
-    initRoomDirectory();
     watchRoomState();
   }
 
@@ -145,7 +138,7 @@
         const action=button.dataset.action;
         setActive(action);
         if(action==="home"){ safeShowView("home"); scrollToId("homeView"); return; }
-        if(action==="rooms"){ safeShowView("home"); scrollToId("homeView"); const t=document.querySelector('[data-room-tab="personal"]'); t?.click(); return; }
+        if(action==="rooms"){ safeShowView("home"); scrollToId("homeView"); const t=document.querySelector('[data-directory-tab="personal"]'); t?.click(); return; }
         if(action==="explore"){ safeShowView("home"); scrollToId("videoSearchArea"); $("videoSearchInput")?.focus(); return; }
         if(action==="ai"){ safeShowView("home"); scrollToId("videoSearchArea"); $("videoSearchInput")?.focus(); if($("searchHint")) $("searchHint").textContent="AI 搜尋入口已就緒；自然語言搜尋會使用後續 AI Core。"; return; }
         if(action==="friends"){ safeShowView("home"); const node=document.querySelector(".wt-friends-layout"); node ? scrollToId(node.id||"homeView") : scrollToId("homeView"); return; }
@@ -209,12 +202,6 @@
     catch(e){console.warn("[WT2] personal room load:",e);renderDirectory({},"personal");}
   }
 
-  function initRoomDirectory(){
-    document.querySelectorAll("[data-room-tab]").forEach(b=>b.addEventListener("click",()=>setDirectoryTab(b.dataset.roomTab==="public"?"public":"personal")));
-    $("wt2DirectoryRefresh")?.addEventListener("click",()=>setDirectoryTab(document.querySelector("[data-room-tab].active")?.dataset.roomTab==="public"?"public":"personal"));
-    setDirectoryTab("personal");
-  }
-
   async function renderPersonalRooms(){
     const user=window.firebase?.auth?.().currentUser,db=window.db||window.firebase?.database?.();
     const list=$("wt2PersonalRoomList"); if(!list)return;
@@ -249,22 +236,6 @@
     void renderPersonalRooms();
   }
 
-  function bindRoomTabs(){
-    document.querySelectorAll("[data-room-tab]").forEach(b=>b.addEventListener("click",()=>{
-      const value=b.dataset.roomTab;
-      document.querySelectorAll("[data-room-tab]").forEach(x=>x.classList.toggle("active",x===b));
-      const empty=$("wt2PublicRoomsEmpty");
-      const grid=document.querySelector(".home-grid");
-      if(value==="public"){
-        empty?.classList.remove("hidden");
-        if(grid) grid.classList.add("hidden");
-      }else{
-        empty?.classList.add("hidden");
-        if(grid) grid.classList.remove("hidden");
-      }
-    }));
-  }
-
   function watchRoomState(){
     const roomView=$("roomView");
     if(!roomView) return;
@@ -280,7 +251,7 @@
     const list=$("queueList");
     if(list.dataset.wt2Sortable==="1") return;
     try{
-      Sortable.create(list,{animation:160,ghostClass:"wt2-sort-ghost",handle:".queue-drag-handle",fallbackOnBody:true});
+      Sortable.create(list,{animation:160,ghostClass:"wt2-sort-ghost",fallbackOnBody:true});
       list.dataset.wt2Sortable="1";
     }catch(error){console.warn("[WT2] Sortable init failed",error);}
   }
@@ -289,7 +260,6 @@
     const features=value?.features||{};
     const map={
       create_room:["createRoomBtn"],
-      join_public_room:["joinRoomBtn"],
       chat:["chatForm","chatInput"],
       ai:[],
       ai_agent:[],
