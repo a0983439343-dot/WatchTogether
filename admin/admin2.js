@@ -112,6 +112,43 @@
     addSection("settings",'<div class="section-head"><div><div class="eyebrow">SYSTEM SETTINGS</div><h2>系統設定</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>功能旗標</h3><div class="ad2-list" id="ad2FeatureFlags"></div></div><div class="ad2-card"><h3>系統資訊</h3><div class="ad2-list"><div class="ad2-list-row"><strong>Firebase</strong><span>Realtime Database + Auth</span></div><div class="ad2-list-row"><strong>YouTube 搜尋</strong><span>Cloudflare Worker Proxy</span></div><div class="ad2-list-row"><strong>UI Base</strong><span>Tabler 1.6</span></div></div></div></div>');
   }
 
+  async function askAdminAi(){
+    const prompt=String($("ad2AiPrompt")?.value||"").trim().slice(0,2000);
+    const output=$("ad2AiOutput");
+    if(!prompt){if(output)output.textContent="請輸入要分析的內容。";return;}
+    const endpoint=String(window.WATCHTOGETHER_CONFIG?.aiCoreUrl||"").trim().replace(/\/$/,"");
+    const user=window.firebase?.auth?.().currentUser;
+    if(!endpoint)throw new Error("AI Core 尚未設定");
+    if(!user||user.isAnonymous)throw new Error("目前管理員登入狀態無效");
+    if(output)output.textContent="分析中…";
+    const token=await user.getIdToken();
+    const context={
+      accounts:readStat("statAccounts"),
+      whitelist:readStat("statWhitelist"),
+      blocked:readStat("statBlocked"),
+      rooms:readStat("statRooms"),
+      openReports:readStat("statOpenReports"),
+      maintenance:Boolean(state.maintenance?.enabled),
+      roleId:state.customRoleId||"legacy-admin"
+    };
+    const response=await fetch(endpoint+"/chat",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+      body:JSON.stringify({
+        messages:[
+          {role:"system",content:"你是 WatchTogether Admin 2.0 的管理分析助手。你只能根據提供的資料做分析，不要捏造事件。對封鎖、刪除、停權、關站等高風險操作，只能提出建議，不能宣稱已執行。"},
+          {role:"user",content:prompt+"\n\n目前後台摘要："+JSON.stringify(context)}
+        ],
+        temperature:0.2,
+        max_tokens:900
+      })
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(String(data?.error?.message||"AI Core 請求失敗"));
+    const message=String(data?.message?.content||"AI 沒有返回內容");
+    if(output)output.textContent=message;
+  }
+
   async function loadRoles(){
     const db=DB(); const wrap=$("ad2RoleList"); if(!db||!wrap)return;
     try{
@@ -291,7 +328,10 @@
       const el=$("ad2DebugList");if(el)el.innerHTML=(window.__WT_EARLY_ERRORS__||[]).slice(-20).map(x=>'<div class="ad2-list-row"><strong>'+String(x.message||"Unknown").replace(/[<>]/g,"")+'</strong><span>'+String(x.source||"unknown")+"</span></div>").join("")||'<div class="ad2-muted">目前沒有前端 Early Errors。</div>';
     });
     $("ad2Build")&&( $("ad2Build").textContent=window.__WATCHTOGETHER_BUILD__||"—");
-    $("ad2AiAsk")?.addEventListener("click",()=>{$("ad2AiOutput").textContent="AI 管理代理的工具層已預留；目前這個 UI 不會假裝有分析結果。下一階段會接入真正的 AI Core / tools。"});
+    $("ad2AiAsk")?.addEventListener("click",()=>void askAdminAi().catch(error=>{
+      console.error("[WT2 Admin] AI:",error);
+      $("ad2AiOutput").textContent="⚠️ "+String(error?.message||error||"AI 分析失敗");
+    }));
     $("ad2CopyRoleBtn")?.addEventListener("click",()=>{document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=true);});
     $("ad2SaveRoleBtn")?.addEventListener("click",()=>saveRole().catch(e=>{console.error(e);$("ad2RoleHint").textContent="角色儲存失敗。";}));
     $("ad2RoleReload")?.addEventListener("click",()=>loadRoles());
