@@ -22,6 +22,8 @@
   let reportHistory = {};
   let reportScanTimer = null;
   let reportScanRunning = false;
+  let autonomousMaintenanceEnabled = false;
+  let autonomousMaintenanceRef = null;
   let accountsRef = null;
   let reportsRef = null;
   let auditLogsRef = null;
@@ -390,6 +392,82 @@
     if (!auditLogsRef) return;
     try { auditLogsRef.off(); } catch (_) {}
     auditLogsRef = null;
+  }
+
+
+  function renderAutonomousMaintenance() {
+    const panel = $("autonomousMaintenancePanel");
+    const toggle = $("autonomousMaintenanceToggle");
+    const status = $("autonomousMaintenanceStatus");
+    const hint = $("autonomousMaintenanceHint");
+    if (!panel || !toggle || !status || !hint) return;
+    const enabled = autonomousMaintenanceEnabled === true;
+    toggle.checked = enabled;
+    toggle.disabled = currentRole !== "master";
+    panel.classList.toggle("is-enabled", enabled);
+    panel.classList.toggle("is-disabled", !enabled);
+    status.textContent = enabled ? "已啟用 · 全自動維護中" : "未啟用";
+    hint.textContent = enabled
+      ? "符合條件的 Bug 會自動進入修復流程，不會要求人工確認。"
+      : (currentRole === "master"
+        ? "目前需要人工確認後才會開始修復。只有你可以切換此設定。"
+        : "目前需要人工確認後才會開始修復；此設定只有最高管理員可以切換。");
+  }
+
+  function stopAutonomousMaintenanceListener() {
+    if (!autonomousMaintenanceRef) return;
+    try { autonomousMaintenanceRef.off(); } catch (_) {}
+    autonomousMaintenanceRef = null;
+  }
+
+  async function loadAutonomousMaintenance() {
+    if (!currentHasAdminAccess) {
+      autonomousMaintenanceEnabled = false;
+      renderAutonomousMaintenance();
+      return;
+    }
+    const snapshot = await db.ref("admin/autonomousMaintenance").once("value");
+    const value = snapshot.val();
+    autonomousMaintenanceEnabled = value === true || value?.enabled === true;
+    renderAutonomousMaintenance();
+  }
+
+  function startAutonomousMaintenanceListener() {
+    stopAutonomousMaintenanceListener();
+    if (!currentHasAdminAccess) return;
+    autonomousMaintenanceRef = db.ref("admin/autonomousMaintenance");
+    autonomousMaintenanceRef.on("value", snapshot => {
+      if (!currentHasAdminAccess) return;
+      const value = snapshot.val();
+      autonomousMaintenanceEnabled = value === true || value?.enabled === true;
+      renderAutonomousMaintenance();
+      renderReports();
+    }, error => {
+      console.error("autonomous maintenance listener failed", error);
+    });
+  }
+
+  async function setAutonomousMaintenance(enabled) {
+    if (currentRole !== "master") {
+      renderAutonomousMaintenance();
+      return;
+    }
+    const next = enabled === true;
+    await db.ref("admin/autonomousMaintenance").set({
+      enabled: next,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid: currentUser.uid,
+      updatedByEmail: currentUser.email || ""
+    });
+    autonomousMaintenanceEnabled = next;
+    renderAutonomousMaintenance();
+    await writeAuditLog(
+      "maintenance.toggle",
+      currentUser.uid,
+      "全自動維護",
+      next ? "啟用全自動維護" : "停用全自動維護"
+    );
+    toast(next ? "已啟用全自動維護" : "已停用全自動維護");
   }
 
   async function writeAuditLog(action, targetUid, targetName, details) {
@@ -1089,8 +1167,13 @@
       String(item.aiSuggestion || "") ||
       "先閱讀回報與驗證結果，再決定是否開始處理。";
     const canManageReport = currentRole === "master" || currentRole === "admin";
-    $("reportRepairBtn").classList.toggle("hidden", !canManageReport || normalizeReportStatus(item.status) === "resolved");
+    const fullAuto = autonomousMaintenanceEnabled === true;
+    $("reportRepairBtn").classList.toggle("hidden", !canManageReport || fullAuto || normalizeReportStatus(item.status) === "resolved");
     $("reportRepairBtn").textContent = normalizeReportStatus(item.status) === "in_progress" ? "處理中" : "開始處理";
+    const repairQuestion = document.querySelector(".report-repair-question");
+    if (repairQuestion) {
+      repairQuestion.classList.toggle("hidden", fullAuto || normalizeReportStatus(item.status) === "resolved");
+    }
     $("reportHint").textContent = account.email ? "回報帳號：" + account.email + " · 來源：" + reportSourceLabel(item) : "來源：" + reportSourceLabel(item);
     $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
     $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
@@ -1488,6 +1571,7 @@
       stopAccountsListener();
       stopReportsListener();
       stopAuditLogsListener();
+      stopAutonomousMaintenanceListener();
       currentUser = user || null;
       currentHasAdminAccess = false;
       currentRole = null;
@@ -1533,11 +1617,18 @@
           loadBlocks(),
           loadRooms(),
           loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
-          loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error))
+          loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error)),
+          loadAutonomousMaintenance().catch(error => {
+            console.warn("載入全自動維護設定失敗:", error);
+            autonomousMaintenanceEnabled = false;
+            renderAutonomousMaintenance();
+          })
         ]);
         startAccountsListener();
         startReportsListener();
         startAuditLogsListener();
+        startAutonomousMaintenanceListener();
+        renderAutonomousMaintenance();
         startReportAutomation();
       } catch (error) {
         console.error(error);
@@ -1588,6 +1679,14 @@
     }));
     $("reportsExportBtn")?.addEventListener("click", exportReports);
     $("reportsScanBtn")?.addEventListener("click", () => scanWebsiteAndReports().then(() => toast("自動掃描完成")).catch(error => toast(error?.message || "自動掃描失敗")));
+    $("autonomousMaintenanceToggle")?.addEventListener("change", event => {
+      setAutonomousMaintenance(event.target.checked).catch(error => {
+        console.error("切換全自動維護失敗:", error);
+        autonomousMaintenanceEnabled = !event.target.checked;
+        renderAutonomousMaintenance();
+        toast(error?.message || "全自動維護設定失敗");
+      });
+    });
     $("reportRepairBtn")?.addEventListener("click", () => repairDecisionStart().catch(error => { console.error(error); toast(error?.message || "開始處理失敗"); }));
     $("reportRecheckBtn")?.addEventListener("click", () => recheckCurrentReport().catch(error => { console.error(error); toast(error?.message || "重新檢查失敗"); }));
     $("reportLaterBtn")?.addEventListener("click", () => {
