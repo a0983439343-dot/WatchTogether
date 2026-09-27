@@ -12134,6 +12134,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
             return `
               <div
+                id="chat-message-${escapeHtml(message.id)}"
                 class="message wt-message${isOwnMessage ? " self" : ""}"
               >
                 <div
