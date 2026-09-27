@@ -232,7 +232,7 @@
     const target=targetSnap.val()||{};
     const targetEmail=String(target.email||"").trim().toLowerCase();
     if(!targetEmail){if(hint)hint.textContent="找不到此 UID 對應的已登入帳號。請先讓對方登入一次。";return}
-    const permissionsOut={};permissions.forEach(p=>permissionsOut[p]=true);
+    const permissionsOut=encodePermissions(Object.fromEntries(permissions.map(p=>[p,true])));
     await DB().ref("admin/roles/master_equivalent").set({
       name:"主帳號同權限",
       permissions:permissionsOut,
