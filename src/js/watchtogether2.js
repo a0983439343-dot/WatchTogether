@@ -779,31 +779,75 @@
     }catch(error){console.warn("[WT2] Sortable init failed",error);}
   }
 
+  function setFeatureNodesBlocked(ids,blocked,sourceClass){
+    (ids||[]).forEach(id=>{
+      const node=$(id);
+      if(!node)return;
+      if("disabled" in node) node.disabled=blocked;
+      node.setAttribute("aria-disabled",blocked?"true":"false");
+      node.classList.toggle(sourceClass,blocked);
+    });
+  }
+
+  function setTranslationButtonsBlocked(blocked,sourceClass){
+    document.querySelectorAll("[data-chat-translate]").forEach(button=>{
+      if("disabled" in button) button.disabled=blocked;
+      button.setAttribute("aria-disabled",blocked?"true":"false");
+      button.classList.toggle(sourceClass,blocked);
+      if(blocked)button.title="聊天翻譯目前已停用";
+      else button.removeAttribute("title");
+    });
+  }
+
+  function setPublicExploreBlocked(blocked,sourceClass){
+    document.querySelectorAll('[data-directory-tab="public"]').forEach(button=>{
+      button.disabled=blocked;
+      button.setAttribute("aria-disabled",blocked?"true":"false");
+      button.classList.toggle(sourceClass,blocked);
+    });
+    const searchWrap=$("wt2PublicRoomSearchWrap");
+    if(searchWrap)searchWrap.classList.toggle("hidden",blocked);
+    const list=$("wt2PublicRoomList");
+    if(list&&blocked){
+      list.innerHTML='<div class="wt2-muted">公開房間探索目前已停用。</div>';
+      list.classList.add("hidden");
+    }
+  }
+
   function applyGlobalFeatureFlags(flags){
     const normalized=flags&&typeof flags==="object"?flags:{};
     const map={
       create_room:["createRoomBtn"],
+      join_public_room:["joinRoomBtn","joinCodeInput"],
       chat:["chatForm","chatInput"],
-      playlists:["queueList","playQueueNowBtn"],
-      ai:[],
-      ai_agent:[],
-      uploads:[],
-      friends:[],
+      playback_control:["playPauseBtn","syncNowBtn"],
+      ai:["wt2AiClear"],
+      ai_agent:["wt2AiInput","wt2AiSend"],
+      uploads:["wtChatImageBtn","wtChatMicBtn"],
+      friends:["wtFriendsBtn","wtHomeFriends"],
       polls:[],
-      public_explore:[],
-      schedules:[]
+      playlists:["queueList","playQueueNowBtn"],
+      public_explore:["wt2PublicRoomList","wt2PublicRoomSearch"],
+      schedules:["wt2SchedulePanel"],
+      youtube_search:["videoSearchArea","searchVideoBtn","videoSearchInput"],
+      translation:[]
     };
     const blocked=[];
     Object.entries(map).forEach(([feature,ids])=>{
       const isBlocked=normalized[feature]===false;
-      ids.forEach(id=>{
-        const node=$(id);if(!node)return;
-        node.disabled=isBlocked;
-        node.classList.toggle("wt2-feature-disabled",isBlocked);
-        node.setAttribute("aria-disabled",isBlocked?"true":"false");
-      });
+      setFeatureNodesBlocked(ids,isBlocked,"wt2-feature-disabled");
       if(isBlocked)blocked.push(feature);
     });
+    setTranslationButtonsBlocked(normalized.translation===false,"wt2-feature-disabled");
+    setPublicExploreBlocked(normalized.public_explore===false,"wt2-feature-disabled");
+
+    const aiCenter=$("wt2AiCenter");
+    if(aiCenter){
+      const aiOff=normalized.ai===false;
+      aiCenter.classList.toggle("wt2-feature-disabled",aiOff);
+      if(aiOff)aiCenter.setAttribute("aria-disabled","true");else aiCenter.removeAttribute("aria-disabled");
+    }
+
     const existing=document.getElementById("wt2GlobalFeatureNotice");
     if(blocked.length){
       const notice=existing||document.createElement("div");
@@ -829,104 +873,46 @@
     const features=value?.features||{};
     const map={
       create_room:["createRoomBtn"],
-      join_public_room:["wt2PublicRoomList"],
-      chat:["chatForm","chatInput","wtChatCenter"],
+      join_public_room:["joinRoomBtn","joinCodeInput"],
+      chat:["chatForm","chatInput"],
       ai:["wt2AiCenter"],
-      ai_agent:["wt2AiCenter"],
+      ai_agent:["wt2AiInput","wt2AiSend"],
       uploads:["wtChatImageBtn","wtChatMicBtn"],
       friends:["wtFriendsBtn","wtHomeFriends"],
       polls:[],
-      playlists:["queueList"],
+      playlists:["queueList","playQueueNowBtn"],
       playback_control:["playPauseBtn","syncNowBtn"],
-      public_explore:["wt2PublicRoomList"],
+      public_explore:["wt2PublicRoomList","wt2PublicRoomSearch"],
       schedules:["wt2SchedulePanel"],
       youtube_search:["videoSearchArea","searchVideoBtn","videoSearchInput"],
-      translation:["chatMessages"]
+      translation:[]
     };
     Object.entries(map).forEach(([feature,ids])=>{
-      const blocked=features[feature]===true;
-      ids.forEach(id=>{
-        const node=$(id); if(!node) return;
-        node.disabled=blocked;
-        node.setAttribute("aria-disabled",blocked?"true":"false");
-        node.classList.toggle("wt2-restricted",blocked);
-      });
+      setFeatureNodesBlocked(ids,features[feature]===true,"wt2-restricted");
     });
+    setTranslationButtonsBlocked(features.translation===true,"wt2-restricted");
+    setPublicExploreBlocked(features.public_explore===true,"wt2-restricted");
+
     const disabledLabels=[];
-    if(features.create_room) disabledLabels.push("建立房間");
-    if(features.chat) disabledLabels.push("聊天室");
-    if(features.playlists) disabledLabels.push("播放佇列");
-    if(features.playback_control) disabledLabels.push("播放控制");
-    if(features.youtube_search) disabledLabels.push("YouTube 搜尋");
-    if(features.translation) disabledLabels.push("聊天翻譯");
+    const labels={
+      create_room:"建立房間",join_public_room:"加入公開房間",chat:"聊天室",
+      playback_control:"播放控制",ai:"AI",ai_agent:"AI Agent",uploads:"檔案／圖片上傳",
+      friends:"好友系統",polls:"投票",playlists:"播放佇列",public_explore:"公開房間探索",
+      schedules:"預約觀看",youtube_search:"YouTube 搜尋",translation:"聊天翻譯"
+    };
+    Object.entries(labels).forEach(([key,label])=>{if(features[key]===true)disabledLabels.push(label);});
     const existing=document.getElementById("wt2RestrictionNotice");
     if(disabledLabels.length){
       const notice=existing||document.createElement("div");
-      notice.id="wt2RestrictionNotice";notice.className="wt2-restriction-notice";
+      notice.id="wt2RestrictionNotice";
+      notice.className="wt2-restriction-notice";
       notice.textContent="此帳號目前有部分功能受到限制："+disabledLabels.join("、")+"。";
-      if(!existing) document.body.appendChild(notice);
-    }else existing?.remove();
-    window.__WT2_BLOCKED_FEATURES__=Object.fromEntries(Object.entries(features).filter(([,blocked])=>blocked===true));
-    document.body.classList.toggle("wt2-user-restricted",Object.values(features).some(Boolean));
-  }
-
-  function applyFeatureFlags(flags){
-    const value=flags&&typeof flags==="object"?flags:{};
-    const map={
-      create_room:["createRoomBtn"],
-      chat:["chatForm","chatInput"],
-      playlists:["queueList"],
-      public_explore:["wt2PublicRoomList"],
-      schedules:["wt2SchedulePanel"],
-      youtube_search:["videoSearchArea","searchVideoBtn","videoSearchInput"],
-      translation:["wt2ChatCenter","chatMessages"],
-      ai:["wt2AiCenter"]
-    };
-    const disabled=[];
-    Object.entries(map).forEach(([key,ids])=>{
-      const off=value[key]===false;
-      if(off) disabled.push(key);
-      ids.forEach(id=>{
-        const node=$(id);if(!node)return;
-        node.disabled=off;
-        node.classList.toggle("wt2-feature-off",off);
-        if(off) node.setAttribute("aria-disabled","true"); else node.removeAttribute("aria-disabled");
-      });
-    });
-    const ai=$("wt2AiCenter");if(ai)ai.classList.toggle("hidden",value.ai===false);
-    const existing=$("wt2FeatureNotice");
-    if(disabled.length){
-      const notice=existing||document.createElement("div");
-      notice.id="wt2FeatureNotice";notice.className="wt2-feature-notice";
-      notice.textContent="部分網站功能目前暫停："+disabled.join("、");
       if(!existing)document.body.appendChild(notice);
     }else existing?.remove();
+
+    window.__WT2_BLOCKED_FEATURES__=Object.fromEntries(Object.entries(features).filter(([,blocked])=>blocked===true));
   }
 
-  function initFeatureFlagListener(){
-    const db=window.db||window.firebase?.database?.();
-    if(!db){setTimeout(initFeatureFlagListener,1000);return;}
-    try{
-      db.ref("system/featureFlags").on("value",snap=>applyFeatureFlags(snap.val()||{}));
-    }catch(error){console.warn("[WT2] feature flags:",error);}
-  }
-
-  let restrictionRef=null;
-  let restrictionExpiryTimer=null;
-  function clearRestrictionSubscription(){
-    if(restrictionRef){try{restrictionRef.off();}catch(_){}restrictionRef=null;}
-    if(restrictionExpiryTimer){clearTimeout(restrictionExpiryTimer);restrictionExpiryTimer=null;}
-  }
-  function scheduleRestrictionExpiry(value){
-    if(restrictionExpiryTimer){clearTimeout(restrictionExpiryTimer);restrictionExpiryTimer=null;}
-    const until=Number(value?.blockedUntil||0);
-    if(until>0 && until>Date.now()){
-      restrictionExpiryTimer=setTimeout(()=>{
-        restrictionExpiryTimer=null;
-        applyUserRestrictions(null);
-      },Math.min(until-Date.now()+50,2147483647));
-    }
-  }
   function initRestrictionListener(){
     const tryAttach=()=>{
       const auth=window.firebase?.auth?.();
