@@ -97,8 +97,26 @@
     if(!list.length){root.innerHTML='<div class="wt2-empty">目前沒有預約場次。</div>';return}
     root.innerHTML=list.map(item=>{
       const id=escapeHtml(item.id||"");
-      return '<article class="wt2-schedule-row"><div class="wt2-schedule-dot">◷</div><div class="wt2-schedule-main"><strong>'+escapeHtml(item.name||"預約觀看")+'</strong><span>'+escapeHtml(item.roomId||"")+" · "+escapeHtml(localDateTime(item.startAt))+(Number(item.reminderMinutes||0)?' · 提前 '+Number(item.reminderMinutes)+' 分鐘提醒':"")+'</span></div><button type="button" data-schedule-join="'+id+'">進入</button></article>';
+      return '<article class="wt2-schedule-row"><div class="wt2-schedule-dot">◷</div><div class="wt2-schedule-main"><strong>'+escapeHtml(item.name||"預約觀看")+'</strong><span>'+escapeHtml(item.roomId||"")+" · "+escapeHtml(localDateTime(item.startAt))+(Number(item.reminderMinutes||0)?' · 提前 '+Number(item.reminderMinutes)+' 分鐘提醒':"")+'</span></div><div class="wt2-schedule-row-actions"><button type="button" data-schedule-join="'+id+'">進入</button><button type="button" data-schedule-delete="'+id+'">取消</button></div></article>';
     }).join("");
+    root.querySelectorAll("[data-schedule-delete]").forEach(button=>{
+      button.addEventListener("click",async()=>{
+        const id=String(button.dataset.scheduleDelete||"");
+        if(!id)return;
+        if(!window.confirm("確定要取消這個預約嗎？"))return;
+        const user=currentUser(),database=db();
+        if(!user||!database)return;
+        button.disabled=true;
+        try{
+          await database.ref("profiles/"+user.uid+"/watchSchedules/"+id).remove();
+          await renderSchedules();
+        }catch(error){
+          console.error("[WT2] schedule delete",error);
+          button.disabled=false;
+        }
+      });
+    });
+
     root.querySelectorAll("[data-schedule-join]").forEach(button=>{
       button.addEventListener("click",async()=>{
         const item=list.find(x=>String(x.id)===String(button.dataset.scheduleJoin||""));
@@ -110,6 +128,29 @@
     });
   }
 
+  function maybeNotifySchedules(items){
+    const user=currentUser();if(!user)return;
+    const key="wt2_schedule_notified_"+user.uid;
+    let notified={};
+    try{notified=JSON.parse(localStorage.getItem(key)||"{}")||{};}catch(_){}
+    const now=Date.now();
+    let changed=false;
+    Object.values(items||{}).forEach(item=>{
+      if(!item||!item.id)return;
+      const start=Number(item.startAt||0),rem=Math.max(0,Number(item.reminderMinutes||0));
+      const fireAt=start-rem*60*1000;
+      if(now>=fireAt&&now<start+60*1000&&!notified[item.id]){
+        notified[item.id]=Date.now();changed=true;
+        const message="「"+String(item.name||"預約觀看")+"」即將開始，房間 "+String(item.roomId||"");
+        try{
+          if("Notification" in window && Notification.permission==="granted") new Notification("WatchTogether 預約提醒",{body:message});
+        }catch(_){}
+        try{window.WT_ENHANCEMENTS?.toast?.(message);}catch(_){}
+      }
+    });
+    if(changed){try{localStorage.setItem(key,JSON.stringify(notified));}catch(_){}}
+  }
+
   async function renderSchedules(){
     const user=currentUser(),database=db(),root=$("wt2ScheduleList");
     if(!root)return;
@@ -119,6 +160,7 @@
       const values=snap.val()||{};
       const future=Object.values(values).filter(x=>x&&Number(x.startAt)>Date.now());
       renderList(values);
+      maybeNotifySchedules(values);
       updateBadge(future.length);
     }catch(error){console.warn("[WT2] schedule load",error);root.innerHTML='<div class="wt2-empty">預約資料暫時無法載入。</div>';}
   }
@@ -148,7 +190,13 @@
     ensureModal();
     const auth=window.firebase?.auth?.();
     auth?.onAuthStateChanged(()=>renderSchedules());
+    if("Notification" in window && Notification.permission==="default"){
+      document.getElementById("wt2SchedulePanel")?.addEventListener("dblclick",()=>{
+        void Notification.requestPermission().catch(()=>{});
+      });
+    }
     void renderSchedules();
+    window.setInterval(()=>void renderSchedules(),30000);
   }
 
   window.WT2_SCHEDULES={open:openModal,refresh:renderSchedules};
