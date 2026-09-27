@@ -740,6 +740,7 @@ html[data-device="phone"][data-orientation="portrait"] .toast{
   .audit-table td:nth-child(3)::before { content: "操作"; }
   .audit-table td:nth-child(4)::before { content: "目標"; }
   .audit-table td:nth-child(5)::before { content: "內容"; }
+  .audit-table td:nth-child(6)::before { content: "操作"; }
 
   .audit-table .audit-target,
   .audit-table .audit-content {
