@@ -5,6 +5,7 @@ compatibility_date = "2026-09-21"
 [vars]
 FIREBASE_PROJECT_ID = "watchtogether-3f4f9"
 ALLOWED_ORIGIN = "https://a0983439343-dot.github.io"
+TRANSLATION_API_URL = ""
 
 [secrets]
-required = ["YOUTUBE_API_KEY"]
+required = ["YOUTUBE_API_KEY", "LIBRETRANSLATE_API_KEY"]
