@@ -193,6 +193,62 @@
     const ff=$("ad2FeatureFlags");if(ff)ff.innerHTML=features.map(([label,key])=>'<div class="ad2-list-row"><strong>'+label+'</strong><span class="ad2-chip on">ON</span></div>').join("");
   }
 
+  function ensureAdminCommandPalette(){
+    if(document.getElementById("ad2CommandPalette"))return;
+    const dialog=document.createElement("dialog");
+    dialog.id="ad2CommandPalette";
+    dialog.className="ad2-command-palette";
+    dialog.innerHTML='<div class="ad2-command-inner"><div class="ad2-command-search"><span>⌘</span><input id="ad2CommandInput" placeholder="搜尋管理功能…" autocomplete="off"><kbd>Esc</kbd></div><div id="ad2CommandList" class="ad2-command-list"></div></div>';
+    document.body.appendChild(dialog);
+
+    const commands=[
+      ["overview","總覽","Dashboard"],
+      ["accounts","使用者管理","Users"],
+      ["rooms","房間管理","Rooms"],
+      ["reports","檢舉中心","Reports"],
+      ["audit","Audit Log","Audit"],
+      ["security","安全中心","Security"],
+      ["analytics","Analytics","Analytics"],
+      ["maintenance","維護中心","Maintenance"],
+      ["restrictions","使用者功能限制","Restrictions"],
+      ["roles","角色與權限","Roles"],
+      ["ai","AI 管理中心","AI"],
+      ["debug","Debug Center","Debug"],
+      ["versions","版本中心","Versions"],
+      ["settings","系統設定","Settings"]
+    ];
+    let filtered=commands.slice(),index=0;
+    const list=()=>document.getElementById("ad2CommandList");
+    const render=()=>{
+      const box=list();if(!box)return;
+      box.innerHTML=filtered.map((item,i)=>'<button type="button" class="'+(i===index?"active":"")+'" data-ad2-command="'+item[0]+'"><span>'+item[1]+'</span><small>'+item[2]+'</small></button>').join("")||'<div class="ad2-muted">找不到功能。</div>';
+      box.querySelectorAll("[data-ad2-command]").forEach(b=>b.addEventListener("click",()=>{
+        showSection(b.dataset.ad2Command);dialog.close();
+      }));
+    };
+    const input=$("ad2CommandInput");
+    input?.addEventListener("input",()=>{
+      const q=String(input.value||"").trim().toLowerCase();
+      filtered=commands.filter(x=>!q||x[1].toLowerCase().includes(q)||x[2].toLowerCase().includes(q));
+      index=0;render();
+    });
+    input?.addEventListener("keydown",e=>{
+      if(e.key==="ArrowDown"){e.preventDefault();index=filtered.length?(index+1)%filtered.length:0;render();}
+      if(e.key==="ArrowUp"){e.preventDefault();index=filtered.length?(index-1+filtered.length)%filtered.length:0;render();}
+      if(e.key==="Enter"){e.preventDefault();const item=filtered[index];if(item){showSection(item[0]);dialog.close();}}
+      if(e.key==="Escape"){dialog.close();}
+    });
+    dialog.addEventListener("click",e=>{if(e.target===dialog)dialog.close();});
+    render();
+  }
+
+  function openAdminCommandPalette(){
+    ensureAdminCommandPalette();
+    const dialog=$("ad2CommandPalette");if(!dialog)return;
+    if(!dialog.open)dialog.showModal();
+    const input=$("ad2CommandInput");if(input){input.value="";input.dispatchEvent(new Event("input"));input.focus();}
+  }
+
   function toast(message){
     const el=$("toast");
     if(!el)return;
@@ -313,6 +369,7 @@
   async function boot(){
     if(!document.querySelector("#app"))return;
     renderNewUI();renderFeatureChecks();bindNav();
+    ensureAdminCommandPalette();
     await loadAdminPermissionContext();
     applyPermissionVisibility();
     $("ad2MaintenanceReload")?.addEventListener("click",readMaintenance);
@@ -324,6 +381,7 @@
     $("ad2ApplyRestriction")?.addEventListener("click",()=>applyRestriction(false).catch(e=>{console.error(e);$("ad2RestrictionHint").textContent="套用失敗。"}));
     $("ad2ClearRestriction")?.addEventListener("click",()=>applyRestriction(true).catch(e=>{console.error(e);$("ad2RestrictionHint").textContent="解除失敗。"}));
     $("ad2SecurityRefresh")?.addEventListener("click",refreshAll);
+    document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openAdminCommandPalette();}});
     $("ad2DebugRefresh")?.addEventListener("click",()=>{
       const el=$("ad2DebugList");if(el)el.innerHTML=(window.__WT_EARLY_ERRORS__||[]).slice(-20).map(x=>'<div class="ad2-list-row"><strong>'+String(x.message||"Unknown").replace(/[<>]/g,"")+'</strong><span>'+String(x.source||"unknown")+"</span></div>").join("")||'<div class="ad2-muted">目前沒有前端 Early Errors。</div>';
     });
