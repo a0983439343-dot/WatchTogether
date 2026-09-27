@@ -299,7 +299,7 @@
     const title=escapeHtml(item.name||"一起看");
     const platform=escapeHtml(item.sourceType||"youtube");
     const count=Number(item.memberCount||0);
-    card.innerHTML='<div class="wt2-directory-icon">'+(kind==="public"?"🌎":"🔐")+'</div><div class="wt2-directory-info"><strong>'+title+'</strong><span>'+roomId+' · '+platform+(kind==="public"&&count>0?' · '+count+' 人在線索引':"")+'</span></div><button type="button" class="wt2-directory-join">'+(kind==="public"?"加入":"重新進入")+'</button>';
+    card.innerHTML='<div class="wt2-directory-icon">'+(kind==="public"?"🌎":"🔐")+'</div><div class="wt2-directory-info"><strong>'+title+'</strong><span>'+roomId+' · '+platform+(kind==="public"&&count>0?' · '+count+' 人在線索引':"")+'</span></div><button type="button" class="wt2-directory-join '+(kind==="public"?"wt2-directory-public-join":"wt2-directory-personal-join")+'" data-directory-kind="'+kind+'">'+(kind==="public"?"加入":"重新進入")+'</button>';
     card.querySelector(".wt2-directory-join")?.addEventListener("click",()=>{
       const input=$("joinCodeInput");const btn=$("joinRoomBtn");
       if(input) input.value=roomId;
@@ -814,11 +814,20 @@
     }
   }
 
+  function setPublicJoinBlocked(blocked,sourceClass){
+    document.querySelectorAll(".wt2-directory-public-join").forEach(button=>{
+      button.disabled=blocked;
+      button.setAttribute("aria-disabled",blocked?"true":"false");
+      button.classList.toggle(sourceClass,blocked);
+      if(blocked)button.title="加入公開房間目前已停用";else button.removeAttribute("title");
+    });
+  }
+
   function applyGlobalFeatureFlags(flags){
     const normalized=flags&&typeof flags==="object"?flags:{};
     const map={
       create_room:["createRoomBtn"],
-      join_public_room:["joinRoomBtn","joinCodeInput"],
+      join_public_room:[],
       chat:["chatForm","chatInput"],
       playback_control:["playPauseBtn","syncNowBtn"],
       ai:["wt2AiClear"],
@@ -840,6 +849,7 @@
     });
     setTranslationButtonsBlocked(normalized.translation===false,"wt2-feature-disabled");
     setPublicExploreBlocked(normalized.public_explore===false,"wt2-feature-disabled");
+    setPublicJoinBlocked(normalized.join_public_room===false,"wt2-feature-disabled");
 
     const aiCenter=$("wt2AiCenter");
     if(aiCenter){
@@ -873,7 +883,7 @@
     const features=value?.features||{};
     const map={
       create_room:["createRoomBtn"],
-      join_public_room:["joinRoomBtn","joinCodeInput"],
+      join_public_room:[],
       chat:["chatForm","chatInput"],
       ai:["wt2AiCenter"],
       ai_agent:["wt2AiInput","wt2AiSend"],
@@ -892,6 +902,7 @@
     });
     setTranslationButtonsBlocked(features.translation===true,"wt2-restricted");
     setPublicExploreBlocked(features.public_explore===true,"wt2-restricted");
+    setPublicJoinBlocked(features.join_public_room===true,"wt2-restricted");
 
     const disabledLabels=[];
     const labels={
