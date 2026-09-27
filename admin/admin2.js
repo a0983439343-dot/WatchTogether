@@ -183,7 +183,7 @@
   }
   async function saveRole(){
     const user=window.firebase?.auth?.().currentUser;
-    if(!user || String(user.email||"").trim().toLowerCase()!=="a0983439343@gmail.com"){ $("ad2RoleHint").textContent="只有最高管理員可以修改角色定義。"; return; }
+    if(!user || !hasPermission("roles.manage")){ $("ad2RoleHint").textContent="你沒有修改角色定義的權限。"; return; }
     const roleId=String($("ad2RoleId")?.value||"").trim().replace(/[^A-Za-z0-9_-]/g,"").slice(0,80);
     const name=String($("ad2RoleName")?.value||"").trim().slice(0,80);
     if(!roleId||!name){$("ad2RoleHint").textContent="請填寫角色 ID 與名稱。";return}
@@ -197,7 +197,7 @@
   }
   async function assignSelectedRole(){
     const user=window.firebase?.auth?.().currentUser; const uid=String($("ad2RoleAssignUid")?.value||"").trim(); const roleId=String($("ad2RoleId")?.value||"").trim();
-    if(String(user?.email||"").trim().toLowerCase()!=="a0983439343@gmail.com"){toast("只有最高管理員可以套用角色");return}
+    if(!hasPermission("roles.manage")){toast("你沒有套用角色的權限");return}
     if(!uid||!roleId){$("ad2RoleHint").textContent="請先填角色 ID 與使用者 UID。";return}
     await DB().ref("admin/userRoles/"+uid).set({roleId,updatedAt:Date.now(),updatedBy:user.uid});
     $("ad2RoleHint").textContent="角色已套用。";
