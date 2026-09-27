@@ -126,7 +126,7 @@
     "重新整理":{"zh-TW":"重新整理","zh-CN":"重新整理","en":"Refresh","ja":"更新","ko":"새로고침","es":"Actualizar","fr":"Actualiser","de":"Aktualisieren","pt-BR":"Atualizar","ru":"Обновить","it":"Aggiorna","th":"รีเฟรช","vi":"Làm mới","id":"Segarkan","tr":"Yenile","ar":"تحديث"},
     "[翻譯]":{"zh-TW":"[翻譯]","zh-CN":"[翻译]","en":"[Translate]","ja":"[翻訳]","ko":"[번역]","es":"[Traducir]","fr":"[Traduire]","de":"[Übersetzen]","pt-BR":"[Traduzir]","ru":"[Перевести]","it":"[Traduci]","th":"[แปล]","vi":"[Dịch]","id":"[Terjemahkan]","tr":"[Çevir]","ar":"[ترجمة]"},
     "核准":{"zh-TW":"核准","zh-CN":"批准","en":"Approve","ja":"承認","ko":"승인","es":"Aprobar","fr":"Approuver","de":"Genehmigen","pt-BR":"Aprovar","ru":"Одобрить","it":"Одобрить","th":"อนุมัติ","vi":"Phê duyệt","id":"Setujui","tr":"Onayla","ar":"موافقة"},
-    "拒絕":{"zh-TW":"拒絕","zh-CN":"拒绝","en":"Reject","ja":"拒否","ko":"거부","es":"Rechazar","fr":"Refuser","de":"Ablehnen","pt-BR":"Rejeitar","ru":"Отклонить","it":"Rifiuta","th":"ปฏิเสธ","vi":"Từ chối","id":"Tolak","tr":"Reddet","ar":"رفض"}
+    "拒絕":{"zh-TW":"拒絕","zh-CN":"拒绝","en":"Reject","ja":"拒否","ko":"거부","es":"Rechazar","fr":"Refuser","de":"Ablehnen","pt-BR":"Rejeitar","ru":"Отклонить","it":"Rifiuta","th":"ปฏิเสธ","vi":"Từ chối","id":"Tolak","tr":"Reddet","ar":"رفض"},
 
   const LANGUAGES = Object.fromEntries(
     SUPPORTED.map(locale => [
