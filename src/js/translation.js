@@ -22,8 +22,14 @@
       "de":"de",
       "pt":"pt"
     };
+    const i18nLocale = String(
+      window.WT_I18N?.getMode?.() ||
+      window.WT_I18N?.getLocale?.() ||
+      ""
+    ).trim();
     const lang = String(
       localStorage.getItem("wt2_translation_target") ||
+      i18nLocale ||
       document.documentElement.lang ||
       "zh-Hant"
     ).trim();
