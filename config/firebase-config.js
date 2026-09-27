@@ -13,6 +13,7 @@ window.WATCHTOGETHER_CONFIG = {
   youtubeSearchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   aiBugDetectorUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/ai/analyze",
+  aiCoreUrl: "",
   // Set this to the authenticated translation endpoint when the translation Worker is deployed.
   translationUrl: "",
   dailymotionPlayerId: "",
