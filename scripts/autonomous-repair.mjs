@@ -448,7 +448,7 @@ async function restoreChanged(changed) {
   }
 }
 
-async function commitAndPush(changedFiles) {
+async function commitAndPush(changedFiles, reportId) {
   const name = "WatchTogether Autonomous Repair";
   const email = "watchtogether-autorepair@users.noreply.github.com";
   await git(["config", "user.name", name]);
@@ -457,7 +457,7 @@ async function commitAndPush(changedFiles) {
   await git(["diff", "--cached", "--check"]);
   const staged = await git(["diff", "--cached", "--name-only"]);
   if (!staged) throw new Error("沒有可提交的修復變更");
-  const commitMessage = "fix: autonomous repair [report:" + String(process.env.AUTONOMOUS_REPAIR_REPORT_ID || "unknown").slice(0,128) + "]";
+  const commitMessage = "fix: autonomous repair [report:" + String(reportId || "unknown").slice(0,128) + "]";
   const commitSha = await git(["commit", "-m", commitMessage]);
 
   try {
@@ -666,7 +666,7 @@ async function repairOne(database, reportId, report, batchId, batchPosition, bat
     return false;
   }
 
-  const commit = await commitAndPush([...applied.changed.keys()]);
+  const commit = await commitAndPush([...applied.changed.keys()], reportId);
   if (applied.changed.has("config/database.rules.json")) {
     try {
       await deployFirebaseRules();
