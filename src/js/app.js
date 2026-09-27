@@ -592,6 +592,18 @@
   }
 
 
+  async function isCurrentUserFeatureRestricted(feature) {
+    const uid = String(state.uid || auth?.currentUser?.uid || "").trim();
+    if (!uid || !db || !feature) return false;
+    try {
+      const snapshot = await db.ref("admin/restrictionsByUid/" + uid + "/features/" + feature).once("value");
+      return snapshot.val() === true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+
   function formatViews(value) {
     const number =
       Number(value);
@@ -7248,6 +7260,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
      * 避免 Realtime Database Rules 在多路徑寫入時把整筆
      * 操作判定為 permission_denied。
      */
+    const visibility =
+      String(
+        $("roomVisibilityInput")?.value ||
+        "personal"
+      ).trim() === "public"
+        ? "public"
+        : "personal";
+
     const room = {
       owner:
         state.uid,
@@ -7338,6 +7358,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           name:
             roomName,
 
+          visibility,
+          joinMode:
+            visibility === "public"
+              ? "open"
+              : "invite_only",
+
           settings: {
             locked:
               false,
@@ -7403,6 +7429,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
      */
     state.room = {
       ...room,
+      visibility,
+      isPersonal: visibility === "personal",
       video:
         null
     };
@@ -7415,6 +7443,33 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       "",
       `?room=${encodeURIComponent(roomId)}${state.adminJoinOverride ? "&adminJoin=1" : ""}`
     );
+
+    try {
+      await db.ref("profiles/" + state.uid + "/personalRooms/" + roomId).set({
+        roomId,
+        name: roomName,
+        visibility,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+    } catch (error) {
+      console.warn("寫入房間帳號索引失敗:", error);
+    }
+
+    if (visibility === "public") {
+      try {
+        await db.ref("publicRooms/" + roomId).set({
+          roomId,
+          name: roomName,
+          sourceType,
+          memberCount: 1,
+          createdAt: firebase.database.ServerValue.TIMESTAMP,
+          updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+      } catch (error) {
+        console.warn("寫入公開房間索引失敗:", error);
+      }
+    }
 
     try {
       await enterRoom();
@@ -7811,6 +7866,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       owner: actualOwnerUid,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
+      visibility: String(metaData.visibility || "personal"),
+      isPersonal: String(metaData.visibility || "personal") === "personal",
       video: null
     };
 
@@ -10856,7 +10913,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (
       state.isOwner &&
-      !state.adminJoinOverride
+      !state.adminJoinOverride &&
+      String(state.room?.visibility || "personal") !== "personal"
     ) {
       try {
         const nextOwner =
@@ -11270,7 +11328,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             ""
           );
 
+        const roomIsPersonal =
+          String(state.room?.visibility || "") === "personal";
+
         let ownerCanBeClaimed =
+          !roomIsPersonal &&
           !currentOwnerUid;
 
         if (
@@ -11284,6 +11346,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               .once("value");
 
           ownerCanBeClaimed =
+            !roomIsPersonal &&
             !isMemberPresenceLive(
               ownerMemberSnapshot.val()
             );
