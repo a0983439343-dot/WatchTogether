@@ -1948,6 +1948,7 @@ function formatDate(value) {
 
 async function sendRoomText(text) {
   var user = wt.auth.currentUser;
+  if (await isFeatureBlocked("chat")) throw new Error("你的帳號目前無法使用聊天室");
   var id = roomId();
   text = String(text || "").trim().slice(0,300);
   if (!user || !id || !text) return;
@@ -1962,6 +1963,7 @@ async function sendRoomText(text) {
 
 async function sendRoomSticker(sticker) {
   var user = wt.auth.currentUser;
+  if (await isFeatureBlocked("chat")) throw new Error("你的帳號目前無法使用聊天室");
   var id = roomId();
   if (!user || !id) return;
   await wt.db.ref("chat/" + id).push({
