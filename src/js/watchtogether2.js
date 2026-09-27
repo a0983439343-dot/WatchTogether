@@ -839,7 +839,9 @@
       playlists:["queueList"],
       playback_control:["playPauseBtn","syncNowBtn"],
       public_explore:["wt2PublicRoomList"],
-      schedules:["wt2SchedulePanel"]
+      schedules:["wt2SchedulePanel"],
+      youtube_search:["videoSearchArea","searchVideoBtn","videoSearchInput"],
+      translation:["chatMessages"]
     };
     Object.entries(map).forEach(([feature,ids])=>{
       const blocked=features[feature]===true;
@@ -855,6 +857,8 @@
     if(features.chat) disabledLabels.push("聊天室");
     if(features.playlists) disabledLabels.push("播放佇列");
     if(features.playback_control) disabledLabels.push("播放控制");
+    if(features.youtube_search) disabledLabels.push("YouTube 搜尋");
+    if(features.translation) disabledLabels.push("聊天翻譯");
     const existing=document.getElementById("wt2RestrictionNotice");
     if(disabledLabels.length){
       const notice=existing||document.createElement("div");
