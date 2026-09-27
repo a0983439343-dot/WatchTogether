@@ -7262,7 +7262,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
      */
     const visibility =
       String(
-        $("roomVisibilityInput")?.value ||
+        document.querySelector('input[name="wt2-room-visibility"]:checked')?.value ||
         "personal"
       ).trim() === "public"
         ? "public"
@@ -10696,6 +10696,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function transferOwnershipBeforeLeave() {
     if (
       state.adminJoinOverride ||
+      String(state.room?.visibility || "personal") === "personal" ||
       !state.isOwner ||
       !state.roomId ||
       !state.uid
