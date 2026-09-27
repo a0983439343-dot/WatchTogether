@@ -17,13 +17,17 @@ const PROVIDER_TIMEOUT_MS = 25 * 1000;
 async function isUserFeatureBlocked(env, token, uid, feature){
   if(!token || !uid || !feature) return false;
   const base=String(env.FIREBASE_DATABASE_URL||DEFAULT_FIREBASE_DATABASE_URL).trim().replace(/\/+$/,"");
-  const url=base+"/admin/restrictionsByUid/"+encodeURIComponent(uid)+"/features/"+encodeURIComponent(feature)+".json?auth="+encodeURIComponent(token);
+  const url=base+"/admin/restrictionsByUid/"+encodeURIComponent(uid)+".json?auth="+encodeURIComponent(token);
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),5000);
   try{
     const response=await fetch(url,{method:"GET",cache:"no-store",signal:controller.signal});
     if(!response.ok) return true;
-    return (await response.json().catch(()=>false))===true;
+    const value=await response.json().catch(()=>null);
+    if(!value || typeof value!=="object") return false;
+    const until=Number(value.blockedUntil||0);
+    const active=until===0 || until>Date.now();
+    return active && value.features && value.features[feature]===true;
   }catch(_){
     return true;
   }finally{
