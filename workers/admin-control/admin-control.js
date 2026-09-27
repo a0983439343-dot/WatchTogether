@@ -106,7 +106,7 @@ async function verifyMaintenancePassword(env,ctx,password){
 }
 async function writeAudit(env,ctx,action,targetUid,targetName,details){
   try{
-    await dbFetch(env,"admin/auditLogs.json",ctx.token,"POST",{
+    await dbFetch(env,"admin/auditLogs",ctx.token,"POST",{
       action:String(action||"admin").slice(0,40),
       actorUid:String(ctx.uid||"").slice(0,128),
       actorEmail:String(ctx.email||"").slice(0,320),
