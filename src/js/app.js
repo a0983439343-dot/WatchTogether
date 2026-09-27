@@ -639,7 +639,7 @@
   }
 
 
-  async async function isCurrentUserFeatureRestricted(feature) {
+  async function isCurrentUserFeatureRestricted(feature) {
     const uid = String(state.uid || auth?.currentUser?.uid || "").trim();
     if (!uid || !db || !feature) return false;
     try {
