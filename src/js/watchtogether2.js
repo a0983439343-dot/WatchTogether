@@ -430,12 +430,38 @@
     roomView.addEventListener("wt2-room-state-changed",()=>void renderJoinApprovalPanel());
   }
 
-  function initSortableQueue(){
+    function initSortableQueue(){
     if(!window.Sortable || !$("queueList")) return;
     const list=$("queueList");
     if(list.dataset.wt2Sortable==="1") return;
+    if(!window.WT_CORE?.state?.isOwner) return;
+
     try{
-      Sortable.create(list,{animation:160,ghostClass:"wt2-sort-ghost",fallbackOnBody:true});
+      Sortable.create(list,{
+        animation:160,
+        handle:".wt2-queue-drag-handle",
+        filter:"button,input,textarea,a,img",
+        preventOnFilter:false,
+        ghostClass:"wt2-sort-ghost",
+        fallbackOnBody:true,
+        onEnd:async()=>{
+          const roomId=window.WT_CORE?.getRoomId?.();
+          const db=window.db||window.firebase?.database?.();
+          if(!roomId||!db||!window.WT_CORE?.state?.isOwner)return;
+
+          const rows=[...list.querySelectorAll(".queue-item[data-queue-id]")];
+          const base=Date.now();
+          try{
+            await Promise.all(rows.map((row,index)=>{
+              const queueId=String(row.dataset.queueId||"").trim();
+              return queueId ? db.ref("queue/"+roomId+"/"+queueId+"/queueOrder").set(base+index) : Promise.resolve();
+            }));
+            if(typeof window.WT_CORE.refreshQueue==="function") window.WT_CORE.refreshQueue();
+          }catch(error){
+            console.warn("[WT2] queue reorder failed:",error);
+          }
+        }
+      });
       list.dataset.wt2Sortable="1";
     }catch(error){console.warn("[WT2] Sortable init failed",error);}
   }
