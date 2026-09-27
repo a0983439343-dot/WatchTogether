@@ -104,7 +104,7 @@
     addSection("security",'<div class="section-head"><div><div class="eyebrow">SECURITY CENTER</div><h2>安全中心</h2></div><button class="btn primary" id="ad2SecurityRefresh">重新整理</button></div><div class="ad2-grid cols-4"><div class="ad2-card"><div class="ad2-kicker">AUTH</div><div class="ad2-kpi" id="ad2SecAccounts">—</div><div class="ad2-muted">目前帳號</div></div><div class="ad2-card"><div class="ad2-kicker">BLOCKS</div><div class="ad2-kpi" id="ad2SecBlocked">—</div><div class="ad2-muted">封鎖帳號</div></div><div class="ad2-card"><div class="ad2-kicker">REPORTS</div><div class="ad2-kpi" id="ad2SecReports">—</div><div class="ad2-muted">待處理回報</div></div><div class="ad2-card"><div class="ad2-kicker">MAINTENANCE</div><div class="ad2-kpi" id="ad2SecMaintenance">—</div><div class="ad2-muted">網站狀態</div></div></div><div class="ad2-card" style="margin-top:14px"><h3>安全控制項</h3><div class="ad2-list" id="ad2SecurityList"></div></div>');
     addSection("analytics",'<div class="section-head"><div><div class="eyebrow">ANALYTICS</div><h2>Analytics</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>平台概況</h3><canvas id="ad2StatsChart" height="130"></canvas></div><div class="ad2-card"><h3>資料說明</h3><p>這裡只繪製目前 Admin 已讀取到的資料，不用假數據填圖。後續可再接 DAU、WAU、MAU、觀看時長等事件統計。</p><div class="ad2-list" id="ad2AnalyticsList"></div></div></div>');
     addSection("maintenance",'<div class="section-head"><div><div class="eyebrow">MAINTENANCE CENTER</div><h2>網站維護 / 關站</h2></div><button class="btn" id="ad2MaintenanceReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-row"><div><div class="ad2-kicker">CURRENT STATUS</div><h3 id="ad2MaintStatus">讀取中…</h3></div><span id="ad2MaintChip" class="ad2-chip off">OFF</span></div><div class="ad2-list"><div class="ad2-list-row"><strong>開始時間</strong><span id="ad2MaintStart">—</span></div><div class="ad2-list-row"><strong>預計恢復</strong><span id="ad2MaintEnd">—</span></div></div></div><div class="ad2-card ad2-danger"><h3>🔴 關閉網站</h3><p>這會啟用全站維護畫面。一般使用者被擋下，管理員仍可進入 Admin。</p><div class="ad2-form"><label>維護原因<input id="ad2MaintMessage" maxlength="200" placeholder="例如：系統更新"></label><label>預計恢復時間<input id="ad2MaintEnds" type="datetime-local"></label><label>維護密碼<input id="ad2MaintPassword" type="password" autocomplete="current-password" placeholder="輸入已設定的維護密碼"></label><div class="ad2-confirm-box">按下確認前會再次詢問「確定要關閉網站嗎？」；密碼通過後才會寫入維護狀態。</div><div class="ad2-row"><button class="btn" id="ad2SetPasswordBtn">設定/變更維護密碼</button><button class="btn danger" id="ad2CloseSiteBtn">🔴 確定要關閉網站嗎？</button></div><button class="btn primary" id="ad2OpenSiteBtn">🟢 恢復網站</button><div class="ad2-muted" id="ad2MaintHint"></div></div></div></div>');
-    addSection("restrictions",'<div class="section-head"><div><div class="eyebrow">USER RESTRICTIONS</div><h2>指定使用者功能限制</h2></div><button class="btn" id="ad2RestrictionReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-form"><label>使用者 UID<input id="ad2RestrictionUid" placeholder="Google 使用者 UID"></label><label>限制時間<select id="ad2RestrictionDuration"><option value="permanent">永久</option><option value="3600000">1 小時</option><option value="86400000">1 天</option><option value="604800000">7 天</option><option value="2592000000">30 天</option></select></label><label>原因<textarea id="ad2RestrictionReason" maxlength="300" placeholder="限制原因"></textarea></label></div><h3 style="margin-top:14px">限制功能</h3><div class="ad2-checks" id="ad2RestrictionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn danger" id="ad2ApplyRestriction">套用限制</button><button class="btn" id="ad2ClearRestriction">解除限制</button></div><div class="ad2-muted" id="ad2RestrictionHint"></div></div><div class="ad2-card"><h3>目前限制</h3><div id="ad2RestrictionCurrent" class="ad2-list"><div class="ad2-muted">輸入 UID 後讀取。</div></div></div></div>');
+    addSection("restrictions",'<div class="section-head"><div><div class="eyebrow">USER RESTRICTIONS</div><h2>指定使用者功能限制</h2></div><button class="btn" id="ad2RestrictionReload">重新整理</button></div><div class="ad2-grid cols-3"><div class="ad2-card"><div class="ad2-form"><label>使用者 UID<input id="ad2RestrictionUid" placeholder="Google 使用者 UID"></label><label>限制時間<select id="ad2RestrictionDuration"><option value="permanent">永久</option><option value="3600000">1 小時</option><option value="86400000">1 天</option><option value="604800000">7 天</option><option value="2592000000">30 天</option></select></label><label>原因<textarea id="ad2RestrictionReason" maxlength="300" placeholder="限制原因"></textarea></label></div><h3 style="margin-top:14px">限制功能</h3><div class="ad2-checks" id="ad2RestrictionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn danger" id="ad2ApplyRestriction">套用限制</button><button class="btn" id="ad2ClearRestriction">解除限制</button></div><div class="ad2-muted" id="ad2RestrictionHint"></div></div><div class="ad2-card"><h3>目前選定使用者</h3><div id="ad2RestrictionCurrent" class="ad2-list"><div class="ad2-muted">輸入 UID 後讀取。</div></div></div><div class="ad2-card"><h3>已設定功能限制</h3><div id="ad2RestrictionList" class="ad2-list"><div class="ad2-muted">載入中…</div></div></div></div>');
     addSection("roles",'<div class="section-head"><div><div class="eyebrow">ROLES & PERMISSIONS</div><h2>角色與權限</h2></div><button class="btn" id="ad2RoleReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>共用角色</h3><div class="ad2-form"><label>角色 ID<input id="ad2RoleId" maxlength="80" placeholder="例如 core_admin"></label><label>角色名稱<input id="ad2RoleName" maxlength="80" placeholder="例如 核心管理員"></label><label>指定使用者 UID（可留空）<input id="ad2RoleAssignUid" maxlength="128" placeholder="把此角色套用給一個使用者"></label></div><div class="ad2-list" id="ad2RoleList" style="margin-top:12px"></div><p class="ad2-muted" style="margin-top:10px">同一角色的使用者共用同一份權限定義；修改角色後，所有套用該角色的人一起更新。</p></div><div class="ad2-card"><h3>角色權限</h3><div class="ad2-checks" id="ad2PermissionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn" id="ad2CopyRoleBtn">全部允許</button><button class="btn primary" id="ad2SaveRoleBtn">儲存角色</button></div><div class="ad2-muted" id="ad2RoleHint" style="margin-top:9px"></div></div></div>');
     addSection("ai",'<div class="section-head"><div><div class="eyebrow">AI CENTER</div><h2>AI 管理中心</h2></div></div><div class="ad2-grid cols-3"><div class="ad2-card"><h3>🧠 診斷</h3><p>分析錯誤、檢舉、房間與 API 異常。</p></div><div class="ad2-card"><h3>🔎 查詢</h3><p>用自然語言查 Admin 已授權資料。</p></div><div class="ad2-card"><h3>⚙️ Agent</h3><p>可執行管理工具，但刪除、停權、關站等高風險操作仍需人工確認。</p></div></div><div class="ad2-card" style="margin-top:14px"><div class="ad2-form"><label>詢問 AI<textarea id="ad2AiPrompt" placeholder="例如：最近有哪些房間異常？"></textarea></label><button class="btn primary" id="ad2AiAsk">送出分析</button></div><div id="ad2AiOutput" class="ad2-code" style="margin-top:12px"></div></div>');
     addSection("debug",'<div class="section-head"><div><div class="eyebrow">DEBUG CENTER</div><h2>Debug Center</h2></div><button class="btn" id="ad2DebugRefresh">重新整理</button></div><div class="ad2-card"><div class="ad2-list" id="ad2DebugList"></div></div>');
@@ -365,6 +365,33 @@
     }catch(e){$("ad2MaintHint").textContent=e?.message||"維護密碼錯誤。";}
   }
 
+  async function loadRestrictedUsers(){
+    const db=DB(),wrap=$("ad2RestrictionList");
+    if(!db||!wrap)return;
+    try{
+      const snap=await db.ref("admin/restrictionsByUid").once("value");
+      const now=Date.now();
+      const entries=Object.entries(snap.val()||{}).filter(([uid,value])=>{
+        if(!value||typeof value!=="object")return false;
+        const until=Number(value.blockedUntil||0);
+        const any=Object.values(value.features||{}).some(Boolean);
+        return any && (until===0 || until>now);
+      }).sort((a,b)=>Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0));
+      wrap.innerHTML=entries.length?entries.map(([uid,value])=>{
+        const count=Object.values(value.features||{}).filter(Boolean).length;
+        const until=Number(value.blockedUntil||0);
+        const time=until===0?"永久":new Date(until).toLocaleString();
+        return '<button type="button" class="ad2-list-row" data-restrict-uid="'+escapeHtml(uid)+'"><strong>'+escapeHtml(uid)+'</strong><span>'+count+' 個功能 · '+escapeHtml(time)+'</span></button>';
+      }).join(""):'<div class="ad2-muted">目前沒有啟用中的功能限制。</div>';
+      wrap.querySelectorAll("[data-restrict-uid]").forEach(button=>button.addEventListener("click",()=>{
+        const input=$("ad2RestrictionUid");if(input){input.value=button.dataset.restrictUid||"";input.dispatchEvent(new Event("change"))}
+      }));
+    }catch(error){
+      wrap.innerHTML='<div class="ad2-muted">無法載入功能限制。</div>';
+      console.warn("[WT2 Admin] restrictions:",error);
+    }
+  }
+
   async function loadRestriction(){
     const uid=String($("ad2RestrictionUid")?.value||"").trim();const box=$("ad2RestrictionCurrent");if(!uid||!box)return;
     try{const s=await DB().ref("admin/restrictionsByUid/"+uid).once("value");const v=s.val(); if(!v){box.innerHTML='<div class="ad2-muted">目前沒有功能限制。</div>';return}
@@ -393,9 +420,9 @@
     $("ad2CloseSiteBtn")?.addEventListener("click",()=>closeSite().catch(e=>{console.error(e);$("ad2MaintHint").textContent=e?.message||"關站失敗。"}));
     $("ad2OpenSiteBtn")?.addEventListener("click",()=>openSite().catch(e=>{console.error(e);$("ad2MaintHint").textContent=e?.message||"恢復網站失敗。"}));
     $("ad2RestrictionUid")?.addEventListener("change",loadRestriction);
-    $("ad2RestrictionReload")?.addEventListener("click",loadRestriction);
-    $("ad2ApplyRestriction")?.addEventListener("click",()=>applyRestriction(false).catch(e=>{console.error(e);$("ad2RestrictionHint").textContent="套用失敗。"}));
-    $("ad2ClearRestriction")?.addEventListener("click",()=>applyRestriction(true).catch(e=>{console.error(e);$("ad2RestrictionHint").textContent="解除失敗。"}));
+    $("ad2RestrictionReload")?.addEventListener("click",()=>{void loadRestriction();void loadRestrictedUsers();});
+    $("ad2ApplyRestriction")?.addEventListener("click",()=>applyRestriction(false).then(()=>loadRestrictedUsers()).catch(e=>{console.error(e);$("ad2RestrictionHint").textContent="套用失敗。"}));
+    $("ad2ClearRestriction")?.addEventListener("click",()=>applyRestriction(true).then(()=>loadRestrictedUsers()).catch(e=>{console.error(e);$("ad2RestrictionHint").textContent="解除失敗。"}));
     $("ad2SecurityRefresh")?.addEventListener("click",refreshAll);
     document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openAdminCommandPalette();}});
     $("ad2DebugRefresh")?.addEventListener("click",()=>{
@@ -414,6 +441,7 @@
     loadRoles();
     const denied=new MutationObserver(()=>{const d=$("deniedScreen"),s=$("setupScreen");if((d&&!d.classList.contains("hidden"))||(s&&!s.classList.contains("hidden"))){try{location.replace("../404.html")}catch(_){}}});
     denied.observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
+    void loadRestrictedUsers();
     refreshAll();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
