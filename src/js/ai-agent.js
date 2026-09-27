@@ -177,7 +177,7 @@
   }
 
   function render(message,kind="assistant"){
-    const box=$("wt2AiConversation"); if(!box)return;
+    const box=$("wt2AiConversation")||$("wt2AiChat"); if(!box)return;
     const item=document.createElement("div");
     item.className="wt2-ai-msg "+kind;
     item.textContent=String(message||"");
@@ -186,6 +186,11 @@
   }
 
   async function run(prompt){
+    const user=window.firebase?.auth?.().currentUser;
+    if(!user || user.isAnonymous) throw new Error("請先登入 Google 帳號後使用 AI Agent");
+    if(window.WT_ENHANCEMENTS?.isFeatureBlocked && await window.WT_ENHANCEMENTS.isFeatureBlocked("ai_agent")){
+      throw new Error("你的帳號目前無法使用 AI Agent");
+    }
     const clean=String(prompt||"").trim().slice(0,2000);
     if(!clean)return;
     render(clean,"user");
@@ -229,7 +234,7 @@
   }
 
   function init(){
-    const prompt=$("wt2AiPrompt"),send=$("wt2AiSend");
+    const prompt=$("wt2AiPrompt")||$("wt2AiInput"),send=$("wt2AiSend");
     if(!prompt||!send||send.dataset.wt2Bound==="1")return;
     send.dataset.wt2Bound="1";
     send.addEventListener("click",async()=>{
