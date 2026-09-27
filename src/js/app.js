@@ -7641,6 +7641,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     saveRoomId(roomId);
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      String(metaData.joinMode || "open") === "approval"
+    ) {
+      try {
+        await db.ref("roomJoinRequests/" + roomId + "/" + state.uid).remove();
+      } catch (_) {}
+      state.pendingRoomJoinRequest = null;
+    }
   }
 
   async function createRoomWithVideo(video) {
@@ -7715,21 +7726,36 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   async function requestRoomJoinApproval(roomId) {
     const user = auth?.currentUser;
-    if (!db || !user || user.isAnonymous) throw new Error("請先登入後再申請加入公開房間");
-    const profile = await db.ref("profiles/" + user.uid).once("value").catch(() => null);
-    const profileValue = profile?.val?.() || {};
-    const name = String(profileValue.displayName || state.memberName || "玩家").trim().slice(0, 30) || "玩家";
+    if (!db || !user || user.isAnonymous) {
+      throw new Error("請先登入後再申請加入公開房間");
+    }
+
     const requestRef = db.ref("roomJoinRequests/" + roomId + "/" + user.uid);
-    await requestRef.set({
-      uid: user.uid,
-      name,
-      status: "pending",
-      approved: false,
-      requestedAt: firebase.database.ServerValue.TIMESTAMP
-    });
+    const existingSnapshot = await requestRef.once("value").catch(() => null);
+    const existing = existingSnapshot?.val?.() || {};
+
+    if (existing.status === "approved" && existing.approved === true) {
+      return true;
+    }
+
+    if (existing.status !== "pending") {
+      const profile = await db.ref("profiles/" + user.uid).once("value").catch(() => null);
+      const profileValue = profile?.val?.() || {};
+      const name = String(profileValue.displayName || state.memberName || "玩家").trim().slice(0, 30) || "玩家";
+
+      await requestRef.set({
+        uid: user.uid,
+        name,
+        status: "pending",
+        approved: false,
+        requestedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+
     requestRef.on("value", async snapshot => {
       const value = snapshot.val();
       if (!value) return;
+
       if (value.status === "approved" && value.approved === true) {
         requestRef.off();
         try {
@@ -7738,15 +7764,19 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         } catch (error) {
           toast(error?.message || "核准後加入房間失敗");
         }
-      } else if (value.status === "rejected" || value.approved === false && value.status === "rejected") {
+      } else if (value.status === "rejected") {
         requestRef.off();
         toast("房主拒絕了你的加入申請");
+        try {
+          await requestRef.remove();
+        } catch (_) {}
       }
     });
-    state.pendingRoomJoinRequest = roomId;
-    toast("已送出加入申請，等待房主審核");
-  }
 
+    state.pendingRoomJoinRequest = roomId;
+    toast(existing.status === "pending" ? "已經送出申請，等待房主審核" : "已送出加入申請，等待房主審核");
+    return false;
+  }
 
   async function joinRoom(roomId) {
     roomId =
@@ -7866,26 +7896,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       String(metaData.visibility || "personal") === "public" &&
       String(metaData.joinMode || "open") === "approval"
     ) {
-      const requestRef = db.ref(
-        "roomJoinRequests/" + roomId + "/" + state.uid
-      );
-      const requestSnapshot = await requestRef.once("value");
-      const request = requestSnapshot.val() || {};
-
-      if (request.approved !== true) {
-        if (request.status === "pending") {
-          throw new Error("加入申請已送出，等待房主批准");
-        }
-
-        await requestRef.set({
-          uid: state.uid,
-          name: String(state.memberName || "玩家").slice(0, 30),
-          status: "pending",
-          approved: false,
-          requestedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        throw new Error("已送出加入申請，等待房主批准");
+      const approved = await requestRoomJoinApproval(roomId);
+      if (!approved) {
+        return;
       }
     }
 
