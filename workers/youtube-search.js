@@ -527,6 +527,18 @@ async function isUserFeatureBlocked(env, token, uid, feature){
   return (until===0 || until>Date.now()) && value.features?.[feature]===true;
 }
 
+async function isGlobalFeatureDisabled(env, token, feature){
+  const base=String(env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app").trim().replace(/\/+$/,"");
+  try{
+    const response=await fetch(base+"/system/featureFlags/"+encodeURIComponent(feature)+".json?auth="+encodeURIComponent(token),{method:"GET",cache:"no-store"});
+    if(!response.ok)return true;
+    const value=await response.json().catch(()=>null);
+    return value === false;
+  }catch(_){
+    return true;
+  }
+}
+
 function parseIsoDuration(
   value
 ) {
@@ -667,6 +679,15 @@ export default {
         return jsonResponse(
           { error: { message: "登入驗證失敗" } },
           401,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      if (await isGlobalFeatureDisabled(env, firebaseIdToken, "translation")) {
+        return jsonResponse(
+          { error: { message: "聊天翻譯功能目前由系統管理員停用" } },
+          503,
           origin,
           allowedOrigin
         );
@@ -906,6 +927,15 @@ export default {
           }
         },
         401,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    if (await isGlobalFeatureDisabled(env, firebaseIdToken, "youtube_search")) {
+      return jsonResponse(
+        { error: { message: "YouTube 搜尋功能目前由系統管理員停用" } },
+        503,
         origin,
         allowedOrigin
       );
