@@ -859,7 +859,7 @@ async function handleAiAnalyze(req, res) {
 
   let body;
   try {
-    body = await readJsonBody(req, 600000);
+    body = await readJsonBody(req, 2_000_000);
   } catch (error) {
     send(res, 400, JSON.stringify({
       ok: false,
@@ -1865,9 +1865,11 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/ai/health") {
     send(res, 200, JSON.stringify({
-      ok: Boolean(String(process.env.GEMINI_API_KEY || "").trim()),
+      ok: getGeminiApiKeys().length > 0,
       provider: "gemini",
-      model: getAiModel()
+      model: getAiModel(),
+      repairModel: getAiModel("repair"),
+      configuredKeys: getGeminiApiKeys().length
     }));
     return;
   }
