@@ -3996,6 +3996,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 "
               >
 
+                ${state.isOwner ? `<div class="wt2-queue-drag-handle" title="拖曳排序" aria-label="拖曳排序">⠿</div>` : ""}
+
                 <div
                   style="
                     width:28px;
