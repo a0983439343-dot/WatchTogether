@@ -152,6 +152,24 @@
     return currentRole === "master" || currentRole === "admin";
   }
 
+  function hasAdminPermission(permission) {
+    if (currentRole === "master") return true;
+    const key = String(permission || "").trim();
+    if (!key || !isAdminOperator()) return false;
+    const ctx = window.__WT2_ADMIN_PERMISSION_CONTEXT__;
+    if (ctx && String(ctx.baseRole || "").toLowerCase() === String(currentRole || "").toLowerCase()) {
+      if (ctx.deny && ctx.deny[key] === true) return false;
+      if (ctx.allow && ctx.allow[key] === true) return true;
+      if (ctx.hasCustomRole === true) {
+        return Array.isArray(ctx.permissions) && ctx.permissions.includes(key);
+      }
+    }
+    if (currentRole === "viewer") {
+      return ["users.view","rooms.view","analytics.view","audit.view"].includes(key);
+    }
+    return currentRole === "admin";
+  }
+
   const ROLE_LEVELS = {
     viewer: 1,
     admin: 2,
@@ -598,7 +616,7 @@
   }
 
   async function deleteAuditLog(id) {
-    if (!isAdminOperator()) {
+    if (!hasAdminPermission("audit.delete")) {
       toast("沒有刪除操作紀錄的權限");
       return;
     }
@@ -1309,7 +1327,7 @@
   }
 
   async function saveReportStatus() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1348,7 +1366,7 @@
   }
 
   async function deleteReport() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1467,7 +1485,7 @@
   }
 
   async function openEditUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.manage")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1495,7 +1513,7 @@
   }
 
   async function saveUser() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.manage")) return;
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1558,7 +1576,7 @@
   }
 
   function openBlockUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.ban")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1576,7 +1594,7 @@
   }
 
   async function confirmBlock() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.ban")) return;
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1608,7 +1626,7 @@
   }
 
    async function unblockUser(uid) {
-     if (!isAdminOperator()) return;
+     if (!hasAdminPermission("users.ban")) return;
      const item = accounts[uid];
      if (!item) return;
      if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1635,7 +1653,7 @@
    }
 
   async function deleteRoom(roomId) {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("rooms.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
