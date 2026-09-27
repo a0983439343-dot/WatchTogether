@@ -49,6 +49,11 @@ const VERIFY_SITE_URL =
     .trim()
     .replace(/\/+$/, "");
 const rateBuckets = new Map();
+const AI_AGENT_ALLOWED_TOOLS = new Set([
+  "searchVideos","getRoomState","addToQueue","createRoom","sendChat","removeFromQueue",
+  "listQueue","getQueue","playQueueItem","admin_overview","search_users","search_rooms",
+  "reports_summary","recent_audit","maintenance_status"
+]);
 let activeSearches = 0;
 let activeStreams = 0;
 
@@ -951,11 +956,11 @@ async function isFeatureRestrictedForUser(identity, feature) {
       cache:"no-store",
       signal:controller.signal
     });
-    if (!response.ok) return false;
+    if (!response.ok) return true;
     const value = await response.json().catch(() => false);
     return value === true;
   } catch (_) {
-    return false;
+    return true;
   } finally {
     clearTimeout(timer);
   }
@@ -1003,7 +1008,11 @@ async function handleAiAgent(req, res) {
   }
 
   const messages = Array.isArray(body?.messages) ? body.messages.slice(-16) : [];
-  const tools = Array.isArray(body?.tools) ? body.tools.slice(0, 16) : [];
+  const tools = Array.isArray(body?.tools)
+    ? body.tools
+        .slice(0, 16)
+        .filter(tool => AI_AGENT_ALLOWED_TOOLS.has(String(tool?.function?.name || "").trim()))
+    : [];
   if (!messages.length) {
     send(res, 400, JSON.stringify({ok:false,error:"messages_required"}));
     return;
@@ -1012,7 +1021,7 @@ async function handleAiAgent(req, res) {
   const allowedNames = new Set(
     tools
       .map(item => String(item?.function?.name || "").trim())
-      .filter(Boolean)
+      .filter(name => AI_AGENT_ALLOWED_TOOLS.has(name))
   );
 
   const safeMessages = messages.map(message => ({
