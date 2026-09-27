@@ -570,6 +570,14 @@ test("2.0: maintenance state is public-readable but admin-write only", async () 
       updatedBy: ADMIN_UID
     })
   );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/maintenance").set({
+      enabled: false,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
 });
 
 test("2.0: user feature restrictions can only be written by admin", async () => {
