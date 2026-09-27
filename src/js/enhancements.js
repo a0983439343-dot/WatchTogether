@@ -1322,6 +1322,17 @@ function notify(title,body) {
   } catch (_) {}
 }
 
+async function isFeatureBlocked(feature) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous || !wt.db || !feature) return false;
+  try {
+    var snapshot = await wt.db.ref("admin/restrictionsByUid/" + user.uid + "/features/" + feature).once("value");
+    return snapshot.val() === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function isLoggedUser() {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous) {
@@ -1340,6 +1351,7 @@ async function isFriend(uid) {
 
 async function addFriendByCode(code) {
   if (!(await isLoggedUser())) return;
+  if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var user = wt.auth.currentUser;
   code = String(code || "").trim().toUpperCase();
   if (!FRIEND_CODE_RE.test(code)) throw new Error("ID 必須是 6 碼英數字");
