@@ -124,7 +124,7 @@ export default {
 
     if(request.method==="POST"){
       const contentType=String(request.headers.get("Content-Type")||"").trim();
-      if(!/^application\\/json(?:\\s*;|$)/i.test(contentType)){
+      if(!/^application\/json(?:\s*;|$)/i.test(contentType)){
         return jsonResponse({error:{message:"Content-Type 必須是 application/json"}},415,origin,allowedOrigin);
       }
     }
