@@ -16,5 +16,6 @@ window.WATCHTOGETHER_CONFIG = {
   // Set this to the authenticated translation endpoint when the translation Worker is deployed.
   translationUrl: "",
   dailymotionPlayerId: "",
-  adminEmail: "a0983439343@gmail.com"
+  adminEmail: "a0983439343@gmail.com",
+  adminControlUrl: ""
 };
