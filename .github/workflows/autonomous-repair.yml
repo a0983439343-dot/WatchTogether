@@ -40,5 +40,13 @@ jobs:
       - name: Install repair dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Install Chromium for post-repair verification
+        run: npx playwright install --with-deps chromium
+
       - name: Run autonomous repair engine
         run: npm run monitor:repair
+
+      - name: Run browser verification after repair
+        timeout-minutes: 12
+        run: npm run monitor:synthetics
+
