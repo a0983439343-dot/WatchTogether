@@ -223,9 +223,21 @@
     return {message:null,conversation};
   }
 
+  async function isFeatureBlocked(feature){
+    const auth=window.firebase?.auth?.(),db=window.db||window.firebase?.database?.();
+    const user=auth?.currentUser;
+    if(!user||user.isAnonymous||!db||!feature)return false;
+    try{
+      const snap=await db.ref("admin/restrictionsByUid/"+user.uid+"/features/"+feature).once("value");
+      return snap.val()===true;
+    }catch(_){return false;}
+  }
+
   async function ask(prompt, options={}){
     const text=String(prompt || "").trim().slice(0,2000);
     if(!text) throw new Error("請先輸入內容");
+    if(await isFeatureBlocked("ai")) throw new Error("你的帳號目前無法使用 AI");
+    if(await isFeatureBlocked("ai_agent")) throw new Error("你的帳號目前無法使用 AI Agent");
 
     const system = {
       role:"system",
