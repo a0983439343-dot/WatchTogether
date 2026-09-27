@@ -453,6 +453,14 @@
       return;
     }
     const next = enabled === true;
+    const actionText = next ? "啟用" : "停用";
+    const warningText = next
+      ? "啟用全自動維護後，符合條件的 Bug 會自動分析、修改、部署、驗證，無需人工確認。\n\n確定要啟用全自動維護嗎？"
+      : "停用全自動維護後，系統將恢復需要人工確認才能開始修復的模式。\n\n確定要停用全自動維護嗎？";
+    if (!window.confirm(warningText)) {
+      renderAutonomousMaintenance();
+      return;
+    }
     await db.ref("admin/autonomousMaintenance").set({
       enabled: next,
       updatedAt: firebase.database.ServerValue.TIMESTAMP,
