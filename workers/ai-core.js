@@ -35,6 +35,18 @@ async function isUserFeatureBlocked(env, token, uid, feature){
   }
 }
 
+async function isGlobalFeatureDisabled(env, token, feature){
+  const base=String(env.FIREBASE_DATABASE_URL||DEFAULT_FIREBASE_DATABASE_URL).trim().replace(/\/+$/,"");
+  try{
+    const response=await fetch(base+"/system/featureFlags/"+encodeURIComponent(feature)+".json?auth="+encodeURIComponent(token),{method:"GET",cache:"no-store"});
+    if(!response.ok)return true;
+    const value=await response.json().catch(()=>null);
+    return value === false;
+  }catch(_){
+    return true;
+  }
+}
+
 function normalizeProviderMessage(message, mode){
   if(!message || typeof message!=="object") return null;
   const out={
@@ -157,6 +169,9 @@ export default {
     const ip=request.headers.get("CF-Connecting-IP")||"unknown";
     const requestedMode = url.pathname==="/agent" ? "agent" : "chat";
     const requestedFeature = requestedMode==="agent" ? "ai_agent" : "ai";
+    if(await isGlobalFeatureDisabled(env,firebaseIdToken,requestedFeature)){
+      return jsonResponse({error:{message:requestedMode==="agent"?"AI Agent 功能目前由系統管理員停用":"AI 功能目前由系統管理員停用"}},503,origin,allowedOrigin);
+    }
     if(await isUserFeatureBlocked(env,firebaseIdToken,firebaseUser.sub,requestedFeature)){
       return jsonResponse({error:{message:requestedMode==="agent"?"此帳號目前無法使用 AI Agent":"此帳號目前無法使用 AI"}},403,origin,allowedOrigin);
     }
