@@ -3819,7 +3819,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       channel: video.channel || "YouTube",
       addedBy: state.uid,
       addedByName: state.memberName,
-      addedAt: firebase.database.ServerValue.TIMESTAMP
+      addedAt: firebase.database.ServerValue.TIMESTAMP,
+      queueOrder: Date.now()
     };
 
     if (video.url) item.url = String(video.url);
@@ -3933,11 +3934,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       .sort(
         (a, b) =>
           Number(
-            a.addedAt || 0
+            a.queueOrder || a.addedAt || 0
           ) -
           Number(
-            b.addedAt || 0
-          )
+            b.queueOrder || b.addedAt || 0
+          ) ||
+          String(a.queueId || "").localeCompare(String(b.queueId || ""))
       );
   }
 
@@ -14652,6 +14654,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   window.WT_CORE.createRoomWithVideo =
     createRoomWithVideo;
   window.WT_CORE.joinRoom = joinRoom;
+  window.WT_CORE.searchYoutube = searchYoutube;
+  window.WT_CORE.addToQueue = addToQueue;
+  window.WT_CORE.removeFromQueue = removeFromQueue;
+  window.WT_CORE.playQueueItem = playQueueItem;
   window.WT_CORE.sendChat = sendChat;
 
   window.WT_CORE.setMemberName = setMemberName;
