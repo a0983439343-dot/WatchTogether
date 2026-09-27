@@ -352,6 +352,7 @@
             actions += '<span class="muted">僅可查看</span>';
           } else {
             actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
+            actions += '<button class="btn" type="button" data-user-restrict="' + escapeHtml(uid) + '">🚫 功能限制</button>';
             if (active) {
               if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
                 actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
@@ -381,6 +382,16 @@
     $("accountsBody").querySelectorAll("[data-edit-user]").forEach(button => {
       button.addEventListener("click", () => openEditUser(button.dataset.editUser)
         .catch(error => { console.error(error); toast("載入使用者資料失敗"); }));
+    });
+    $("accountsBody").querySelectorAll("[data-user-restrict]").forEach(button => {
+      button.addEventListener("click", () => {
+        const uid = String(button.dataset.userRestrict || "").trim();
+        const input = $("ad2RestrictionUid");
+        if (input) input.value = uid;
+        const nav = document.querySelector('#app .nav-item[data-section="restrictions"]');
+        nav?.click();
+        input?.dispatchEvent(new Event("change"));
+      });
     });
     $("accountsBody").querySelectorAll("[data-block-user]").forEach(button => {
       button.addEventListener("click", () => openBlockUser(button.dataset.blockUser));
