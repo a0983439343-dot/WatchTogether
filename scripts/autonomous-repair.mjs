@@ -350,6 +350,168 @@ function normalizePatch(patch, allow, contextFiles) {
   return {file, find, replace, reason};
 }
 
+function nextFrontendVersion() {
+  const d = new Date();
+  const pad = value => String(value).padStart(2, "0");
+  const stamp =
+    String(d.getUTCFullYear()) +
+    pad(d.getUTCMonth() + 1) +
+    pad(d.getUTCDate()) +
+    "-v" +
+    pad(d.getUTCHours()) +
+    pad(d.getUTCMinutes()) +
+    pad(d.getUTCSeconds());
+  return {
+    formal: stamp.replace("-v", "-formal-v"),
+    withoutFormal: stamp
+  };
+}
+
+function replaceUnique(text, pattern, replacement, label) {
+  const matches = String(text || "").match(pattern);
+  if (!matches || matches.length !== 1) {
+    throw new Error("無法唯一更新資產版本：" + label);
+  }
+  return String(text || "").replace(pattern, replacement);
+}
+
+function ensureChangedFile(changed, original, file) {
+  if (!original.has(file)) {
+    const before = fs.readFile(path.join(ROOT, file), "utf8");
+    original.set(file, before);
+  }
+  return changed.has(file)
+    ? changed.get(file)
+    : original.get(file);
+}
+
+async function syncAssetVersions(changed, original) {
+  const frontendChanged = [
+    "index.html",
+    "src/js/app.js",
+    "src/js/enhancements.js",
+    "src/css/styles.css",
+    "src/js/bug-monitor.js",
+    "src/js/chat.js",
+    "sw.js"
+  ].some(file => changed.has(file));
+
+  if (frontendChanged) {
+    const indexBefore = changed.has("index.html")
+      ? changed.get("index.html")
+      : await readRepoFile("index.html");
+    if (!original.has("index.html")) original.set("index.html", await readRepoFile("index.html"));
+
+    const version = nextFrontendVersion();
+    let indexAfter = indexBefore;
+
+    if (
+      changed.has("src/js/app.js") ||
+      changed.has("src/js/enhancements.js") ||
+      changed.has("src/css/styles.css") ||
+      changed.has("sw.js")
+    ) {
+      indexAfter = indexAfter.replace(
+        /(src\/js\/app\.js\?v=)[^"'&]+/,
+        "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/enhancements\.js\?v=)[^"'&]+/,
+        "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/css\/styles\.css\?v=)[^"'&]+/,
+        "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
+        /(sw\.js\?v=)[^"'&]+/,
+        "$1" + version.formal
+      );
+    }
+
+    if (changed.has("src/js/bug-monitor.js")) {
+      indexAfter = indexAfter.replace(
+        /(src\/js\/bug-monitor\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-bug-")
+      );
+    }
+
+    if (changed.has("src/js/chat.js")) {
+      indexAfter = indexAfter.replace(
+        /(src\/js\/chat\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-chat-")
+      );
+    }
+
+    if (indexAfter === indexBefore && !changed.has("index.html")) {
+      throw new Error("前端版本同步失敗：沒有找到需要更新的資產參照");
+    }
+
+    if (indexAfter !== indexBefore) changed.set("index.html", indexAfter);
+
+    if (
+      changed.has("src/js/app.js") ||
+      changed.has("src/js/enhancements.js") ||
+      changed.has("src/css/styles.css") ||
+      changed.has("sw.js")
+    ) {
+      const swBefore = changed.has("sw.js")
+        ? changed.get("sw.js")
+        : await readRepoFile("sw.js");
+      if (!original.has("sw.js")) original.set("sw.js", await readRepoFile("sw.js"));
+      const swAfter = swBefore.replace(
+        /(wt-shell-)[^"'\s]+/,
+        "$1" + version.withoutFormal
+      );
+      if (swAfter !== swBefore) changed.set("sw.js", swAfter);
+      if (changed.has("src/js/app.js") && swAfter === swBefore) {
+        throw new Error("Service Worker cache 版本同步失敗");
+      }
+    }
+  }
+
+  const adminChanged = [
+    "admin/admin.js",
+    "admin/admin.css",
+    "admin/admin.html"
+  ].some(file => changed.has(file));
+
+  if (adminChanged) {
+    const adminBefore = changed.has("admin/admin.html")
+      ? changed.get("admin/admin.html")
+      : await readRepoFile("admin/admin.html");
+    if (!original.has("admin/admin.html")) {
+      original.set("admin/admin.html", await readRepoFile("admin/admin.html"));
+    }
+
+    if (changed.has("admin/admin.js") || changed.has("admin/admin.css")) {
+      const d = new Date();
+      const pad = value => String(value).padStart(2, "0");
+      const adminVersion =
+        String(d.getUTCFullYear()) +
+        pad(d.getUTCMonth() + 1) +
+        pad(d.getUTCDate()) +
+        "-admin-v" +
+        pad(d.getUTCHours()) +
+        pad(d.getUTCMinutes()) +
+        pad(d.getUTCSeconds());
+
+      let adminAfter = adminBefore.replace(
+        /(admin\.css\?v=)[^"'&]+/,
+        "$1" + adminVersion
+      );
+      adminAfter = adminAfter.replace(
+        /(admin\.js\?v=)[^"'&]+/,
+        "$1" + adminVersion
+      );
+      if (adminAfter === adminBefore) {
+        throw new Error("管理員資產版本同步失敗");
+      }
+      changed.set("admin/admin.html", adminAfter);
+    }
+  }
+}
+
 async function applyPatches(patches, allow, contextFiles) {
   const changed = new Map();
   const original = new Map();
@@ -377,6 +539,8 @@ async function applyPatches(patches, allow, contextFiles) {
       throw new Error("拒絕自動將 reports 設為公開寫入");
     }
   }
+
+  await syncAssetVersions(changed, original);
 
   for (const [file, content] of changed) {
     await fs.writeFile(path.join(ROOT, file), content, "utf8");
