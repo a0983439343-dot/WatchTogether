@@ -334,6 +334,22 @@
     catch(e){console.warn("[WT2] personal room load:",e);renderDirectory({},"personal");}
   }
 
+  async function deletePersonalRoom(roomId){
+    const db=window.db||window.firebase?.database?.();
+    const user=window.firebase?.auth?.().currentUser;
+    const id=String(roomId||"").trim().toUpperCase();
+    if(!db||!user||user.isAnonymous||!id)return;
+    if(!window.confirm("確定要刪除這個專屬房間嗎？\n刪除後房間將不再出現在你的房間中心。"))return;
+    const roomSnap=await db.ref("rooms/"+id).once("value");
+    const room=roomSnap.val()||{};
+    if(String(room.owner||"")!==String(user.uid||""))throw new Error("只有房主可以刪除專屬房間");
+    await db.ref("rooms/"+id).remove();
+    try{await db.ref("roomMeta/"+id).remove();}catch(error){console.warn("[WT2] roomMeta cleanup:",error);}
+    try{await db.ref("publicRooms/"+id).remove();}catch(_){}
+    try{await db.ref("profiles/"+user.uid+"/personalRooms/"+id).remove();}catch(error){console.warn("[WT2] personal index cleanup:",error);}
+    await renderPersonalRooms();
+  }
+
   async function renderPersonalRooms(){
     const user=window.firebase?.auth?.().currentUser,db=window.db||window.firebase?.database?.();
     const list=$("wt2PersonalRoomList"); if(!list)return;
@@ -341,11 +357,26 @@
     try{
       const snap=await db.ref("profiles/"+user.uid+"/personalRooms").once("value");
       const value=snap.val()||{};
-      const entries=Object.values(value).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
-      list.innerHTML=entries.length?entries.map(room=>'<button type="button" class="wt2-room-row" data-open-room="'+escapeHtml(room.roomId)+'"><span class="room-icon">🔐</span><span class="room-main"><strong>'+escapeHtml(room.name||"一起看")+'</strong><small>'+escapeHtml(room.roomId||"")+'</small></span><span class="room-go">進入 →</span></button>').join(""):'<div class="wt2-empty">還沒有專屬房間。建立一個就會永久保存在這裡。</div>';
-      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.WT_CORE?.joinRoom?.(b.dataset.openRoom)));
-    }catch(e){list.innerHTML='<div class="wt2-empty">無法載入專屬房間。</div>';console.warn("[WT2] personal room list",e);}
+      const entries=Object.values(value).filter(room=>room&&typeof room==="object")
+        .sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+      list.innerHTML=entries.length
+        ? entries.map(room=>{
+            const id=escapeHtml(room.roomId||"");
+            return '<article class="wt2-room-row"><span class="room-icon">🔐</span><span class="room-main"><strong>'+escapeHtml(room.name||"一起看")+'</strong><small>'+id+'</small></span><button type="button" class="room-go" data-open-room="'+id+'">進入 →</button><button type="button" class="room-delete" data-delete-room="'+id+'" title="刪除專屬房間">刪除</button></article>';
+          }).join("")
+        : '<div class="wt2-empty">還沒有專屬房間。建立一個就會永久保存在這裡。</div>';
+      list.querySelectorAll("[data-open-room]").forEach(button=>button.addEventListener("click",()=>{
+        window.WT_CORE?.joinRoom?.(button.dataset.openRoom).catch?.(error=>console.warn("[WT2] room join:",error));
+      }));
+      list.querySelectorAll("[data-delete-room]").forEach(button=>button.addEventListener("click",()=>{
+        void deletePersonalRoom(button.dataset.deleteRoom).catch(error=>console.warn("[WT2] room delete:",error));
+      }));
+    }catch(error){
+      list.innerHTML='<div class="wt2-empty">無法載入專屬房間。</div>';
+      console.warn("[WT2] personal room list",error);
+    }
   }
+
   async function renderPublicRooms(){
     const db=window.db||window.firebase?.database?.(),list=$("wt2PublicRoomList");
     if(!list||!db)return;
