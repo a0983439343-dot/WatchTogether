@@ -49,7 +49,6 @@
       }
     }catch(_){}
 
-    const user=currentUser();
     if(!user){
       $("wt2ScheduleError").textContent="請先使用 Google 登入。";
       $("wt2ScheduleModal").classList.remove("hidden");
