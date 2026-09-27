@@ -7912,18 +7912,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
     }
 
-    if (
-      !state.adminJoinOverride &&
-      !isRoomOwner &&
-      !isExistingMember &&
-      metaData.visibility === "public" &&
-      metaData.joinMode === "approval" &&
-      !approvedJoinRequest
-    ) {
-      await requestRoomJoinApproval(roomId);
-      return;
-    }
-
     const kickRemainingMs =
       await getKickRemainingMs(
         roomId,
