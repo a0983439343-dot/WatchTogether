@@ -81,12 +81,23 @@ async function authenticateAdmin(request,env){
 
   const roleSnap=await dbFetch(env,"admin/userRoles/"+uid,token);
   const roleId=String(roleSnap.data?.roleId||"").trim();
+  const PERMISSION_DB_KEYS={
+    "users.view":"users__view","users.ban":"users__ban","users.manage":"users__manage",
+    "rooms.view":"rooms__view","rooms.manage":"rooms__manage","reports.handle":"reports__handle",
+    "chat.moderate":"chat__moderate","analytics.view":"analytics__view","settings.edit":"settings__edit",
+    "maintenance.manage":"maintenance__manage","restrictions.manage":"restrictions__manage",
+    "roles.manage":"roles__manage","whitelist.manage":"whitelist__manage","ai.use":"ai__use",
+    "audit.view":"audit__view","audit.delete":"audit__delete"
+  };
+  const DB_TO_PERMISSION=Object.fromEntries(Object.entries(PERMISSION_DB_KEYS).map(([key,value])=>[value,key]));
   let permissions={};
   let deny={};
   let allow={};
   if(roleId){
     const roleSnap2=await dbFetch(env,"admin/roles/"+roleId,token);
-    Object.entries(roleSnap2.data?.permissions||{}).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
+    Object.entries(roleSnap2.data?.permissions||{}).forEach(([key,value])=>{
+      if(value===true && DB_TO_PERMISSION[key]) permissions[DB_TO_PERMISSION[key]]=true;
+    });
   }
   const override=await dbFetch(env,"admin/userPermissionOverrides/"+uid,token);
   allow=override.data?.allow||{};
