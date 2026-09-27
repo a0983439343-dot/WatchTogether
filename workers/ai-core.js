@@ -151,6 +151,12 @@ export default {
     }
 
     const ip=request.headers.get("CF-Connecting-IP")||"unknown";
+    const requestedMode = url.pathname==="/agent" ? "agent" : "chat";
+    const requestedFeature = requestedMode==="agent" ? "ai_agent" : "ai";
+    if(await isUserFeatureBlocked(env,firebaseIdToken,firebaseUser.sub,requestedFeature)){
+      return jsonResponse({error:{message:requestedMode==="agent"?"此帳號目前無法使用 AI Agent":"此帳號目前無法使用 AI"}},403,origin,allowedOrigin);
+    }
+
     if(rateLimited(ipBuckets,ip,IP_RATE_LIMIT) || rateLimited(userBuckets,firebaseUser.sub,USER_RATE_LIMIT)){
       return jsonResponse({error:{message:"AI 請求太頻繁，請稍候再試"}},429,origin,allowedOrigin);
     }
