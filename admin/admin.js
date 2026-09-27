@@ -640,7 +640,7 @@
     return id;
   }
 
-  const ADMIN_AI_REFRESH_MS = 10 * 60 * 1000;\n\n  async function scanUserReports(limit = 5) {
+  const ADMIN_AI_REFRESH_MS = 30 * 60 * 1000;\n\n  async function scanUserReports(limit = 5) {
     const entries = Object.entries(reports || {})
       .filter(([,item]) => item && (item.source === "manual" || item.source === "auto") && normalizeReportStatus(item.status) !== "resolved")
       .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0))
@@ -686,6 +686,7 @@
           verificationState:"failed",
           aiStatus:"unavailable",
           aiError:String(error?.message || "自動檢查失敗").slice(0,500),
+          aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
           verificationCheckedAt:firebase.database.ServerValue.TIMESTAMP
         }).catch(() => {});
       }
@@ -703,7 +704,7 @@
     try {
       const result = await runBugServiceVerify("all");
       const findings = Array.isArray(result?.checks) ? result.checks.filter(check => check && check.ok !== true) : [];
-      for (const finding of findings.slice(0,10)) {
+      for (const finding of findings.slice(0,3)) {
         const id = await upsertScannerFinding(finding,result);
         if (id) {
           try {
@@ -720,14 +721,21 @@
                 aiRootCause:String(ai.analysis.rootCause || "").slice(0,900),
                 aiSuggestion:String(ai.analysis.suggestion || "").slice(0,900),
                 aiModel:String(ai.model || "").slice(0,100),
-                aiCheckedAt:firebase.database.ServerValue.TIMESTAMP
+                aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
+                aiError:null
               });
             }
-          } catch (_) {}
+          } catch (error) {
+            await db.ref("reports/" + id).update({
+              aiStatus:"unavailable",
+              aiError:String(error?.message || "AI 分析失敗").slice(0,500),
+              aiCheckedAt:firebase.database.ServerValue.TIMESTAMP
+            }).catch(() => {});
+          }
         }
       }
 
-      await scanUserReports(5);
+      await scanUserReports(2);
 
       if (banner) {
         banner.textContent = findings.length
