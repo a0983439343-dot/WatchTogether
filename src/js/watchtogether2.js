@@ -522,6 +522,7 @@
       friends:[],
       polls:[],
       playlists:["queueList"],
+      playback_control:["playPauseBtn","syncNowBtn"],
       public_explore:[]
     };
     Object.entries(map).forEach(([feature,ids])=>{
@@ -537,6 +538,7 @@
     if(features.create_room) disabledLabels.push("建立房間");
     if(features.chat) disabledLabels.push("聊天室");
     if(features.playlists) disabledLabels.push("播放佇列");
+    if(features.playback_control) disabledLabels.push("播放控制");
     const existing=document.getElementById("wt2RestrictionNotice");
     if(disabledLabels.length){
       const notice=existing||document.createElement("div");
@@ -589,7 +591,7 @@
       showMaintenance(state);
     };
     try{
-      db.ref("system/publicMaintenance").on("value",snap=>{ void apply(snap.val()); });
+      db.ref("system/maintenance").on("value",snap=>{ void apply(snap.val()); });
       const auth=window.firebase?.auth?.();
       auth?.onAuthStateChanged(()=>{ void db.ref("system/maintenance").once("value").then(snap=>apply(snap.val())); });
     }catch(error){ console.warn("[WT2] maintenance listener:", error); }
