@@ -84,15 +84,17 @@
 
     const visibilityWrap=document.createElement("div");
     visibilityWrap.className="wt2-room-visibility-wrap";
-    visibilityWrap.innerHTML='<div class="wt2-section-label">房間類型</div><div class="wt2-visibility-options"><label class="wt2-visibility-option active"><input id="roomVisibilityInput" type="radio" name="wt2-room-visibility" value="personal" checked><span><strong>🔐 專屬房間</strong><small>與你的帳號綁定，永久保存</small></span></label><label class="wt2-visibility-option"><input type="radio" name="wt2-room-visibility" value="public"><span><strong>🌎 公開房間</strong><small>會出現在公開房間探索</small></span></label></div><div id="wt2VisibilityHint" class="wt2-visibility-hint">專屬房間會固定保留房主身份，不會因房主暫時離線而轉移。</div>';
+    visibilityWrap.innerHTML='<div class="wt2-section-label">房間類型</div><div class="wt2-visibility-options"><label class="wt2-visibility-option active"><input id="roomVisibilityInput" type="radio" name="wt2-room-visibility" value="personal" checked><span><strong>🔐 專屬房間</strong><small>與你的帳號綁定，永久保存</small></span></label><label class="wt2-visibility-option"><input type="radio" name="wt2-room-visibility" value="public"><span><strong>🌎 公開房間</strong><small>會出現在公開房間探索</small></span></label></div><div id="wt2PublicJoinModeWrap" class="wt2-public-join-mode hidden"><label for="wt2PublicJoinMode">公開房間加入方式<select id="wt2PublicJoinMode"><option value="open">立即加入</option><option value="approval">房主審核後加入</option></select></label></div><div id="wt2VisibilityHint" class="wt2-visibility-hint">專屬房間會固定保留房主身份，不會因房主暫時離線而轉移。</div>';
     const creatorPanel=document.querySelector(".creator-panel");
     const roomName=document.querySelector("#roomNameInput");
     if(creatorPanel && roomName) creatorPanel.insertBefore(visibilityWrap,roomName.nextElementSibling);
+    $("wt2PublicJoinModeWrap")?.classList.add("hidden");
     visibilityWrap.querySelectorAll("input[name=wt2-room-visibility]").forEach(input=>{
       input.addEventListener("change",()=>{
         visibilityWrap.querySelectorAll(".wt2-visibility-option").forEach(x=>x.classList.toggle("active",x.querySelector("input")===input));
         const hint=$("wt2VisibilityHint");
-        if(hint) hint.textContent=input.value==="public"?"公開房間會出現在探索列表；後續可從房間設定加入密碼/審核等進階加入方式。":"專屬房間會固定保留房主身份，不會因房主暫時離線而轉移。";
+        $("wt2PublicJoinModeWrap")?.classList.toggle("hidden",input.value!=="public");
+        if(hint) hint.textContent=input.value==="public"?"公開房間會出現在探索列表，可選立即加入或房主審核。":"專屬房間會固定保留房主身份，不會因房主暫時離線而轉移。";
       });
     });
 
