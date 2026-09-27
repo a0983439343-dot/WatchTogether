@@ -313,7 +313,7 @@
     }catch(error){console.warn("[WT2 Admin] audit:",error);}
   }
 
-  function readStat(id){return Number(($(id)?.textContent||"").replace(/[^d.-]/g,""))||0}
+  function readStat(id){return Number(($(id)?.textContent||"").replace(/[^\d.-]/g,""))||0}
   function renderAnalytics(){
     const data=[readStat("statAccounts"),readStat("statWhitelist"),readStat("statBlocked"),readStat("statRooms")];
     const labels=["帳號","白名單","封鎖","房間"];
