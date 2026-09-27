@@ -456,6 +456,7 @@ function blobToDataUrl(blob) {
 
 async function uploadMediaBlob(blob,type,name,targetUid) {
   var me = user();
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("uploads")) throw new Error("你的帳號目前無法使用檔案／圖片上傳");
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("聊天對象不存在");
   var conversationId = privateId(me.uid,targetUid);
