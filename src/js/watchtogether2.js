@@ -891,18 +891,37 @@
     }catch(error){console.warn("[WT2] feature flags:",error);}
   }
 
+  let restrictionRef=null;
+  let restrictionExpiryTimer=null;
+  function clearRestrictionSubscription(){
+    if(restrictionRef){try{restrictionRef.off();}catch(_){}restrictionRef=null;}
+    if(restrictionExpiryTimer){clearTimeout(restrictionExpiryTimer);restrictionExpiryTimer=null;}
+  }
+  function scheduleRestrictionExpiry(value){
+    if(restrictionExpiryTimer){clearTimeout(restrictionExpiryTimer);restrictionExpiryTimer=null;}
+    const until=Number(value?.blockedUntil||0);
+    if(until>0 && until>Date.now()){
+      restrictionExpiryTimer=setTimeout(()=>{
+        restrictionExpiryTimer=null;
+        applyUserRestrictions(null);
+      },Math.min(until-Date.now()+50,2147483647));
+    }
+  }
   function initRestrictionListener(){
     const tryAttach=()=>{
       const auth=window.firebase?.auth?.();
       const db=window.firebase?.database?.();
       if(!auth||!db){setTimeout(tryAttach,1000);return;}
       auth.onAuthStateChanged(user=>{
+        clearRestrictionSubscription();
         if(!user||user.isAnonymous){applyUserRestrictions(null);return;}
-        db.ref("admin/restrictionsByUid/"+user.uid).on("value",snap=>{
+        restrictionRef=db.ref("admin/restrictionsByUid/"+user.uid);
+        restrictionRef.on("value",snap=>{
           const value=snap.val()||null;
           const until=Number(value?.blockedUntil||0);
           if(value && until!==0 && until<=Date.now()){applyUserRestrictions(null);return;}
           applyUserRestrictions(value);
+          scheduleRestrictionExpiry(value);
         },error=>console.warn("[WT2] restriction listener:",error));
       });
     };
