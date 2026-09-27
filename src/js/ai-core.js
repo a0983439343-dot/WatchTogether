@@ -236,10 +236,20 @@
       tool_calls:calls
     });
 
+    const agentBlocked=await isFeatureBlocked("ai_agent");
     for(const call of calls){
       const name=String(call?.function?.name || "");
       let args={};
       try{args=JSON.parse(String(call?.function?.arguments || "{}"));}catch(_){}
+
+      if(agentBlocked){
+        conversation.push({
+          role:"tool",
+          tool_call_id:String(call.id || ""),
+          content:JSON.stringify({ok:false,blocked:true,message:"此帳號目前無法使用 AI Agent 操作工具"})
+        });
+        continue;
+      }
 
       if(TOOL_META[name]?.risk === "confirm"){
         const approved = window.confirm(
@@ -292,7 +302,6 @@
     const text=String(prompt || "").trim().slice(0,2000);
     if(!text) throw new Error("請先輸入內容");
     if(await isFeatureBlocked("ai")) throw new Error("你的帳號目前無法使用 AI");
-    if(await isFeatureBlocked("ai_agent")) throw new Error("你的帳號目前無法使用 AI Agent");
 
     const system = {
       role:"system",
