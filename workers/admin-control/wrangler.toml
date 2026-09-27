@@ -1,0 +1,8 @@
+name = "watchtogether-admin-control"
+main = "admin-control.js"
+compatibility_date = "2026-09-27"
+
+[vars]
+FIREBASE_PROJECT_ID = "watchtogether-3f4f9"
+ALLOWED_ORIGIN = "https://a0983439343-dot.github.io"
+MASTER_ADMIN_UID = "35d45a23-b648-4caf-a6d5-a69112860551"
