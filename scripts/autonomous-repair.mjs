@@ -511,7 +511,7 @@ async function applyPatches(patches, allow, contextFiles) {
     if (count !== 1) throw new Error("find 無法唯一匹配：" + patch.file + "，匹配數：" + count);
     const after = before.replace(patch.find, patch.replace);
     if (after === before) throw new Error("patch 沒有產生變更：" + patch.file);
-    if (after.length > 220000) throw new Error("修復後檔案過大：" + patch.file);
+    if (after.length > 450000) throw new Error("修復後檔案過大：" + patch.file);
     changed.set(patch.file, after);
   }
 
