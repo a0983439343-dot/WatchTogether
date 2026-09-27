@@ -1867,7 +1867,9 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/health") {
     send(res, 200, JSON.stringify({
       ok: true,
-      service: "watchtogether-youtube-proxy"
+      service: "watchtogether-youtube-proxy",
+      commit: String(process.env.RENDER_GIT_COMMIT || ""),
+      branch: String(process.env.RENDER_GIT_BRANCH || "")
     }));
     return;
   }
