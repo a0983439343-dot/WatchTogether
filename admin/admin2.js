@@ -2,7 +2,7 @@
   "use strict";
   const $=id=>document.getElementById(id);
   const DB=()=>window.db||window.firebase?.database?.();
-  const state={maintenance:null,chart:null,restrictionSelection:new Set(),rolePermissions:new Set(),customRoleId:"",customPermissions:new Set(),hasCustomRole:false};
+  const state={maintenance:null,chart:null,restrictionSelection:new Set(),rolePermissions:new Set(),customRoleId:"",customPermissions:new Set(),hasCustomRole:false,permissionOverrides:{allow:{},deny:{}}};
   const features=[
     ["建立房間","create_room"],["加入公開房間","join_public_room"],["聊天室","chat"],["播放控制","playback_control"],["AI","ai"],["AI Agent","ai_agent"],
     ["檔案/圖片上傳","uploads"],["好友系統","friends"],["投票","polls"],["播放清單","playlists"],["公開房間探索","public_explore"],["預約觀看","schedules"]
@@ -29,6 +29,8 @@
 
   function hasPermission(permission){
     if(isMaster())return true;
+    if(state.permissionOverrides?.deny?.[permission]===true)return false;
+    if(state.permissionOverrides?.allow?.[permission]===true)return true;
     if(!state.hasCustomRole)return true;
     return state.customPermissions.has(permission);
   }
@@ -180,6 +182,38 @@
     if(!uid||!roleId){$("ad2RoleHint").textContent="請先填角色 ID 與使用者 UID。";return}
     await DB().ref("admin/userRoles/"+uid).set({roleId,updatedAt:Date.now(),updatedBy:user.uid});
     $("ad2RoleHint").textContent="角色已套用。";
+  }
+
+  function renderOverridePermissions(){
+    const select=$("ad2OverridePermission");
+    if(!select)return;
+    select.innerHTML=permissions.map(p=>'<option value="'+escapeHtml(p)+'">'+escapeHtml(p)+'</option>').join("");
+  }
+
+  async function applyPermissionOverride(clear=false){
+    const db=DB(),user=window.firebase?.auth?.().currentUser;
+    const uid=String($("ad2OverrideUid")?.value||"").trim();
+    const permission=String($("ad2OverridePermission")?.value||"").trim();
+    const mode=String($("ad2OverrideMode")?.value||"deny");
+    const hint=$("ad2OverrideHint");
+    if(!db||!user||!uid||!permission){if(hint)hint.textContent="請填寫 UID 與權限。";return}
+    if(!isMaster()&&!hasPermission("roles.manage")){if(hint)hint.textContent="你沒有修改例外權限的權限。";return}
+    try{
+      const base="admin/userPermissionOverrides/"+uid;
+      const updates={};
+      if(clear){
+        updates[mode+"/"+permission]=null;
+      }else{
+        updates[mode+"/"+permission]=true;
+      }
+      updates.updatedAt=Date.now();
+      updates.updatedBy=user.uid;
+      await db.ref(base).update(updates);
+      await writeAudit(clear?"permissionOverride.clear":"permissionOverride.apply",uid,uid,(clear?"清除":"套用")+" "+mode+" 例外權限："+permission);
+      if(hint)hint.textContent=clear?"例外已清除。":"例外已套用。";
+    }catch(error){
+      if(hint)hint.textContent="操作失敗："+String(error?.message||error);
+    }
   }
 
   function renderFeatureChecks(){
@@ -427,7 +461,7 @@
   function refreshAll(){renderAnalytics();renderSecurity();void readMaintenance();void loadRestriction();void loadRestrictedUsers();void loadRoles();void loadFeatureFlags();}
   async function boot(){
     if(!document.querySelector("#app"))return;
-    renderNewUI();renderFeatureChecks();bindNav();
+    renderNewUI();renderFeatureChecks();renderOverridePermissions();bindNav();
     ensureAdminCommandPalette();
     await loadAdminPermissionContext();
     publishPermissionContext();
@@ -452,6 +486,8 @@
     }));
     $("ad2CopyRoleBtn")?.addEventListener("click",()=>{document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>x.checked=true);});
     $("ad2SaveRoleBtn")?.addEventListener("click",()=>saveRole().catch(e=>{console.error(e);$("ad2RoleHint").textContent="角色儲存失敗。";}));
+    $("ad2OverrideApply")?.addEventListener("click",()=>applyPermissionOverride(false));
+    $("ad2OverrideClear")?.addEventListener("click",()=>applyPermissionOverride(true));
     $("ad2RoleReload")?.addEventListener("click",()=>loadRoles());
     $("ad2FeatureFlagsSave")?.addEventListener("click",()=>saveFeatureFlags());
     void loadFeatureFlags();
