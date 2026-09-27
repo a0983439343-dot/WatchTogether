@@ -305,3 +305,11 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-feature-off{opacity:.45!important;filter:grayscale(.3)!important;cursor:not-allowed!important}
 .wt2-feature-notice{position:fixed;left:18px;top:74px;z-index:999;max-width:min(520px,calc(100vw - 36px));padding:9px 12px;border:1px solid rgba(243,191,99,.25);border-radius:12px;background:rgba(35,27,12,.95);color:#ffe7b1;font-size:11px;font-weight:800;box-shadow:0 14px 42px rgba(0,0,0,.35);backdrop-filter:blur(14px)}
 @media(max-width:760px){.wt2-feature-notice{left:12px;right:12px;top:62px;max-width:none}}
+
+.wt2-invite-manager{margin-top:10px;padding:10px;border:1px solid var(--wt2-border);border-radius:13px;background:rgba(255,255,255,.02)}
+.wt2-invite-form{display:flex;gap:7px}.wt2-invite-form input{flex:1;min-width:0}
+.wt2-invite-list{display:grid;gap:6px;margin-top:8px}
+.wt2-invite-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border:1px solid var(--wt2-border);border-radius:10px;background:rgba(255,255,255,.02)}
+.wt2-invite-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--wt2-text);font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.wt2-public-join-mode{margin-top:9px}.wt2-public-join-mode label{display:grid;gap:5px;color:var(--wt2-muted);font-size:10px;font-weight:900}
+.wt2-public-join-mode select{width:100%;min-height:38px;padding:6px 9px;border:1px solid var(--wt2-border);border-radius:10px;background:rgba(0,0,0,.18);color:var(--wt2-text)}
