@@ -1051,7 +1051,7 @@ async function handleAiTranslate(req, res) {
     return;
   }
 
-  const allowedTargets = new Set(["zh","en","ja","ko","es","fr","de","pt"]);
+  const allowedTargets = new Set(["zh","zh-TW","zh-CN","en","ja","ko","es","fr","de","pt","pt-BR","ru","it","th","vi","id","tr","ar"]);
   const target = allowedTargets.has(targetLanguage) ? targetLanguage : "zh";
 
   try {
