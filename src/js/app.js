@@ -639,12 +639,15 @@
   }
 
 
-  async function isCurrentUserFeatureRestricted(feature) {
+  async async function isCurrentUserFeatureRestricted(feature) {
     const uid = String(state.uid || auth?.currentUser?.uid || "").trim();
     if (!uid || !db || !feature) return false;
     try {
-      const snapshot = await db.ref("admin/restrictionsByUid/" + uid + "/features/" + feature).once("value");
-      return snapshot.val() === true;
+      const snapshot = await db.ref("admin/restrictionsByUid/" + uid).once("value");
+      const value = snapshot.val() || {};
+      const until = Number(value.blockedUntil || 0);
+      if (!(until === 0 || until > Date.now())) return false;
+      return value.features?.[feature] === true;
     } catch (_) {
       return false;
     }
