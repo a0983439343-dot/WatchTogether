@@ -262,39 +262,17 @@ async function verifyFirebaseBearer(authorization) {
   const token = value.slice(7).trim();
   if (!token) return {ok:false};
 
-  const apiKey = String(process.env.FIREBASE_WEB_API_KEY || "").trim();
-  if (!apiKey) return {ok:false, reason:"firebase_web_api_key_missing"};
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 7000);
   try {
-    const response = await fetch(
-      "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" + encodeURIComponent(apiKey),
-      {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({idToken:token}),
-        signal:controller.signal
-      }
-    );
-
-    if(!response.ok) return {ok:false};
-
-    const data=await response.json().catch(()=>({}));
-    const user=Array.isArray(data?.users) ? data.users[0] : null;
-    const uid=String(user?.localId||"").trim();
-    if(!uid) return {ok:false};
-
+    const payload=await verifyFirebaseIdTokenRender(token,FIREBASE_PROJECT_ID);
     return {
       ok:true,
-      uid,
-      email:String(user?.email||""),
-      emailVerified:Boolean(user?.emailVerified)
+      uid:String(payload.sub||""),
+      email:String(payload.email||""),
+      emailVerified:payload.email_verified===true,
+      token
     };
   } catch (_) {
     return {ok:false};
-  } finally {
-    clearTimeout(timer);
   }
 }
 
