@@ -156,7 +156,7 @@
     ].forEach(x=>addNav(x[0],x[1],x[2]));
     addSection("security",'<div class="section-head"><div><div class="eyebrow">SECURITY CENTER</div><h2>安全中心</h2></div><button class="btn primary" id="ad2SecurityRefresh">重新整理</button></div><div class="ad2-grid cols-4"><div class="ad2-card"><div class="ad2-kicker">AUTH</div><div class="ad2-kpi" id="ad2SecAccounts">—</div><div class="ad2-muted">目前帳號</div></div><div class="ad2-card"><div class="ad2-kicker">BLOCKS</div><div class="ad2-kpi" id="ad2SecBlocked">—</div><div class="ad2-muted">封鎖帳號</div></div><div class="ad2-card"><div class="ad2-kicker">REPORTS</div><div class="ad2-kpi" id="ad2SecReports">—</div><div class="ad2-muted">待處理回報</div></div><div class="ad2-card"><div class="ad2-kicker">MAINTENANCE</div><div class="ad2-kpi" id="ad2SecMaintenance">—</div><div class="ad2-muted">網站狀態</div></div></div><div class="ad2-card" style="margin-top:14px"><h3>安全控制項</h3><div class="ad2-list" id="ad2SecurityList"></div></div>');
     addSection("analytics",'<div class="section-head"><div><div class="eyebrow">ANALYTICS</div><h2>Analytics</h2></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>平台概況</h3><canvas id="ad2StatsChart" height="130"></canvas></div><div class="ad2-card"><h3>資料說明</h3><p>這裡只繪製目前 Admin 已讀取到的資料，不用假數據填圖。後續可再接 DAU、WAU、MAU、觀看時長等事件統計。</p><div class="ad2-list" id="ad2AnalyticsList"></div></div></div>');
-    addSection("maintenance",'<div class="section-head"><div><div class="eyebrow">MAINTENANCE CENTER</div><h2>網站維護 / 關站</h2></div><button class="btn" id="ad2MaintenanceReload">重新讀取</button></div><div class="ad2-card" style="margin-bottom:14px"><div class="ad2-form"><label>Admin Control Worker URL<input id="ad2MaintWorkerUrl" type="url" placeholder="https://你的-worker.workers.dev" autocomplete="off"></label><div class="ad2-row"><button class="btn" id="ad2MaintSetWorkerUrl">設定 Worker URL</button><span class="ad2-muted">只會儲存在這個管理員瀏覽器；真正的關站仍由 Worker + Firebase Token 驗證。</span></div></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-row"><div><div class="ad2-kicker">CURRENT STATUS</div><h3 id="ad2MaintStatus">讀取中…</h3></div><span id="ad2MaintChip" class="ad2-chip off">OFF</span></div><div class="ad2-list"><div class="ad2-list-row"><strong>開始時間</strong><span id="ad2MaintStart">—</span></div><div class="ad2-list-row"><strong>預計恢復</strong><span id="ad2MaintEnd">—</span></div></div></div><div class="ad2-card ad2-danger"><h3>🔴 關閉網站</h3><p>這會啟用全站維護畫面。一般使用者被擋下，管理員仍可進入 Admin。</p><div class="ad2-form"><label>維護原因<input id="ad2MaintMessage" maxlength="200" placeholder="例如：系統更新"></label><label>預計恢復時間<input id="ad2MaintEnds" type="datetime-local"></label><label>維護密碼<input id="ad2MaintPassword" type="password" autocomplete="current-password" placeholder="輸入已設定的維護密碼"></label><div class="ad2-confirm-box">按下確認前會再次詢問「確定要關閉網站嗎？」；密碼通過後才會寫入維護狀態。</div><div class="ad2-row"><button class="btn" id="ad2SetPasswordBtn">設定/變更維護密碼</button><button class="btn danger" id="ad2CloseSiteBtn">🔴 確定要關閉網站嗎？</button></div><button class="btn primary" id="ad2OpenSiteBtn">🟢 恢復網站</button><div class="ad2-muted" id="ad2MaintHint"></div></div></div></div>');
+    addSection("maintenance",'<div class="section-head"><div><div class="eyebrow">MAINTENANCE CENTER</div><h2>網站維護 / 關站</h2></div><button class="btn" id="ad2MaintenanceReload">重新讀取</button></div><div class="ad2-card" style="margin-bottom:14px"><div class="ad2-form"><label>Admin Control Worker URL<input id="ad2MaintWorkerUrl" type="url" placeholder="https://你的-worker.workers.dev" autocomplete="off"></label><div class="ad2-row"><button class="btn" id="ad2MaintSetWorkerUrl">設定 Worker URL</button><button class="btn" id="ad2MaintTestWorkerUrl">測試連線</button><span class="ad2-muted">網址會同步儲存在 Admin 設定；真正的關站仍由 Worker + Firebase Token 驗證。</span></div></div></div><div class="ad2-grid cols-2"><div class="ad2-card"><div class="ad2-row"><div><div class="ad2-kicker">CURRENT STATUS</div><h3 id="ad2MaintStatus">讀取中…</h3></div><span id="ad2MaintChip" class="ad2-chip off">OFF</span></div><div class="ad2-list"><div class="ad2-list-row"><strong>開始時間</strong><span id="ad2MaintStart">—</span></div><div class="ad2-list-row"><strong>預計恢復</strong><span id="ad2MaintEnd">—</span></div></div></div><div class="ad2-card ad2-danger"><h3>🔴 關閉網站</h3><p>這會啟用全站維護畫面。一般使用者被擋下，管理員仍可進入 Admin。</p><div class="ad2-form"><label>維護原因<input id="ad2MaintMessage" maxlength="200" placeholder="例如：系統更新"></label><label>預計恢復時間<input id="ad2MaintEnds" type="datetime-local"></label><label>維護密碼<input id="ad2MaintPassword" type="password" autocomplete="current-password" placeholder="輸入已設定的維護密碼"></label><div class="ad2-confirm-box">按下確認前會再次詢問「確定要關閉網站嗎？」；密碼通過後才會寫入維護狀態。</div><div class="ad2-row"><button class="btn" id="ad2SetPasswordBtn">設定/變更維護密碼</button><button class="btn danger" id="ad2CloseSiteBtn">🔴 確定要關閉網站嗎？</button></div><button class="btn primary" id="ad2OpenSiteBtn">🟢 恢復網站</button><div class="ad2-muted" id="ad2MaintHint"></div></div></div></div>');
     addSection("restrictions",'<div class="section-head"><div><div class="eyebrow">USER RESTRICTIONS</div><h2>指定使用者功能限制</h2></div><button class="btn" id="ad2RestrictionReload">重新整理</button></div><div class="ad2-grid cols-3"><div class="ad2-card"><div class="ad2-form"><label>使用者 UID<input id="ad2RestrictionUid" placeholder="Google 使用者 UID"></label><label>限制時間<select id="ad2RestrictionDuration"><option value="permanent">永久</option><option value="3600000">1 小時</option><option value="86400000">1 天</option><option value="604800000">7 天</option><option value="2592000000">30 天</option></select></label><label>原因<textarea id="ad2RestrictionReason" maxlength="300" placeholder="限制原因"></textarea></label></div><h3 style="margin-top:14px">限制功能</h3><div class="ad2-checks" id="ad2RestrictionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn danger" id="ad2ApplyRestriction">套用限制</button><button class="btn" id="ad2ClearRestriction">解除限制</button></div><div class="ad2-muted" id="ad2RestrictionHint"></div></div><div class="ad2-card"><h3>目前選定使用者</h3><div id="ad2RestrictionCurrent" class="ad2-list"><div class="ad2-muted">輸入 UID 後讀取。</div></div></div><div class="ad2-card"><h3>已設定功能限制</h3><div id="ad2RestrictionList" class="ad2-list"><div class="ad2-muted">載入中…</div></div></div></div>');
     addSection("roles",'<div class="section-head"><div><div class="eyebrow">ROLES & PERMISSIONS</div><h2>角色與權限</h2></div><button class="btn" id="ad2RoleReload">重新讀取</button></div><div class="ad2-grid cols-2"><div class="ad2-card"><h3>共用角色</h3><div class="ad2-form"><label>角色 ID<input id="ad2RoleId" maxlength="80" placeholder="例如 core_admin"></label><label>角色名稱<input id="ad2RoleName" maxlength="80" placeholder="例如 核心管理員"></label><label>指定使用者 UID（可留空）<input id="ad2RoleAssignUid" maxlength="128" placeholder="把此角色套用給一個使用者"></label></div><div class="ad2-list" id="ad2RoleList" style="margin-top:12px"></div><p class="ad2-muted" style="margin-top:10px">同一角色的使用者共用同一份權限定義；修改角色後，所有套用該角色的人一起更新。</p></div><div class="ad2-card"><h3>角色權限</h3><div class="ad2-checks" id="ad2PermissionChecks"></div><div class="ad2-row" style="margin-top:12px"><button class="btn" id="ad2CopyRoleBtn">全部允許</button><button class="btn" id="ad2MasterEquivalentBtn">套用與主帳號相同權限</button><button class="btn primary" id="ad2SaveRoleBtn">儲存角色</button></div><div class="ad2-muted" id="ad2RoleHint" style="margin-top:9px"></div></div></div>');
     addSection("ai",'<div class="section-head"><div><div class="eyebrow">AI CENTER</div><h2>AI 管理中心</h2></div></div><div class="ad2-grid cols-3"><div class="ad2-card"><h3>🧠 診斷</h3><p>分析錯誤、檢舉、房間與 API 異常。</p></div><div class="ad2-card"><h3>🔎 查詢</h3><p>用自然語言查 Admin 已授權資料。</p></div><div class="ad2-card"><h3>⚙️ Agent</h3><p>可執行管理工具，但刪除、停權、關站等高風險操作仍需人工確認。</p></div></div><div class="ad2-card" style="margin-top:14px"><div class="ad2-form"><label>詢問 AI<textarea id="ad2AiPrompt" placeholder="例如：最近有哪些房間異常？"></textarea></label><button class="btn primary" id="ad2AiAsk">送出分析</button></div><div id="ad2AiOutput" class="ad2-code" style="margin-top:12px"></div></div>');
@@ -439,18 +439,49 @@
     }catch(_){}
     return configured.replace(/\/+$/,"");
   }
-  function saveControlUrl(){
-    if(!isMaster()){toast("只有最高管理員可以設定 Admin Control Worker");return}
+  async function loadControlUrlFromDatabase(){
+    const db=DB();const user=window.firebase?.auth?.().currentUser;
+    if(!db||!user||user.isAnonymous)return;
+    try{
+      const snap=await db.ref("admin/settings/adminControlUrl").once("value");
+      const value=String(snap.val()||"").trim().replace(/\/+$/,"");
+      if(value){
+        try{localStorage.setItem("wt_admin_control_url",value);}catch(_){}
+        if($("ad2MaintWorkerUrl"))$("ad2MaintWorkerUrl").value=value;
+      }
+    }catch(error){
+      console.warn("[WT2 Admin] control URL settings:",error);
+    }
+  }
+  async function saveControlUrl(){
+    if(!hasPermission("settings.edit")){toast("你沒有設定 Admin Control Worker 的權限");return}
     const current=controlUrl();
     const value=String(prompt("輸入 Admin Control Worker URL",current)||"").trim().replace(/\/+$/,"");
     if(value && !/^https:\/\//i.test(value)){toast("Worker URL 必須使用 HTTPS");return}
     try{
+      await DB().ref("admin/settings/adminControlUrl").set(value);
       if(value)localStorage.setItem("wt_admin_control_url",value);
       else localStorage.removeItem("wt_admin_control_url");
-    }catch(_){}
+    }catch(error){
+      toast(error?.message||"Worker URL 儲存失敗");return;
+    }
     if($("ad2MaintWorkerUrl"))$("ad2MaintWorkerUrl").value=value;
-    if($("ad2MaintHint"))$("ad2MaintHint").textContent=value?"Admin Control Worker URL 已儲存。":"已清除本機 Worker URL。";
+    if($("ad2MaintHint"))$("ad2MaintHint").textContent=value?"Admin Control Worker URL 已同步給管理員。":"已清除 Admin Control Worker URL。";
+    await writeAudit("adminControl.url.update",window.firebase?.auth?.().currentUser?.uid||"","Admin Control Worker",value?"更新 Worker URL":"清除 Worker URL");
     void readMaintenance();
+  }
+  async function testControlUrl(){
+    const url=controlUrl();
+    const hint=$("ad2MaintHint");
+    if(!url){if(hint)hint.textContent="請先設定 Worker URL。";return}
+    try{
+      const response=await fetch(url+"/health",{method:"GET",cache:"no-store",credentials:"omit"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||data?.ok!==true)throw new Error(String(data?.error?.message||data?.error||"健康檢查失敗"));
+      if(hint)hint.textContent="Worker 連線成功："+String(data.service||"Admin Control");
+    }catch(error){
+      if(hint)hint.textContent="Worker 連線失敗："+String(error?.message||error);
+    }
   }
   async function controlRequest(payload,method="POST"){
     const url=controlUrl();
@@ -604,7 +635,9 @@
     applyPermissionVisibility();
     window.addEventListener("wt2-admin-role-ready",()=>applyPermissionVisibility());
     $("ad2MaintenanceReload")?.addEventListener("click",readMaintenance);
-    $("ad2MaintSetWorkerUrl")?.addEventListener("click",saveControlUrl);
+    $("ad2MaintSetWorkerUrl")?.addEventListener("click",()=>saveControlUrl().catch(e=>toast(e?.message||"Worker URL 設定失敗")));
+    $("ad2MaintTestWorkerUrl")?.addEventListener("click",()=>void testControlUrl());
+    void loadControlUrlFromDatabase();
     try{ if($("ad2MaintWorkerUrl"))$("ad2MaintWorkerUrl").value=controlUrl(); }catch(_){}
     $("ad2SetPasswordBtn")?.addEventListener("click",()=>setPassword().catch(e=>{console.error(e);$("ad2MaintHint").textContent="設定密碼失敗。"}));
     $("ad2CloseSiteBtn")?.addEventListener("click",()=>closeSite().catch(e=>{console.error(e);$("ad2MaintHint").textContent=e?.message||"關站失敗。"}));
