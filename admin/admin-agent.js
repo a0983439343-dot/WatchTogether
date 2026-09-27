@@ -94,5 +94,4 @@
 
 
   window.WT2_ADMIN_AI={run,tools};
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
