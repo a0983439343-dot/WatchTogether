@@ -280,3 +280,6 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-schedule-form{display:grid;gap:10px;padding:15px}.wt2-schedule-form label{display:block;color:var(--wt2-muted);font-size:10px;font-weight:900}.wt2-schedule-form input,.wt2-schedule-form select{display:block;width:100%;margin-top:5px;min-height:41px;padding:8px 10px;border:1px solid var(--wt2-border);border-radius:10px;background:rgba(0,0,0,.18);color:var(--wt2-text);outline:none}
 .wt2-schedule-error{min-height:16px;color:#ffafb8;font-size:10px}.wt2-schedule-actions{display:flex;justify-content:flex-end;gap:7px;padding:12px 15px;border-top:1px solid var(--wt2-border)}
 @media(max-width:760px){.wt2-schedule-panel-head{display:grid}.wt2-schedule-row{grid-template-columns:auto minmax(0,1fr)}.wt2-schedule-row>button{grid-column:2;justify-self:start}}
+
+.wt2-schedule-row-actions{display:flex;gap:5px;flex-wrap:wrap}.wt2-schedule-row-actions button:last-child{border-color:rgba(255,107,125,.22);background:rgba(255,107,125,.07)}
+@media(max-width:760px){.wt2-schedule-row-actions{grid-column:2;justify-self:start}}
