@@ -30,9 +30,8 @@ jobs:
             'workers/youtube-search.js',
             'workers/admin-control/admin-control.js'
           ];
-          for (const file of [...common, ...esm]) {
-            let source = fs.readFileSync(file, 'utf8');
-            if (esm.includes(file)) source = source.replace('export default {', 'const __worker = {');
+          for (const file of common) {
+            const source = fs.readFileSync(file, 'utf8');
             try {
               new Function(source);
               console.log('Syntax OK:', file);
@@ -40,6 +39,20 @@ jobs:
               console.error('Syntax ERROR:', file);
               console.error(error.message);
               process.exitCode = 1;
+            }
+          }
+          for (const file of esm) {
+            const source = fs.readFileSync(file, 'utf8');
+            const temp = '/tmp/' + file.split('/').join('_') + '.mjs';
+            fs.writeFileSync(temp, source);
+            const { spawnSync } = require('child_process');
+            const check = spawnSync(process.execPath, ['--check', temp], { encoding: 'utf8' });
+            if (check.status !== 0) {
+              console.error('ESM SYNTAX ERROR:', file);
+              console.error(check.stderr || check.stdout);
+              process.exitCode = 1;
+            } else {
+              console.log('ESM Syntax OK:', file);
             }
           }
           NODE
