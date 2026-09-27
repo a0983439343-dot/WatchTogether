@@ -69,15 +69,6 @@
       description: "讀取目前房間待播放清單",
       parameters: { type: "object", properties: {} }
     },
-    removeFromQueue: {
-      risk: "confirm",
-      description: "把指定項目從目前房間待播放清單移除",
-      parameters: {
-        type: "object",
-        properties: { queueId: { type: "string" } },
-        required: ["queueId"]
-      }
-    },
     playQueueItem: {
       risk: "confirm",
       description: "由房主播放指定待播放項目",
