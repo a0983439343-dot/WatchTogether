@@ -64,7 +64,7 @@ function corsHeaders(
       allowed,
 
     "Access-Control-Allow-Methods":
-      "GET, OPTIONS",
+      "GET, POST, OPTIONS",
 
     "Access-Control-Allow-Headers":
       allowHeaders,
@@ -611,6 +611,192 @@ export default {
     }
 
     if (
+      request.method === "POST" &&
+      url.pathname === "/translate"
+    ) {
+      if (
+        allowedOrigin !== "*" &&
+        origin !== allowedOrigin
+      ) {
+        return jsonResponse(
+          { error: { message: "不允許的來源" } },
+          403,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const authorization = request.headers.get("Authorization") || "";
+      const fallbackToken = request.headers.get("X-Firebase-ID-Token") || "";
+      const tokenMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+      const firebaseIdToken =
+        tokenMatch?.[1]?.trim() ||
+        fallbackToken.trim();
+
+      if (!firebaseIdToken) {
+        return jsonResponse(
+          { error: { message: "缺少登入驗證" } },
+          401,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const projectId = String(
+        env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID
+      ).trim();
+
+      let firebaseUser = null;
+      try {
+        firebaseUser = await verifyFirebaseIdToken(
+          firebaseIdToken,
+          projectId
+        );
+      } catch (_) {
+        return jsonResponse(
+          { error: { message: "登入驗證失敗" } },
+          401,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const ip =
+        request.headers.get("CF-Connecting-IP") || "unknown";
+
+      if (
+        isRateLimited(ipBuckets, ip, 12) ||
+        isRateLimited(userBuckets, firebaseUser.sub, 8)
+      ) {
+        return jsonResponse(
+          { error: { message: "翻譯太頻繁，請稍候再試" } },
+          429,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      let body = null;
+      try {
+        body = await request.json();
+      } catch (_) {
+        return jsonResponse(
+          { error: { message: "JSON 格式錯誤" } },
+          400,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const text = String(body?.text || "").trim();
+      const target = String(body?.targetLanguage || "zh").trim().slice(0, 16);
+
+      if (!text || text.length > 2000) {
+        return jsonResponse(
+          { error: { message: "文字長度錯誤" } },
+          400,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      if (!/^[A-Za-z-]{2,16}$/.test(target)) {
+        return jsonResponse(
+          { error: { message: "翻譯語言格式錯誤" } },
+          400,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translationUrl = String(env.TRANSLATION_API_URL || "").trim();
+      if (!translationUrl) {
+        return jsonResponse(
+          { error: { message: "Worker 尚未設定 TRANSLATION_API_URL" } },
+          503,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translationBody = new URLSearchParams({
+        q: text,
+        source: "auto",
+        target
+      });
+
+      const translationApiKey = String(
+        env.LIBRETRANSLATE_API_KEY || ""
+      ).trim();
+
+      if (translationApiKey) {
+        translationBody.set("api_key", translationApiKey);
+      }
+
+      let translationResponse;
+      try {
+        translationResponse = await fetch(translationUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: translationBody.toString()
+        });
+      } catch (_) {
+        return jsonResponse(
+          { error: { message: "翻譯服務目前無法連線" } },
+          502,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translatedData =
+        await translationResponse.json().catch(() => ({}));
+
+      if (!translationResponse.ok) {
+        return jsonResponse(
+          {
+            error: {
+              message:
+                String(
+                  translatedData?.error ||
+                  "第三方翻譯服務失敗"
+                ).slice(0, 240)
+            }
+          },
+          502,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translatedText = String(
+        translatedData?.translatedText || ""
+      ).trim();
+
+      if (!translatedText) {
+        return jsonResponse(
+          { error: { message: "翻譯服務沒有返回文字" } },
+          502,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      return jsonResponse(
+        {
+          translatedText,
+          source: "libretranslate",
+          targetLanguage: target
+        },
+        200,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    if (
       request.method !==
       "GET"
     ) {
@@ -618,7 +804,7 @@ export default {
         {
           error: {
             message:
-              "只允許 GET"
+              "只允許 GET 或 POST /translate"
           }
         },
         405,
