@@ -105,7 +105,7 @@
   function renderSecurity(){ if($("ad2SecAccounts"))$("ad2SecAccounts").textContent=readStat("statAccounts"); if($("ad2SecBlocked"))$("ad2SecBlocked").textContent=readStat("statBlocked"); if($("ad2SecReports"))$("ad2SecReports").textContent=readStat("statOpenReports"); if($("ad2SecMaintenance"))$("ad2SecMaintenance").textContent=state.maintenance?.enabled?"ON":"OFF"; const list=$("ad2SecurityList"); if(list)list.innerHTML=["Google Auth","Firebase Rules","Admin Whitelist","Audit Log","Maintenance Lock","User Restrictions"].map(x=>'<div class="ad2-list-row"><strong>'+x+'</strong><span class="ad2-chip on">ENABLED</span></div>').join(""); }
 
   function controlUrl(){
-    return String(window.WATCHTOGETHER_CONFIG?.adminControlUrl||"").trim().replace(/\\/+$/,"");
+    return String(window.WATCHTOGETHER_CONFIG?.adminControlUrl||"").trim().replace(/\/+$/,"");
   }
   async function controlRequest(payload,method="POST"){
     const url=controlUrl();
