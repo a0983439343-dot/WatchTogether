@@ -471,7 +471,7 @@
       },
       "featureFlags": {
         ".read": true,
-        ".write": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || ((root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() !== 'viewer') && root.child('admin').child('userRoles').child(auth.uid).child('roleId').exists() && root.child('admin').child('roles').child(root.child('admin').child('userRoles').child(auth.uid).child('roleId').val()).child('permissions').child('settings.edit').val() === true))",
+        ".write": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() !== 'viewer' && (!root.child('admin').child('userRoles').child(auth.uid).child('roleId').exists() || root.child('admin').child('roles').child(root.child('admin').child('userRoles').child(auth.uid).child('roleId').val()).child('permissions').child('settings.edit').val() === true)))",
         "$feature": {
           ".validate": "newData.isBoolean()"
         }
