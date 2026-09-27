@@ -88,6 +88,7 @@
   }
 
   function publishAdminContext() {
+    window.WT2_ADMIN_ROLE = currentRole;
     window.WT_ADMIN_CONTEXT = {
       getRole: () => currentRole,
       isAuthorized: () => currentHasAdminAccess,
