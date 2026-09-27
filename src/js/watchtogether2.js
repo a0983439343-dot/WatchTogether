@@ -238,6 +238,105 @@
     void renderPersonalRooms();
   }
 
+  async function renderJoinApprovalPanel(){
+    const roomState=window.WT_CORE?.state;
+    const roomView=$("roomView");
+    if(!roomView||!roomState)return;
+    const shouldShow=Boolean(
+      !roomView.classList.contains("hidden") &&
+      roomState.isOwner === true &&
+      String(roomState.room?.visibility || "") === "public" &&
+      String(roomState.room?.joinMode || "") === "approval"
+    );
+
+    let panel=$("wt2JoinApprovalPanel");
+    if(!shouldShow){
+      panel?.classList.add("hidden");
+      return;
+    }
+
+    if(!panel){
+      panel=document.createElement("section");
+      panel.id="wt2JoinApprovalPanel";
+      panel.className="wt2-join-approval-panel";
+      roomView.appendChild(panel);
+    }
+
+    panel.classList.remove("hidden");
+    const db=window.db||window.firebase?.database?.();
+    const roomId=String(roomState.roomId||"").trim().toUpperCase();
+    if(!db||!roomId){
+      panel.innerHTML='<strong>加入申請</strong><div class="wt2-empty">資料庫尚未就緒。</div>';
+      return;
+    }
+
+    try{
+      const snapshot=await db.ref("roomJoinRequests/"+roomId).once("value");
+      const requests=Object.values(snapshot.val()||{})
+        .filter(item=>item&&item.status==="pending"&&item.approved!==true)
+        .sort((a,b)=>Number(a.requestedAt||0)-Number(b.requestedAt||0));
+
+      panel.innerHTML='<div class="wt2-approval-head"><div><strong>加入申請</strong><span>'+requests.length+' 筆待處理</span></div><button type="button" id="wt2ApprovalRefresh">重新整理</button></div><div id="wt2ApprovalList"></div>';
+      const list=$("wt2ApprovalList");
+      if(!requests.length){
+        list.innerHTML='<div class="wt2-empty">目前沒有待審核的加入申請。</div>';
+      }else{
+        list.innerHTML=requests.map(item=>{
+          const uid=escapeHtml(item.uid||"");
+          const name=escapeHtml(item.name||"玩家");
+          const id=escapeHtml(item.uid||"");
+          return '<div class="wt2-approval-row"><div><strong>'+name+'</strong><small>'+id+'</small></div><div class="wt2-approval-actions"><button type="button" data-approve="'+uid+'">核准</button><button type="button" data-reject="'+uid+'">拒絕</button></div></div>';
+        }).join("");
+      }
+
+      list?.querySelectorAll("[data-approve]").forEach(button=>{
+        button.addEventListener("click",async()=>{
+          const uid=String(button.dataset.approve||"");
+          if(!uid)return;
+          button.disabled=true;
+          try{
+            await db.ref("roomJoinRequests/"+roomId+"/"+uid).update({
+              status:"approved",
+              approved:true,
+              approvedAt:firebase.database.ServerValue.TIMESTAMP,
+              approvedBy:roomState.uid
+            });
+            await renderJoinApprovalPanel();
+          }catch(error){
+            console.error("核准加入申請失敗:",error);
+            button.disabled=false;
+          }
+        });
+      });
+
+      list?.querySelectorAll("[data-reject]").forEach(button=>{
+        button.addEventListener("click",async()=>{
+          const uid=String(button.dataset.reject||"");
+          if(!uid)return;
+          button.disabled=true;
+          try{
+            await db.ref("roomJoinRequests/"+roomId+"/"+uid).update({
+              status:"rejected",
+              approved:false,
+              rejectedAt:firebase.database.ServerValue.TIMESTAMP,
+              rejectedBy:roomState.uid
+            });
+            await renderJoinApprovalPanel();
+          }catch(error){
+            console.error("拒絕加入申請失敗:",error);
+            button.disabled=false;
+          }
+        });
+      });
+
+      $("wt2ApprovalRefresh")?.addEventListener("click",()=>void renderJoinApprovalPanel());
+    }catch(error){
+      console.warn("[WT2] join approval:",error);
+      panel.innerHTML='<strong>加入申請</strong><div class="wt2-empty">目前無法讀取加入申請。</div>';
+    }
+  }
+
+
   function watchRoomState(){
     const roomView=$("roomView");
     if(!roomView) return;
@@ -246,6 +345,10 @@
       if(inRoom) setActive("rooms");
     });
     observer.observe(roomView,{attributes:true,attributeFilter:["class"]});
+    void renderJoinApprovalPanel();
+    const timer=setInterval(()=>void renderJoinApprovalPanel(),5000);
+    roomView.dataset.wt2ApprovalTimer="1";
+    roomView.addEventListener("wt2-room-state-changed",()=>void renderJoinApprovalPanel());
   }
 
   function initSortableQueue(){
