@@ -49,6 +49,29 @@
         properties: { text: { type: "string" } },
         required: ["text"]
       }
+    },
+    getQueue: {
+      risk: "safe",
+      description: "讀取目前房間待播放清單",
+      parameters: { type: "object", properties: {} }
+    },
+    removeFromQueue: {
+      risk: "confirm",
+      description: "把指定項目從目前房間待播放清單移除",
+      parameters: {
+        type: "object",
+        properties: { queueId: { type: "string" } },
+        required: ["queueId"]
+      }
+    },
+    playQueueItem: {
+      risk: "confirm",
+      description: "由房主播放指定待播放項目",
+      parameters: {
+        type: "object",
+        properties: { queueId: { type: "string" } },
+        required: ["queueId"]
+      }
     }
   };
 
@@ -157,6 +180,38 @@
       if(typeof fn !== "function") throw new Error("建立房間功能尚未準備完成");
       await fn();
       return {ok:true,message:"房間建立完成",roomId:String(window.WT_CORE?.state?.roomId || "")};
+    }
+
+    if(name === "getQueue"){
+      const s = window.WT_CORE?.state;
+      const queue = s?.queue || {};
+      const items = Object.entries(queue).map(([queueId,item])=>({
+        queueId,
+        id:String(item?.id||""),
+        platform:String(item?.platform||""),
+        title:String(item?.title||"未命名影片"),
+        addedByName:String(item?.addedByName||""),
+        queueOrder:Number(item?.queueOrder||item?.addedAt||0)
+      })).sort((a,b)=>a.queueOrder-b.queueOrder);
+      return {ok:true,items};
+    }
+
+    if(name === "removeFromQueue"){
+      const fn = window.WT_CORE?.removeFromQueue;
+      if(typeof fn !== "function") throw new Error("待播放清單功能尚未準備完成");
+      const queueId = String(parsed.queueId || "").trim();
+      if(!queueId) throw new Error("queueId 不能為空");
+      await fn(queueId);
+      return {ok:true,message:"已從待播放清單移除"};
+    }
+
+    if(name === "playQueueItem"){
+      const fn = window.WT_CORE?.playQueueItem;
+      if(typeof fn !== "function") throw new Error("播放佇列功能尚未準備完成");
+      const queueId = String(parsed.queueId || "").trim();
+      if(!queueId) throw new Error("queueId 不能為空");
+      await fn(queueId);
+      return {ok:true,message:"已切換到指定待播放項目"};
     }
 
     if(name === "sendChat"){
