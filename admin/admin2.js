@@ -425,7 +425,7 @@
     await writeAudit(clear?"userRestriction.clear":"userRestriction.apply",uid,uid,clear?"解除指定使用者功能限制":"套用指定使用者功能限制");
     $("ad2RestrictionHint").textContent=clear?"限制已解除。":"功能限制已套用。";await loadRestriction();
   }
-  function refreshAll(){renderAnalytics();renderSecurity();readMaintenance();loadRestriction();}
+  function refreshAll(){renderAnalytics();renderSecurity();void readMaintenance();void loadRestriction();void loadRestrictedUsers();void loadRoles();void loadFeatureFlags();}
   async function boot(){
     if(!document.querySelector("#app"))return;
     renderNewUI();renderFeatureChecks();bindNav();
