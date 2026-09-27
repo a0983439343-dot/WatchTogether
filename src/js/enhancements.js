@@ -1817,6 +1817,7 @@ function formatDate(value) {
 async function sendPrivateText(text) {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
+  if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   text = String(text || "").trim().slice(0,300);
   if (!text) return;
   var id = await ensureConversation(wt.state.selectedFriendUid);
@@ -1828,6 +1829,7 @@ async function sendPrivateText(text) {
 async function sendPrivateSticker(sticker) {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
+  if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var id = await ensureConversation(wt.state.selectedFriendUid);
   await wt.db.ref("conversations/" + id + "/messages").push({
     uid:user.uid,name:wt.currentName(),type:"sticker",sticker:String(sticker || "😊").slice(0,4),createdAt:wt.serverTs()
@@ -1836,6 +1838,20 @@ async function sendPrivateSticker(sticker) {
 }
 
 function openFriends() {
+  if (wt.auth.currentUser && !wt.auth.currentUser.isAnonymous) {
+    void isFeatureBlocked("friends").then(function(blocked){
+      if (blocked) { wt.toast("你的帳號目前無法使用好友功能"); return; }
+      buildFriendsModal();
+      if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
+      wt.openModal("wtFriendsModal");
+      void loadFriends();
+      listenRequests();
+      renderFriends();
+      renderRequests();
+      updatePrivateHeader();
+    });
+    return;
+  }
   buildFriendsModal();
   if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
   wt.openModal("wtFriendsModal");
