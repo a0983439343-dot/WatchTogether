@@ -10,6 +10,45 @@ const RATE_WINDOW_MS = 60 * 1000;
 const IP_RATE_LIMIT = 20;
 const USER_RATE_LIMIT = 12;
 const MAX_BODY_BYTES = 32 * 1024;
+const DEFAULT_FIREBASE_DATABASE_URL =
+  "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app";
+const PROVIDER_TIMEOUT_MS = 25 * 1000;
+
+async function isUserFeatureBlocked(env, token, uid, feature){
+  if(!token || !uid || !feature) return false;
+  const base=String(env.FIREBASE_DATABASE_URL||DEFAULT_FIREBASE_DATABASE_URL).trim().replace(/\\/$/,"");
+  const url=base+"/admin/restrictionsByUid/"+encodeURIComponent(uid)+"/features/"+encodeURIComponent(feature)+".json?auth="+encodeURIComponent(token);
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),5000);
+  try{
+    const response=await fetch(url,{method:"GET",cache:"no-store",signal:controller.signal});
+    if(!response.ok) return true;
+    return (await response.json().catch(()=>false))===true;
+  }catch(_){
+    return true;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function normalizeProviderMessage(message, mode){
+  if(!message || typeof message!=="object") return null;
+  const out={
+    role:"assistant",
+    content:typeof message.content==="string" ? message.content.slice(0,8000) : ""
+  };
+  if(mode==="agent" && Array.isArray(message.tool_calls)){
+    out.tool_calls=message.tool_calls.slice(0,6).map((call,index)=>({
+      id:String(call?.id||("call_"+Date.now()+"_"+index)).slice(0,100),
+      type:"function",
+      function:{
+        name:String(call?.function?.name||"").slice(0,80),
+        arguments:String(call?.function?.arguments||"{}").slice(0,4000)
+      }
+    })).filter(call=>/^[A-Za-z_][A-Za-z0-9_-]{0,79}$/.test(call.function.name));
+  }
+  return out;
+}
 
 const ipBuckets = new Map();
 const userBuckets = new Map();
@@ -83,8 +122,15 @@ export default {
       return jsonResponse({error:{message:"不允許的來源"}},403,origin,allowedOrigin);
     }
 
+    if(request.method==="POST"){
+      const contentType=String(request.headers.get("Content-Type")||"").trim();
+      if(!/^application\\/json(?:\\s*;|$)/i.test(contentType)){
+        return jsonResponse({error:{message:"Content-Type 必須是 application/json"}},415,origin,allowedOrigin);
+      }
+    }
+
     const contentLength=Number(request.headers.get("Content-Length")||0);
-    if(contentLength>MAX_BODY_BYTES){
+    if(Number.isFinite(contentLength) && contentLength>MAX_BODY_BYTES){
       return jsonResponse({error:{message:"請求內容過大"}},413,origin,allowedOrigin);
     }
 
@@ -111,9 +157,21 @@ export default {
 
     let body;
     try{
-      body=await request.json();
+      const rawBody=await request.text();
+      if(new TextEncoder().encode(rawBody).byteLength>MAX_BODY_BYTES){
+        return jsonResponse({error:{message:"請求內容過大"}},413,origin,allowedOrigin);
+      }
+      body=JSON.parse(rawBody);
     }catch(_){
       return jsonResponse({error:{message:"JSON 格式錯誤"}},400,origin,allowedOrigin);
+    }
+    if(!body || typeof body!=="object" || Array.isArray(body)){
+      return jsonResponse({error:{message:"請求內容必須是 JSON 物件"}},400,origin,allowedOrigin);
+    }
+
+    const feature= url.pathname==="/agent" ? "ai_agent" : "ai";
+    if(await isUserFeatureBlocked(env,firebaseIdToken,firebaseUser.sub,feature)){
+      return jsonResponse({error:{message:"此帳號目前無法使用此 AI 功能"}},403,origin,allowedOrigin);
     }
 
     const messages=normalizeMessages(body?.messages);
@@ -130,6 +188,9 @@ export default {
     if(!apiUrl){
       return jsonResponse({error:{message:"AI Core 尚未設定 AI_API_URL"}},503,origin,allowedOrigin);
     }
+    if(!/^https:\\/\\//i.test(apiUrl)){
+      return jsonResponse({error:{message:"AI_API_URL 必須使用 HTTPS"}},503,origin,allowedOrigin);
+    }
 
     const payload={
       model,
@@ -141,6 +202,8 @@ export default {
     if(mode==="agent" && body?.tool_choice) payload.tool_choice=body.tool_choice;
 
     let response;
+    const providerController=new AbortController();
+    const providerTimer=setTimeout(()=>providerController.abort(),PROVIDER_TIMEOUT_MS);
     try{
       response=await fetch(apiUrl,{
         method:"POST",
@@ -149,13 +212,22 @@ export default {
           "Accept":"application/json",
           ...(apiKey?{"Authorization":"Bearer "+apiKey}:{})
         },
-        body:JSON.stringify(payload)
+        body:JSON.stringify(payload),
+        signal:providerController.signal
       });
-    }catch(_){
-      return jsonResponse({error:{message:"AI Provider 無法連線"}},502,origin,allowedOrigin);
+    }catch(error){
+      return jsonResponse({error:{message:error?.name==="AbortError"?"AI Provider 逾時":"AI Provider 無法連線"}},502,origin,allowedOrigin);
+    }finally{
+      clearTimeout(providerTimer);
     }
 
-    const data=await response.json().catch(()=>({}));
+    const responseText=await response.text();
+    let data={};
+    try{
+      data=responseText?JSON.parse(responseText):{};
+    }catch(_){
+      return jsonResponse({error:{message:"AI Provider 回傳無效 JSON"}},502,origin,allowedOrigin);
+    }
     if(!response.ok){
       return jsonResponse({
         error:{
@@ -164,7 +236,7 @@ export default {
       },502,origin,allowedOrigin);
     }
 
-    const message=data?.choices?.[0]?.message;
+    const message=normalizeProviderMessage(data?.choices?.[0]?.message,mode);
     if(!message){
       return jsonResponse({error:{message:"AI Provider 沒有返回有效結果"}},502,origin,allowedOrigin);
     }
