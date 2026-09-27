@@ -58,12 +58,12 @@ async function authenticateAdmin(request,env){
   const uid=String(claims?.sub||claims?.user_id||"").trim();
   if(!uid)return {ok:false,status:401};
 
-  if(uid===env.MASTER_ADMIN_UID)return {ok:true,uid,token,role:"master"};
+  if(uid===env.MASTER_ADMIN_UID)return {ok:true,uid,token,role:"master",email:String(claims.email||"")};
 
   const r=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
   const item=r.data;
   if(item?.uid===uid && item?.enabled===true && ["admin","master"].includes(String(item.role||"admin"))){
-    return {ok:true,uid,token,role:String(item.role||"admin")};
+    return {ok:true,uid,token,role:String(item.role||"admin"),email:String(claims.email||"")};
   }
 
   return {ok:false,status:404};
@@ -104,6 +104,21 @@ async function verifyMaintenancePassword(env,ctx,password){
   if(ok) clearPasswordFailures(key); else recordPasswordFailure(key);
   return ok;
 }
+async function writeAudit(env,ctx,action,targetUid,targetName,details){
+  try{
+    await dbFetch(env,"admin/auditLogs.json",ctx.token,"POST",{
+      action:String(action||"admin").slice(0,40),
+      actorUid:String(ctx.uid||"").slice(0,128),
+      actorEmail:String(ctx.email||"").slice(0,320),
+      actorRole:String(ctx.role||"admin").slice(0,40),
+      targetUid:String(targetUid||"").slice(0,128),
+      targetName:String(targetName||"").slice(0,200),
+      details:String(details||"").slice(0,1000),
+      createdAt:Date.now()
+    });
+  }catch(_){}
+}
+
 async function writeMaintenance(env,ctx,data){
   return dbFetch(env,"system/maintenance",ctx.token,"PUT",data);
 }
@@ -145,6 +160,7 @@ export default {
       const r=await dbFetch(env,"admin/security/maintenanceCredential",ctx.token,"PUT",{
         hash,salt,iterations,updatedAt:Date.now(),updatedBy:ctx.uid
       });
+      if(r.ok) await writeAudit(env,ctx,"maintenance.password.update",ctx.uid,ctx.email,"更新網站維護密碼");
       return json({ok:r.ok},r.ok?200:502,origin);
     }
 
@@ -159,6 +175,7 @@ export default {
         enabled:true,mode:String(body.mode||"maintenance"),message,
         startedAt:Date.now(),endsAt:Number.isFinite(endsAt)?endsAt:0,updatedAt:Date.now(),updatedBy:ctx.uid
       });
+      if(r.ok) await writeAudit(env,ctx,"maintenance.enable",ctx.uid,ctx.email,"啟用網站維護模式："+message);
       return json({ok:r.ok},r.ok?200:502,origin);
     }
 
@@ -168,6 +185,7 @@ export default {
         return json({ok:false,error:"invalid_password"},403,origin);
       }
       const r=await writeMaintenance(env,ctx,{enabled:false,updatedAt:Date.now(),updatedBy:ctx.uid});
+      if(r.ok) await writeAudit(env,ctx,"maintenance.disable",ctx.uid,ctx.email,"恢復網站服務");
       return json({ok:r.ok},r.ok?200:502,origin);
     }
 
