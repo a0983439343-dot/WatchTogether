@@ -3860,8 +3860,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
-    if (!state.isOwner) {
-      throw new Error("只有房主可以播放待播放清單");
+    if (!canControlRoomPlayback()) {
+      throw new Error("只有房主或副房主可以播放待播放清單");
     }
 
     if (!state.uid || !state.roomId) {
@@ -4000,7 +4000,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 "
               >
 
-                ${state.isOwner ? `<div class="wt2-queue-drag-handle" title="拖曳排序" aria-label="拖曳排序">⠿</div>` : ""}
+                ${canControlRoomPlayback() ? `<div class="wt2-queue-drag-handle" title="拖曳排序" aria-label="拖曳排序">⠿</div>` : ""}
 
                 <div
                   style="
@@ -4176,7 +4176,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function playNextQueueItem() {
     cancelScheduledQueuePlayback();
 
-    if (!state.isOwner) {
+    if (!canControlRoomPlayback()) {
       return false;
     }
 
@@ -4344,6 +4344,19 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
   }
 
+  function isRoomCoHost() {
+    return (
+      !state.isOwner &&
+      String(
+        state.roomRoles?.[state.uid]?.role || ""
+      ).toLowerCase() === "cohost"
+    );
+  }
+
+  function canControlRoomPlayback() {
+    return state.isOwner || isRoomCoHost();
+  }
+
   function nativeYoutubeGuestActionAllowed(
     kind = ""
   ) {
@@ -4369,7 +4382,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     kind = ""
   ) {
     if (
-      !state.isOwner ||
+      !canControlRoomPlayback() ||
       !state.playerReady ||
       !state.player ||
       state.playerType !== "youtube" ||
@@ -9403,7 +9416,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     endedOverride = false
   ) {
     if (
-      !state.isOwner ||
+      !canControlRoomPlayback() ||
       !state.uid ||
       !state.roomId ||
       !state.playerReady ||
