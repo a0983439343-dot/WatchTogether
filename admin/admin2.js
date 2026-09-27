@@ -81,7 +81,6 @@
       document.querySelectorAll('#app [data-section="'+section+'"]').forEach(node=>{
         node.classList.toggle("hidden",!allowed);
       });
-      if(sectionNode) {}
       if(section === "accounts" || section === "rooms" || section === "reports"){
         // Fine-grained button visibility for legacy Admin 2.0 sections is applied below.
       }
