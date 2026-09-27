@@ -46,7 +46,7 @@
     if(!source) throw new Error("沒有可翻譯的內容");
 
     const config = getConfig();
-    const endpoint = String(config.translationUrl || "").trim().replace(//+$/,"");
+    const endpoint = String(config.translationUrl || "").trim().replace(/\/+$/,"");
     if(!endpoint) throw new Error("翻譯服務尚未設定");
 
     const target = targetLanguage();
