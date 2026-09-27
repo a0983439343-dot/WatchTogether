@@ -184,6 +184,7 @@
     }
     const snapshot = await db.ref("accounts").once("value");
     accounts = snapshot.val() || {};
+    publishAdminContext();
     renderAccounts();
     updateStats();
   }
@@ -231,6 +232,7 @@
     }
     const snapshot = await db.ref("admin/blocksByUid").once("value");
     blocks = snapshot.val() || {};
+    publishAdminContext();
     renderAccounts();
     updateStats();
   }
@@ -267,6 +269,7 @@
     });
 
     rooms = valid;
+    publishAdminContext();
     renderRooms();
     updateStats();
   }
@@ -575,6 +578,7 @@
     }
     const snapshot = await db.ref("admin/auditLogs").limitToLast(300).once("value");
     auditLogs = snapshot.val() || {};
+    publishAdminContext();
     renderAuditLogs();
   }
 
