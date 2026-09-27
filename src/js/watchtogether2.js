@@ -140,6 +140,7 @@
     bindQuickActions();
     bindDirectoryTabs();
     bindAiPanel();
+    installDynamicFeatureGuard();
     bindThemePicker();
     bindAccountCard();
     watchRoomState();
@@ -779,6 +780,19 @@
     }catch(error){console.warn("[WT2] Sortable init failed",error);}
   }
 
+  let dynamicFeatureGuardObserver=null;
+
+  function installDynamicFeatureGuard(){
+    if(dynamicFeatureGuardObserver||!document.body)return;
+    dynamicFeatureGuardObserver=new MutationObserver(()=>{
+      const globalFlags=window.__WT2_GLOBAL_FEATURE_FLAGS__||{};
+      const userFeatures=window.__WT2_BLOCKED_FEATURES__||{};
+      setTranslationButtonsBlocked(globalFlags.translation===false||userFeatures.translation===true,"wt2-feature-disabled");
+      setPublicJoinBlocked(globalFlags.join_public_room===false||userFeatures.join_public_room===true,"wt2-feature-disabled");
+    });
+    dynamicFeatureGuardObserver.observe(document.body,{childList:true,subtree:true});
+  }
+
   function setFeatureNodesBlocked(ids,blocked,sourceClass){
     (ids||[]).forEach(id=>{
       const node=$(id);
@@ -825,6 +839,7 @@
 
   function applyGlobalFeatureFlags(flags){
     const normalized=flags&&typeof flags==="object"?flags:{};
+    window.__WT2_GLOBAL_FEATURE_FLAGS__=Object.assign({},normalized);
     const map={
       create_room:["createRoomBtn"],
       join_public_room:[],
@@ -881,6 +896,7 @@
 
   function applyUserRestrictions(value){
     const features=value?.features||{};
+    window.__WT2_BLOCKED_FEATURES__=Object.fromEntries(Object.entries(features).filter(([,blocked])=>blocked===true));
     const map={
       create_room:["createRoomBtn"],
       join_public_room:[],
