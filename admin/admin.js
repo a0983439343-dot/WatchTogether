@@ -1640,16 +1640,20 @@
   }
 
   function restoreAdminSection() {
-    let section = "overview";
-    try {
-      section =
-        localStorage.getItem("watchtogether-admin-section") ||
-        sessionStorage.getItem("watchtogether-admin-section") ||
-        "overview";
-    } catch (_) {
+    let section = String(window.location.hash || "").replace(/^#/, "").trim();
+    if (!section) {
       try {
-        section = sessionStorage.getItem("watchtogether-admin-section") || "overview";
-      } catch (__) {}
+        section =
+          localStorage.getItem("watchtogether-admin-section") ||
+          sessionStorage.getItem("watchtogether-admin-section") ||
+          "overview";
+      } catch (_) {
+        try {
+          section = sessionStorage.getItem("watchtogether-admin-section") || "overview";
+        } catch (__) {
+          section = "overview";
+        }
+      }
     }
     const validSections = new Set(Array.from(document.querySelectorAll(".nav-item")).map(btn => btn.dataset.section));
     if (!validSections.has(section)) section = "overview";
@@ -1660,6 +1664,11 @@
     btn.classList.add("active");
     document.querySelectorAll(".admin-section").forEach(x => x.classList.add("hidden"));
     show("section-" + btn.dataset.section);
+    try { history.replaceState(null, "", "#" + btn.dataset.section); } catch (_) {}
+    try {
+      localStorage.setItem("watchtogether-admin-section", btn.dataset.section);
+      sessionStorage.setItem("watchtogether-admin-section", btn.dataset.section);
+    } catch (_) {}
   }
 
   function setupEvents() {
@@ -1673,6 +1682,7 @@
       btn.classList.add("active");
       document.querySelectorAll(".admin-section").forEach(section => section.classList.add("hidden"));
       show("section-" + btn.dataset.section);
+      try { history.replaceState(null, "", "#" + btn.dataset.section); } catch (_) {}
       try {
         localStorage.setItem("watchtogether-admin-section", btn.dataset.section);
         sessionStorage.setItem("watchtogether-admin-section", btn.dataset.section);
