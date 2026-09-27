@@ -291,3 +291,13 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 .wt2-directory-count{color:var(--wt2-muted);font-size:10px;font-weight:900;white-space:nowrap}
 .wt2-room-delete{min-height:32px;padding:0 9px;border:1px solid rgba(255,107,125,.20);border-radius:9px;background:rgba(255,107,125,.06);color:#ffc6cd;font-size:10px;font-weight:900}
 .wt2-room-delete:hover{background:rgba(255,107,125,.12)}
+
+.wt2-room-settings{margin-top:14px;padding:14px}
+.wt2-room-settings-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.wt2-room-settings-head strong{display:block;font-size:13px}.wt2-room-settings-head small{display:block;margin-top:3px;color:var(--wt2-muted);font-size:10px}
+.wt2-room-settings-head button{width:30px;height:30px;border:1px solid var(--wt2-border);border-radius:9px;background:rgba(255,255,255,.04);color:var(--wt2-text);cursor:pointer}
+.wt2-room-settings-form{display:grid;gap:11px}.wt2-room-settings-form label{display:grid;gap:6px;color:var(--wt2-muted);font-size:10px;font-weight:800}
+.wt2-room-settings-form select{min-height:38px;border:1px solid var(--wt2-border);border-radius:10px;background:rgba(0,0,0,.18);color:var(--wt2-text);padding:0 10px}
+.wt2-room-setting-check{display:flex!important;grid-template-columns:none!important;align-items:flex-start;gap:9px;padding:11px;border:1px solid var(--wt2-border);border-radius:12px;background:rgba(255,255,255,.025);cursor:pointer}
+.wt2-room-setting-check input{width:auto!important;min-height:0!important;margin-top:3px!important}
+.wt2-room-setting-check strong{display:block;color:var(--wt2-text);font-size:11px}.wt2-room-setting-check small{display:block;margin-top:3px;line-height:1.5}
