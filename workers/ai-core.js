@@ -16,7 +16,7 @@ const PROVIDER_TIMEOUT_MS = 25 * 1000;
 
 async function isUserFeatureBlocked(env, token, uid, feature){
   if(!token || !uid || !feature) return false;
-  const base=String(env.FIREBASE_DATABASE_URL||DEFAULT_FIREBASE_DATABASE_URL).trim().replace(/\\/$/,"");
+  const base=String(env.FIREBASE_DATABASE_URL||DEFAULT_FIREBASE_DATABASE_URL).trim().replace(/\/+$/,"");
   const url=base+"/admin/restrictionsByUid/"+encodeURIComponent(uid)+"/features/"+encodeURIComponent(feature)+".json?auth="+encodeURIComponent(token);
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),5000);
