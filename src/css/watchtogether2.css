@@ -285,3 +285,9 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 @media(max-width:760px){.wt2-schedule-row-actions{grid-column:2;justify-self:start}}
 
 .wt2-member-role-btn{margin-left:6px!important;color:#c4b5fd!important;border-color:rgba(139,124,255,.22)!important;background:rgba(139,124,255,.07)!important}
+
+.wt2-public-room-search{display:flex;align-items:center;gap:9px;margin:12px 0}
+.wt2-public-room-search input{flex:1;min-width:0;min-height:40px;padding:8px 10px;border:1px solid var(--wt2-border);border-radius:11px;background:rgba(0,0,0,.16);color:var(--wt2-text)}
+.wt2-directory-count{color:var(--wt2-muted);font-size:10px;font-weight:900;white-space:nowrap}
+.wt2-room-delete{min-height:32px;padding:0 9px;border:1px solid rgba(255,107,125,.20);border-radius:9px;background:rgba(255,107,125,.06);color:#ffc6cd;font-size:10px;font-weight:900}
+.wt2-room-delete:hover{background:rgba(255,107,125,.12)}
