@@ -50,6 +50,20 @@
         required: ["text"]
       }
     },
+    removeFromQueue: {
+      risk: "confirm",
+      description: "從目前房間待播放清單移除指定項目",
+      parameters: {
+        type: "object",
+        properties: { queueId: { type: "string" } },
+        required: ["queueId"]
+      }
+    },
+    listQueue: {
+      risk: "safe",
+      description: "讀取目前房間待播放清單",
+      parameters: { type: "object", properties: {} }
+    },
     getQueue: {
       risk: "safe",
       description: "讀取目前房間待播放清單",
@@ -212,6 +226,25 @@
       if(!queueId) throw new Error("queueId 不能為空");
       await fn(queueId);
       return {ok:true,message:"已切換到指定待播放項目"};
+    }
+
+    if(name === "removeFromQueue"){
+      const fn=window.WT_CORE?.removeFromQueue;
+      if(typeof fn!=="function") throw new Error("待播放清單移除功能尚未準備完成");
+      const queueId=String(parsed.queueId||"").trim();
+      if(!queueId) throw new Error("缺少 queueId");
+      await fn(queueId);
+      return {ok:true,message:"已移除待播放項目",queueId};
+    }
+
+    if(name === "listQueue"){
+      const s=window.WT_CORE?.state;
+      if(!s?.roomId) throw new Error("目前不在房間內");
+      const items=Object.entries(s.queue||{})
+        .sort((a,b)=>Number(a[1]?.queueOrder||a[1]?.addedAt||0)-Number(b[1]?.queueOrder||b[1]?.addedAt||0))
+        .slice(0,30)
+        .map(([queueId,item])=>({queueId,id:item?.id||"",platform:item?.platform||"youtube",title:item?.title||"未命名影片",addedByName:item?.addedByName||""}));
+      return {ok:true,count:items.length,items};
     }
 
     if(name === "sendChat"){
