@@ -120,7 +120,22 @@ async function writeAudit(env,ctx,action,targetUid,targetName,details){
 }
 
 async function writeMaintenance(env,ctx,data){
-  return dbFetch(env,"system/maintenance",ctx.token,"PUT",data);
+  const publicData={
+    enabled:Boolean(data?.enabled),
+    mode:String(data?.mode||"maintenance").slice(0,40),
+    message:String(data?.message||"系統維護").slice(0,200),
+    startedAt:Number(data?.startedAt||0),
+    endsAt:Number(data?.endsAt||0)
+  };
+  if(data?.enabled===false){
+    publicData.mode=String(data?.mode||"").slice(0,40);
+    publicData.message=String(data?.message||"").slice(0,200);
+  }
+  const [privateResult,publicResult]=await Promise.all([
+    dbFetch(env,"system/maintenance",ctx.token,"PUT",data),
+    dbFetch(env,"system/publicMaintenance",ctx.token,"PUT",publicData)
+  ]);
+  return {ok:privateResult.ok&&publicResult.ok,privateResult,publicResult};
 }
 export default {
   async fetch(request,env){
