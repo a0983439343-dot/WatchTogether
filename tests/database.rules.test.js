@@ -955,10 +955,10 @@ test("2.0: approval join requests are requester-creatable and owner-approvable",
     });
   });
 
-  const requestPath = "roomJoinRequests/REQ123/" + USER_UID;
+  const requestPath = "roomJoinRequests/REQ123/" + OTHER_UID;
   await assertSucceeds(
-    db(USER_UID, userToken).ref(requestPath).set({
-      uid: USER_UID,
+    db(OTHER_UID, { email: "other@example.com", email_verified: true }).ref(requestPath).set({
+      uid: OTHER_UID,
       name: "User",
       status: "pending",
       approved: false,
