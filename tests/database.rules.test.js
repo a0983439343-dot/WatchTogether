@@ -767,6 +767,63 @@ test("2.0: custom admin role permissions are enforced", async () => {
   await master.ref("admin/roles/restricted_admin").remove();
 });
 
+test("2.0: audit deletion requires audit__delete permission", async () => {
+  const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
+  const log = await master.ref("admin/auditLogs").push({
+    action: "test",
+    actorUid: MASTER_UID,
+    actorEmail: MASTER_EMAIL,
+    actorRole: "master",
+    targetUid: ADMIN_UID,
+    targetName: "test",
+    details: "audit deletion test",
+    createdAt: Date.now()
+  });
+
+  await master.ref("admin/roles/audit_deleter").set({
+    name: "Audit Deleter",
+    permissions: { audit__delete: true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "audit_deleter",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + log.key).remove()
+  );
+
+  await master.ref("admin/roles/audit_viewer").set({
+    name: "Audit Viewer",
+    permissions: { audit__view: true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "audit_viewer",
+    updatedAt: Date.now()
+  });
+  const log2 = await master.ref("admin/auditLogs").push({
+    action: "test",
+    actorUid: MASTER_UID,
+    actorEmail: MASTER_EMAIL,
+    actorRole: "master",
+    targetUid: ADMIN_UID,
+    targetName: "test",
+    details: "audit deletion deny test",
+    createdAt: Date.now()
+  });
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + log2.key).remove()
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/audit_deleter").remove();
+  await master.ref("admin/roles/audit_viewer").remove();
+  await master.ref("admin/auditLogs/" + log2.key).remove();
+});
+
 test("2.0: assigned admin can read its own custom role definition", async () => {
   const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
   await master.ref("admin/roles/read_test").set({
