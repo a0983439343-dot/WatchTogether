@@ -553,6 +553,7 @@ function mediaRecorderMime() {
 }
 
 async function toggleRecording() {
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("uploads")) { wt.toast("你的帳號目前無法使用語音上傳"); return; }
   if (!ensureLogin() || !state.activeUid) {
     if (!state.activeUid) wt.toast("請先選擇好友");
     return;
