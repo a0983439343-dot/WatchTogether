@@ -640,3 +640,48 @@ test("2.0: public room index is readable but owner-controlled", async () => {
       .update({ name: "forged" })
   );
 });
+
+
+test("2.0: approval join requests are requester-creatable and owner-approvable", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/REQ123").set({
+      owner: ADMIN_UID,
+      name: "Approval Room",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/REQ123").set({
+      owner: ADMIN_UID,
+      name: "Approval Room",
+      visibility: "public",
+      joinMode: "approval",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+  });
+
+  const requestPath = "roomJoinRequests/REQ123/" + USER_UID;
+  await assertSucceeds(
+    db(USER_UID, userToken).ref(requestPath).set({
+      uid: USER_UID,
+      name: "User",
+      status: "pending",
+      approved: false,
+      requestedAt: Date.now()
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref(requestPath).update({
+      status: "approved",
+      approved: true,
+      approvedAt: Date.now(),
+      approvedBy: ADMIN_UID
+    })
+  );
+
+  await assertFails(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true })
+      .ref(requestPath)
+      .update({ status: "approved", approved: true })
+  );
+});
