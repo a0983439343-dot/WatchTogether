@@ -172,3 +172,7 @@ body.wt2-theme #memberList{background:rgba(0,0,0,.10)!important}
   .wt2-module-strip{grid-template-columns:1fr}
   .wt2-maintenance-meta{grid-template-columns:1fr}
 }
+
+body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!important;cursor:not-allowed!important}
+.wt2-restriction-notice{position:fixed;left:18px;bottom:18px;z-index:1000;max-width:min(520px,calc(100vw - 36px));padding:10px 13px;border:1px solid rgba(243,191,99,.25);border-radius:13px;background:rgba(35,27,12,.96);color:#ffe7b1;font-size:11px;font-weight:800;box-shadow:0 16px 45px rgba(0,0,0,.35);backdrop-filter:blur(14px)}
+@media(max-width:760px){.wt2-restriction-notice{left:12px;right:12px;bottom:76px;max-width:none}}
