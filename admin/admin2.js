@@ -81,7 +81,7 @@
     const sectionPermissions={
       accounts:"users.view",
       rooms:"rooms.view",
-      whitelist:"users.ban",
+      whitelist:"whitelist.manage",
       reports:"reports.handle",
       audit:"audit.view",
       security:"audit.view",
