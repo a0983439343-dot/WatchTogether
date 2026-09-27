@@ -42,6 +42,17 @@ async function dbFetch(env,path,token,method="GET",body){
   let data=null;try{data=JSON.parse(text)}catch(_){}
   return {ok:res.ok,data,status:res.status};
 }
+async function dbPatchRoot(env,token,patch){
+  const url="https://"+env.FIREBASE_PROJECT_ID+"-default-rtdb.asia-southeast1.firebasedatabase.app/.json?auth="+encodeURIComponent(token);
+  const res=await fetch(url,{
+    method:"PATCH",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify(patch)
+  });
+  const text=await res.text();
+  let data=null;try{data=JSON.parse(text)}catch(_){}
+  return {ok:res.ok,data,status:res.status};
+}
 async function authenticateAdmin(request,env){
   const auth=String(request.headers.get("authorization")||"");
   const token=auth.startsWith("Bearer ")?auth.slice(7).trim():"";
@@ -131,11 +142,12 @@ async function writeMaintenance(env,ctx,data){
     publicData.mode=String(data?.mode||"").slice(0,40);
     publicData.message=String(data?.message||"").slice(0,200);
   }
-  const [privateResult,publicResult]=await Promise.all([
-    dbFetch(env,"system/maintenance",ctx.token,"PUT",data),
-    dbFetch(env,"system/publicMaintenance",ctx.token,"PUT",publicData)
-  ]);
-  return {ok:privateResult.ok&&publicResult.ok,privateResult,publicResult};
+  return dbPatchRoot(env,ctx.token,{
+    system:{
+      maintenance:data,
+      publicMaintenance:publicData
+    }
+  });
 }
 export default {
   async fetch(request,env){
