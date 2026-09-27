@@ -640,7 +640,9 @@
     return id;
   }
 
-  const ADMIN_AI_REFRESH_MS = 30 * 60 * 1000;\n\n  async function scanUserReports(limit = 5) {
+  const ADMIN_AI_REFRESH_MS = 30 * 60 * 1000;
+
+  async function scanUserReports(limit = 5) {
     const entries = Object.entries(reports || {})
       .filter(([,item]) => item && (item.source === "manual" || item.source === "auto") && normalizeReportStatus(item.status) !== "resolved")
       .sort((a,b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0))
