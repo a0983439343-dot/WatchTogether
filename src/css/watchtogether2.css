@@ -283,3 +283,5 @@ body.wt2-theme .wt2-restricted{opacity:.48!important;filter:grayscale(.35)!impor
 
 .wt2-schedule-row-actions{display:flex;gap:5px;flex-wrap:wrap}.wt2-schedule-row-actions button:last-child{border-color:rgba(255,107,125,.22);background:rgba(255,107,125,.07)}
 @media(max-width:760px){.wt2-schedule-row-actions{grid-column:2;justify-self:start}}
+
+.wt2-member-role-btn{margin-left:6px!important;color:#c4b5fd!important;border-color:rgba(139,124,255,.22)!important;background:rgba(139,124,255,.07)!important}
