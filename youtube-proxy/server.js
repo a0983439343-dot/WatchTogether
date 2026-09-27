@@ -477,6 +477,7 @@ async function analyzeBugWithGemini(input) {
 
           if (!retryable) break;
           if (isQuotaError(error)) {
+            aiQuotaBlockedUntil = Date.now() + AI_QUOTA_COOLDOWN_MS;
             error.code = "gemini_quota_exhausted";
             throw error;
           }
