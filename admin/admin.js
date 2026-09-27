@@ -70,6 +70,8 @@
     if (!block || typeof block !== "object") return false;
     if (block.permanent === true || Number(block.blockedUntil || 0) === 0) return true;
     return Number(block.blockedUntil || 0) > Date.now();
+    };
+    window.dispatchEvent(new Event("wt2-admin-role-ready"));
   }
 
   function isMasterUser(user) {
