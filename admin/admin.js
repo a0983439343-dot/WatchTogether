@@ -487,7 +487,16 @@
     "whitelist.toggle": "啟用 / 停用",
     "whitelist.remove": "移除白名單",
     "audit.delete": "刪除操作紀錄",
-    "role.masterEquivalent": "授予主帳號同等權限"
+    "userRestriction.apply": "套用使用者功能限制",
+    "userRestriction.clear": "解除使用者功能限制",
+    "permissionOverride.apply": "套用個人權限例外",
+    "permissionOverride.clear": "清除個人權限例外",
+    "featureFlags.update": "更新全站功能開關",
+    "role.save": "儲存角色",
+    "role.masterEquivalent": "授予主帳號同等權限",
+    "maintenance.enable": "啟用網站維護",
+    "maintenance.disable": "恢復網站",
+    "maintenance.password": "更新維護密碼"
   };
 
   function stopAuditLogsListener() {
@@ -1315,7 +1324,7 @@
     $("reportRepairPlan").textContent =
       String(item.aiSuggestion || "") ||
       "先閱讀回報與驗證結果，再決定是否開始處理。";
-    const canManageReport = currentRole === "master" || currentRole === "admin";
+    const canManageReport = hasAdminPermission("reports.handle");
     const fullAuto = autonomousMaintenanceEnabled === true;
     $("reportRepairBtn").classList.toggle("hidden", !canManageReport || fullAuto || normalizeReportStatus(item.status) === "resolved");
     $("reportRepairBtn").textContent = normalizeReportStatus(item.status) === "in_progress" ? "處理中" : "開始處理";
