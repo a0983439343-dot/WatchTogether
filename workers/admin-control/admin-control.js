@@ -81,17 +81,18 @@ async function authenticateAdmin(request,env){
 
   const roleSnap=await dbFetch(env,"admin/userRoles/"+uid,token);
   const roleId=String(roleSnap.data?.roleId||"").trim();
-  let permissions=null;
+  let permissions={};
+  let deny={};
+  let allow={};
   if(roleId){
     const roleSnap2=await dbFetch(env,"admin/roles/"+roleId,token);
-    permissions={};
     Object.entries(roleSnap2.data?.permissions||{}).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
-    const override=await dbFetch(env,"admin/userPermissionOverrides/"+uid,token);
-    const allow=override.data?.allow||{};
-    const deny=override.data?.deny||{};
-    Object.entries(allow).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
-    Object.entries(deny).forEach(([key,value])=>{if(value===true)delete permissions[key];});
   }
+  const override=await dbFetch(env,"admin/userPermissionOverrides/"+uid,token);
+  allow=override.data?.allow||{};
+  deny=override.data?.deny||{};
+  Object.entries(allow).forEach(([key,value])=>{if(value===true)permissions[key]=true;});
+  Object.entries(deny).forEach(([key,value])=>{if(value===true)delete permissions[key];});
 
   return {
     ok:true,
@@ -101,11 +102,14 @@ async function authenticateAdmin(request,env){
     email:String(claims.email||""),
     hasCustomRole:Boolean(roleId),
     roleId,
-    permissions:permissions||{}
+    permissions,
+    allow,
+    deny
   };
 }
 function hasPermission(ctx,permission){
   if(ctx.role==="master")return true;
+  if(ctx.deny?.[permission]===true)return false;
   if(ctx.hasCustomRole!==true)return true;
   return ctx.permissions?.[permission]===true;
 }
