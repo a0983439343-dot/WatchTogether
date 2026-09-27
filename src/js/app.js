@@ -8044,6 +8044,16 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       Boolean(state.adminJoinOverride);
 
     if (
+      !isAdminJoin &&
+      !isRoomOwner &&
+      !isExistingMember &&
+      String(metaData.visibility || "personal") === "public" &&
+      await isCurrentUserFeatureRestricted("join_public_room")
+    ) {
+      throw new Error("你的帳號目前無法加入公開房間");
+    }
+
+    if (
       !state.adminJoinOverride &&
       !isRoomOwner &&
       !isExistingMember &&
