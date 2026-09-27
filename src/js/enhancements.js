@@ -2807,6 +2807,7 @@ async function searchHome(query) {
   if (version !== searchVersion) return;
   var results = Array.isArray(data.items) ? data.items.map(normalizeSearchItem).filter(Boolean) : [];
   renderHomeSearch(results);
+  return results;
 }
 
 function bindHomeSearch() {
@@ -2886,6 +2887,8 @@ function bindHomeSearch() {
 function initSearchAndCreate() {
   bindHomeSearch();
 }
+
+wt.searchHome = searchHome;
 
 wt.state.createVideo = wt.state.createVideo || null;
 
