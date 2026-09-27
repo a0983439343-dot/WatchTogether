@@ -7504,6 +7504,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           roomId,
           name: roomName,
           sourceType,
+          visibility: "public",
+          joinMode: String(document.querySelector("#wt2PublicJoinMode")?.value || "open") === "approval" ? "approval" : "open",
           memberCount: 1,
           createdAt: firebase.database.ServerValue.TIMESTAMP,
           updatedAt: firebase.database.ServerValue.TIMESTAMP
