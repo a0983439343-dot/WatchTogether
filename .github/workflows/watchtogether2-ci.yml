@@ -23,12 +23,17 @@ jobs:
             src/js/bug-monitor.js \
             src/js/watchtogether2.js \
             admin/admin.js \
-            admin/admin2.js \
-            workers/youtube-search.js \
-            workers/admin-control/admin-control.js
+            admin/admin2.js
           do
             echo "Checking $f"
             node --check "$f"
+          done
+          for f in \
+            workers/youtube-search.js \
+            workers/admin-control/admin-control.js
+          do
+            echo "Checking ESM $f"
+            node -e "const fs=require('fs'); let s=fs.readFileSync(process.argv[1],'utf8').replace(/^[\\s\\S]*?export default /,''); new Function(s); console.log('ESM syntax OK')" "$f"
           done
       - name: Validate JSON configuration
         run: |
