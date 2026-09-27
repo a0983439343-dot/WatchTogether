@@ -1638,6 +1638,20 @@
     });
   }
 
+  function restoreAdminSection() {
+    let section = "overview";
+    try {
+      section = sessionStorage.getItem("watchtogether-admin-section") || "overview";
+    } catch (_) {}
+    const btn = document.querySelector('.nav-item[data-section="' + CSS.escape(section) + '"]') ||
+      document.querySelector('.nav-item[data-section="overview"]');
+    if (!btn) return;
+    document.querySelectorAll(".nav-item").forEach(x => x.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".admin-section").forEach(x => x.classList.add("hidden"));
+    show("section-" + btn.dataset.section);
+  }
+
   function setupEvents() {
     document.addEventListener("dblclick", event => {
       if (event.target?.closest("button,a,input,select")) {
@@ -1649,6 +1663,7 @@
       btn.classList.add("active");
       document.querySelectorAll(".admin-section").forEach(section => section.classList.add("hidden"));
       show("section-" + btn.dataset.section);
+      try { sessionStorage.setItem("watchtogether-admin-section", btn.dataset.section); } catch (_) {}
     }));
 
     $("accountSearch")?.addEventListener("input", renderAccounts);
@@ -1730,5 +1745,6 @@
   }
 
   setupEvents();
+  restoreAdminSection();
   initialize();
 })();
