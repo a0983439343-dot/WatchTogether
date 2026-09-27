@@ -201,15 +201,6 @@
       return {ok:true,items};
     }
 
-    if(name === "removeFromQueue"){
-      const fn = window.WT_CORE?.removeFromQueue;
-      if(typeof fn !== "function") throw new Error("待播放清單功能尚未準備完成");
-      const queueId = String(parsed.queueId || "").trim();
-      if(!queueId) throw new Error("queueId 不能為空");
-      await fn(queueId);
-      return {ok:true,message:"已從待播放清單移除"};
-    }
-
     if(name === "playQueueItem"){
       const fn = window.WT_CORE?.playQueueItem;
       if(typeof fn !== "function") throw new Error("播放佇列功能尚未準備完成");
