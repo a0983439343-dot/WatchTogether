@@ -787,6 +787,44 @@
     document.body.classList.toggle("wt2-user-restricted",Object.values(features).some(Boolean));
   }
 
+  function applyFeatureFlags(flags){
+    const value=flags&&typeof flags==="object"?flags:{};
+    const map={
+      create_room:["createRoomBtn"],
+      chat:["chatForm","chatInput"],
+      playlists:["queueList"],
+      public_explore:["wt2PublicRoomList"],
+      ai:["wt2AiCenter"]
+    };
+    const disabled=[];
+    Object.entries(map).forEach(([key,ids])=>{
+      const off=value[key]===false;
+      if(off) disabled.push(key);
+      ids.forEach(id=>{
+        const node=$(id);if(!node)return;
+        node.disabled=off;
+        node.classList.toggle("wt2-feature-off",off);
+        if(off) node.setAttribute("aria-disabled","true"); else node.removeAttribute("aria-disabled");
+      });
+    });
+    const ai=$("wt2AiCenter");if(ai)ai.classList.toggle("hidden",value.ai===false);
+    const existing=$("wt2FeatureNotice");
+    if(disabled.length){
+      const notice=existing||document.createElement("div");
+      notice.id="wt2FeatureNotice";notice.className="wt2-feature-notice";
+      notice.textContent="部分網站功能目前暫停："+disabled.join("、");
+      if(!existing)document.body.appendChild(notice);
+    }else existing?.remove();
+  }
+
+  function initFeatureFlagListener(){
+    const db=window.db||window.firebase?.database?.();
+    if(!db){setTimeout(initFeatureFlagListener,1000);return;}
+    try{
+      db.ref("system/featureFlags").on("value",snap=>applyFeatureFlags(snap.val()||{}));
+    }catch(error){console.warn("[WT2] feature flags:",error);}
+  }
+
   function initRestrictionListener(){
     const tryAttach=()=>{
       const auth=window.firebase?.auth?.();
@@ -895,6 +933,7 @@
     initSortableQueue();
     initMaintenanceListener();
     initRestrictionListener();
+    initFeatureFlagListener();
     initGlobalFeatureFlagListener();
     window.WatchTogether2={build:BUILD,refresh:()=>{renderShell();initSortableQueue();}};
     const observer=new MutationObserver(()=>initSortableQueue());
