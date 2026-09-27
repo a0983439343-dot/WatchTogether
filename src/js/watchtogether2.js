@@ -818,15 +818,17 @@
     const features=value?.features||{};
     const map={
       create_room:["createRoomBtn"],
-      chat:["chatForm","chatInput"],
-      ai:[],
-      ai_agent:[],
-      uploads:[],
-      friends:[],
+      join_public_room:["wt2PublicRoomList"],
+      chat:["chatForm","chatInput","wtChatCenter"],
+      ai:["wt2AiCenter"],
+      ai_agent:["wt2AiCenter"],
+      uploads:["wtChatImageBtn","wtChatMicBtn"],
+      friends:["wtFriendsBtn","wtHomeFriends"],
       polls:[],
       playlists:["queueList"],
       playback_control:["playPauseBtn","syncNowBtn"],
-      public_explore:[]
+      public_explore:["wt2PublicRoomList"],
+      schedules:["wt2SchedulePanel"]
     };
     Object.entries(map).forEach(([feature,ids])=>{
       const blocked=features[feature]===true;
@@ -849,6 +851,7 @@
       notice.textContent="此帳號目前有部分功能受到限制："+disabledLabels.join("、")+"。";
       if(!existing) document.body.appendChild(notice);
     }else existing?.remove();
+    window.__WT2_BLOCKED_FEATURES__=Object.fromEntries(Object.entries(features).filter(([,blocked])=>blocked===true));
     document.body.classList.toggle("wt2-user-restricted",Object.values(features).some(Boolean));
   }
 
