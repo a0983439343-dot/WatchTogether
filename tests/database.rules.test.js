@@ -546,3 +546,97 @@ test("unauthenticated users cannot access protected admin paths", async () => {
     unauth.database().ref("admin/whitelistByUid").once("value")
   );
 });
+
+
+test("2.0: maintenance state is public-readable but admin-write only", async () => {
+  await assertSucceeds(db(USER_UID, userToken).ref("system/maintenance").once("value"));
+  await assertFails(
+    db(USER_UID, userToken).ref("system/maintenance").set({
+      enabled: true,
+      mode: "maintenance",
+      message: "forged",
+      updatedAt: Date.now(),
+      updatedBy: USER_UID
+    })
+  );
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/maintenance").set({
+      enabled: true,
+      mode: "maintenance",
+      message: "test",
+      startedAt: Date.now(),
+      endsAt: 0,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+});
+
+test("2.0: user feature restrictions can only be written by admin", async () => {
+  const path = "admin/restrictionsByUid/" + USER_UID;
+  await assertFails(
+    db(USER_UID, userToken).ref(path).set({
+      features: { chat: true },
+      reason: "self",
+      blockedUntil: 0,
+      updatedAt: Date.now(),
+      updatedBy: USER_UID
+    })
+  );
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref(path).set({
+      features: { chat: true, create_room: true },
+      reason: "test restriction",
+      blockedUntil: 0,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+  await assertSucceeds(db(USER_UID, userToken).ref(path).once("value"));
+});
+
+test("2.0: role definitions and assignments are master-only writes", async () => {
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("admin/roles/core_admin").set({
+      name: "Core Admin",
+      permissions: { "rooms.manage": true },
+      updatedAt: Date.now()
+    })
+  );
+  await assertSucceeds(
+    db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true }).ref("admin/roles/core_admin").set({
+      name: "Core Admin",
+      permissions: { "rooms.manage": true, "users.view": true },
+      updatedAt: Date.now()
+    })
+  );
+  await assertSucceeds(
+    db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true }).ref("admin/userRoles/" + ADMIN_UID).set({
+      roleId: "core_admin",
+      updatedAt: Date.now()
+    })
+  );
+});
+
+test("2.0: public room index is readable but owner-controlled", async () => {
+  await assertSucceeds(
+    db(USER_UID, userToken).ref("publicRooms/ABC123").set({
+      roomId: "ABC123",
+      name: "Public Test",
+      sourceType: "youtube",
+      memberCount: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    })
+  );
+  await assertSucceeds(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true })
+      .ref("publicRooms/ABC123")
+      .once("value")
+  );
+  await assertFails(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true })
+      .ref("publicRooms/ABC123")
+      .update({ name: "forged" })
+  );
+});
