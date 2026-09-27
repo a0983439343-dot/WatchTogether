@@ -104,10 +104,29 @@
 
   function renderSecurity(){ if($("ad2SecAccounts"))$("ad2SecAccounts").textContent=readStat("statAccounts"); if($("ad2SecBlocked"))$("ad2SecBlocked").textContent=readStat("statBlocked"); if($("ad2SecReports"))$("ad2SecReports").textContent=readStat("statOpenReports"); if($("ad2SecMaintenance"))$("ad2SecMaintenance").textContent=state.maintenance?.enabled?"ON":"OFF"; const list=$("ad2SecurityList"); if(list)list.innerHTML=["Google Auth","Firebase Rules","Admin Whitelist","Audit Log","Maintenance Lock","User Restrictions"].map(x=>'<div class="ad2-list-row"><strong>'+x+'</strong><span class="ad2-chip on">ENABLED</span></div>').join(""); }
 
+  function controlUrl(){
+    return String(window.WATCHTOGETHER_CONFIG?.adminControlUrl||"").trim().replace(/\\/+$/,"");
+  }
+  async function controlRequest(payload,method="POST"){
+    const url=controlUrl();
+    const token=await window.firebase?.auth?.().currentUser?.getIdToken?.();
+    if(!url) throw new Error("尚未設定 Admin Control Worker URL");
+    if(!token) throw new Error("管理員登入 Token 尚未準備完成");
+    const response=await fetch(url+"/maintenance",{method,headers:{"content-type":"application/json","authorization":"Bearer "+token},body:method==="GET"?undefined:JSON.stringify(payload)});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error||"Admin Control Worker 請求失敗");
+    return data;
+  }
+
   async function readMaintenance(){
-    const db=DB();if(!db)return;
-    try{const snap=await db.ref("system/maintenance").once("value");state.maintenance=snap.val()||{enabled:false};}
-    catch(e){state.maintenance={enabled:false};}
+    const url=controlUrl();
+    if(!url){
+      state.maintenance={enabled:false};
+      if($("ad2MaintHint"))$("ad2MaintHint").textContent="請先在 config/firebase-config.js 設定 adminControlUrl。";
+    }else{
+      try{state.maintenance=await controlRequest({}, "GET");}
+      catch(e){state.maintenance={enabled:false};if($("ad2MaintHint"))$("ad2MaintHint").textContent=e?.message||"無法讀取網站狀態。";}
+    }
     const m=state.maintenance;
     if($("ad2MaintStatus"))$("ad2MaintStatus").textContent=m.enabled?"🔴 維護中":"🟢 正常運行";
     if($("ad2MaintChip")){$("ad2MaintChip").textContent=m.enabled?"ON":"OFF";$("ad2MaintChip").className="ad2-chip "+(m.enabled?"on":"off")}
@@ -115,27 +134,14 @@
     if($("ad2MaintEnd"))$("ad2MaintEnd").textContent=m.endsAt?new Date(Number(m.endsAt)).toLocaleString():"—";
   }
 
-  async function derivePBKDF2(password,salt,iterations=120000){
-    const enc=new TextEncoder();
-    const base=await crypto.subtle.importKey("raw",enc.encode(password),{name:"PBKDF2"},false,["deriveBits"]);
-    const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations,hash:"SHA-256"},base,256);
-    return Array.from(new Uint8Array(bits)).map(x=>x.toString(16).padStart(2,"0")).join("");
-  }
-  function b64(buf){let s="";new Uint8Array(buf).forEach(x=>s+=String.fromCharCode(x));return btoa(s)}
-  async function hashPassword(password,saltB64,iterations){const salt=Uint8Array.from(atob(saltB64),c=>c.charCodeAt(0));return derivePBKDF2(password,salt,iterations)}
-  async function credentialRef(){return DB().ref("admin/security/maintenanceCredential")}
-  async function getCredential(){try{const s=await (await credentialRef()).once("value");return s.val()||null}catch(_){return null}}
-  async function verifyPassword(password){
-    const c=await getCredential();if(!c)return false;
-    return (await hashPassword(password,c.salt,c.iterations))===String(c.hash||"");
-  }
   async function setPassword(){
-    const password=prompt("請設定新的維護密碼（至少 8 個字元）：")||"";
-    if(password.length<8){alert("密碼至少 8 個字元");return}
-    const salt=new Uint8Array(16);crypto.getRandomValues(salt);const saltB64=b64(salt),iterations=120000,hash=await derivePBKDF2(password,salt,iterations);
-    await (await credentialRef()).set({hash,salt:saltB64,iterations,updatedAt:Date.now()});
-    if($("ad2MaintHint"))$("ad2MaintHint").textContent="維護密碼已更新。"; 
+    const currentPassword=prompt("請輸入目前維護密碼（首次設定可留空）：")||"";
+    const newPassword=prompt("請輸入新的維護密碼（至少 8 個字元）：")||"";
+    if(newPassword.length<8){alert("密碼至少 8 個字元");return}
+    await controlRequest({action:"set-password",currentPassword,newPassword});
+    if($("ad2MaintHint"))$("ad2MaintHint").textContent="維護密碼已更新。";
   }
+
   async function closeSite(){
     const message=String($("ad2MaintMessage")?.value||"系統維護").trim()||"系統維護";
     const raw=$("ad2MaintEnds")?.value||"";
@@ -143,19 +149,20 @@
     const password=$("ad2MaintPassword")?.value||"";
     if(!confirm("確定要關閉網站嗎？"))return;
     if(!password){$("ad2MaintHint").textContent="請輸入維護密碼。";return}
-    if(!await verifyPassword(password)){$("ad2MaintHint").textContent="維護密碼錯誤，沒有關站。";return}
-    await DB().ref("system/maintenance").set({enabled:true,mode:"maintenance",message,startedAt:Date.now(),endsAt:Number.isFinite(ends)?ends:0,updatedAt:Date.now(),updatedBy:window.firebase?.auth?.().currentUser?.uid||""});
-    await readMaintenance();
-    $("ad2MaintPassword").value="";
-    $("ad2MaintHint").textContent="網站已進入維護模式。";
+    try{
+      await controlRequest({action:"enable",password,message,endsAt:Number.isFinite(ends)?ends:0});
+      $("ad2MaintPassword").value="";$("ad2MaintHint").textContent="網站已進入維護模式。";await readMaintenance();
+    }catch(e){$("ad2MaintHint").textContent=e?.message||"維護密碼錯誤，沒有關站。";}
   }
+
   async function openSite(){
     if(!confirm("確定要恢復網站嗎？"))return;
     const password=$("ad2MaintPassword")?.value||"";
     if(!password){$("ad2MaintHint").textContent="請輸入維護密碼後再恢復網站。";return}
-    if(!await verifyPassword(password)){$("ad2MaintHint").textContent="維護密碼錯誤。";return}
-    await DB().ref("system/maintenance").set({enabled:false,updatedAt:Date.now(),updatedBy:window.firebase?.auth?.().currentUser?.uid||""});
-    await readMaintenance();$("ad2MaintPassword").value="";$("ad2MaintHint").textContent="網站已恢復。";
+    try{
+      await controlRequest({action:"disable",password});
+      $("ad2MaintPassword").value="";$("ad2MaintHint").textContent="網站已恢復。";await readMaintenance();
+    }catch(e){$("ad2MaintHint").textContent=e?.message||"維護密碼錯誤。";}
   }
 
   async function loadRestriction(){
