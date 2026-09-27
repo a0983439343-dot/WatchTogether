@@ -514,6 +514,7 @@
     }catch(e){$("ad2MaintHint").textContent=e?.message||"維護密碼錯誤。";}
   }
 
+  const FEATURE_LABELS=Object.fromEntries(features.map(([label,key])=>[key,label]));
   async function loadRestrictedUsers(){
     const db=DB(),wrap=$("ad2RestrictionList");
     if(!db||!wrap)return;
@@ -521,16 +522,17 @@
       const snap=await db.ref("admin/restrictionsByUid").once("value");
       const now=Date.now();
       const entries=Object.entries(snap.val()||{}).filter(([uid,value])=>{
-        if(!value||typeof value!=="object")return false;
+        if(!value||typeof value!=="object" || uid==="35d45a23-b648-4caf-a6d5-a69112860551")return false;
         const until=Number(value.blockedUntil||0);
         const any=Object.values(value.features||{}).some(Boolean);
         return any && (until===0 || until>now);
       }).sort((a,b)=>Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0));
       wrap.innerHTML=entries.length?entries.map(([uid,value])=>{
-        const count=Object.values(value.features||{}).filter(Boolean).length;
+        const active=Object.entries(value.features||{}).filter(([,x])=>x===true).map(([k])=>FEATURE_LABELS[k]||k);
         const until=Number(value.blockedUntil||0);
         const time=until===0?"永久":new Date(until).toLocaleString();
-        return '<button type="button" class="ad2-list-row" data-restrict-uid="'+escapeHtml(uid)+'"><strong>'+escapeHtml(uid)+'</strong><span>'+count+' 個功能 · '+escapeHtml(time)+'</span></button>';
+        const reason=String(value.reason||"未填寫原因").slice(0,100);
+        return '<button type="button" class="ad2-list-row" data-restrict-uid="'+escapeHtml(uid)+'"><span><strong>'+escapeHtml(uid)+'</strong><small style="display:block;color:var(--ad2-muted);margin-top:3px">'+escapeHtml(active.join("、"))+'</small><small style="display:block;color:var(--ad2-muted);margin-top:3px">原因：'+escapeHtml(reason)+'</small></span><span>'+escapeHtml(time)+'</span></button>';
       }).join(""):'<div class="ad2-muted">目前沒有啟用中的功能限制。</div>';
       wrap.querySelectorAll("[data-restrict-uid]").forEach(button=>button.addEventListener("click",()=>{
         const input=$("ad2RestrictionUid");if(input){input.value=button.dataset.restrictUid||"";input.dispatchEvent(new Event("change"))}
@@ -543,20 +545,54 @@
 
   async function loadRestriction(){
     const uid=String($("ad2RestrictionUid")?.value||"").trim();const box=$("ad2RestrictionCurrent");if(!uid||!box)return;
-    try{const s=await DB().ref("admin/restrictionsByUid/"+uid).once("value");const v=s.val(); if(!v){box.innerHTML='<div class="ad2-muted">目前沒有功能限制。</div>';return}
-      box.innerHTML=Object.entries(v.features||{}).filter(([,x])=>x===true).map(([k])=>'<div class="ad2-list-row"><strong>'+k+'</strong><span class="ad2-chip off">BLOCKED</span></div>').join("")||'<div class="ad2-muted">沒有啟用中的功能限制。</div>';
+    try{
+      const snap=await DB().ref("admin/restrictionsByUid/"+uid).once("value");const v=snap.val();
+      if(!v){box.innerHTML='<div class="ad2-muted">目前沒有功能限制。</div>';document.querySelectorAll("#ad2RestrictionChecks input").forEach(x=>x.checked=false);return}
+      const until=Number(v.blockedUntil||0);
+      const activeUntil=until===0?"永久":new Date(until).toLocaleString();
+      const active=Object.entries(v.features||{}).filter(([,x])=>x===true).map(([k])=>FEATURE_LABELS[k]||k);
+      box.innerHTML='<div class="ad2-list-row"><strong>限制功能</strong><span>'+escapeHtml(active.join("、")||"無")+'</span></div><div class="ad2-list-row"><strong>到期時間</strong><span>'+escapeHtml(activeUntil)+'</span></div><div class="ad2-list-row"><strong>原因</strong><span>'+escapeHtml(String(v.reason||"未填寫原因"))+'</span></div>';
       document.querySelectorAll("#ad2RestrictionChecks input").forEach(x=>x.checked=v.features?.[x.dataset.feature]===true);
+      if($("ad2RestrictionReason"))$("ad2RestrictionReason").value=String(v.reason||"");
     }catch(e){box.innerHTML='<div class="ad2-muted">無法讀取限制資料。</div>'}
   }
+
   async function applyRestriction(clear=false){
     if(!hasPermission("restrictions.manage")){toast("你沒有管理指定使用者功能限制的權限");return}
-    const uid=String($("ad2RestrictionUid")?.value||"").trim();if(!uid){$("ad2RestrictionHint").textContent="請輸入 UID。";return}
-    const featuresOut={};document.querySelectorAll("#ad2RestrictionChecks input").forEach(x=>featuresOut[x.dataset.feature]=x.checked);
-    if(clear)Object.keys(featuresOut).forEach(k=>featuresOut[k]=false);
-    const duration=$("ad2RestrictionDuration")?.value||"permanent";const until=duration==="permanent"?0:Date.now()+Number(duration);
-    await DB().ref("admin/restrictionsByUid/"+uid).set({features:featuresOut,reason:String($("ad2RestrictionReason")?.value||"").trim().slice(0,300),blockedUntil:until,updatedAt:Date.now(),updatedBy:window.firebase?.auth?.().currentUser?.uid||""});
-    await writeAudit(clear?"userRestriction.clear":"userRestriction.apply",uid,uid,clear?"解除指定使用者功能限制":"套用指定使用者功能限制");
-    $("ad2RestrictionHint").textContent=clear?"限制已解除。":"功能限制已套用。";await loadRestriction();
+    const db=DB(),user=window.firebase?.auth?.().currentUser;
+    const uid=String($("ad2RestrictionUid")?.value||"").trim();
+    const hint=$("ad2RestrictionHint");
+    if(!uid){if(hint)hint.textContent="請輸入 UID。";return}
+    if(uid==="35d45a23-b648-4caf-a6d5-a69112860551"){if(hint)hint.textContent="最高管理員不能被功能限制。";return}
+    const accountSnap=await db.ref("accounts/"+uid).once("value");
+    if(!accountSnap.exists()){if(hint)hint.textContent="找不到這個 UID 對應的帳號。";return}
+
+    if(clear){
+      if(!confirm("確定解除這個使用者的全部功能限制嗎？"))return;
+      await db.ref("admin/restrictionsByUid/"+uid).remove();
+      await writeAudit("userRestriction.clear",uid,uid,"解除指定使用者全部功能限制");
+      if(hint)hint.textContent="限制已解除。";
+      await loadRestriction();await loadRestrictedUsers();return;
+    }
+
+    const selected=[];
+    document.querySelectorAll("#ad2RestrictionChecks input").forEach(x=>{if(x.checked)selected.push(x.dataset.feature);});
+    if(!selected.length){if(hint)hint.textContent="至少要選擇一個限制功能。";return}
+    const reason=String($("ad2RestrictionReason")?.value||"").trim().slice(0,300);
+    if(!reason){if(hint)hint.textContent="請填寫限制原因。";return}
+    const duration=$("ad2RestrictionDuration")?.value||"permanent";
+    const until=duration==="permanent"?0:Date.now()+Number(duration);
+    const featuresOut={};selected.forEach(key=>featuresOut[key]=true);
+    await db.ref("admin/restrictionsByUid/"+uid).set({
+      features:featuresOut,
+      reason,
+      blockedUntil:until,
+      updatedAt:Date.now(),
+      updatedBy:user?.uid||""
+    });
+    await writeAudit("userRestriction.apply",uid,uid,"套用功能限制："+selected.map(k=>FEATURE_LABELS[k]||k).join("、")+" · "+(duration==="permanent"?"永久":new Date(until).toLocaleString())+" · 原因："+reason);
+    if(hint)hint.textContent="功能限制已套用。";
+    await loadRestriction();await loadRestrictedUsers();
   }
   function refreshAll(){renderAnalytics();renderSecurity();void readMaintenance();void loadRestriction();void loadRestrictedUsers();void loadRoles();void loadFeatureFlags();}
   async function boot(){
