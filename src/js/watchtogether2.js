@@ -695,6 +695,25 @@
       auth?.onAuthStateChanged(()=>{ void db.ref("system/maintenance").once("value").then(snap=>apply(snap.val())); });
     }catch(error){ console.warn("[WT2] maintenance listener:", error); }
   }
+  let maintenanceCountdownTimer=null;
+
+  function formatMaintenanceCountdown(ms){
+    const total=Math.max(0,Math.ceil(Number(ms||0)/1000));
+    const days=Math.floor(total/86400);
+    const hours=Math.floor((total%86400)/3600);
+    const minutes=Math.floor((total%3600)/60);
+    const seconds=total%60;
+    if(days>0) return days+" 天 "+String(hours).padStart(2,"0")+" 時 "+String(minutes).padStart(2,"0")+" 分";
+    return String(hours).padStart(2,"0")+":"+String(minutes).padStart(2,"0")+":"+String(seconds).padStart(2,"0");
+  }
+
+  function clearMaintenanceCountdown(){
+    if(maintenanceCountdownTimer){
+      clearInterval(maintenanceCountdownTimer);
+      maintenanceCountdownTimer=null;
+    }
+  }
+
   function showMaintenance(state){
     let screen=$("wt2MaintenanceScreen");
     if(!screen){
@@ -704,11 +723,29 @@
       document.body.appendChild(screen);
     }
     const ends=Number(state.endsAt||0);
-    screen.innerHTML='<div class="wt2-maintenance-card"><div class="wt2-maintenance-icon">🔧</div><h1>WatchTogether 維護中</h1><p>'+escapeHtml(state.message||"系統正在進行維護，請稍後再回來。")+'</p><div class="wt2-maintenance-meta"><div class="box"><small>狀態</small><strong>🔴 維護中</strong></div><div class="box"><small>預計恢復</small><strong>'+(ends?new Date(ends).toLocaleString():"尚未設定")+'</strong></div></div></div>';
+    screen.innerHTML='<div class="wt2-maintenance-card"><div class="wt2-maintenance-icon">🔧</div><div class="wt2-ai-kicker">SERVER MAINTENANCE</div><h1>WatchTogether 維護中</h1><p>'+escapeHtml(state.message||"系統正在進行維護，請稍後再回來。")+'</p><div class="wt2-maintenance-meta"><div class="box"><small>狀態</small><strong>🔴 維護中</strong></div><div class="box"><small>預計恢復</small><strong id="wt2MaintenanceEnds">'+(ends?new Date(ends).toLocaleString():"尚未設定")+'</strong></div><div class="box"><small>剩餘時間</small><strong id="wt2MaintenanceCountdown">'+(ends?formatMaintenanceCountdown(ends-Date.now()):"未設定")+'</strong></div></div></div>';
     screen.classList.remove("hidden");
+    clearMaintenanceCountdown();
+    if(ends>0){
+      const tick=()=>{
+        const remain=ends-Date.now();
+        const node=$("wt2MaintenanceCountdown");
+        if(remain<=0){
+          clearMaintenanceCountdown();
+          location.reload();
+          return;
+        }
+        if(node)node.textContent=formatMaintenanceCountdown(remain);
+      };
+      tick();
+      maintenanceCountdownTimer=setInterval(tick,1000);
+    }
   }
 
-  function hideMaintenance(){ $("wt2MaintenanceScreen")?.classList.add("hidden"); }
+  function hideMaintenance(){
+    clearMaintenanceCountdown();
+    $("wt2MaintenanceScreen")?.classList.add("hidden");
+  }
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
