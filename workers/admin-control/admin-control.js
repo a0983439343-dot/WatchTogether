@@ -1,3 +1,5 @@
+import { verifyFirebaseIdToken } from "../youtube-search.js";
+
 const passwordAttempts = new Map();
 
 const json=(data,status=200,origin="*")=>new Response(JSON.stringify(data),{
@@ -45,29 +47,27 @@ async function authenticateAdmin(request,env){
   const token=auth.startsWith("Bearer ")?auth.slice(7).trim():"";
   if(!token)return {ok:false,status:401};
 
-  const claims=decodeJwtPayload(token);
-  const uid=String(claims?.user_id||claims?.sub||"").trim();
-  if(!uid)return {ok:false,status:401};
-
-  // Do not trust decoded JWT claims by themselves. The Realtime Database
-  // REST API validates the Firebase ID token supplied in ?auth=<token>.
-  const whitelist=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
-  if(!whitelist.ok && whitelist.status!==404){
+  const projectId=String(env.FIREBASE_PROJECT_ID||"watchtogether-3f4f9").trim();
+  let claims;
+  try{
+    claims=await verifyFirebaseIdToken(token,projectId);
+  }catch(_){
     return {ok:false,status:401};
   }
 
-  if(uid===env.MASTER_ADMIN_UID){
-    return {ok:true,uid,token,role:"master"};
-  }
+  const uid=String(claims?.sub||claims?.user_id||"").trim();
+  if(!uid)return {ok:false,status:401};
 
-  const item=whitelist.data;
-  if(item?.enabled===true && ["admin","master"].includes(String(item.role||"admin"))){
+  if(uid===env.MASTER_ADMIN_UID)return {ok:true,uid,token,role:"master"};
+
+  const r=await dbFetch(env,"admin/whitelistByUid/"+uid,token);
+  const item=r.data;
+  if(item?.uid===uid && item?.enabled===true && ["admin","master"].includes(String(item.role||"admin"))){
     return {ok:true,uid,token,role:String(item.role||"admin")};
   }
 
   return {ok:false,status:404};
 }
-
 async function getCredential(env,ctx){
   const r=await dbFetch(env,"admin/security/maintenanceCredential",ctx.token);
   return r.data;
