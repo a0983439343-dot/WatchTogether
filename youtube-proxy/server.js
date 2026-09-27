@@ -260,41 +260,43 @@ async function verifyFirebaseBearer(authorization) {
   const value = String(authorization || "");
   if (!value.startsWith("Bearer ")) return {ok:false};
   const token = value.slice(7).trim();
-  const parts = token.split(".");
-  if (parts.length !== 3) return {ok:false};
+  if (!token) return {ok:false};
 
-  let payload;
-  try {
-    const normalized = parts[1].replace(/-/g,"+").replace(/_/g,"/") + "=".repeat((4 - parts[1].length % 4) % 4);
-    payload = JSON.parse(Buffer.from(normalized, "base64").toString("utf8"));
-  } catch (_) {
-    return {ok:false};
-  }
-
-  const uid = String(payload?.user_id || payload?.sub || "").trim();
-  if (!uid) return {ok:false};
+  const apiKey = String(process.env.FIREBASE_WEB_API_KEY || "").trim();
+  if (!apiKey) return {ok:false, reason:"firebase_web_api_key_missing"};
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
+  const timer = setTimeout(() => controller.abort(), 7000);
   try {
     const response = await fetch(
-      FIREBASE_DATABASE_URL + "/admin/whitelistByUid/" + encodeURIComponent(uid) + ".json?auth=" + encodeURIComponent(token),
-      {method:"GET",cache:"no-store",signal:controller.signal}
+      "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" + encodeURIComponent(apiKey),
+      {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({idToken:token}),
+        signal:controller.signal
+      }
     );
-    if (response.status === 401 || response.status === 403) return {ok:false};
-    const whitelist = await response.json().catch(() => null);
-    if (uid === "35d45a23-b648-4caf-a6d5-a69112860551") {
-      return {ok:true,uid,role:"master"};
-    }
-    return {ok:true,uid,role:String(whitelist?.role || "user"),whitelist};
+
+    if(!response.ok) return {ok:false};
+
+    const data=await response.json().catch(()=>({}));
+    const user=Array.isArray(data?.users) ? data.users[0] : null;
+    const uid=String(user?.localId||"").trim();
+    if(!uid) return {ok:false};
+
+    return {
+      ok:true,
+      uid,
+      email:String(user?.email||""),
+      emailVerified:Boolean(user?.emailVerified)
+    };
   } catch (_) {
     return {ok:false};
   } finally {
     clearTimeout(timer);
   }
 }
-
-
 
 async function readJsonBody(req, maxBytes = 32768) {
   return await new Promise((resolve, reject) => {
