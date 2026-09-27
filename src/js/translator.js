@@ -26,7 +26,7 @@
     if (configured.endsWith("/ai/analyze")) {
       return configured.slice(0, -"/ai/analyze".length) + "/ai/translate";
     }
-    const base = configured.replace(//+$/, "");
+    const base = configured.replace(/\/+$/, "");
     return base ? base + "/ai/translate" : "";
   }
 
