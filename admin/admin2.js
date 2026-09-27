@@ -9,6 +9,24 @@
   ];
   const permissions=["users.view","users.ban","users.manage","rooms.view","rooms.manage","reports.handle","chat.moderate","analytics.view","settings.edit","maintenance.manage","restrictions.manage","roles.manage","whitelist.manage","ai.use","audit.view","audit.delete"];
 
+  const PERMISSION_DB_KEYS = Object.fromEntries(permissions.map(p=>[p,p.replace(/\./g,"__")]));
+  function encodePermissions(source){
+    const out={};
+    Object.entries(source||{}).forEach(([key,value])=>{
+      const dbKey=PERMISSION_DB_KEYS[key]||String(key||"").replace(/[^A-Za-z0-9_-]/g,"__");
+      if(value===true) out[dbKey]=true;
+    });
+    return out;
+  }
+  function decodePermissions(source){
+    const out={};
+    Object.entries(source||{}).forEach(([key,value])=>{
+      if(value!==true)return;
+      const match=Object.entries(PERMISSION_DB_KEYS).find(([,dbKey])=>dbKey===key);
+      if(match) out[match[0]]=true;
+    });
+    return out;
+  }
   function isAdminContext(){
     const text=(document.querySelector("#adminAccount")?.textContent||"").toLowerCase();
     return Boolean(text && !text.includes("—"));
@@ -58,16 +76,14 @@
       if(roleId){
         const roleSnap2=await db.ref("admin/roles/"+roleId).once("value");
         const role=roleSnap2.val()||{};
-        state.customPermissions=new Set(
-          Object.entries(role.permissions||{}).filter(([,v])=>v===true).map(([k])=>k)
-        );
+        state.customPermissions=new Set(Object.keys(decodePermissions(role.permissions||{})));
       }
 
       const overrideSnap=await db.ref("admin/userPermissionOverrides/"+user.uid).once("value").catch(()=>null);
       const override=overrideSnap?.val?.()||{};
       state.permissionOverrides={
-        allow:override.allow||{},
-        deny:override.deny||{}
+        allow:decodePermissions(override.allow||{}),
+        deny:decodePermissions(override.deny||{})
       };
     }catch(error){
       console.warn("[WT2 Admin] role/override context:",error);
@@ -187,7 +203,8 @@
     const roleId=String($("ad2RoleId")?.value||"").trim().replace(/[^A-Za-z0-9_-]/g,"").slice(0,80);
     const name=String($("ad2RoleName")?.value||"").trim().slice(0,80);
     if(!roleId||!name){$("ad2RoleHint").textContent="請填寫角色 ID 與名稱。";return}
-    const permissionsOut={}; document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>permissionsOut[x.dataset.permission]=x.checked);
+    const selected={}; document.querySelectorAll("#ad2PermissionChecks input").forEach(x=>selected[x.dataset.permission]=x.checked);
+    const permissionsOut=encodePermissions(selected);
     await DB().ref("admin/roles/"+roleId).set({name,permissions:permissionsOut,updatedAt:Date.now(),updatedBy:user.uid});
     const assignUid=String($("ad2RoleAssignUid")?.value||"").trim();
     if(assignUid) await DB().ref("admin/userRoles/"+assignUid).set({roleId,updatedAt:Date.now(),updatedBy:user.uid});
@@ -261,9 +278,9 @@
       const base="admin/userPermissionOverrides/"+uid;
       const updates={};
       if(clear){
-        updates[mode+"/"+permission]=null;
+        updates[mode+"/"+(PERMISSION_DB_KEYS[permission]||permission.replace(/\./g,"__"))]=null;
       }else{
-        updates[mode+"/"+permission]=true;
+        updates[mode+"/"+(PERMISSION_DB_KEYS[permission]||permission.replace(/\./g,"__"))]=true;
       }
       updates.updatedAt=Date.now();
       updates.updatedBy=user.uid;
