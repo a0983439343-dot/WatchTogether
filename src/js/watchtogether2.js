@@ -218,7 +218,7 @@
   }
   async function renderPublicRooms(){
     const db=window.db||window.firebase?.database?.(),list=$("wt2PublicRoomList"); if(!list||!db)return;
-    try{
+       list.innerHTML=entries.length?entries.map(room=>{const name=escapeHtml(room.name||"公開房間");const roomId=escapeHtml(room.roomId||"");const count=Number(room.memberCount||0);return '<button type="button" class="wt2-room-row" data-open-room="'+roomId+'"><span class="room-icon">🌎</span><span class="room-main"><strong>'+name+'</strong><small>'+roomId+(count>0?" · "+count+" 人":"")+'</small></span><span class="room-go">加入 →</span></button>';}).join(""):'<div class="wt2-empty">目前沒有公開房間。</div>';
       const snap=await db.ref("publicRooms").once("value");
       const entries=Object.values(snap.val()||{}).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0)).slice(0,50);
       list.innerHTML=entries.length?entries.map(room=>'<button type="button" class="wt2-room-row" data-open-room="'+escapeHtml(room.roomId)+'"><span class="room-icon">🌎</span><span class="room-main"><strong>'+escapeHtml(room.name||"公開房間")+'</strong><small>'+escapeHtml(room.roomId||"")+" · "+Number(room.memberCount||0)+" 人</small></span><span class="room-go">加入 →</span></button>').join(""):'<div class="wt2-empty">目前沒有公開房間。</div>';
