@@ -840,6 +840,95 @@ function degradedAiResult(input, error) {
   };
 }
 
+async function handleAiTranslate(req, res) {
+  if (req.method !== "POST") {
+    send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+
+  if (!aiAllowedOrigin(req)) {
+    send(res, 403, JSON.stringify({ok:false,error:"origin_not_allowed"}));
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "translate", 30)) {
+    send(res, 429, JSON.stringify({ok:false,error:"翻譯請求過於頻繁，請稍後再試"}));
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, 8_192);
+  } catch (error) {
+    send(res, 400, JSON.stringify({ok:false,error:String(error?.message||"invalid_request")}));
+    return;
+  }
+
+  const textValue = String(body?.text || "").trim().slice(0, 2_000);
+  const targetLanguage = String(body?.targetLanguage || "zh").trim().slice(0, 20);
+  if (!textValue) {
+    send(res, 400, JSON.stringify({ok:false,error:"text_required"}));
+    return;
+  }
+
+  const allowedTargets = new Set(["zh","en","ja","ko","es","fr","de","pt"]);
+  const target = allowedTargets.has(targetLanguage) ? targetLanguage : "zh";
+
+  try {
+    const apiKeys = getGeminiApiKeys();
+    if (!apiKeys.length) throw new Error("GEMINI_API_KEY 未設定");
+
+    const schema = {
+      type: "object",
+      properties: {
+        translatedText: {type:"string"}
+      },
+      required: ["translatedText"],
+      propertyOrdering: ["translatedText"]
+    };
+
+    let lastError = null;
+    for (const model of getAiModelFallbacks()) {
+      for (const apiKey of apiKeys) {
+        try {
+          const result = await requestGeminiModel({
+            model,
+            apiKey,
+            prompt:
+              "Translate the following user chat message into target language code " +
+              target +
+              ". Preserve meaning, tone, emojis, names, URLs and line breaks. " +
+              "Return only the translated text in JSON field translatedText. " +
+              "Do not add explanations.\n\n" +
+              textValue,
+            schema,
+            isRepairPhase: false
+          });
+          const translatedText = String(result?.translatedText || "").trim().slice(0, 2_000);
+          if (!translatedText) throw new Error("empty_translation");
+          send(res, 200, JSON.stringify({ok:true, translatedText, model}));
+          return;
+        } catch (error) {
+          lastError = error;
+          if (!isQuotaError(error)) break;
+        }
+      }
+      if (lastError && !isQuotaError(lastError)) break;
+    }
+
+    send(res, 502, JSON.stringify({
+      ok:false,
+      error:String(lastError?.message || "translation_failed").slice(0,300)
+    }));
+  } catch (error) {
+    send(res, 500, JSON.stringify({
+      ok:false,
+      error:String(error?.message || "translation_failed").slice(0,300)
+    }));
+  }
+}
+
 async function handleAiAnalyze(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({
@@ -1882,6 +1971,11 @@ const server = http.createServer((req, res) => {
       repairModel: getAiModel("repair"),
       configuredKeys: getGeminiApiKeys().length
     }));
+    return;
+  }
+
+  if (url.pathname === "/ai/translate") {
+    handleAiTranslate(req, res);
     return;
   }
 
