@@ -22,12 +22,12 @@
   };
 
   function apiUrl() {
-    const configured = String(window.WATCHTOGETHER_CONFIG?.aiBugDetectorUrl || "").trim();
-    if (configured.endsWith("/ai/analyze")) {
-      return configured.slice(0, -"/ai/analyze".length) + "/ai/translate";
-    }
-    const base = configured.replace(/\/+$/, "");
-    return base ? base + "/ai/translate" : "";
+    const configured=String(window.WATCHTOGETHER_CONFIG?.translationUrl||"").trim();
+    if(configured)return configured;
+    const fallback=String(window.WATCHTOGETHER_CONFIG?.aiBugDetectorUrl||"").trim();
+    if(fallback.endsWith("/ai/analyze"))return fallback.slice(0,-"/ai/analyze".length)+"/ai/translate";
+    const base=fallback.replace(/\/+$/,"");
+    return base?base+"/ai/translate":"";
   }
 
   function targetLanguage() {
