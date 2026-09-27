@@ -537,12 +537,73 @@
   }
 
 
+  function ensureRoomSettingsPanel(){
+    const roomView=$("roomView");
+    if(!roomView || $("wt2RoomSettings")) return;
+    const toolbar=roomView.querySelector(".room-toolbar");
+    const left=toolbar?.querySelector(".room-meta");
+    if(left){
+      const button=document.createElement("button");
+      button.type="button";
+      button.id="wt2RoomSettingsBtn";
+      button.className="tiny-btn hidden";
+      button.textContent="⚙ 房間設定";
+      left.appendChild(button);
+    }
+
+    const panel=document.createElement("section");
+    panel.id="wt2RoomSettings";
+    panel.className="panel wt2-room-settings hidden";
+    panel.innerHTML='<div class="wt2-room-settings-head"><div><strong>房間設定</strong><small>只有房主可以修改</small></div><button type="button" id="wt2RoomSettingsClose">×</button></div><div class="wt2-room-settings-form"><label class="wt2-room-setting-check"><input id="wt2RoomLocked" type="checkbox"><span><strong>鎖定新成員</strong><small>開啟後，不再接受新的成員加入；目前成員不受影響。</small></span></label><label>最大成員數<select id="wt2RoomMaxMembers"><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option><option value="5">5 人</option><option value="6">6 人</option><option value="7">7 人</option><option value="8">8 人</option><option value="9">9 人</option><option value="10">10 人</option></select></label><div id="wt2RoomSettingsHint" class="wt2-muted"></div><button type="button" class="primary-btn" id="wt2RoomSettingsSave">儲存設定</button></div>';
+    roomView.appendChild(panel);
+
+    $("wt2RoomSettingsBtn")?.addEventListener("click",()=>{refreshRoomSettingsPanel();panel.classList.toggle("hidden");});
+    $("wt2RoomSettingsClose")?.addEventListener("click",()=>panel.classList.add("hidden"));
+    $("wt2RoomSettingsSave")?.addEventListener("click",()=>void saveRoomSettings());
+  }
+
+  function refreshRoomSettingsPanel(){
+    const state=window.WT_CORE?.state;
+    const button=$("wt2RoomSettingsBtn"),panel=$("wt2RoomSettings");
+    if(!state||!button||!panel)return;
+    const owner=state.isOwner===true;
+    button.classList.toggle("hidden",!owner);
+    if(!owner){panel.classList.add("hidden");return}
+    const settings=state.room?.settings||{};
+    const locked=settings.locked===true;
+    const max=Math.max(2,Math.min(10,Number(settings.maxMembers||2)));
+    if($("wt2RoomLocked"))$("wt2RoomLocked").checked=locked;
+    if($("wt2RoomMaxMembers"))$("wt2RoomMaxMembers").value=String(max);
+  }
+
+  async function saveRoomSettings(){
+    const state=window.WT_CORE?.state;
+    const db=window.db||window.firebase?.database?.();
+    const roomId=String(state?.roomId||"").trim().toUpperCase();
+    if(!state?.isOwner||!db||!roomId){return}
+    const locked=Boolean($("wt2RoomLocked")?.checked);
+    const maxMembers=Math.max(2,Math.min(10,Number($("wt2RoomMaxMembers")?.value||2)));
+    const hint=$("wt2RoomSettingsHint");
+    try{
+      await db.ref("roomMeta/"+roomId+"/settings").update({
+        locked,
+        maxMembers
+      });
+      if(state.room) state.room.settings={...(state.room.settings||{}),locked,maxMembers};
+      if(hint)hint.textContent="設定已儲存。";
+      setTimeout(()=>hint&&(hint.textContent=""),1600);
+    }catch(error){
+      if(hint)hint.textContent="儲存失敗："+String(error?.message||error);
+      console.warn("[WT2] room settings:",error);
+    }
+  }
+
   function watchRoomState(){
     const roomView=$("roomView");
     if(!roomView) return;
     const observer=new MutationObserver(()=>{
       const inRoom=!roomView.classList.contains("hidden");
-      if(inRoom) setActive("rooms");
+      if(inRoom){ setActive("rooms"); refreshRoomSettingsPanel(); }
     });
     observer.observe(roomView,{attributes:true,attributeFilter:["class"]});
     void renderJoinApprovalPanel();
