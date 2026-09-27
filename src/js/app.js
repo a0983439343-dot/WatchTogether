@@ -7365,7 +7365,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           visibility,
           joinMode:
             visibility === "public"
-              ? "open"
+              ? String(
+                  document.querySelector("#wt2PublicJoinMode")?.value ||
+                  "open"
+                ) === "approval"
+                ? "approval"
+                : "open"
               : "invite_only",
 
           settings: {
@@ -7818,6 +7823,36 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     const isAdminJoin =
       Boolean(state.adminJoinOverride);
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      !isExistingMember &&
+      String(metaData.visibility || "personal") === "public" &&
+      String(metaData.joinMode || "open") === "approval"
+    ) {
+      const requestRef = db.ref(
+        "roomJoinRequests/" + roomId + "/" + state.uid
+      );
+      const requestSnapshot = await requestRef.once("value");
+      const request = requestSnapshot.val() || {};
+
+      if (request.approved !== true) {
+        if (request.status === "pending") {
+          throw new Error("加入申請已送出，等待房主批准");
+        }
+
+        await requestRef.set({
+          uid: state.uid,
+          name: String(state.memberName || "玩家").slice(0, 30),
+          status: "pending",
+          approved: false,
+          requestedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        throw new Error("已送出加入申請，等待房主批准");
+      }
+    }
 
     if (
       !state.adminJoinOverride &&
