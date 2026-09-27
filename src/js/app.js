@@ -7461,6 +7461,16 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       `?room=${encodeURIComponent(roomId)}${state.adminJoinOverride ? "&adminJoin=1" : ""}`
     );
 
+    try {
+      await db.ref("roomRoles/" + roomId + "/" + state.uid).set({
+        role: "owner",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedBy: state.uid
+      });
+    } catch (error) {
+      console.warn("寫入房主角色失敗:", error);
+    }
+
     if (visibility === "personal") {
       try {
         await db.ref("profiles/" + state.uid + "/personalRooms/" + roomId).set({
