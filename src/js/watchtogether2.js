@@ -128,6 +128,7 @@
     bindNavigation();
     bindQuickActions();
     bindRoomTabs();
+    bindDirectoryTabs();
     initRoomDirectory();
     watchRoomState();
   }
@@ -212,6 +213,40 @@
     document.querySelectorAll("[data-room-tab]").forEach(b=>b.addEventListener("click",()=>setDirectoryTab(b.dataset.roomTab==="public"?"public":"personal")));
     $("wt2DirectoryRefresh")?.addEventListener("click",()=>setDirectoryTab(document.querySelector("[data-room-tab].active")?.dataset.roomTab==="public"?"public":"personal"));
     setDirectoryTab("personal");
+  }
+
+  async function renderPersonalRooms(){
+    const user=window.firebase?.auth?.().currentUser,db=window.db||window.firebase?.database?.();
+    const list=$("wt2PersonalRoomList"); if(!list)return;
+    if(!user || user.isAnonymous || !db){list.innerHTML='<div class="wt2-empty">登入後可查看永久專屬房間。</div>';return;}
+    try{
+      const snap=await db.ref("profiles/"+user.uid+"/personalRooms").once("value");
+      const value=snap.val()||{};
+      const entries=Object.values(value).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+      list.innerHTML=entries.length?entries.map(room=>'<button type="button" class="wt2-room-row" data-open-room="'+escapeHtml(room.roomId)+'"><span class="room-icon">🔐</span><span class="room-main"><strong>'+escapeHtml(room.name||"一起看")+'</strong><small>'+escapeHtml(room.roomId||"")+'</small></span><span class="room-go">進入 →</span></button>').join(""):'<div class="wt2-empty">還沒有專屬房間。建立一個就會永久保存在這裡。</div>';
+      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.joinRoom?.(b.dataset.openRoom)));
+    }catch(e){list.innerHTML='<div class="wt2-empty">無法載入專屬房間。</div>';console.warn("[WT2] personal room list",e);}
+  }
+  async function renderPublicRooms(){
+    const db=window.db||window.firebase?.database?.(),list=$("wt2PublicRoomList"); if(!list||!db)return;
+    try{
+      const snap=await db.ref("publicRooms").once("value");
+      const entries=Object.values(snap.val()||{}).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0)).slice(0,50);
+      list.innerHTML=entries.length?entries.map(room=>'<button type="button" class="wt2-room-row" data-open-room="'+escapeHtml(room.roomId)+'"><span class="room-icon">🌎</span><span class="room-main"><strong>'+escapeHtml(room.name||"公開房間")+'</strong><small>'+escapeHtml(room.roomId||"")+" · "+Number(room.memberCount||0)+" 人</small></span><span class="room-go">加入 →</span></button>').join(""):'<div class="wt2-empty">目前沒有公開房間。</div>';
+      list.querySelectorAll("[data-open-room]").forEach(b=>b.addEventListener("click",()=>window.joinRoom?.(b.dataset.openRoom)));
+    }catch(e){list.innerHTML='<div class="wt2-empty">公開房間暫時無法載入。</div>';console.warn("[WT2] public room list",e);}
+  }
+  function bindDirectoryTabs(){
+    document.querySelectorAll("[data-directory-tab]").forEach(b=>b.addEventListener("click",()=>{
+      const tab=b.dataset.directoryTab;
+      document.querySelectorAll("[data-directory-tab]").forEach(x=>x.classList.toggle("active",x===b));
+      $("wt2PersonalRoomList")?.classList.toggle("hidden",tab!=="personal");
+      $("wt2PublicRoomList")?.classList.toggle("hidden",tab!=="public");
+      if(tab==="personal")void renderPersonalRooms();else void renderPublicRooms();
+    }));
+    const auth=window.firebase?.auth?.();
+    auth?.onAuthStateChanged(()=>void renderPersonalRooms());
+    void renderPersonalRooms();
   }
 
   function bindRoomTabs(){
@@ -305,21 +340,35 @@
     tryAttach();
   }
 
+  async function isAdminForMaintenance(){
+    if(window.__WT2_ADMIN_AUTHORIZED__===true) return true;
+    const auth=window.firebase?.auth?.();
+    const db=window.db || window.firebase?.database?.();
+    const user=auth?.currentUser;
+    if(!user || user.isAnonymous || !db) return false;
+    const MASTER_UID="35d45a23-b648-4caf-a6d5-a69112860551";
+    if(String(user.uid||"")===MASTER_UID) return true;
+    try{
+      const snapshot=await db.ref("admin/whitelistByUid/"+user.uid).once("value");
+      const value=snapshot.val();
+      return Boolean(value?.enabled===true && ["admin","master"].includes(String(value.role||"admin")));
+    }catch(_){ return false; }
+  }
+
   function initMaintenanceListener(){
     const db=window.db || window.firebase?.database?.();
     if(!db){setTimeout(initMaintenanceListener,1000); return;}
+    const apply=async(state)=>{
+      if(!state || state.enabled!==true){ hideMaintenance(); return; }
+      if(await isAdminForMaintenance()){ hideMaintenance(); return; }
+      showMaintenance(state);
+    };
     try{
-      db.ref("system/maintenance").on("value",snap=>{
-        const state=snap.val();
-        if(!state || state.enabled!==true){ hideMaintenance(); return; }
-        const u=window.firebase?.auth?.().currentUser;
-        const privileged=window.__WT2_ADMIN_AUTHORIZED__===true;
-        if(privileged){ hideMaintenance(); return; }
-        showMaintenance(state);
-      });
-    }catch(error){ console.warn("[WT2] maintenance listener:",error); }
+      db.ref("system/maintenance").on("value",snap=>{ void apply(snap.val()); });
+      const auth=window.firebase?.auth?.();
+      auth?.onAuthStateChanged(()=>{ void db.ref("system/maintenance").once("value").then(snap=>apply(snap.val())); });
+    }catch(error){ console.warn("[WT2] maintenance listener:", error); }
   }
-
   function showMaintenance(state){
     let screen=$("wt2MaintenanceScreen");
     if(!screen){
