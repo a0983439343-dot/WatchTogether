@@ -48,3 +48,8 @@ jobs:
               with open(path, encoding="utf-8") as f:
                   json.load(f)
           PY
+
+      - name: Install test dependencies
+        run: npm ci
+      - name: Run Firebase Rules tests
+        run: npm run test:rules
