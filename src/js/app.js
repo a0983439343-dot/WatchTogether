@@ -14589,6 +14589,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   window.WT_CORE.createRoom =
     createRoom;
 
+  window.WT_CORE.addToQueue =
+    addToQueue;
+
+  window.WT_CORE.removeFromQueue =
+    removeFromQueue;
+
+  window.WT_CORE.playQueueItem =
+    playQueueItem;
+
+  window.WT_CORE.changeVideo =
+    changeVideo;
+
   window.WT_CORE.createRoomWithVideo =
     createRoomWithVideo;
   window.WT_CORE.joinRoom = joinRoom;
