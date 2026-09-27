@@ -217,7 +217,7 @@
       if(action==="create"){ safeShowView("home"); scrollToId("roomNameInput"); $("roomNameInput")?.focus(); }
       if(action==="join"){ safeShowView("home"); scrollToId("joinCodeInput"); $("joinCodeInput")?.focus(); }
       if(action==="search"){ safeShowView("home"); scrollToId("videoSearchInput"); $("videoSearchInput")?.focus(); }
-      if(action==="ai"){ safeShowView("home"); scrollToId("videoSearchInput"); $("videoSearchInput")?.focus(); }
+      if(action==="ai"){ safeShowView("home"); scrollToId("wt2AiCenter"); $("wt2AiPrompt")?.focus(); }
     }));
   }
 
