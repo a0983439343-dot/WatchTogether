@@ -326,6 +326,17 @@
 
   async function loadPublicRooms(){
     const db=window.db||window.firebase?.database?.();if(!db)return;
+    const user=window.firebase?.auth?.().currentUser;
+    if(user && !user.isAnonymous){
+      try{
+        const restriction=await db.ref("admin/restrictionsByUid/"+user.uid).once("value");
+        const value=restriction.val()||{}, until=Number(value.blockedUntil||0);
+        if((until===0 || until>Date.now()) && value.features?.public_explore===true){
+          renderDirectory({},"public");
+          return;
+        }
+      }catch(_){}
+    }
     try{const s=await db.ref("publicRooms").limitToLast(50).once("value");renderDirectory(s.val()||{},"public");}
     catch(e){console.warn("[WT2] public room load:",e);renderDirectory({},"public");}
   }
