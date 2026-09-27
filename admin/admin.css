@@ -613,3 +613,137 @@ html[data-device="phone"][data-orientation="portrait"] .toast{
     flex: 1 1 130px;
   }
 }
+
+
+/* 手機版：問題回報 / 操作紀錄改用卡片，不再強制桌面表格寬度 */
+@media (max-width: 820px) {
+  .reports-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .reports-table thead {
+    display: none;
+  }
+
+  .reports-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .reports-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 13px;
+    background: #0b1322;
+    overflow: hidden;
+  }
+
+  .reports-table td {
+    display: grid;
+    grid-template-columns: 74px minmax(0,1fr);
+    gap: 8px;
+    min-width: 0;
+    padding: 10px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.055);
+    overflow-wrap: anywhere;
+  }
+
+  .reports-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .reports-table td::before {
+    color: #72809f;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+    content: "資料";
+  }
+
+  .reports-table td:nth-child(1)::before { content: "時間"; }
+  .reports-table td:nth-child(2)::before { content: "類型"; }
+  .reports-table td:nth-child(3)::before { content: "帳號"; }
+  .reports-table td:nth-child(4)::before { content: "房間"; }
+  .reports-table td:nth-child(5)::before { content: "問題"; }
+  .reports-table td:nth-child(6)::before { content: "狀態"; }
+  .reports-table td:nth-child(7)::before { content: "操作"; }
+
+  .reports-table .report-description-cell {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .reports-table .row-actions {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .audit-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .audit-table thead {
+    display: none;
+  }
+
+  .audit-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .audit-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 13px;
+    background: #0b1322;
+    overflow: hidden;
+  }
+
+  .audit-table td {
+    display: grid;
+    grid-template-columns: 74px minmax(0,1fr);
+    gap: 8px;
+    min-width: 0;
+    padding: 10px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.055);
+    overflow-wrap: anywhere;
+  }
+
+  .audit-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .audit-table td::before {
+    color: #72809f;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+    content: "資料";
+  }
+
+  .audit-table td:nth-child(1)::before { content: "時間"; }
+  .audit-table td:nth-child(2)::before { content: "管理員"; }
+  .audit-table td:nth-child(3)::before { content: "操作"; }
+  .audit-table td:nth-child(4)::before { content: "目標"; }
+  .audit-table td:nth-child(5)::before { content: "內容"; }
+
+  .audit-table .audit-target,
+  .audit-table .audit-content {
+    min-width: 0;
+    max-width: none;
+  }
+}
