@@ -1460,7 +1460,7 @@
   }
 
   async function toggleWhitelist(uid) {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有管理白名單權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     await db.ref("admin/whitelistByUid/" + uid).update({
@@ -1678,14 +1678,15 @@
 
   function applyRoleUi() {
     const master = currentRole === "master";
+    const canWhitelist = hasAdminPermission("whitelist.manage");
     const addPanel = $("whitelistAddPanel");
     const help = $("whitelistHelp");
-    if (master) {
+    if (canWhitelist) {
       addPanel?.classList.remove("hidden");
       if (help) help.textContent = "到「登入帳號」查看使用者 UID，按「複製 UID」後貼到這裡；新增時可指定「管理員」或「觀察員」。";
     } else if (currentRole === "admin") {
       addPanel?.classList.add("hidden");
-      if (help) help.textContent = "你目前是管理員；可用功能會依自訂角色與個人權限覆寫決定，白名單由最高管理員管理。";
+      if (help) help.textContent = "你目前是管理員；可用功能會依自訂角色與個人權限覆寫決定。";
     } else {
       addPanel?.classList.add("hidden");
       if (help) help.textContent = "你目前是觀察員，僅可查看後台資料，不可修改使用者、封鎖帳號或刪除房間。";
