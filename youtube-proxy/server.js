@@ -840,6 +840,185 @@ function degradedAiResult(input, error) {
   };
 }
 
+async function handleAiAgent(req, res) {
+  if (req.method !== "POST") {
+    send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+
+  if (!aiAllowedOrigin(req)) {
+    send(res, 403, JSON.stringify({ok:false,error:"origin_not_allowed"}));
+    return;
+  }
+
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) {
+    send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "agent", 18)) {
+    send(res, 429, JSON.stringify({ok:false,error:"AI Agent 請求過於頻繁，請稍後再試"}));
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, 32_768);
+  } catch (error) {
+    send(res, 400, JSON.stringify({ok:false,error:String(error?.message || "invalid_request")}));
+    return;
+  }
+
+  const messages = Array.isArray(body?.messages) ? body.messages.slice(-16) : [];
+  const tools = Array.isArray(body?.tools) ? body.tools.slice(0, 16) : [];
+  if (!messages.length) {
+    send(res, 400, JSON.stringify({ok:false,error:"messages_required"}));
+    return;
+  }
+
+  const allowedNames = new Set(
+    tools
+      .map(item => String(item?.function?.name || "").trim())
+      .filter(Boolean)
+  );
+
+  const safeMessages = messages.map(message => ({
+    role: String(message?.role || "").slice(0, 20),
+    content: String(message?.content || "").slice(0, 4_000),
+    ...(Array.isArray(message?.tool_calls) ? {
+      tool_calls: message.tool_calls.slice(0, 6).map(call => ({
+        id: String(call?.id || "").slice(0, 100),
+        type: "function",
+        function: {
+          name: String(call?.function?.name || "").slice(0, 80),
+          arguments: String(call?.function?.arguments || "{}").slice(0, 2_000)
+        }
+      }))
+    } : {}),
+    ...(message?.tool_call_id ? {
+      tool_call_id: String(message.tool_call_id).slice(0, 100)
+    } : {})
+  }));
+
+  const toolSummary = tools.map(tool => ({
+    name: String(tool?.function?.name || "").slice(0, 80),
+    description: String(tool?.function?.description || "").slice(0, 400),
+    parameters: tool?.function?.parameters || {type:"object",properties:{}}
+  }));
+
+  const prompt = [
+    "You are WatchTogether 2.0 AI Core.",
+    "Understand the user's request and respond with JSON only.",
+    "You may request one or more tools from the supplied allow-list.",
+    "Never invent a tool name.",
+    "When a tool is necessary, set message.tool_calls to an array and put JSON arguments as a STRING in function.arguments.",
+    "When no tool is necessary, tool_calls must be an empty array.",
+    "Do not pretend a tool ran; the browser will execute returned tool calls.",
+    "Important operations are confirmed by the browser before execution.",
+    "",
+    "AVAILABLE TOOLS:",
+    JSON.stringify(toolSummary),
+    "",
+    "CONVERSATION:",
+    JSON.stringify(safeMessages)
+  ].join("\n");
+
+  const schema = {
+    type: "object",
+    properties: {
+      message: {
+        type: "object",
+        properties: {
+          role: {type:"string"},
+          content: {type:"string"},
+          tool_calls: {
+            type:"array",
+            items: {
+              type:"object",
+              properties: {
+                id:{type:"string"},
+                type:{type:"string"},
+                function:{
+                  type:"object",
+                  properties:{
+                    name:{type:"string"},
+                    arguments:{type:"string"}
+                  },
+                  required:["name","arguments"]
+                }
+              },
+              required:["id","type","function"]
+            }
+          }
+        },
+        required:["role","content","tool_calls"]
+      }
+    },
+    required:["message"]
+  };
+
+  try {
+    const apiKeys = getGeminiApiKeys();
+    if (!apiKeys.length) throw new Error("GEMINI_API_KEY 未設定");
+
+    let lastError = null;
+    for (const model of getAiModelFallbacks()) {
+      for (const apiKey of apiKeys) {
+        try {
+          const result = await requestGeminiModel({
+            model,
+            apiKey,
+            prompt,
+            schema,
+            isRepairPhase: false
+          });
+
+          const message = result?.message || {};
+          const toolCalls = Array.isArray(message.tool_calls)
+            ? message.tool_calls
+                .slice(0, 6)
+                .filter(call => allowedNames.has(String(call?.function?.name || "")))
+            : [];
+
+          send(res, 200, JSON.stringify({
+            ok:true,
+            model,
+            message:{
+              role:"assistant",
+              content:String(message.content || "").slice(0,4_000),
+              tool_calls:toolCalls.map((call,index)=>({
+                id:String(call?.id || ("call_" + Date.now() + "_" + index)).slice(0,100),
+                type:"function",
+                function:{
+                  name:String(call?.function?.name || "").slice(0,80),
+                  arguments:String(call?.function?.arguments || "{}").slice(0,2_000)
+                }
+              }))
+            }
+          }));
+          return;
+        } catch (error) {
+          lastError = error;
+          if (!isQuotaError(error)) break;
+        }
+      }
+      if (lastError && !isQuotaError(lastError)) break;
+    }
+
+    send(res, 502, JSON.stringify({
+      ok:false,
+      error:String(lastError?.message || "AI Agent 失敗").slice(0,300)
+    }));
+  } catch (error) {
+    send(res, 500, JSON.stringify({
+      ok:false,
+      error:String(error?.message || "AI Agent 失敗").slice(0,300)
+    }));
+  }
+}
+
 async function handleAiTranslate(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
@@ -1971,6 +2150,11 @@ const server = http.createServer((req, res) => {
       repairModel: getAiModel("repair"),
       configuredKeys: getGeminiApiKeys().length
     }));
+    return;
+  }
+
+  if (url.pathname === "/agent") {
+    handleAiAgent(req, res);
     return;
   }
 
