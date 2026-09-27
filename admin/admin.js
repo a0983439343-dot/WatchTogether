@@ -1412,7 +1412,7 @@
   }
 
   async function addWhitelist() {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有管理白名單權限"); return; }
     const input = $("whitelistEmail");
     const uid = String(input?.value || "").trim();
     if (!uid) { toast("請輸入使用者 UID"); return; }
@@ -1444,7 +1444,7 @@
   }
 
   async function changeWhitelistRole(uid) {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以調整權限"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有調整白名單權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     if (uid === MASTER_UID) { toast("最高管理員的權限不可修改"); return; }
