@@ -451,7 +451,11 @@ async function analyzeBugWithGemini(input) {
   let usedModel = model;
   let lastError = null;
 
+  let exhaustedKeys = 0;
+
   for (const apiKey of apiKeys) {
+    let keyExhausted = false;
+
     for (const candidateModel of models) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
@@ -462,35 +466,52 @@ async function analyzeBugWithGemini(input) {
             schema,
             isRepairPhase
           });
-        usedModel = candidateModel;
-        break;
-      } catch (error) {
-        lastError = error;
-        const retryable =
-          Number(error?.httpStatus) === 429 ||
-          Number(error?.httpStatus) === 500 ||
-          Number(error?.httpStatus) === 502 ||
-          Number(error?.httpStatus) === 503 ||
-          /high demand|quota|rate limit|temporarily|try again/i.test(
-            String(error?.message || "")
-          );
+          usedModel = candidateModel;
+          break;
+        } catch (error) {
+          lastError = error;
+          const retryable =
+            Number(error?.httpStatus) === 429 ||
+            Number(error?.httpStatus) === 500 ||
+            Number(error?.httpStatus) === 502 ||
+            Number(error?.httpStatus) === 503 ||
+            /high demand|quota|rate limit|temporarily|try again/i.test(
+              String(error?.message || "")
+            );
 
           if (!retryable) break;
+
           if (isQuotaError(error)) {
-            aiQuotaBlockedUntil = Date.now() + AI_QUOTA_COOLDOWN_MS;
+            keyExhausted = true;
             error.code = "gemini_quota_exhausted";
-            throw error;
+            break;
           }
+
           if (attempt === 1) break;
           await new Promise(resolve => setTimeout(resolve, 1200));
         }
       }
 
       if (analysis) break;
+      if (keyExhausted) break;
     }
+
     if (analysis) break;
-    if (isQuotaError(lastError)) {
-      throw lastError;
+
+    if (keyExhausted) {
+      exhaustedKeys += 1;
+      continue;
+    }
+
+    if (lastError && !isQuotaError(lastError)) {
+      continue;
+    }
+  }
+
+  if (!analysis && exhaustedKeys >= apiKeys.length && apiKeys.length > 0) {
+    aiQuotaBlockedUntil = Date.now() + AI_QUOTA_COOLDOWN_MS;
+    if (lastError) {
+      lastError.code = "gemini_all_keys_quota_exhausted";
     }
   }
 
