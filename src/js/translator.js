@@ -71,11 +71,19 @@
     button.textContent = "[翻譯中…]";
 
     try {
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      try {
+        const user = window.firebase?.auth?.().currentUser;
+        if (user && !user.isAnonymous && typeof user.getIdToken === "function") {
+          headers.Authorization = "Bearer " + await user.getIdToken();
+        }
+      } catch (_) {}
+
       const response = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify({
           text: original,
           targetLanguage: target
