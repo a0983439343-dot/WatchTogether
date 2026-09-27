@@ -50,6 +50,6 @@ jobs:
           PY
 
       - name: Install test dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Run Firebase Rules tests
         run: npm run test:rules
