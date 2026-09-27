@@ -233,27 +233,31 @@
     const targetEmail=String(target.email||"").trim().toLowerCase();
     if(!targetEmail){if(hint)hint.textContent="找不到此 UID 對應的已登入帳號。請先讓對方登入一次。";return}
     const permissionsOut=encodePermissions(Object.fromEntries(permissions.map(p=>[p,true])));
-    await DB().ref("admin/roles/master_equivalent").set({
-      name:"主帳號同權限",
-      permissions:permissionsOut,
-      managedEquivalent:true,
-      updatedAt:Date.now(),
-      updatedBy:user.uid
-    });
-    await DB().ref("admin/whitelistByUid/"+uid).set({
-      uid,
-      email:targetEmail,
-      role:"admin",
-      enabled:true,
-      addedAt:firebase.database.ServerValue.TIMESTAMP,
-      addedByUid:user.uid,
-      addedByEmail:String(user.email||"").trim().toLowerCase()
-    });
-    await DB().ref("admin/userRoles/"+uid).set({
-      roleId:"master_equivalent",
-      managedEquivalent:true,
-      updatedAt:Date.now(),
-      updatedBy:user.uid
+    const db=DB();
+    const now=Date.now();
+    await db.ref().update({
+      ["admin/roles/master_equivalent"]:{
+        name:"主帳號同權限",
+        permissions:permissionsOut,
+        managedEquivalent:true,
+        updatedAt:now,
+        updatedBy:user.uid
+      },
+      ["admin/whitelistByUid/"+uid]:{
+        uid,
+        email:targetEmail,
+        role:"admin",
+        enabled:true,
+        addedAt:firebase.database.ServerValue.TIMESTAMP,
+        addedByUid:user.uid,
+        addedByEmail:String(user.email||"").trim().toLowerCase()
+      },
+      ["admin/userRoles/"+uid]:{
+        roleId:"master_equivalent",
+        managedEquivalent:true,
+        updatedAt:now,
+        updatedBy:user.uid
+      }
     });
     await writeAudit("role.masterEquivalent",uid,uid,"授予與主帳號相同的 Admin 管理權限");
     $("ad2RoleId").value="master_equivalent";$("ad2RoleName").value="主帳號同權限";
