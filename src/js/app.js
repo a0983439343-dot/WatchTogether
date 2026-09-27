@@ -11975,6 +11975,15 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                       ""
                     )}
                   </p>
+                  <div class="wt2-chat-translation" aria-live="polite"></div>
+                  <button
+                    type="button"
+                    class="wt2-chat-translate-btn"
+                    data-chat-translate="${escapeHtml(message.id)}"
+                    data-chat-original="${escapeHtml(message?.text || "")}"
+                  >
+                    [翻譯]
+                  </button>
                 `;
 
             const isOwnMessage =
@@ -12047,6 +12056,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     box.scrollTop =
       box.scrollHeight;
+
+    box.querySelectorAll("[data-chat-translate]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (window.WT2_TRANSLATOR?.translateMessage) {
+          void window.WT2_TRANSLATOR.translateMessage(button);
+        }
+      });
+    });
 
     box
       .querySelectorAll(
