@@ -693,3 +693,42 @@ test("2.0: approval join requests are requester-creatable and owner-approvable",
       .update({ status: "approved", approved: true })
   );
 });
+
+
+test("2.0: co-host can reorder but cannot rewrite queue item", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("roomRoles/ABC123/" + ADMIN_UID).set({
+      role: "cohost",
+      updatedAt: 1,
+      updatedBy: USER_UID
+    });
+    await context.database().ref("queue/ABC123/item1").set({
+      id: "video-1",
+      platform: "youtube",
+      title: "Original",
+      thumbnail: "",
+      channel: "YouTube",
+      addedBy: USER_UID,
+      addedByName: "User",
+      addedAt: 1,
+      queueOrder: 1
+    });
+    await context.database().ref("rooms/ABC123/owner").set(ADMIN_UID);
+    await context.database().ref("members/ABC123/" + ADMIN_UID).set({
+      name: "Admin",
+      joinedAt: 1,
+      online: true,
+      lastSeen: 1
+    });
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("queue/ABC123/item1/queueOrder").set(2)
+  );
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("queue/ABC123/item1").update({
+      title: "forged"
+    })
+  );
+});
