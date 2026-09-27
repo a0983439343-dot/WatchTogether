@@ -1326,8 +1326,11 @@ async function isFeatureBlocked(feature) {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.db || !feature) return false;
   try {
-    var snapshot = await wt.db.ref("admin/restrictionsByUid/" + user.uid + "/features/" + feature).once("value");
-    return snapshot.val() === true;
+    var snapshot = await wt.db.ref("admin/restrictionsByUid/" + user.uid).once("value");
+    var value = snapshot.val() || {};
+    var until = Number(value.blockedUntil || 0);
+    var active = until === 0 || until > Date.now();
+    return active && value.features && value.features[feature] === true;
   } catch (_) {
     return false;
   }
