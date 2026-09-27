@@ -37,11 +37,20 @@ jobs:
           done
           for f in \
             workers/youtube-search.js \
+            workers/ai-core.js \
             workers/admin-control/admin-control.js
           do
             echo "Checking Worker ESM: $f"
             node --input-type=module --check < "$f"
           done
+
+      - name: Validate Wrangler worker bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.136.0 deploy --dry-run --config workers/wrangler.toml
+          npx --yes wrangler@4.136.0 deploy --dry-run --config workers/wrangler-ai.toml
+          npx --yes wrangler@4.136.0 deploy --dry-run --config workers/admin-control/wrangler.toml
 
       - name: Validate JSON configuration
         run: |
