@@ -23,6 +23,8 @@ jobs:
             src/js/i18n.js \
             src/js/bug-monitor.js \
             src/js/watchtogether2.js \
+            src/js/translation.js \
+            src/js/ai-core.js \
             admin/admin.js \
             admin/admin2.js
           do
