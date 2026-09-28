@@ -10,6 +10,7 @@ window.FIREBASE_CONFIG = {
 };
 
 window.WATCHTOGETHER_CONFIG = {
+  searchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeSearchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   aiBugDetectorUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/ai/analyze",
