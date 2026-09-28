@@ -164,17 +164,17 @@
     const user = options.user || state.user;
     if (!user) return false;
     if (isMaster(user)) return true;
-    if (user.isAnonymous) {
-      const flag = state.featureFlags[key];
-      return normalizeFlag(flag);
-    }
-
     const restriction = state.restrictions[key];
     if (isActiveRestriction(restriction)) return false;
 
     const override = overrideEffect(key);
     if (override === "deny") return false;
     if (override === "allow") {
+      const flag = state.featureFlags[key];
+      return normalizeFlag(flag);
+    }
+
+    if (user.isAnonymous) {
       const flag = state.featureFlags[key];
       return normalizeFlag(flag);
     }
@@ -293,7 +293,7 @@
   async function loadUserPolicies(user) {
     state.userOverrides = {};
     state.restrictions = {};
-    if (!user || user.isAnonymous) return;
+    if (!user) return;
 
     const [overrideSnapshot, restrictionSnapshot] = await Promise.all([
       db.ref("admin/access/permissionsByUid/" + user.uid).once("value"),
@@ -334,17 +334,19 @@
   }
 
   function attachUserListeners(user) {
-    if (!user || user.isAnonymous) return;
+    if (!user) return;
 
-    try {
-      state.refs.role = db.ref("admin/access/roleByUid/" + user.uid);
-      state.refs.role.on("value", async () => {
-        try {
-          await loadRole(user);
-          emit();
-        } catch (_) {}
-      });
-    } catch (_) {}
+    if (!user.isAnonymous) {
+      try {
+        state.refs.role = db.ref("admin/access/roleByUid/" + user.uid);
+        state.refs.role.on("value", async () => {
+          try {
+            await loadRole(user);
+            emit();
+          } catch (_) {}
+        });
+      } catch (_) {}
+    }
 
     try {
       state.refs.overrides = db.ref("admin/access/permissionsByUid/" + user.uid);
