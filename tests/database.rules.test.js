@@ -74,7 +74,9 @@ async function seed() {
                 reports__read: true,
                 reports__manage: true,
                 audit__read: true,
-                audit__write: true
+                audit__write: true,
+                audit__delete: true,
+                maintenance__manage: true
               }
             }
           },
@@ -451,6 +453,29 @@ test("2.0 access control: custom admin role can read and write its permitted adm
     details: "custom role audit",
     createdAt: Date.now()
   }));
+});
+
+test("2.0 maintenance: direct client writes remain blocked even with maintenance.manage", async () => {
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("site/maintenance").set({
+      enabled: true,
+      reason: "direct client write",
+      restoreAt: Date.now() + 3600000,
+      updatedAt: Date.now(),
+      updatedByUid: ADMIN_UID
+    })
+  );
+
+  await assertSucceeds(
+    db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
+      .ref("site/maintenance").set({
+        enabled: false,
+        reason: "test reset",
+        restoreAt: 0,
+        updatedAt: Date.now(),
+        updatedByUid: MASTER_UID
+      })
+  );
 });
 
 test("2.0 access control: master can manage roles, permissions, restrictions and feature flags", async () => {
