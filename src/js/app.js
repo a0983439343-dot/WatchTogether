@@ -5160,44 +5160,22 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
    */
 
   async function destroyCurrentPlayer() {
-    const old =
-      state.player;
-
-    const oldType =
-      state.playerType;
+    const old = state.player;
+    const oldType = state.playerType;
 
     if (oldType === "youtube") {
       detachYoutubeNativeEvents();
     }
 
-    state.player =
-      null;
-
-    state.playerReady =
-      false;
-
-    state.playerType =
-      null;
-
-    state.currentVideoId =
-      null;
-
-    state.currentVideoUrl =
-      null;
-
+    state.player = null;
+    state.playerReady = false;
+    state.playerType = null;
+    state.currentVideoId = null;
+    state.currentVideoUrl = null;
     state.twitchPlaybackKind = null;
 
     state.youtubePlaybackMode = "iframe";
     state.youtubeIframeInitialSyncUntil = 0;
-
-    if (!old) {
-      clearTimeout(state.youtubeStreamStallTimer);
-      state.youtubeStreamStallTimer = null;
-      state.youtubeStreamRefreshInFlight = false;
-      state.youtubeStreamRefreshAttempts = 0;
-      state.youtubeStreamRefreshWindowStartedAt = 0;
-      return;
-    }
 
     clearTimeout(state.youtubeStreamStallTimer);
     state.youtubeStreamStallTimer = null;
@@ -5205,42 +5183,26 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     state.youtubeStreamRefreshAttempts = 0;
     state.youtubeStreamRefreshWindowStartedAt = 0;
 
+    if (!old) return;
+
     try {
-      if (
-        oldType ===
-        "youtube"
-      ) {
+      if (oldType === "youtube") {
         old.destroy?.();
-      }
-
-      if (
-        oldType ===
-        "vimeo"
-      ) {
+      } else if (oldType === "vimeo" || oldType === "dailymotion" || oldType === "twitch") {
         await old.destroy?.();
-      }
-
-      if (
-        oldType ===
-        "dailymotion"
-      ) {
-        await old.destroy?.();
-      }
-
-      if (
-        oldType ===
-        "twitch"
-      ) {
-        await old.destroy?.();
-      } catch (_) {}
-
-        try {
-          if (old.contentWindow) {
-            old.contentWindow.location.replace("about:blank");
-          }
-        } catch (_) {}
       }
     } catch (_) {}
+
+    if (oldType === "twitch-clip" || oldType === "dailymotion-iframe") {
+      try {
+        old.src = "about:blank";
+      } catch (_) {}
+      try {
+        if (old.contentWindow) {
+          old.contentWindow.location.replace("about:blank");
+        }
+      } catch (_) {}
+    }
   }
 
 
