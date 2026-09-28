@@ -107,7 +107,7 @@
       if (typeof wt.openLoginHistory === "function") wt.openLoginHistory();
       else toast("登入紀錄暫時不可用");
     });
-    add("wtCompletionAccountBtn","👤 帳號管理",openAccountManager);
+    add("wtCompletionAccountBtn","👤 帳號管理",() => { void openAccountManager().catch(error => toast(error?.message || "帳號管理開啟失敗")); });
     add("wtCompletionToolsBtn","🧰 工具",openTools);
   }
 
@@ -297,7 +297,8 @@
     body.querySelector("#wtSessionRefresh")?.addEventListener("click", () => { closeModal("wtSessionManagerModal"); void openSessionManager(); });
   }
 
-  function openAccountManager() {
+  async function openAccountManager() {
+    await loadOwnProfile();
     const u = currentUser();
     const anonymous = Boolean(u?.isAnonymous);
     const publicCode = String(state().profile?.publicCode || "").toUpperCase();
@@ -331,6 +332,7 @@
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt:"select_account" });
     const result = await u.linkWithPopup(provider);
+    await loadOwnProfile();
     toast("Google 已成功綁定，原帳號 UID 不變");
     if (result?.user) {
       closeModal("wtAccountManagerModal");
@@ -387,6 +389,8 @@
     }
     localStorage.removeItem(PREF_KEY);
     localStorage.removeItem(PLAYER_KEY);
+    profileLoadUid="";
+    state().profile=null;
     toast("帳號已刪除");
     location.href = location.pathname;
   }
@@ -737,8 +741,47 @@
   async function claimCode(code,uid){const d=db(),v=String(code||"").toUpperCase();if(!d||!validCode(v))throw new Error("使用者 ID 必須是 6 碼英數字");const tx=await d.ref("profileCodes/"+v).transaction(x=>x==null||String(x)===String(uid)?String(uid):x);if(String(tx.snapshot?.val?.()||"")!==String(uid))throw new Error("這個使用者 ID 已被使用")}
   async function releaseCode(code,uid){const d=db(),v=String(code||"").toUpperCase();if(!d||!validCode(v))return;try{const s=await d.ref("profileCodes/"+v).once("value");if(String(s.val()||"")===String(uid))await d.ref("profileCodes/"+v).remove()}catch(_){}}
   async function generateCode(uid){const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";for(let n=0;n<12;n++){let c="";for(let i=0;i<6;i++)c+=a[Math.floor(Math.random()*a.length)];try{await claimCode(c,uid);return c}catch(_){}}throw new Error("暫時無法產生新的使用者 ID")}
+  let profileLoadUid="";
+  async function loadOwnProfile(){
+    const u=user(),d=db();
+    if(!u||u.isAnonymous||!d){
+      profileLoadUid="";
+      if(state().profile)state().profile=null;
+      return null;
+    }
+    const uid=String(u.uid||"");
+    if(!uid)return null;
+    if(profileLoadUid===uid&&state().profile&&typeof state().profile==="object")return state().profile;
+    profileLoadUid=uid;
+    try{
+      const snap=await d.ref("profiles/"+uid).once("value");
+      if(profileLoadUid!==uid||String(user()?.uid||"")!==uid)return null;
+      let p=snap.val();
+      if(!p||typeof p!=="object"){
+        const code=await generateCode(uid);
+        const name=String(u.displayName||"玩家").trim().slice(0,30)||"玩家";
+        p={displayName:name,publicCode:code,avatarEmoji:"🙂",theme:"aurora",notifications:true,createdAt:Date.now()};
+        await d.ref().update({
+          ["profiles/"+uid]:p,
+          ["publicUsers/"+uid]:{displayName:name,publicCode:code,avatarEmoji:"🙂",searchName:name.toLowerCase(),updatedAt:firebase.database.ServerValue.TIMESTAMP}
+        });
+      }
+      state().profile=Object.assign({},p);
+      const storedName=String(localStorage.getItem("wt_name")||"").trim();
+      if(p.displayName&&(!storedName||/^訪客\d{3}$/.test(storedName))){
+        state().memberName=String(p.displayName).slice(0,30);
+        localStorage.setItem("wt_name",state().memberName);
+      }
+      if(p.theme&&typeof wt.applyTheme==="function")wt.applyTheme(p.theme);
+      return state().profile;
+    }catch(error){
+      if(profileLoadUid===uid)profileLoadUid="";
+      console.warn("個人資料載入失敗:",error);
+      return null;
+    }
+  }
   const themeOptions=sel=>{const a=Array.isArray(wt.THEMES)&&wt.THEMES.length?wt.THEMES:[{id:"aurora",name:"Aurora"},{id:"cyber",name:"Cyber"},{id:"paper",name:"Paper"},{id:"terminal",name:"Terminal"},{id:"sakura",name:"Sakura"},{id:"ocean",name:"Ocean"},{id:"sunset",name:"Sunset"},{id:"mono",name:"Mono"},{id:"glass",name:"Glass"},{id:"retro",name:"Retro"},{id:"forest",name:"Forest"},{id:"blueprint",name:"Blueprint"}];return a.map(x=>'<option value="'+esc(x.id)+'" '+(String(x.id)===String(sel||"aurora")?"selected":"")+'>'+esc(x.name||x.id)+'</option>').join("")};
-  const languageOptions=sel=>{const a=window.WT_I18N?.languages||{},ks=Object.keys(a);return ks.length?ks.map(k=>'<option value="'+esc(k)+'" '+(String(k)===String(sel||"zh-TW")?"selected":"")+'>'+esc(a[k]?.name||k)+'</option>').join(""):'<option value="zh-TW" selected>繁體中文</option>'};
+  const languageOptions=sel=>{const a=window.WT_I18N?.languages||{},ks=Object.keys(a),mode=String(sel||window.WT_I18N?.getMode?.()||"auto");return '<option value="auto" '+(mode==="auto"?"selected":"")+'>自動（瀏覽器語言）</option>'+(ks.length?ks.map(k=>'<option value="'+esc(k)+'" '+(String(k)===mode?"selected":"")+'>'+esc(a[k]?.name||k)+'</option>').join(""):'<option value="zh-TW" '+(mode==="zh-TW"?"selected":"")+'>繁體中文</option>')};
   async function saveSettings(){
     const u=user(),p=profile(),l=prefs(),guest=!u||u.isAnonymous;
     const name=String($("wtAccountV6Name")?.value||"").trim().slice(0,30),avatar=String($("wtAccountV6Avatar")?.value||"").trim().slice(0,4),theme=String($("wtAccountV6Theme")?.value||"aurora"),language=String($("wtAccountV6Language")?.value||"zh-TW"),platform=String($("wtAccountV6Platform")?.value||"youtube");
@@ -756,12 +799,13 @@
         if(oldCode&&oldCode!==code)await releaseCode(oldCode,u.uid);
         await d.ref("userSettings/"+u.uid).set({showOnline:$("wtAccountV6Online")?.checked!==false,browserNotifications:next.browserNotifications,cloudHistory:$("wtAccountV6History")?.checked!==false,cloudStats:$("wtAccountV6Stats")?.checked!==false,updatedAt:firebase.database.ServerValue.TIMESTAMP});
       }catch(e){if(code!==oldCode)await releaseCode(code,u.uid);throw e}
-      state().profile=Object.assign({},p,updated);state().memberName=name;localStorage.setItem("wt_name",name);try{wt.applyTheme?.(theme)}catch(_){}try{await core.updateCurrentMemberName?.(name)}catch(_){}
+      state().profile=Object.assign({},p,updated);profileLoadUid=u.uid;state().memberName=name;localStorage.setItem("wt_name",name);try{wt.applyTheme?.(theme)}catch(_){}try{await core.updateCurrentMemberName?.(name)}catch(_){}
     }
     if($("sourceTypeInput"))$("sourceTypeInput").value=platform;if($("sourceTypeModal"))$("sourceTypeModal").value=platform;
     document.documentElement.classList.toggle("wt-account-v6-compact",next.compactControls===true);toast("帳號與設定已儲存");close("wtAccountV6SettingsModal");
   }
   async function openSettings(){
+    await loadOwnProfile();
     const p=profile(),l=prefs(),c=await cloudSettings(),guest=!isGoogle();
     const body=modal("wtAccountV6SettingsModal",guest?"帳號與設定（訪客）":"帳號與設定",
       '<div class="wt-account-v6-grid"><label>顯示名稱<input id="wtAccountV6Name" maxlength="30" value="'+esc(p.displayName||wt.currentName?.()||(guest?"訪客":"玩家"))+'"></label><label>頭像 Emoji<input id="wtAccountV6Avatar" maxlength="4" value="'+esc(p.avatarEmoji||wt.currentAvatar?.()||"🙂")+'"></label><label>使用者 ID<input id="wtAccountV6Code" maxlength="6" value="'+esc(p.publicCode||"")+'" style="text-transform:uppercase" '+(guest?"disabled":"")+'></label><label>主題<select id="wtAccountV6Theme">'+themeOptions(p.theme)+'</select></label><label>語言<select id="wtAccountV6Language">'+languageOptions(window.WT_I18N?.getLocale?.()||"zh-TW")+'</select></label><label>預設平台<select id="wtAccountV6Platform"><option value="youtube">YouTube</option><option value="vimeo">Vimeo</option><option value="dailymotion">Dailymotion</option><option value="twitch">Twitch</option></select></label></div><div class="panel-title" style="margin-top:16px">隱私、通知與雲端</div><div class="wt-account-v6-grid"><label class="wt-account-v6-check"><input id="wtAccountV6Online" type="checkbox" '+(c.showOnline!==false?"checked":"")+'> 允許好友看到我在線上</label><label class="wt-account-v6-check"><input id="wtAccountV6Browser" type="checkbox" '+(l.browserNotifications===true?"checked":"")+'> 瀏覽器通知</label><label class="wt-account-v6-check"><input id="wtAccountV6Friend" type="checkbox" '+(l.friendNotifications!==false?"checked":"")+'> 好友／房間申請通知</label><label class="wt-account-v6-check"><input id="wtAccountV6Dm" type="checkbox" '+(l.dmNotifications!==false?"checked":"")+'> 私訊通知</label><label class="wt-account-v6-check"><input id="wtAccountV6Room" type="checkbox" '+(l.roomNotifications!==false?"checked":"")+'> 房間與系統通知</label><label class="wt-account-v6-check"><input id="wtAccountV6History" type="checkbox" '+(c.cloudHistory!==false?"checked":"")+'> 雲端觀看紀錄</label><label class="wt-account-v6-check"><input id="wtAccountV6Stats" type="checkbox" '+(c.cloudStats!==false?"checked":"")+'> 雲端統計</label><label class="wt-account-v6-check"><input id="wtAccountV6Compact" type="checkbox" '+(l.compactControls===true?"checked":"")+'> 緊湊控制列</label></div>'+(guest?'<div class="wt-account-v6-note">訪客模式的設定只保存在此裝置。</div>':"")+'<div class="wt-account-v6-actions"><button id="wtAccountV6Notify" type="button" class="secondary-btn">允許瀏覽器通知</button><button id="wtAccountV6Save" type="button" class="primary-btn">儲存設定</button></div>');
@@ -770,7 +814,7 @@
     $("wtAccountV6Save").onclick=()=>saveSettings().catch(e=>toast(e.message||"設定儲存失敗"));
   }
   const localNotifs=()=>{const x=local(NOTIF,[]);return Array.isArray(x)?x:[]};
-  const allNotifs=()=>{const m=new Map();localNotifs().forEach(x=>x?.id&&m.set(String(x.id),x));Object.entries(cloud).forEach(([id,x])=>x&&m.set(String(id),Object.assign({id},x)));return [...m.values()].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,100)};
+  const allNotifs=()=>{const m=new Map();localNotifs().forEach(x=>{if(x?.id)m.set(String(x.id),Object.assign({__source:"local"},x))});Object.entries(cloud).forEach(([id,x])=>{if(!x)return;const key=String(x.id||id);m.set(key,Object.assign({id:key,__source:"cloud"},x))});return [...m.values()].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).map(x=>{const y=Object.assign({},x);delete y.__source;return y}).slice(0,100)};
   const badge=()=>{const n=allNotifs().filter(x=>x.read!==true).length,b=$("wtFeatureNotificationBadge");if(b){b.textContent=n>99?"99+":String(n);b.style.display=n?"block":"none"}};
   async function openNotifications(){
     const items=allNotifs(),b=modal("wtAccountV6NotificationsModal",isGoogle()?"通知中心（跨裝置）":"通知中心",'<div class="wt-account-v6-actions"><span class="small muted">未讀 '+items.filter(x=>x.read!==true).length+' 筆</span><span><button id="wtAccountV6ReadAll" class="tiny-btn" type="button">全部已讀</button><button id="wtAccountV6Clear" class="tiny-btn danger" type="button">清空本機通知</button></span></div><div class="wt-account-v6-list">'+(items.length?items.map(x=>'<button type="button" class="wt-account-v6-row '+(x.read===true?"":"unread")+'" data-v6-notif="'+esc(x.id||"")+'"><div><strong>'+esc(x.title||"通知")+'</strong><span class="small">'+esc(x.body||"")+'</span><span class="small muted">'+esc(x.createdAt?new Date(Number(x.createdAt)).toLocaleString("zh-TW"):"—")+'</span></div></button>').join(""):'<div class="wt-account-v6-empty">目前沒有通知。</div>')+'</div>');
@@ -782,7 +826,7 @@
   function bindUi(){bind("wtSettingsBtn",openSettings,"帳號與設定");bind("wtV3SettingsBtn",openSettings,"帳號與設定");bind("wtHomeSettings",openSettings,"帳號與設定");bind("wtV3NotifBtn",openNotifications,"通知中心");bind("wtFeatureNotificationBtn",openNotifications,"通知中心");const copy=$("copyRoomBtn");if(copy&&!$("wtAccountV6QrBtn")){const b=document.createElement("button");b.id="wtAccountV6QrBtn";b.className="tiny-btn";b.type="button";b.textContent="🔳 QR";b.title="顯示房間 QR Code";b.onclick=()=>{if(typeof wt.createRoomQrCode==="function")Promise.resolve(wt.createRoomQrCode()).catch(e=>toast(e.message||"QR Code 建立失敗"));else toast("QR Code 功能尚未準備完成")};copy.insertAdjacentElement("afterend",b)}}
   function cloudWatch(){const u=user(),d=db();if(notifUid===String(u?.uid||"")&&notifRef)return;try{notifRef?.off()}catch(_){}notifRef=null;cloud={};notifUid=String(u?.uid||"");if(!u||u.isAnonymous||!d){badge();return}notifRef=d.ref("notifications/"+u.uid).limitToLast(100);notifRef.once("value").then(s=>{cloud=s.val()||{};badge()}).catch(()=>{});notifRef.on("child_added",s=>{if(s.val())cloud[s.key]=s.val();badge()});notifRef.on("child_changed",s=>{if(s.val())cloud[s.key]=s.val();badge()});notifRef.on("child_removed",s=>{delete cloud[s.key];badge()})}
   function bridge(){const f=wt.pushNotification;if(typeof f!=="function"||f.__wtAccountV6)return;const g=function(){const r=f.apply(this,arguments);setTimeout(badge,0);return r};g.__wtAccountV6=true;wt.pushNotification=g}
-  function init(){if(document.documentElement.dataset.wtAccountV6)return;document.documentElement.dataset.wtAccountV6="1";const s=document.createElement("style");s.id="wtAccountV6Style";s.textContent=".wt-account-v6-card{width:min(920px,calc(100vw - 24px));max-height:90vh;overflow:auto}.wt-account-v6-head,.wt-account-v6-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.wt-account-v6-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.wt-account-v6-grid label{display:grid;gap:6px;font-size:12px}.wt-account-v6-grid input,.wt-account-v6-grid select{width:100%;box-sizing:border-box}.wt-account-v6-check{display:flex!important;align-items:center;gap:8px;padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:12px}.wt-account-v6-check input{width:auto!important}.wt-account-v6-list{display:grid;gap:8px;max-height:58vh;overflow:auto;margin-top:12px}.wt-account-v6-row{display:flex;width:100%;justify-content:space-between;gap:10px;padding:11px;border:1px solid rgba(148,163,184,.14);border-radius:12px;background:transparent;color:inherit;text-align:left}.wt-account-v6-row.unread{background:rgba(59,130,246,.07)}.wt-account-v6-row>div{display:grid;gap:3px}.wt-account-v6-row .small{display:block;word-break:break-word}.wt-account-v6-empty{text-align:center;padding:18px;color:#94a3b8}.wt-account-v6-note{margin-top:12px;padding:10px;border-radius:12px;background:rgba(59,130,246,.07);color:#94a3b8;font-size:11px}.wt-account-v6-compact .room-controls .control-btn,.wt-account-v6-compact .room-controls .volume{transform:scale(.94);transform-origin:left center}@media(max-width:650px){.wt-account-v6-grid{grid-template-columns:1fr}}";document.head.appendChild(s);bindUi();bridge();cloudWatch();document.documentElement.classList.toggle("wt-account-v6-compact",prefs().compactControls===true)}
+  function init(){if(document.documentElement.dataset.wtAccountV6)return;document.documentElement.dataset.wtAccountV6="1";const activeAuth=auth();activeAuth?.onAuthStateChanged?.(()=>{profileLoadUid="";void loadOwnProfile();notifUid="";try{notifRef?.off()}catch(_){}notifRef=null;cloud={};bindUi();cloudWatch();badge()});void loadOwnProfile();const s=document.createElement("style");s.id="wtAccountV6Style";s.textContent=".wt-account-v6-card{width:min(920px,calc(100vw - 24px));max-height:90vh;overflow:auto}.wt-account-v6-head,.wt-account-v6-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.wt-account-v6-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.wt-account-v6-grid label{display:grid;gap:6px;font-size:12px}.wt-account-v6-grid input,.wt-account-v6-grid select{width:100%;box-sizing:border-box}.wt-account-v6-check{display:flex!important;align-items:center;gap:8px;padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:12px}.wt-account-v6-check input{width:auto!important}.wt-account-v6-list{display:grid;gap:8px;max-height:58vh;overflow:auto;margin-top:12px}.wt-account-v6-row{display:flex;width:100%;justify-content:space-between;gap:10px;padding:11px;border:1px solid rgba(148,163,184,.14);border-radius:12px;background:transparent;color:inherit;text-align:left}.wt-account-v6-row.unread{background:rgba(59,130,246,.07)}.wt-account-v6-row>div{display:grid;gap:3px}.wt-account-v6-row .small{display:block;word-break:break-word}.wt-account-v6-empty{text-align:center;padding:18px;color:#94a3b8}.wt-account-v6-note{margin-top:12px;padding:10px;border-radius:12px;background:rgba(59,130,246,.07);color:#94a3b8;font-size:11px}.wt-account-v6-compact .room-controls .control-btn,.wt-account-v6-compact .room-controls .volume{transform:scale(.94);transform-origin:left center}@media(max-width:650px){.wt-account-v6-grid{grid-template-columns:1fr}}";document.head.appendChild(s);bindUi();bridge();cloudWatch();document.documentElement.classList.toggle("wt-account-v6-compact",prefs().compactControls===true)}
   auth()?.onAuthStateChanged?.(()=>{notifUid="";try{notifRef?.off()}catch(_){}notifRef=null;cloud={};bindUi();cloudWatch();badge()});
   wt.openSettings=openSettings;wt.openNotifications=openNotifications;wt.openCompleteSettings=openSettings;wt.openSyncedNotifications=openNotifications;wt.loadAccountSettings=cloudSettings;wt.updateNotificationBadge=badge;
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
