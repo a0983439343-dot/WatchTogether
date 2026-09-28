@@ -32,6 +32,8 @@
   let aiStatus = null;
   let chatModerationRoomId = "";
   let chatModerationMessages = {};
+  let systemSettings = {};
+  let systemSettingsRef = null;
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -2223,6 +2225,129 @@
     toast(enabled ? "網站已進入維護模式" : "網站已重新開站");
   }
 
+  const SYSTEM_SETTINGS_DEFAULTS = {
+    siteName: "WatchTogether",
+    siteDescription: "WatchTogether - 和朋友一起同步看影片、聊天與加好友",
+    announcementEnabled: false,
+    announcementText: ""
+  };
+
+  function stopSystemSettingsListener() {
+    if (!systemSettingsRef) return;
+    try { systemSettingsRef.off(); } catch (_) {}
+    systemSettingsRef = null;
+  }
+
+  function normalizeSystemSettings(value) {
+    const item = value && typeof value === "object" ? value : {};
+    return {
+      siteName: String(item.siteName || SYSTEM_SETTINGS_DEFAULTS.siteName).trim().slice(0,80) || SYSTEM_SETTINGS_DEFAULTS.siteName,
+      siteDescription: String(item.siteDescription || SYSTEM_SETTINGS_DEFAULTS.siteDescription).trim().slice(0,300),
+      announcementEnabled: item.announcementEnabled === true,
+      announcementText: String(item.announcementText || "").trim().slice(0,500),
+      updatedAt: Number(item.updatedAt || 0),
+      updatedByUid: String(item.updatedByUid || "")
+    };
+  }
+
+  function renderSystemSettings() {
+    const current = normalizeSystemSettings(systemSettings);
+    const status = $("systemSettingsStatus");
+    const hint = $("systemSettingsHint");
+    const name = $("systemSiteName");
+    const description = $("systemSiteDescription");
+    const announcementEnabled = $("systemAnnouncementEnabled");
+    const announcementText = $("systemAnnouncementText");
+    if (name) name.value = current.siteName;
+    if (description) description.value = current.siteDescription;
+    if (announcementEnabled) announcementEnabled.checked = current.announcementEnabled;
+    if (announcementText) announcementText.value = current.announcementText;
+
+    const master = isMasterOperator();
+    [name,description,announcementEnabled,announcementText,$("systemSettingsSaveBtn")]
+      .filter(Boolean)
+      .forEach(el => { el.disabled = !master; });
+
+    if (status) {
+      status.textContent = master ? "Master Admin" : "唯讀";
+      status.className = "status " + (master ? "admin" : "");
+    }
+    if (hint) {
+      hint.textContent = master
+        ? "只有最高管理員可以修改系統設定；變更會寫入 Audit Log。"
+        : "你目前只有查看權限，系統設定由最高管理員管理。";
+    }
+
+    const summary = $("systemSettingsLiveSummary");
+    if (summary) {
+      summary.innerHTML = [
+        '<div><span>網站名稱</span><strong>' + escapeHtml(current.siteName) + '</strong></div>',
+        '<div><span>網站描述</span><strong>' + escapeHtml(current.siteDescription || "—") + '</strong></div>',
+        '<div><span>首頁公告</span><strong>' + (current.announcementEnabled && current.announcementText ? "已啟用" : "未啟用") + '</strong></div>',
+        '<div><span>最後更新</span><strong>' + escapeHtml(current.updatedAt ? formatDate(current.updatedAt) : "尚未設定") + '</strong></div>'
+      ].join("");
+    }
+  }
+
+  async function loadSystemSettings() {
+    if (!currentHasAdminAccess) {
+      systemSettings = {...SYSTEM_SETTINGS_DEFAULTS};
+      renderSystemSettings();
+      return;
+    }
+    const snapshot = await db.ref("site/settings").once("value");
+    systemSettings = normalizeSystemSettings(snapshot.val());
+    renderSystemSettings();
+  }
+
+  function startSystemSettingsListener() {
+    stopSystemSettingsListener();
+    if (!currentHasAdminAccess) return;
+    systemSettingsRef = db.ref("site/settings");
+    systemSettingsRef.on("value", snapshot => {
+      if (!currentHasAdminAccess) return;
+      systemSettings = normalizeSystemSettings(snapshot.val());
+      renderSystemSettings();
+    }, error => {
+      console.error("system settings realtime listener failed", error);
+    });
+  }
+
+  async function saveSystemSettings() {
+    if (!isMasterOperator()) {
+      throw new Error("只有最高管理員可以修改系統設定");
+    }
+    const siteName = String($("systemSiteName")?.value || "").trim().slice(0,80);
+    const siteDescription = String($("systemSiteDescription")?.value || "").trim().slice(0,300);
+    const announcementEnabled = $("systemAnnouncementEnabled")?.checked === true;
+    const announcementText = String($("systemAnnouncementText")?.value || "").trim().slice(0,500);
+    if (!siteName) throw new Error("網站名稱不能是空白");
+    if (!siteDescription) throw new Error("網站描述不能是空白");
+    if (announcementEnabled && !announcementText) throw new Error("啟用首頁公告時，公告內容不能是空白");
+
+    await db.ref("site/settings").set({
+      siteName,
+      siteDescription,
+      announcementEnabled,
+      announcementText,
+      updatedAt:firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid:currentUser.uid,
+      updatedByEmail:currentUser.email || ""
+    });
+    await loadSystemSettings();
+    const logged = await writeAuditLog(
+      "system.settings.update",
+      currentUser.uid,
+      "網站系統設定",
+      "網站名稱：" + siteName + " · 公告：" + (announcementEnabled ? "啟用" : "停用")
+    );
+    if (!logged) {
+      toast("系統設定已儲存，但 Audit Log 寫入失敗");
+      return;
+    }
+    toast("系統設定已儲存");
+  }
+
   async function loadAccessControl() {
     if (!currentHasAdminAccess) return;
     const [rolesSnap, assignmentsSnap, overridesSnap, restrictionsSnap, flagsSnap] = await Promise.all([
@@ -2545,6 +2670,7 @@
           loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
           loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error)),
           loadAccessControl().catch(error => console.warn("載入 2.0 控制中心失敗:", error)),
+          loadSystemSettings().catch(error => console.warn("載入系統設定失敗:", error)),
           loadAiStatus().catch(error => console.warn("載入 AI 狀態失敗:", error)),
           loadAutonomousMaintenance().catch(error => {
             console.warn("載入全自動維護設定失敗:", error);
@@ -2556,6 +2682,7 @@
         startReportsListener();
         startAuditLogsListener();
         startAutonomousMaintenanceListener();
+        startSystemSettingsListener();
         window.addEventListener("wt-access-changed", renderMaintenanceControl);
         populateAccessPermissionCatalog();
         renderAccessSummary();
@@ -2808,7 +2935,7 @@
     });
 
     $("refreshBtn")?.addEventListener("click", () => Promise.all([
-      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs()
+      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs(),loadSystemSettings()
     ]).then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("accountsRefreshBtn")?.addEventListener("click", () => Promise.all([
@@ -2852,6 +2979,8 @@
       $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
     });
     $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("systemSettingsRefreshBtn")?.addEventListener("click", () => loadSystemSettings().then(() => toast("系統設定已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("systemSettingsSaveBtn")?.addEventListener("click", () => saveSystemSettings().catch(error => { console.error(error); toast(error?.message || "系統設定儲存失敗"); }));
     $("analyticsRefreshBtn")?.addEventListener("click", () => {
       renderAnalytics();
       toast("Analytics 已重新整理");
