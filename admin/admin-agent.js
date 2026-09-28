@@ -103,6 +103,9 @@
     const permissionMap = {
       set_user_restriction:"users.restrict",
       clear_user_restriction:"users.restrict",
+      block_user:"users.restrict",
+      unblock_user:"users.restrict",
+      delete_room:"rooms.manage",
       delete_audit:"audit.delete"
     };
 
