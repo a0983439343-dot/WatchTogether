@@ -343,16 +343,18 @@ async function resolveUserAccessPolicy(token) {
       permissions: new Set(["*"]),
       overrides: {},
       restrictions: {},
-      featureFlags: {}
+      featureFlags: {},
+      maintenance: {enabled:false}
     };
   }
 
-  const [roleValue, whitelistValue, overrideValue, restrictionValue, flagValue] = await Promise.all([
+  const [roleValue, whitelistValue, overrideValue, restrictionValue, flagValue, maintenanceValue] = await Promise.all([
     firebaseRestGet("admin/access/roleByUid/" + encodeURIComponent(uid), token),
     firebaseRestGet("admin/whitelistByUid/" + encodeURIComponent(uid), token),
     firebaseRestGet("admin/access/permissionsByUid/" + encodeURIComponent(uid), token),
     firebaseRestGet("admin/access/restrictionsByUid/" + encodeURIComponent(uid), token),
-    firebaseRestGet("admin/featureFlags", token)
+    firebaseRestGet("admin/featureFlags", token),
+    firebaseRestGet("site/maintenance", token)
   ]);
 
   let role = "";
@@ -384,6 +386,10 @@ async function resolveUserAccessPolicy(token) {
     else permissions = new Set();
   }
 
+  const maintenance = maintenanceValue && typeof maintenanceValue === "object"
+    ? maintenanceValue
+    : {enabled:false};
+
   return {
     uid,
     email,
@@ -392,7 +398,8 @@ async function resolveUserAccessPolicy(token) {
     permissions,
     overrides: decodePermissionMap(overrideValue),
     restrictions: decodePermissionMap(restrictionValue),
-    featureFlags: decodePermissionMap(flagValue)
+    featureFlags: decodePermissionMap(flagValue),
+    maintenance
   };
 }
 
@@ -2020,6 +2027,19 @@ async function handleSearch(req, res, url) {
         message: blocked
           ? "目前帳號已被限制使用網站功能"
           : "YouTube 搜尋身分驗證失敗"
+      }
+    }));
+    return;
+  }
+
+  if (
+    access.maintenance?.enabled === true &&
+    access.role !== "master" &&
+    !isAdminScopedPermission("maintenance.manage")
+  ) {
+    send(res, 503, JSON.stringify({
+      error: {
+        message: "網站目前維護中，暫停使用 YouTube 搜尋"
       }
     }));
     return;
