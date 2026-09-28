@@ -36,6 +36,19 @@
     return Boolean(u && roomId() && String(state.room?.owner || "") === u.uid);
   }
 
+  function enforceRoomManagementPolicy() {
+    const access = window.WT_ACCESS_CONTROL;
+    if (!access || isMaster()) return;
+    const restriction = access.getRestriction?.("rooms.manage") || access.state?.restrictions?.["rooms.manage"];
+    if (restriction && access.isActiveRestriction?.(restriction) === true) {
+      throw new Error(String(restriction.reason || "你目前無法管理房間"));
+    }
+    const flag = access.state?.featureFlags?.["rooms.manage"];
+    if (flag && flag.enabled === false) {
+      throw new Error(String(flag.reason || "房間管理功能目前暫停"));
+    }
+  }
+
   function isCohost(uid) {
     const key = String(uid || user()?.uid || "");
     return Boolean(key && roomState.roles && roomState.roles[key] && roomState.roles[key].role === "cohost");
@@ -131,13 +144,7 @@
 
   async function saveRoomSettings() {
     if (!isOwner() && !isMaster()) throw new Error("只有房主可以修改房間設定");
-    const access = window.WT_ACCESS_CONTROL;
-    if (access && !isMaster()) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("rooms.manage")) {
-        throw new Error("你目前無法修改房間管理設定");
-      }
-    }
+    enforceRoomManagementPolicy();
     const id = roomId();
     if (!id) throw new Error("目前不在房間中");
 
@@ -193,13 +200,7 @@
 
   async function setCohost(uid, role) {
     if (!isOwner() && !isMaster()) throw new Error("只有房主可以管理 Co-host");
-    const access = window.WT_ACCESS_CONTROL;
-    if (access && !isMaster()) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("rooms.manage")) {
-        throw new Error("你目前無法管理 Co-host");
-      }
-    }
+    enforceRoomManagementPolicy();
 
     const id = roomId();
     const key = String(uid || "").trim();
