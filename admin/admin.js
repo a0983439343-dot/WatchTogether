@@ -1968,7 +1968,7 @@
     if (!u || !p) return;
     await db.ref("admin/access/permissionsByUid/" + u + "/" + p).remove();
     await loadAccessControl();
-    void writeAuditLog("access.permission.clear", u, p, "移除個人權限覆寫");
+    void writeAuditLog("access.permission.clear", u, p.replace(/__/g, "."), "移除個人權限覆寫");
     toast("個人權限覆寫已移除");
   }
 
