@@ -2223,6 +2223,19 @@
     if (passwordEl) passwordEl.value = "";
     await window.WT_ACCESS_CONTROL?.refresh?.();
     renderMaintenanceControl();
+    const auditDetails = enabled
+      ? "關閉網站 · 原因：" + reason + " · 預計恢復：" + (restoreAt > 0 ? formatDate(restoreAt) : "未設定")
+      : "重新開站";
+    const auditOk = await writeAuditLog(
+      enabled ? "maintenance.on" : "maintenance.off",
+      currentUser.uid,
+      "網站維護模式",
+      auditDetails
+    );
+    if (!auditOk) {
+      toast(enabled ? "網站已進入維護模式，但 Audit Log 寫入失敗" : "網站已重新開站，但 Audit Log 寫入失敗");
+      return;
+    }
     toast(enabled ? "網站已進入維護模式" : "網站已重新開站");
   }
 
