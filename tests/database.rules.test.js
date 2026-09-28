@@ -844,27 +844,45 @@ test("2.0: assigned admin can read its own custom role definition", async () => 
   await master.ref("admin/roles/read_test").remove();
 });
 
-test("2.0: role definitions and assignments are master-only writes", async () => {
-  await assertFails(
+test("2.0: role definitions and assignments require roles.manage", async () => {
+  const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
+  await master.ref("admin/roles/role_manager").set({
+    name: "Role Manager",
+    permissions: { "roles__manage": true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "role_manager",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/roles/core_admin").set({
       name: "Core Admin",
       permissions: { "rooms__manage": true },
       updatedAt: Date.now()
     })
   );
+
   await assertSucceeds(
-    db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true }).ref("admin/roles/core_admin").set({
-      name: "Core Admin",
-      permissions: { "rooms__manage": true, "users__view": true },
-      updatedAt: Date.now()
-    })
-  );
-  await assertSucceeds(
-    db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true }).ref("admin/userRoles/" + ADMIN_UID).set({
+    db(ADMIN_UID, adminToken).ref("admin/userRoles/" + OTHER_UID).set({
       roleId: "core_admin",
       updatedAt: Date.now()
     })
   );
+
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/roles/viewer_cannot_write").set({
+      name: "Nope",
+      permissions: { "rooms__manage": true },
+      updatedAt: Date.now()
+    })
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/userRoles/" + OTHER_UID).remove();
+  await master.ref("admin/roles/core_admin").remove();
+  await master.ref("admin/roles/role_manager").remove();
 });
 
 test("2.0: permissioned same-level admin can update an existing whitelist entry", async () => {
