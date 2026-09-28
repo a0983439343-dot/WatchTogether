@@ -4819,51 +4819,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           return;
         }
 
-        state.playbackIsBuffering = false;
-        state.playbackTransientStateUntil = 0;
-        state.playbackLastPlayerState = "playing";
+        state.playbackLastPlayerState = videoElement.paused ? "paused" : "playing";
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
-
-        if (!state.isOwner && nativeYoutubeGuestActionAllowed("play")) {
-          void requestPlaybackControl("play", Number(videoElement.currentTime) || 0, true);
-        }
-
-        if (nativeYoutubeActionAllowed("play")) {
-          state.playbackAwaitingActualStart = false;
-          clearTimeout(
-            state.playbackActualStartTimer
-          );
-          state.playbackActualStartTimer = null;
-
-          void (async () => {
-            try {
-              const position =
-                await asyncCurrentPosition();
-
-              publishPlaybackEvent(
-                "play",
-                position,
-                true,
-                playbackClockNow()
-              );
-
-              await reconcileRoomTimeline();
-            } catch (error) {
-              console.warn(
-                "原生影片播放同步失敗:",
-                error
-              );
-            }
-          })();
-        }
-
+        state.playbackAwaitingActualStart = true;
         updateTimeUI();
       },
 
       playing: () => {
         if (
           state.playerType !== "youtube" ||
+          !state.player ||
           state.youtubeNativeVideoElement !== videoElement
         ) {
           return;
@@ -4874,6 +4840,30 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         state.playbackLastPlayerState = "playing";
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
+        state.playbackAwaitingActualStart = false;
+        clearTimeout(state.playbackActualStartTimer);
+        state.playbackActualStartTimer = null;
+
+        if (!state.isOwner && nativeYoutubeGuestActionAllowed("play")) {
+          void requestPlaybackControl(
+            "play",
+            Number(videoElement.currentTime) || 0,
+            true
+          );
+        }
+
+        if (nativeYoutubeActionAllowed("play")) {
+          void (async () => {
+            try {
+              const position = await asyncCurrentPosition();
+              const now = playbackClockNow();
+              await publishPlaybackEvent("play", position, true, now, now);
+              await reconcileRoomTimeline();
+            } catch (error) {
+              console.warn("原生影片實際開始播放後同步失敗:", error);
+            }
+          })();
+        }
 
         updateTimeUI();
       },
@@ -5023,13 +5013,21 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         state.playbackTransientStateUntil = 0;
         state.isPlaying = false;
         state.playbackLastPlayerState = "ended";
+
         try {
           if (Number.isFinite(videoElement.duration) && videoElement.duration >= 0) {
             videoElement.currentTime = videoElement.duration;
           }
         } catch (_) {}
-        state.playbackLastObservedPosition =
-          Number(videoElement.currentTime) || 0;
+
+        const endedPosition = Number.isFinite(videoElement.duration)
+          ? Math.max(0, Number(videoElement.duration))
+          : Math.max(0, Number(videoElement.currentTime) || 0);
+
+        state.playbackLastObservedPosition = endedPosition;
+        state.playbackAwaitingActualStart = false;
+        clearTimeout(state.playbackActualStartTimer);
+        state.playbackActualStartTimer = null;
 
         updateTimeUI();
 
@@ -5037,6 +5035,15 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           state.isOwner &&
           !state.playbackApplyingRemote
         ) {
+          void publishPlaybackEvent(
+            "pause",
+            endedPosition,
+            false,
+            playbackClockNow(),
+            playbackClockNow(),
+            true
+          );
+
           cancelScheduledQueuePlayback();
 
           scheduleQueueAdvanceAfterEnded(
@@ -5750,7 +5757,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           state.player.mute();
         }
         suppressYoutubeNativeEvent(
-          "play"
+          "play",
+          1800
         );
         await state.player.playVideo();
       }
@@ -9625,12 +9633,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
       const current = await asyncCurrentPosition();
 
-      if (
-        !Number.isFinite(current) ||
-        Math.abs(current - target) >= 0.02
-      ) {
-        await applyPlayerPosition(target);
-      }
+      await applyPlayerPosition(target);
 
       await setPlaybackRateSafe(1);
 
@@ -9660,6 +9663,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         await playPlayer();
       } else {
         await pausePlayer();
+      }
+
+      const actuallyPlaying = await asyncIsPlaying().catch(() => false);
+      if (
+        event.playing === true &&
+        state.playerType === "youtube" &&
+        !actuallyPlaying
+      ) {
+        state.playbackAwaitingActualStart = true;
+        if ($("syncStatus")) {
+          $("syncStatus").textContent = "已完成時間軸同步，等待播放器開始播放";
+        }
       }
 
       state.playbackLastPosition =
