@@ -1462,59 +1462,69 @@
   }
 
   async function saveReportStatus() {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("reports.manage") || !currentCan("audit.write")) throw new Error("需要 reports.manage 與 audit.write 權限");
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
-    if (!id || !item) {
-      toast("找不到這筆回報");
-      return;
-    }
-
+    if (!id || !item) { toast("找不到這筆回報"); return; }
     const status = normalizeReportStatus($("reportStatus").value);
-    await db.ref("reports/" + id).update({
-      status,
-      handledAt: firebase.database.ServerValue.TIMESTAMP,
-      handledByUid: currentUser.uid,
-      handledByEmail: currentUser.email || "",
-      ...(status !== "resolved" ? {autoResolvedAt: null, autoResolvedBuild: null, autoResolveReason: null} : {})
-    });
-    await writeReportHistory(
-      id,
-      "manual_status",
-      "管理員將狀態改為 " + REPORT_STATUS_LABELS[status]
+    const historyRef = db.ref("reportHistoryEvents/" + id).push();
+    if (!historyRef.key) throw new Error("無法建立回報處理紀錄 ID");
+    const updates = {
+      ["reports/" + id + "/status"]:status,
+      ["reports/" + id + "/handledAt"]:firebase.database.ServerValue.TIMESTAMP,
+      ["reports/" + id + "/handledByUid"]:currentUser.uid,
+      ["reports/" + id + "/handledByEmail"]:currentUser.email || "",
+      ...(status !== "resolved" ? {
+        ["reports/" + id + "/autoResolvedAt"]:null,
+        ["reports/" + id + "/autoResolvedBuild"]:null,
+        ["reports/" + id + "/autoResolveReason"]:null
+      } : {}),
+      ["reportHistoryEvents/" + id + "/" + historyRef.key]: {
+        reportId:String(id).slice(0,128),
+        event:"manual_status",
+        createdAt:firebase.database.ServerValue.TIMESTAMP,
+        actorUid:currentUser.uid,
+        actorEmail:currentUser.email || "",
+        source:"admin",
+        details:"管理員將狀態改為 " + REPORT_STATUS_LABELS[status]
+      }
+    };
+    await writeAuditedUpdates(
+      updates,
+      "report.status",
+      String(item.uid || ""),
+      String(item.uid || ""),
+      "回報 " + id + " 狀態改為 " + REPORT_STATUS_LABELS[status]
     );
     await loadReports();
     $("reportHandledBy").textContent = currentUser.email || currentUser.uid || "—";
     $("reportAutoResolve").textContent = status === "resolved" ? "已處理（手動）" : "監控中";
     $("reportHint").textContent = "狀態已更新。";
     void loadReportHistory(id);
-    void writeAuditLog("report.status", item.uid, item.uid, "回報 " + id + " 狀態改為 " + REPORT_STATUS_LABELS[status]);
     toast("回報狀態已更新");
   }
-
   async function deleteReport() {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("reports.manage") || !currentCan("audit.write")) throw new Error("需要 reports.manage 與 audit.write 權限");
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
-    if (!id || !item) {
-      toast("找不到這筆回報");
-      return;
-    }
+    if (!id || !item) { toast("找不到這筆回報"); return; }
     if (!window.confirm("確定刪除這筆問題回報？刪除後無法復原。")) return;
     const historySnapshot = await db.ref("reportHistoryEvents/" + id).once("value");
-    const updates = {
-      ["reports/" + id]: null
-    };
+    const updates = {"reports/" + id:null};
     historySnapshot.forEach(child => {
       updates["reportHistoryEvents/" + id + "/" + child.key] = null;
     });
-    await db.ref().update(updates);
+    await writeAuditedUpdates(
+      updates,
+      "report.delete",
+      String(item.uid || ""),
+      String(item.uid || ""),
+      "刪除回報 " + id
+    );
     await loadReports();
     closeReportModal();
-    void writeAuditLog("report.delete", item.uid, item.uid, "刪除回報 " + id);
     toast("問題回報已刪除");
   }
-
   function renderAnalytics() {
     const accountsCount = Object.keys(accounts || {}).length;
     const roomsList = Object.entries(rooms || {});
@@ -1648,73 +1658,66 @@
     const uid = String(input?.value || "").trim();
     if (!uid) { toast("請輸入使用者 UID"); return; }
     if (uid === MASTER_UID) { toast("這個帳號已經是最高管理員"); return; }
-
-    const match = Object.values(accounts || {}).find(item =>
-      item && String(item.uid || "") === uid
-    );
+    const match = Object.values(accounts || {}).find(item => item && String(item.uid || "") === uid);
     if (!match?.uid) {
       toast("找不到這個 UID，請先讓該使用者登入 WatchTogether 一次");
       return;
     }
-
     const email = String(match.email || "").trim().toLowerCase();
     const role = $("whitelistRole")?.value === "viewer" ? "viewer" : "admin";
-    await db.ref("admin/whitelistByUid/" + uid).set({
-      uid,
-      email,
-      role,
-      enabled:true,
-      addedAt:firebase.database.ServerValue.TIMESTAMP,
-      addedByUid:currentUser.uid,
-      addedByEmail:currentUser.email || ""
-    });
+    await writeAuditedUpdates({
+      ["admin/whitelistByUid/" + uid]: {
+        uid,
+        email,
+        role,
+        enabled:true,
+        addedAt:firebase.database.ServerValue.TIMESTAMP,
+        addedByUid:currentUser.uid,
+        addedByEmail:currentUser.email || ""
+      }
+    },"whitelist.add",uid,email,"新增 " + role + " 權限");
     input.value = "";
     await loadWhitelist();
-    void writeAuditLog("whitelist.add", uid, email, "新增 " + role + " 權限");
     toast("已加入白名單管理員");
   }
-
   async function changeWhitelistRole(uid) {
     if (!isMasterUser(currentUser)) { toast("只有最高管理員可以調整權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     if (uid === MASTER_UID) { toast("最高管理員的權限不可修改"); return; }
-    const role = $("whitelistBody")?.querySelector('[data-role-select="' + uid.replace(/"/g, '\"') + '"]')?.value === "viewer" ? "viewer" : "admin";
-    await db.ref("admin/whitelistByUid/" + uid).update({
-      role,
-      updatedAt:firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid:currentUser.uid
-    });
+    const role = $("whitelistBody")?.querySelector('[data-role-select="' + uid.replace(/"/g, '"') + '"]')?.value === "viewer" ? "viewer" : "admin";
+    await writeAuditedUpdates({
+      ["admin/whitelistByUid/" + uid]: {role,updatedAt:firebase.database.ServerValue.TIMESTAMP,updatedByUid:currentUser.uid}
+    },"whitelist.role",uid,item.email || uid,"調整為 " + role);
     await loadWhitelist();
-    void writeAuditLog("whitelist.role", uid, item.email || uid, "調整為 " + role);
     toast(role === "viewer" ? "已設為觀察員" : "已設為管理員");
   }
-
   async function toggleWhitelist(uid) {
     if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
     const item = whitelist[uid];
     if (!item) return;
-    await db.ref("admin/whitelistByUid/" + uid).update({
-      enabled:item.enabled !== true,
-      updatedAt:firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid:currentUser.uid
-    });
+    const enabled = item.enabled !== true;
+    await writeAuditedUpdates({
+      ["admin/whitelistByUid/" + uid]: {enabled,updatedAt:firebase.database.ServerValue.TIMESTAMP,updatedByUid:currentUser.uid}
+    },"whitelist.toggle",uid,item.email || uid,enabled ? "啟用管理員資格" : "停用管理員資格");
     await loadWhitelist();
-    void writeAuditLog("whitelist.toggle", uid, item.email || uid, item.enabled === true ? "停用管理員資格" : "啟用管理員資格");
-    toast(item.enabled === true ? "已停用" : "已啟用");
+    toast(enabled ? "已啟用" : "已停用");
   }
-
   async function removeWhitelist(uid) {
     if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
     const item = whitelist[uid];
     if (!item) return;
     if (!window.confirm("確定刪除 " + (item.email || "這個帳號") + " 的管理員資格？")) return;
-    await db.ref("admin/whitelistByUid/" + uid).remove();
+    await writeAuditedUpdates(
+      {"admin/whitelistByUid/" + uid:null},
+      "whitelist.remove",
+      uid,
+      item.email || uid,
+      "移除管理員資格"
+    );
     await loadWhitelist();
-    void writeAuditLog("whitelist.remove", uid, item.email || uid, "移除管理員資格");
     toast("已刪除白名單管理員");
   }
-
   async function openEditUser(uid) {
     if (!isAdminOperator()) return;
     const item = accounts[uid];
@@ -1744,7 +1747,7 @@
   }
 
   async function saveUser() {
-    if (!isAdminOperator()) return;
+    if (!isAdminOperator() || !currentCan("audit.write")) throw new Error("需要 users.update 與 audit.write 權限");
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1765,7 +1768,6 @@
     const avatarEmoji = String($("editUserAvatar").value || "").trim().slice(0,4);
     const theme = String($("editUserTheme").value || "aurora");
     const notifications = $("editUserNotifications").checked === true;
-
     if (!displayName) { toast("顯示名稱不能是空白"); return; }
     if (!avatarEmoji) { toast("頭像 Emoji 不能是空白"); return; }
 
@@ -1778,34 +1780,31 @@
     updates["profiles/" + uid + "/theme"] = theme;
     updates["profiles/" + uid + "/notifications"] = notifications;
 
+    await writeAuditedUpdates(
+      updates,
+      "user.update",
+      uid,
+      displayName,
+      "管理員更新使用者資料"
+    );
+
     try {
-      await db.ref().update(updates);
-
-      try {
-        const membersSnapshot = await db.ref("members").once("value");
-        const memberUpdates = {};
-        Object.entries(membersSnapshot.val() || {}).forEach(([roomId,members]) => {
-          if (members && members[uid]) {
-            memberUpdates["members/" + roomId + "/" + uid + "/name"] = displayName;
-          }
-        });
-        if (Object.keys(memberUpdates).length) await db.ref().update(memberUpdates);
-      } catch (error) {
-        console.warn("同步現有房間名稱失敗:", error);
-      }
-
-      accounts[uid] = {...accounts[uid],displayName,photoURL};
-      profiles[uid] = {...profile,displayName,avatarEmoji,theme,notifications};
-      renderAccounts();
-      closeUserEdit();
-      void writeAuditLog("user.update", uid, displayName, "管理員更新使用者資料");
-      toast("使用者資料已更新");
+      const membersSnapshot = await db.ref("members").once("value");
+      const memberUpdates = {};
+      Object.entries(membersSnapshot.val() || {}).forEach(([roomId,members]) => {
+        if (members && members[uid]) memberUpdates["members/" + roomId + "/" + uid + "/name"] = displayName;
+      });
+      if (Object.keys(memberUpdates).length) await db.ref().update(memberUpdates);
     } catch (error) {
-      console.error(error);
-      toast(error?.message || "使用者資料更新失敗");
+      console.warn("同步現有房間名稱失敗:", error);
     }
-  }
 
+    accounts[uid] = {...accounts[uid],displayName,photoURL};
+    profiles[uid] = {...profile,displayName,avatarEmoji,theme,notifications};
+    renderAccounts();
+    closeUserEdit();
+    toast("使用者資料已更新");
+  }
   function openBlockUser(uid) {
     if (!currentCan("users.restrict")) return;
     const item = accounts[uid];
@@ -1825,7 +1824,7 @@
   }
 
   async function confirmBlock() {
-    if (!currentCan("users.restrict")) return;
+    if (!currentCan("users.restrict") || !currentCan("audit.write")) throw new Error("需要 users.restrict 與 audit.write 權限");
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1833,79 +1832,73 @@
       toast("最高管理員不能被封鎖");
       return;
     }
-
     const duration = String($("blockDuration").value || "");
+    const allowed = new Set(["600000","3600000","86400000","604800000","2592000000","permanent"]);
+    if (!allowed.has(duration)) throw new Error("不支援的封鎖時間");
     const permanent = duration === "permanent";
-    const blockedUntil = permanent ? 0 : Date.now() + Number(duration || 3600000);
-
-    await db.ref("admin/blocksByUid/" + uid).set({
-      uid,
-      email:item.email || "",
-      displayName:item.displayName || "",
-      permanent,
-      blockedUntil,
-      blockedAt:firebase.database.ServerValue.TIMESTAMP,
-      blockedByUid:currentUser.uid,
-      blockedByEmail:currentUser.email || "",
-      blockedByRole:isMasterOperator() ? "master" : "admin"
-    });
-
+    const blockedUntil = permanent ? 0 : Date.now() + Number(duration);
+    await writeAuditedUpdates({
+      ["admin/blocksByUid/" + uid]: {
+        uid,
+        email:item.email || "",
+        displayName:item.displayName || "",
+        permanent,
+        blockedUntil,
+        blockedAt:firebase.database.ServerValue.TIMESTAMP,
+        blockedByUid:currentUser.uid,
+        blockedByEmail:currentUser.email || "",
+        blockedByRole:isMasterOperator() ? "master" : "admin"
+      }
+    },"block",uid,item.displayName || item.email || uid,permanent ? "永久封鎖" : "封鎖 " + formatRemaining({blockedUntil,permanent}));
     await loadBlocks();
     closeBlockModal();
-    void writeAuditLog("block", uid, item.displayName || item.email || uid, permanent ? "永久封鎖" : "封鎖 " + formatRemaining({blockedUntil,permanent}));
     toast(permanent ? "已永久封鎖使用者" : "已封鎖使用者");
   }
-
    async function unblockUser(uid, options = {}) {
-     if (!currentCan("users.restrict")) return;
-     const item = accounts[uid];
-     if (!item) return;
-     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
-       toast("最高管理員不能解除或修改封鎖");
-       return;
-     }
-
-     const block = blocks[uid];
-     if (!block) {
-       await loadBlocks();
-       return;
-     }
-
-     if (String(uid) === String(currentUser?.uid || "") && !canCurrentUserSelfUnblock(block, uid)) {
-       throw new Error("這個封鎖是由權限更高的管理員建立，你不能自行解除");
-     }
-
-     if (options.skipConfirm !== true && !window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
-     await db.ref("admin/blocksByUid/" + uid).remove();
-     await loadBlocks();
-     void writeAuditLog("unblock", uid, item.displayName || item.email || uid, options.source === "ai" ? "AI Agent 解除封鎖" : "解除封鎖");
-     toast("已解除封鎖");
-   }
-
+    if (!currentCan("users.restrict") || !currentCan("audit.write")) throw new Error("需要 users.restrict 與 audit.write 權限");
+    const item = accounts[uid];
+    if (!item) return;
+    if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
+      toast("最高管理員不能解除或修改封鎖");
+      return;
+    }
+    const block = blocks[uid];
+    if (!block) {
+      await loadBlocks();
+      return;
+    }
+    if (String(uid) === String(currentUser?.uid || "") && !canCurrentUserSelfUnblock(block, uid)) {
+      throw new Error("這個封鎖是由權限更高的管理員建立，你不能自行解除");
+    }
+    if (options.skipConfirm !== true && !window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
+    await writeAuditedUpdates(
+      {"admin/blocksByUid/" + uid:null},
+      "unblock",
+      uid,
+      item.displayName || item.email || uid,
+      options.source === "ai" ? "AI Agent 解除封鎖" : "解除封鎖"
+    );
+    await loadBlocks();
+    toast("已解除封鎖");
+  }
   async function deleteRoom(roomId, options = {}) {
-    if (!currentCan("rooms.manage")) return;
+    if (!currentCan("rooms.manage") || !currentCan("audit.write")) throw new Error("需要 rooms.manage 與 audit.write 權限");
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
     const name = item.name || item.__meta?.name || "一起看";
-
-    if (options.skipConfirm !== true && !window.confirm("確定刪除房間「" + name + "」(" + key + ")？\n房間與播放、聊天、成員、待播放資料都會一起刪除。")) {
-      return;
-    }
-
+    if (options.skipConfirm !== true && !window.confirm("確定刪除房間「" + name + "」(" + key + ")？
+房間與播放、聊天、成員、待播放資料都會一起刪除。")) return;
     const updates = {};
     ["rooms/","roomMeta/","members/","playback/","chat/","queue/","kicked/","controlRequests/"].forEach(prefix => {
       updates[prefix + key] = null;
     });
-
-    await db.ref().update(updates);
+    await writeAuditedUpdates(updates,"room.delete",key,name,options.source === "ai" ? "AI Agent 刪除房間" : "刪除房間");
     delete rooms[key];
     renderRooms();
     updateStats();
-    void writeAuditLog("room.delete", key, name, options.source === "ai" ? "AI Agent 刪除房間" : "刪除房間");
     toast("房間已刪除");
   }
-
   function encodeAccessPermission(permission) {
     return String(permission || "").trim().replace(/\./g, "__").replace(/[^A-Za-z0-9_-]/g, "_").slice(0,80);
   }
