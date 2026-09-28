@@ -861,7 +861,7 @@
   const AI_EXTENSION_MODEL = "gpt-4o-mini";
   const AI_EXTENSION_API_ORIGIN = "https://api.openai.com";
   const AI_ADMIN_STREAM_MAX = 12000;
-  const AI_ADMIN_STREAM_TIMEOUT = 25000;
+  const AI_ADMIN_STREAM_TIMEOUT = 125000;
 
   function adminAiRequestId() {
     return "wt-admin-ai-" + Date.now() + "-" + Math.random().toString(36).slice(2,10);
