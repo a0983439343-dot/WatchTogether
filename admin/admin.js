@@ -343,8 +343,8 @@
     );
     if (!confirmed) return;
 
-    await db.ref("chat/" + roomId + "/" + id).remove();
-    await writeAuditLog(
+    await writeAuditedUpdates(
+      {"chat/" + roomId + "/" + id:null},
       "chat.message.delete",
       String(item.uid || ""),
       String(item.name || item.uid || ""),
