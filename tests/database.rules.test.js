@@ -78,6 +78,7 @@ async function seed() {
                 users__restrict: true,
                 reports__read: true,
                 reports__manage: true,
+                chat__moderate: true,
                 audit__read: true,
                 audit__write: true,
                 audit__delete: true
@@ -351,6 +352,36 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
       status: "resolved"
     })
   );
+});
+
+test("chat moderation deletion can be atomic with its Audit Log", async () => {
+  const admin = db(ADMIN_UID, adminToken);
+  const messageKey = admin.ref("chat/ABC123").push().key;
+  const auditKey = admin.ref("admin/auditLogs").push().key;
+  assert.ok(messageKey);
+  assert.ok(auditKey);
+
+  await assertSucceeds(admin.ref("chat/ABC123/" + messageKey).set({
+    uid: USER_UID,
+    name: "User",
+    type: "text",
+    text: "atomic moderation target",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(admin.ref().update({
+    ["chat/ABC123/" + messageKey]: null,
+    ["admin/auditLogs/" + auditKey]: {
+      action: "chat.message.delete",
+      actorUid: ADMIN_UID,
+      actorEmail: "admin@example.com",
+      actorRole: "custom",
+      targetUid: USER_UID,
+      targetName: "User",
+      details: "atomic chat moderation test",
+      createdAt: Date.now()
+    }
+  }));
 });
 
 test("atomic access and report updates require matching Audit permissions", async () => {
