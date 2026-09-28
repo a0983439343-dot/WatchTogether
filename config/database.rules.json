@@ -21,7 +21,7 @@
           ".write": "(auth != null && (root.child('rooms').child($roomId).child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists())) && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (!(root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms__manage').child('enabled').val() === true && (root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms__manage').child('permanent').val() === true || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms__manage').child('until').val() === 0 || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms__manage').child('until').val() > now)) && root.child('admin').child('featureFlags').child('rooms__manage').child('enabled').val() !== false))",
           ".validate": "!newData.exists() || (newData.hasChildren(['id','platform','title','thumbnail','channel']) && newData.child('id').isString() && newData.child('id').val().length <= 200 && newData.child('platform').isString() && (newData.child('platform').val() === 'youtube' || newData.child('platform').val() === 'vimeo' || newData.child('platform').val() === 'dailymotion' || newData.child('platform').val() === 'twitch') && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 200 && newData.child('thumbnail').isString() && newData.child('thumbnail').val().length <= 2000 && newData.child('channel').isString() && newData.child('channel').val().length <= 100 && (!newData.child('url').exists() || (newData.child('url').isString() && newData.child('url').val().length <= 2000)) && (!newData.child('twitchType').exists() || (newData.child('twitchType').isString() && (newData.child('twitchType').val() === 'channel' || newData.child('twitchType').val() === 'video' || newData.child('twitchType').val() === 'clip'))))",
           "$other": {
-            ".validate": false
+            ".validate": "$other === 'id' || $other === 'platform' || $other === 'title' || $other === 'thumbnail' || $other === 'channel' || $other === 'url' || $other === 'twitchType'"
           },
           "id": {
             ".validate": true
@@ -46,7 +46,7 @@
           }
         },
         "$other": {
-          ".validate": false
+          ".validate": "$other === 'owner' || $other === 'name' || $other === 'sourceType' || $other === 'video'"
         }
       },
       ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
