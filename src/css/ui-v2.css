@@ -779,3 +779,7 @@ select{appearance:auto}
   .wt-chat-modal-card{width:94vw;height:92vh;grid-template-columns:240px minmax(0,1fr)}
   .wt-chat-sidebar{display:block}
 }
+
+
+/* Hidden state must always win over component display rules. */
+.hidden{display:none!important}
