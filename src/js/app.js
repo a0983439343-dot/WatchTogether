@@ -3783,6 +3783,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return state.isOwner || isRoomCohost();
   }
 
+  window.addEventListener("wt-room-role-changed", () => {
+    renderQueue();
+  });
+
   function isVideoInQueue(video) {
     return Object.values(state.queue || {}).some(function(item) {
       return isSameVideo(item, video);
