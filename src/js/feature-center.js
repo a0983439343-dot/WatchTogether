@@ -340,16 +340,18 @@ function installFriendshipWatcher(){
   var u=user();if(!u||u.isAnonymous||!db||window.__WT_FRIENDSHIP_WATCH_UID===u.uid)return;
   window.__WT_FRIENDSHIP_WATCH_UID=u.uid;
   var ref=db.ref("friendships/"+u.uid);
-  ref.once("value").then(function(){return;}).then(function(){
+  ref.once("value").then(function(initial){
+    var known={};
+    initial.forEach(function(child){known[String(child.key||"")]=true;});
     ref.on("child_added",function(snap){
-      var uid=String(snap.key||"");if(!uid)return;
-      var key="wt_friend_added:"+u.uid+":"+uid;
-      if(localStorage.getItem(key))return;
-      localStorage.setItem(key,String(Date.now()));
+      var uid=String(snap.key||"");if(!uid||known[uid])return;
+      known[uid]=true;
       db.ref("profiles/"+uid).once("value").then(function(ps){
         var p=ps.val()||{};
         if(prefs().friendNotifications)pushNotification("好友已加入",String(p.displayName||"你的好友")+" 現在已成為好友。","friend");
-      }).catch(function(){if(prefs().friendNotifications)pushNotification("好友已加入","你有一位新的好友。","friend");});
+      }).catch(function(){
+        if(prefs().friendNotifications)pushNotification("好友已加入","你有一位新的好友。","friend");
+      });
     });
   }).catch(function(){});
 }
