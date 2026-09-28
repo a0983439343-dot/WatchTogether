@@ -644,23 +644,18 @@
       renderAutonomousMaintenance();
       return;
     }
-    await db.ref("admin/autonomousMaintenance").set({
-      enabled: next,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid: currentUser.uid,
-      updatedByEmail: currentUser.email || ""
-    });
+    await writeAuditedUpdates({
+      ["admin/autonomousMaintenance"]: {
+        enabled:next,
+        updatedAt:firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid:currentUser.uid,
+        updatedByEmail:currentUser.email || ""
+      }
+    },"maintenance.toggle",currentUser.uid,"全自動維護",next ? "啟用全自動維護" : "停用全自動維護");
     autonomousMaintenanceEnabled = next;
     renderAutonomousMaintenance();
-    await writeAuditLog(
-      "maintenance.toggle",
-      currentUser.uid,
-      "全自動維護",
-      next ? "啟用全自動維護" : "停用全自動維護"
-    );
     toast(next ? "已啟用全自動維護" : "已停用全自動維護");
   }
-
   async function writeAuditLog(action, targetUid, targetName, details) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
@@ -2223,22 +2218,8 @@
     if (passwordEl) passwordEl.value = "";
     await window.WT_ACCESS_CONTROL?.refresh?.();
     renderMaintenanceControl();
-    const auditDetails = enabled
-      ? "關閉網站 · 原因：" + reason + " · 預計恢復：" + (restoreAt > 0 ? formatDate(restoreAt) : "未設定")
-      : "重新開站";
-    const auditOk = await writeAuditLog(
-      enabled ? "maintenance.on" : "maintenance.off",
-      currentUser.uid,
-      "網站維護模式",
-      auditDetails
-    );
-    if (!auditOk) {
-      toast(enabled ? "網站已進入維護模式，但 Audit Log 寫入失敗" : "網站已重新開站，但 Audit Log 寫入失敗");
-      return;
-    }
     toast(enabled ? "網站已進入維護模式" : "網站已重新開站");
   }
-
   const SYSTEM_SETTINGS_DEFAULTS = {
     siteName: "WatchTogether｜一起看",
     siteDescription: "WatchTogether - 和朋友一起同步看影片、聊天與加好友",
@@ -2339,29 +2320,20 @@
     if (!siteDescription) throw new Error("網站描述不能是空白");
     if (announcementEnabled && !announcementText) throw new Error("啟用首頁公告時，公告內容不能是空白");
 
-    await db.ref("site/settings").set({
-      siteName,
-      siteDescription,
-      announcementEnabled,
-      announcementText,
-      updatedAt:firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid:currentUser.uid,
-      updatedByEmail:currentUser.email || ""
-    });
+    await writeAuditedUpdates({
+      "site/settings": {
+        siteName,
+        siteDescription,
+        announcementEnabled,
+        announcementText,
+        updatedAt:firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid:currentUser.uid,
+        updatedByEmail:currentUser.email || ""
+      }
+    },"system.settings.update",currentUser.uid,"網站系統設定","網站名稱：" + siteName + " · 公告：" + (announcementEnabled ? "啟用" : "停用"));
     await loadSystemSettings();
-    const logged = await writeAuditLog(
-      "system.settings.update",
-      currentUser.uid,
-      "網站系統設定",
-      "網站名稱：" + siteName + " · 公告：" + (announcementEnabled ? "啟用" : "停用")
-    );
-    if (!logged) {
-      toast("系統設定已儲存，但 Audit Log 寫入失敗");
-      return;
-    }
     toast("系統設定已儲存");
   }
-
   async function loadAccessControl() {
     if (!currentHasAdminAccess) return;
     const [rolesSnap, assignmentsSnap, overridesSnap, restrictionsSnap, flagsSnap] = await Promise.all([
