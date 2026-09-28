@@ -168,21 +168,11 @@
       return normalizeFlag(flag);
     }
 
-    const adminScoped = /^(admin|users|audit)\./.test(key) ||
-      key === "reports.manage" ||
-      key === "analytics.read" ||
-      key === "ai.use";
-
     const role = normalizeRole(options.role || state.role);
-    if (state.role) {
-      const permissions = rolePermissions(role, state.roleDefinition);
-      if (adminScoped && !(permissions.has("*") || permissions.has(key))) {
-        return false;
-      }
-      if (!adminScoped && role !== "viewer" && !permissions.has("*") && permissions.size > 0 && !permissions.has(key)) {
-        return false;
-      }
-    } else if (adminScoped) {
+    if (!state.role) return false;
+
+    const permissions = rolePermissions(role, state.roleDefinition);
+    if (!permissions.has("*") && !permissions.has(key)) {
       return false;
     }
 
@@ -424,7 +414,7 @@
   }
 
   function hasAdminLikeAccess() {
-    return state.role === "master" || state.role === "admin" || state.role === "viewer";
+    return hasPermission("admin.read");
   }
 
   async function refresh() {
