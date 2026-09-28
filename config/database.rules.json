@@ -522,6 +522,18 @@
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "!newData.exists() || (newData.hasChildren(['displayName','publicCode','avatarEmoji','searchName','updatedAt']) && newData.child('displayName').isString() && newData.child('displayName').val().length > 0 && newData.child('displayName').val().length <= 30 && newData.child('publicCode').isString() && newData.child('publicCode').val().length <= 6 && newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length > 0 && newData.child('avatarEmoji').val().length <= 4 && newData.child('searchName').isString() && newData.child('searchName').val().length > 0 && newData.child('searchName').val().length <= 30 && newData.child('updatedAt').isNumber())"
       }
+    },
+    "publicRooms": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "searchName",
+        "sourceType"
+      ],
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('rooms').child($roomId).child('owner').val() === auth.uid || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+        ".validate": "!newData.exists() || (newData.hasChildren(['id','name','searchName','owner','sourceType','createdAt']) && newData.child('id').isString() && newData.child('id').val() === $roomId && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.child('searchName').isString() && newData.child('searchName').val().length > 0 && newData.child('searchName').val().length <= 40 && newData.child('owner').isString() && newData.child('owner').val().length > 0 && newData.child('sourceType').isString() && (newData.child('sourceType').val() === 'youtube' || newData.child('sourceType').val() === 'vimeo' || newData.child('sourceType').val() === 'dailymotion' || newData.child('sourceType').val() === 'twitch') && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 120000 && (!newData.child('videoTitle').exists() || (newData.child('videoTitle').isString() && newData.child('videoTitle').val().length <= 200)))"
+      }
     }
   }
 }
