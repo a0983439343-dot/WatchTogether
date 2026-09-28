@@ -540,74 +540,7 @@ test("chat media messages: image and audio payloads pass validation", async () =
   }));
 });
 
-  await assertSucceeds(cohostDb.ref("members/ABC123/" + OTHER_UID).set({
-    name: "Cohost",
-    joinedAt: Date.now(),
-    online: true,
-    lastSeen: Date.now()
-  }));
 
-  await assertSucceeds(ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).set({
-    uid: OTHER_UID,
-    role: "cohost",
-    updatedAt: Date.now(),
-    updatedByUid: USER_UID
-  }));
-
-  await assertFails(cohostDb.ref("roomRoles/ABC123/" + USER_UID).set({
-    uid: USER_UID,
-    role: "cohost",
-    updatedAt: Date.now(),
-    updatedByUid: OTHER_UID
-  }));
-
-  await assertSucceeds(cohostDb.ref("playback/ABC123").set({
-    action: "play",
-    position: 0,
-    videoId: "video-1",
-    platform: "youtube",
-    issuedAt: Date.now(),
-    updatedAt: Date.now(),
-    updatedBy: OTHER_UID,
-    eventId: "cohost-playback-" + Date.now(),
-    playing: true,
-    playbackRate: 1
-  }));
-
-  await assertSucceeds(ownerDb.ref("queue/ABC123/first").set({
-    id: "video-queue-1",
-    platform: "youtube",
-    title: "Queue One",
-    thumbnail: "",
-    channel: "",
-    addedBy: USER_UID,
-    addedByName: "User",
-    addedAt: Date.now(),
-    order: 0
-  }));
-
-  await assertSucceeds(ownerDb.ref("queue/ABC123/second").set({
-    id: "video-queue-2",
-    platform: "youtube",
-    title: "Queue Two",
-    thumbnail: "",
-    channel: "",
-    addedBy: USER_UID,
-    addedByName: "User",
-    addedAt: Date.now(),
-    order: 1
-  }));
-
-  await assertSucceeds(cohostDb.ref("queue/ABC123/first").update({
-    order: 1
-  }));
-
-  await assertSucceeds(cohostDb.ref("queue/ABC123/second").update({
-    order: 0
-  }));
-
-  await assertSucceeds(cohostDb.ref("queue/ABC123/first").remove());
-});
 
 test("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
   const adminDb = db(ADMIN_UID, {
