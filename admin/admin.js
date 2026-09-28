@@ -301,7 +301,9 @@
             '<td><div class="primary-text">' + escapeHtml(item.name || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || "") + '</span></td>' +
             '<td><span class="chat-type">' + escapeHtml(type) + '</span></td>' +
             '<td class="chat-moderation-content">' + escapeHtml(content) + '</td>' +
-            '<td><button class="btn danger" type="button" data-chat-delete="' + escapeHtml(id) + '">🗑️ 刪除</button></td>' +
+            '<td>' + (currentCan("chat.moderate")
+              ? '<button class="btn danger" type="button" data-chat-delete="' + escapeHtml(id) + '">🗑️ 刪除</button>'
+              : '<span class="muted">僅可查看</span>') + '</td>' +
           '</tr>';
         }).join("")
       : '<tr><td colspan="5" class="muted">目前沒有符合條件的聊天訊息。</td></tr>';
@@ -379,7 +381,7 @@
             '<td><span class="small">' + escapeHtml(platform) + ' · ' + escapeHtml(title) + '</span></td>' +
             '<td>' + escapeHtml(formatDate(meta.createdAt || item.createdAt)) + '</td>' +
             '<td><div class="room-actions"><a class="btn primary" href="' + href + '">🚪 進入房間</a>' +
-              (isAdminOperator() ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
+              (currentCan("rooms.manage") ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
               '</div></td>' +
           '</tr>';
         }).join("")
