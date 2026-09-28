@@ -3834,6 +3834,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (video.url) item.url = String(video.url);
     if (video.twitchType) item.twitchType = video.twitchType;
+    item.order = Date.now();
 
     const newRef = await state.queueRef.push(item);
 
@@ -3869,6 +3870,38 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  function canManageQueueOrder() {
+    return Boolean(
+      state.isOwner ||
+      window.WT_ROOM_ACCESS?.isCohost?.(state.uid)
+    );
+  }
+
+  async function moveQueueItem(queueId, direction) {
+    if (!canManageQueueOrder()) {
+      throw new Error("只有房主或 Co-host 可以調整待播放順序");
+    }
+    if (!state.queueRef || !queueId) return;
+
+    const list = getSortedQueue();
+    const index = list.findIndex(item => String(item.queueId) === String(queueId));
+    if (index < 0) return;
+
+    const target = direction < 0 ? index - 1 : index + 1;
+    if (target < 0 || target >= list.length) return;
+
+    const current = list[index];
+    const swap = list[target];
+    const currentOrder = Number(current.order || current.addedAt || Date.now());
+    const swapOrder = Number(swap.order || swap.addedAt || Date.now());
+
+    const updates = {};
+    updates[current.queueId + "/order"] = swapOrder;
+    updates[swap.queueId + "/order"] = currentOrder;
+
+    await state.queueRef.update(updates);
+    toast(direction < 0 ? "已上移" : "已下移");
+  }
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
@@ -3948,13 +3981,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         })
       )
       .sort(
-        (a, b) =>
-          Number(
-            a.addedAt || 0
-          ) -
-          Number(
-            b.addedAt || 0
-          )
+        (a, b) => {
+          const ao = Number(a.order);
+          const bo = Number(b.order);
+          if (Number.isFinite(ao) && Number.isFinite(bo) && ao !== bo) return ao - bo;
+          if (Number.isFinite(ao) && !Number.isFinite(bo)) return -1;
+          if (!Number.isFinite(ao) && Number.isFinite(bo)) return 1;
+          return Number(a.addedAt || 0) - Number(b.addedAt || 0);
+        }
       );
   }
 
@@ -4089,6 +4123,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 "
               >
 
+                ${canManageQueueOrder() ? `
+                  <button type="button" class="tiny-btn" data-queue-up="${escapeHtml(item.queueId)}" ${index === 0 ? "disabled" : ""}>↑</button>
+                  <button type="button" class="tiny-btn" data-queue-down="${escapeHtml(item.queueId)}" ${index === list.length - 1 ? "disabled" : ""}>↓</button>
+                ` : ""}
+
                 ${state.isOwner ? `
                   <button
                     type="button"
@@ -4147,6 +4186,27 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         }
       );
 
+    container.querySelectorAll("[data-queue-up]").forEach(button => {
+      button.addEventListener("click", async () => {
+        try {
+          await moveQueueItem(button.dataset.queueUp, -1);
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "上移失敗");
+        }
+      });
+    });
+
+    container.querySelectorAll("[data-queue-down]").forEach(button => {
+      button.addEventListener("click", async () => {
+        try {
+          await moveQueueItem(button.dataset.queueDown, 1);
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "下移失敗");
+        }
+      });
+    });
     container
       .querySelectorAll(
         "[data-queue-remove]"
