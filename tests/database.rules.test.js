@@ -482,11 +482,11 @@ test("2.0 access control: master can manage roles, permissions, restrictions and
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   await assertSucceeds(master.ref("admin/access/roles/custom2").set({
     name: "Custom 2",
-    permissions: {"rooms.read": true}
+    permissions: {"rooms__read": true}
   }));
   await assertSucceeds(master.ref("admin/access/roleByUid/" + USER_UID).set("custom2"));
-  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + USER_UID + "/rooms.manage").set("deny"));
-  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + USER_UID + "/chat.send").set({
+  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + USER_UID + "/rooms__manage").set("deny"));
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + USER_UID + "/chat__send").set({
     enabled: true,
     permanent: true,
     until: 0,
@@ -495,7 +495,7 @@ test("2.0 access control: master can manage roles, permissions, restrictions and
     createdByUid: MASTER_UID,
     createdByEmail: MASTER_EMAIL
   }));
-  await assertSucceeds(master.ref("admin/featureFlags/chat.send").set({
+  await assertSucceeds(master.ref("admin/featureFlags/chat__send").set({
     enabled: false,
     reason: "test flag",
     updatedAt: Date.now(),
@@ -508,7 +508,7 @@ test("2.0 access control: viewer cannot modify policy and user cannot forge thei
     db(VIEWER_UID, viewerToken).ref("admin/access/roleByUid/" + USER_UID).set("admin")
   );
   await assertFails(
-    db(USER_UID, userToken).ref("admin/access/restrictionsByUid/" + USER_UID + "/chat.send").set({
+    db(USER_UID, userToken).ref("admin/access/restrictionsByUid/" + USER_UID + "/chat__send").set({
       enabled: false,
       permanent: false,
       until: 0,
