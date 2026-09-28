@@ -122,6 +122,8 @@ function openFavorites(){
   var s=stats(),fav=wt.readJson?wt.readJson("wt_favorites_v1",{}):{},lang=window.WT_I18N&&window.WT_I18N.getLocale&&window.WT_I18N.getLocale()||"zh-TW";
   var html='<div class="wt-feature-stat-grid"><div class="wt-feature-stat"><span class="small muted">觀看時間</span><strong>'+esc(fmtDur(s.watchSeconds))+'</strong></div><div class="wt-feature-stat"><span class="small muted">播放影片</span><strong>'+esc(s.videosStarted||0)+' 部</strong></div><div class="wt-feature-stat"><span class="small muted">加入房間</span><strong>'+esc(s.roomsJoined||0)+' 次</strong></div></div>';
   html+='<div class="wt-feature-list"><div class="wt-feature-row"><span>訊息數</span><strong>'+esc(s.messagesSent||0)+'</strong></div><div class="wt-feature-row"><span>收藏數</span><strong>'+esc(Object.keys(fav||{}).length)+'</strong></div><div class="wt-feature-row"><span>語言</span><strong>'+esc(lang)+'</strong></div><div class="wt-feature-row"><span>最近活動</span><strong>'+esc(fmtDate(s.lastAt))+'</strong></div></div>';
+  var ps=s.platformStarts&&typeof s.platformStarts==="object"?s.platformStarts:{};
+  html+='<div class="panel-title" style="margin-top:16px">平台使用次數</div><div class="wt-feature-list"><div class="wt-feature-row"><span>YouTube</span><strong>'+esc(ps.youtube||0)+'</strong></div><div class="wt-feature-row"><span>Vimeo</span><strong>'+esc(ps.vimeo||0)+'</strong></div><div class="wt-feature-row"><span>Dailymotion</span><strong>'+esc(ps.dailymotion||0)+'</strong></div><div class="wt-feature-row"><span>Twitch</span><strong>'+esc(ps.twitch||0)+'</strong></div></div>';
   modal("wtStatsModal","個人統計",html);
 }
 
