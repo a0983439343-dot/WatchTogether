@@ -420,7 +420,8 @@
     "whitelist.role": "調整權限",
     "whitelist.toggle": "啟用 / 停用",
     "whitelist.remove": "移除白名單",
-    "audit.delete": "刪除操作紀錄"
+    "audit.delete": "刪除操作紀錄",
+    "ai.analyze": "AI 分析"
   };
 
   function stopAuditLogsListener() {
