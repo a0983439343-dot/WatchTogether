@@ -4125,16 +4125,33 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       return false;
     }
 
-    const list =
-      getSortedQueue();
+    const mode = String(
+      state.room?.settings?.queueMode ||
+      "normal"
+    );
 
+    if (mode === "repeat_one") {
+      try {
+        return await replayVideo();
+      } catch (error) {
+        console.error("重播目前影片失敗:", error);
+        return false;
+      }
+    }
+
+    const list = getSortedQueue();
     if (!list.length) {
       return false;
     }
 
+    const index =
+      mode === "shuffle"
+        ? Math.floor(Math.random() * list.length)
+        : 0;
+
     try {
       await playQueueItem(
-        list[0].queueId
+        list[index].queueId
       );
 
       return true;
@@ -4146,6 +4163,45 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
       return false;
     }
+  }
+
+  function scheduleQueueAdvanceAfterEnded(
+    playerAtEnd,
+    videoIdAtEnd
+  ) {
+    if (
+      !state.isOwner ||
+      state.playbackApplyingRemote ||
+      state.leavingRoom
+    ) {
+      return;
+    }
+
+    cancelScheduledQueuePlayback();
+
+    const roomIdAtEnd =
+      String(state.roomId || "");
+
+    state.queueNextTimer =
+      setTimeout(
+        async () => {
+          state.queueNextTimer = null;
+
+          if (
+            String(state.roomId || "") !== roomIdAtEnd ||
+            state.player !== playerAtEnd ||
+            String(state.currentVideoId || "") !==
+              String(videoIdAtEnd || "") ||
+            !state.isOwner ||
+            state.leavingRoom
+          ) {
+            return;
+          }
+
+          await playNextQueueItem();
+        },
+        300
+      );
   }
 
 
@@ -6517,6 +6573,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         issuedAt,
         true
       );
+      scheduleQueueAdvanceAfterEnded(
+        player,
+        String(state.currentVideoId || "")
+      );
     });
 
     player.on("timeupdate", () => {
@@ -6626,6 +6686,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       const position = Number(playerState?.videoTime) || await asyncCurrentPosition().catch(() => 0);
       const issuedAt = playbackClockNow();
       await publishPlaybackEvent("pause", position, false, issuedAt, issuedAt, true);
+      scheduleQueueAdvanceAfterEnded(
+        player,
+        String(state.currentVideoId || "")
+      );
     });
 
     player.on(dailymotion.events.VIDEO_TIMECHANGE, () => {
@@ -6755,6 +6819,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         const position = await asyncCurrentPosition().catch(() => 0);
         const issuedAt = playbackClockNow();
         await publishPlaybackEvent("pause", position, false, issuedAt, issuedAt, true);
+        scheduleQueueAdvanceAfterEnded(
+          player,
+          String(state.currentVideoId || "")
+        );
       });
 
       player.addEventListener(Twitch.Player.PLAYBACK_BLOCKED, () => {
@@ -7084,7 +7152,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               "public",
 
             joinPolicy:
-              "open"
+              "open",
+
+            queueMode:
+              "normal"
           },
 
           createdAt:
@@ -7574,6 +7645,15 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       owner: actualOwnerUid,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
+      settings: {
+        ...metaSettings,
+        queueMode:
+          ["normal", "repeat_one", "shuffle"].includes(
+            String(metaSettings.queueMode || "")
+          )
+            ? String(metaSettings.queueMode)
+            : "normal"
+      },
       video: null
     };
 
