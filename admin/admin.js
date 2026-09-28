@@ -1928,7 +1928,7 @@
     const name = item.name || item.__meta?.name || "一起看";
     if (options.skipConfirm !== true && !window.confirm("確定刪除房間「" + name + "」(" + key + ")？\n房間與播放、聊天、成員、待播放資料都會一起刪除。")) return;
     const updates = {};
-    ["rooms/","roomMeta/","members/","playback/","chat/","queue/","kicked/","controlRequests/"].forEach(prefix => {
+    ["rooms/","roomMeta/","members/","playback/","chat/","queue/","kicked/","roomBans/","roomMutes/","roomRoles/","roomApplications/","controlRequests/","publicRooms/"].forEach(prefix => {
       updates[prefix + key] = null;
     });
     await writeAuditedUpdates(updates,"room.delete",key,name,options.source === "ai" ? "AI Agent 刪除房間" : "刪除房間");
