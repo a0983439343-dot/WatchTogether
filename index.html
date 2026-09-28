@@ -20,11 +20,11 @@
       return;
     }
 
-    window.__WATCHTOGETHER_BUILD__ = "20260928-batch6-v2";
+    window.__WATCHTOGETHER_BUILD__ = "20260928-formal-v99";
 
     window.addEventListener("load", async () => {
       try {
-        const currentBuild = "20260928-batch6-v2";
+        const currentBuild = "20260928-formal-v99";
 
         const registrations =
           await navigator.serviceWorker.getRegistrations();
@@ -50,7 +50,7 @@
               .filter(
                 key =>
                   key.startsWith("wt-shell-") &&
-                  key !== "wt-shell-20260925-v72"
+                  key !== "wt-shell-20260928-v99"
               )
               .map(key => caches.delete(key))
           );
@@ -58,7 +58,7 @@
 
         const registration =
           await navigator.serviceWorker.register(
-            "./sw.js?v=20260928-batch6-v2",
+            "./sw.js?v=20260928-formal-v99",
             {
               scope: "./"
             }
@@ -107,7 +107,7 @@
   })();
   </script>
 
-  <link rel="stylesheet" href="src/css/styles.css?v=20260928-formal-v98"><link rel="stylesheet" href="src/css/enhancements.css?v=20260928-formal-v98"><link rel="stylesheet" href="src/css/ui-v2.css?v=20260928-ui-v2">
+  <link rel="stylesheet" href="src/css/styles.css?v=20260928-formal-v99"><link rel="stylesheet" href="src/css/enhancements.css?v=20260928-formal-v99"><link rel="stylesheet" href="src/css/ui-v2.css?v=20260928-ui-v2">
 </head>
 
 <body>
@@ -1009,7 +1009,7 @@
     if (window.__WT_EARLY_ERRORS__.length > 30) window.__WT_EARLY_ERRORS__.shift();
   });
 </script>
-<script src="src/js/app.js?v=20260928-formal-v99"></script><script src="src/js/room-access.js?v=20260928-room-v2"></script><script src="src/js/enhancements.js?v=20260928-formal-v98"></script><script src="src/js/feature-center.js?v=20260928-feature-v7"></script><script src="src/js/bug-monitor.js?v=20260928-ai-v1"></script><script src="src/js/chat.js?v=20260928-chat-v3"></script><script src="src/js/feature-pack.js?v=20260928-feature-pack-v3"></script><script src="src/js/feature-completion.js?v=20260928-feature-completion-v4"></script><script src="src/js/feature-completion-v2.js?v=20260928-feature-completion-v2"></script><script src="src/js/feature-complete-v3.js?v=20260928-feature-complete-v3"></script><script src="src/js/room-chat-rich.js?v=20260928-room-chat-rich-v2"></script><script src="src/js/feature-suite-v4.js?v=20260928-feature-suite-v5"></script>
+<script src="src/js/app.js?v=20260928-formal-v99"></script><script src="src/js/room-access.js?v=20260928-room-v2"></script><script src="src/js/enhancements.js?v=20260928-formal-v99"></script><script src="src/js/feature-center.js?v=20260928-feature-v7"></script><script src="src/js/bug-monitor.js?v=20260928-ai-v1"></script><script src="src/js/chat.js?v=20260928-chat-v3"></script><script src="src/js/feature-pack.js?v=20260928-feature-pack-v3"></script><script src="src/js/feature-completion.js?v=20260928-feature-completion-v4"></script><script src="src/js/feature-completion-v2.js?v=20260928-feature-completion-v2"></script><script src="src/js/feature-complete-v3.js?v=20260928-feature-complete-v3"></script><script src="src/js/room-chat-rich.js?v=20260928-room-chat-rich-v2"></script><script src="src/js/feature-suite-v4.js?v=20260928-feature-suite-v5"></script>
 <script src="src/js/feature-complete-v5.js?v=20260928-feature-social-v8"></script>
 
 
