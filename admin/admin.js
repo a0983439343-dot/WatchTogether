@@ -28,6 +28,7 @@
   let autonomousMaintenanceRef = null;
   let accountsRef = null;
   let reportsRef = null;
+  let reportDetailRef = null;
   let auditLogsRef = null;
   let aiStatus = null;
   let chatModerationRoomId = "";
@@ -855,7 +856,133 @@
     return base ? base + "/ai/analyze" : "";
   }
 
+  const AI_EXTENSION_SOURCE = "SSE_STREAM_EXTENSION";
+  const AI_EXTENSION_BRIDGE_SOURCE = "SSE_STREAM_EXTENSION_BRIDGE";
+  const AI_EXTENSION_MODEL = "gpt-4o-mini";
+  const AI_EXTENSION_API_ORIGIN = "https://api.openai.com";
+  const AI_ADMIN_STREAM_MAX = 12000;
+  const AI_ADMIN_STREAM_TIMEOUT = 25000;
+
+  function adminAiRequestId() {
+    return "wt-admin-ai-" + Date.now() + "-" + Math.random().toString(36).slice(2,10);
+  }
+
+  function parseAdminAiDiagnosis(text) {
+    const source = String(text || "").trim();
+    const pick = (label, fallback = "") => {
+      const match = source.match(new RegExp("【" + label + "】\\s*([\\s\\S]*?)(?=\\n?【[^】]+】|$)"));
+      return String(match?.[1] || fallback).trim().slice(0, 900);
+    };
+    const rawStatus = pick("狀態","無法判定");
+    const statusMap = {
+      "確認為問題":"confirmed",
+      "仍存在":"still_present",
+      "已修復候選":"resolved_candidate",
+      "無法判定":"inconclusive"
+    };
+    const confidenceText = pick("信心","");
+    const percent = confidenceText.match(/([0-9]{1,3})\\s*%/);
+    const confidence = percent
+      ? Math.max(0,Math.min(1,Number(percent[1])/100))
+      : Math.max(0,Math.min(1,Number(confidenceText) > 1 ? Number(confidenceText)/100 : Number(confidenceText) || 0));
+    return {
+      status:statusMap[rawStatus] || rawStatus,
+      confidence,
+      title:pick("問題",source.slice(0,220)),
+      summary:pick("證據",source.slice(0,900)),
+      rootCause:pick("根因","未能從目前證據可靠判定根因。"),
+      suggestion:pick("修復建議","先檢查錯誤堆疊、觸發路徑與最近部署差異，再進行最小範圍修正。")
+    };
+  }
+
+  function stopReportDetailListener() {
+    if (!reportDetailRef) return;
+    try { reportDetailRef.off(); } catch (_) {}
+    reportDetailRef = null;
+  }
+
+  function renderReportAiLive(item) {
+    if (!item) return;
+    const status = String(item.aiStatus || "");
+    const state = String(item.aiDiagnosisState || "");
+    const badge = $("reportAiLiveBadge");
+    const live = $("reportAiLive");
+    if (badge) {
+      badge.textContent =
+        state === "streaming" || status === "diagnosing"
+          ? "AI 診斷中"
+          : state === "completed"
+            ? "已完成 AI 診斷"
+            : state === "error" || status === "unavailable"
+              ? "AI 診斷失敗"
+              : "等待診斷";
+    }
+    if (live) live.textContent = String(item.aiStreamText || "").trim() || "尚未收到 AI 串流內容。";
+
+    if ($("reportAiStatus")) {
+      $("reportAiStatus").textContent =
+        status === "resolved_candidate"
+          ? "可自動結案"
+          : status === "confirmed"
+            ? "確認為問題"
+            : status === "still_present"
+              ? "仍存在"
+              : status === "diagnosing"
+                ? "診斷中"
+                : status === "unavailable"
+                  ? "AI 暫不可用"
+                  : status || "尚未分析";
+    }
+    const confidence = Number(item.aiConfidence || 0);
+    if ($("reportAiConfidence")) $("reportAiConfidence").textContent = confidence > 0 ? Math.round(confidence * 100) + "%" : "—";
+    if ($("reportAiRootCause")) $("reportAiRootCause").textContent = String(item.aiRootCause || "—");
+    if ($("reportAiSuggestion")) $("reportAiSuggestion").textContent = String(item.aiSuggestion || "—");
+    if ($("reportDetectedBug")) $("reportDetectedBug").textContent =
+      String(item.aiTitle || "") || String(item.aiRootCause || "") || "尚未完成診斷";
+    if ($("reportDetectedReason")) $("reportDetectedReason").textContent =
+      String(item.aiSummary || "") || "AI 正在根據即時錯誤證據進行分析。";
+    if ($("reportRepairPlan")) $("reportRepairPlan").textContent =
+      String(item.aiSuggestion || "") || "AI 完成診斷後會在這裡顯示建議修復方向。";
+    if ($("reportDiagnosisBadge")) {
+      $("reportDiagnosisBadge").textContent =
+        state === "streaming" || status === "diagnosing"
+          ? "即時診斷中"
+          : state === "completed"
+            ? "已完成 AI 診斷"
+            : state === "error"
+              ? "診斷失敗"
+              : status === "resolved_candidate"
+                ? "目前看起來可能已修復"
+                : "等待分析";
+    }
+  }
+
+  function startReportDetailListener(id) {
+    stopReportDetailListener();
+    const reportId = String(id || "").trim();
+    if (!reportId || !db) return;
+    reportDetailRef = db.ref("reports/" + reportId);
+    reportDetailRef.on("value", snapshot => {
+      const item = snapshot.val();
+      if (!item) return;
+      reports[reportId] = item;
+      if (String($("reportId")?.value || "") === reportId) {
+        renderReportAiLive(item);
+        $("reportStatus").value = normalizeReportStatus(item.status);
+        $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || "—";
+        $("reportHint").textContent =
+          String(item.aiDiagnosisState || "") === "streaming"
+            ? "AI 正在即時分析錯誤證據，內容會持續更新。"
+            : String(item.aiDiagnosisState || "") === "completed"
+              ? "已完成 AI 診斷；完整分析已保存到此回報。"
+              : String(item.aiError || "") || $("reportHint").textContent || "";
+      }
+      renderReports();
+    });
+  }
+
   function reportSourceLabel(item) {
+    if (item?.aiRealtime === true) return "系統自動攔截";
     if (item?.source === "scanner" || item?.autoScanner === true) return "系統掃描";
     if (item?.source === "auto" || item?.autoDetected === true) return "自動偵測";
     return "使用者回報";
@@ -886,58 +1013,176 @@
   }
 
   async function analyzeReportOnAdmin(id, report, verification, phase = "admin_review") {
-    const endpoint = getBugAiEndpoint();
-    if (!endpoint) return null;
-    let idToken = "";
-    try {
-      idToken = await currentUser.getIdToken();
-    } catch (_) {}
-    if (!idToken) throw new Error("管理員登入驗證尚未準備完成");
-    const response = await fetch(endpoint,{
-      method:"POST",
-      cache:"no-store",
-      credentials:"omit",
-      headers:{
-        "Content-Type":"application/json",
-        "Authorization":"Bearer " + idToken
+    if (!id || !currentUser || !isAdminOperator()) return null;
+
+    const reportId = String(id);
+    const requestId = adminAiRequestId();
+    const reportData = report && typeof report === "object" ? report : {};
+    const messages = [
+      {
+        role:"system",
+        content:[
+          "你是 WatchTogether 管理後台的即時 Bug 診斷器。",
+          "只根據回報、錯誤 Stack、驗證證據與目前頁面資訊分析，不得杜撰。",
+          "請使用繁體中文，嚴格輸出六個標記，每個標記各一行：",
+          "【狀態】確認為問題 | 仍存在 | 已修復候選 | 無法判定",
+          "【信心】0-100%",
+          "【問題】一句話描述主要 Bug",
+          "【證據】列出最關鍵的技術證據與因果關聯",
+          "【根因】最可能的技術根因；不確定時標明推測",
+          "【修復建議】最小風險且可驗證的修正方向"
+        ].join("\n")
       },
-      body:JSON.stringify({
-        phase,
-        report:{
-          category:String(report?.category || "other"),
-          details:String(report?.details || "").slice(0,2000),
-          fingerprint:String(report?.fingerprint || "").slice(0,100),
-          buildVersion:String(report?.buildVersion || "").slice(0,120),
-          source:report?.source || "manual",
-          occurrences:Number(report?.occurrences || 1) || 1,
-          createdAt:Number(report?.createdAt || 0)
-        },
-        evidence:{
-          deployment:verification || {},
-          adminPage:{
-            url:location.href,
-            pageReady:document.readyState,
-            reportId:id
-          }
-        },
-        current:{
-          page:location.href,
-          buildVersion:location.pathname,
-          healthy:verification?.ok === true
-        }
-      })
+      {
+        role:"user",
+        content:[
+          "回報 ID：" + reportId,
+          "分析階段：" + String(phase || "admin_review"),
+          "回報資料：",
+          JSON.stringify({
+            category:String(reportData.category || "other").slice(0,40),
+            details:String(reportData.details || "").slice(0,4000),
+            fingerprint:String(reportData.fingerprint || "").slice(0,100),
+            buildVersion:String(reportData.buildVersion || "").slice(0,120),
+            source:String(reportData.source || "").slice(0,40),
+            occurrences:Number(reportData.occurrences || 1) || 1
+          },null,2),
+          "驗證證據：",
+          JSON.stringify(verification || {},null,2),
+          "目前管理頁面：",
+          location.href
+        ].join("\n")
+      }
+    ];
+
+    await db.ref("reports/" + reportId).update({
+      aiProvider:"openai",
+      aiModel:AI_EXTENSION_MODEL,
+      aiRealtime:true,
+      aiDiagnosisState:"streaming",
+      aiStatus:"diagnosing",
+      aiStreamText:"",
+      aiError:null,
+      aiStartedAt:firebase.database.ServerValue.TIMESTAMP
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result?.ok || !result?.analysis || result?.degraded === true) {
-      throw new Error(String(result?.error || result?.analysis?.summary || "AI 分析目前不可用"));
-    }
-    void writeAuditLog(
-      "ai.analyze",
-      String(report?.uid || ""),
-      String(id || "問題回報"),
-      "AI " + String(phase || "admin_review") + " 分析完成"
-    );
-    return result;
+    await writeReportHistory(reportId,"ai_stream_started","管理後台已啟動 OpenAI 即時串流診斷","admin");
+
+    return await new Promise((resolve,reject) => {
+      let settled=false;
+      let accumulated="";
+      let flushTimer=null;
+      let timeout=null;
+
+      const cleanup=()=>{
+        window.removeEventListener("message",onMessage);
+        if(flushTimer) clearTimeout(flushTimer);
+        if(timeout) clearTimeout(timeout);
+      };
+
+      const finish=async(analysis,errorMessage="")=>{
+        if(settled)return;
+        settled=true;
+        cleanup();
+
+        if(analysis){
+          const nextStatus = normalizeReportStatus(reportData.status) === "resolved" ? "resolved" : "ai_completed";
+          await db.ref("reports/" + reportId).update({
+            aiStatus:String(analysis.status || "inconclusive"),
+            aiConfidence:Number(analysis.confidence || 0),
+            aiTitle:String(analysis.title || "").slice(0,220),
+            aiSummary:String(analysis.summary || "").slice(0,900),
+            aiRootCause:String(analysis.rootCause || "").slice(0,900),
+            aiSuggestion:String(analysis.suggestion || "").slice(0,900),
+            aiModel:AI_EXTENSION_MODEL,
+            aiProvider:"openai",
+            aiRealtime:true,
+            aiDiagnosisState:"completed",
+            aiCompletedAt:firebase.database.ServerValue.TIMESTAMP,
+            aiResolvedCandidate:String(analysis.status || "") === "resolved_candidate",
+            aiError:null,
+            aiStreamText:accumulated.slice(0,AI_ADMIN_STREAM_MAX),
+            status:nextStatus
+          });
+          await writeReportHistory(reportId,"ai_stream_completed","OpenAI 即時串流診斷完成："+String(analysis.status || "inconclusive"),"admin");
+          resolve({ok:true,analysis,model:AI_EXTENSION_MODEL,provider:"openai"});
+        }else{
+          await db.ref("reports/" + reportId).update({
+            aiProvider:"openai",
+            aiModel:AI_EXTENSION_MODEL,
+            aiRealtime:true,
+            aiDiagnosisState:"error",
+            aiStatus:"unavailable",
+            aiError:String(errorMessage || "OpenAI 串流診斷失敗").slice(0,500),
+            aiStreamText:accumulated.slice(0,AI_ADMIN_STREAM_MAX)
+          }).catch(()=>{});
+          await writeReportHistory(reportId,"ai_stream_error","OpenAI 即時串流診斷失敗："+String(errorMessage || "unknown"),"admin").catch(()=>{});
+          reject(new Error(String(errorMessage || "OpenAI 串流診斷失敗")));
+        }
+      };
+
+      const onMessage=event=>{
+        if(event.source!==window||event.origin!==location.origin)return;
+        const data=event.data;
+        if(!data||data.source!==AI_EXTENSION_BRIDGE_SOURCE||String(data.requestId||"")!==requestId)return;
+        const type=String(data.type||"");
+        if(type==="STREAM_STARTED"){
+          void db.ref("reports/" + reportId).update({
+            aiDiagnosisState:"streaming",
+            aiStatus:"diagnosing",
+            aiModel:String(data.model || AI_EXTENSION_MODEL).slice(0,100),
+            aiProvider:"openai"
+          }).catch(()=>{});
+          return;
+        }
+        if(type==="STREAM_EVENT"){
+          const chunk=String(data.content||"");
+          if(!chunk)return;
+          accumulated=(accumulated+chunk).slice(0,AI_ADMIN_STREAM_MAX);
+          if(!flushTimer){
+            flushTimer=setTimeout(()=>{
+              flushTimer=null;
+              void db.ref("reports/" + reportId).update({
+                aiDiagnosisState:"streaming",
+                aiStatus:"diagnosing",
+                aiStreamText:accumulated
+              }).catch(()=>{});
+            },120);
+          }
+          return;
+        }
+        if(type==="STREAM_END"){
+          void finish(parseAdminAiDiagnosis(accumulated));
+          return;
+        }
+        if(type==="STREAM_ERROR"){
+          void finish(null,String(data.error || "OpenAI 串流錯誤").slice(0,500));
+        }
+      };
+
+      window.addEventListener("message",onMessage);
+      timeout=setTimeout(()=>{
+        void finish(null,"Chrome 擴充功能未在 25 秒內完成 OpenAI 串流");
+      },AI_ADMIN_STREAM_TIMEOUT);
+
+      try{
+        window.postMessage({
+          source:AI_EXTENSION_SOURCE,
+          type:"START_STREAM",
+          requestId,
+          payload:{
+            requestId,
+            model:AI_EXTENSION_MODEL,
+            provider:"openai",
+            apiOrigin:AI_EXTENSION_API_ORIGIN,
+            messages,
+            reportId,
+            phase:String(phase || "admin_review").slice(0,40)
+          }
+        },location.origin);
+      }catch(error){
+        void finish(null,error?.message || "無法發送 AI 擴充功能請求");
+      }
+    });
   }
 
   async function writeReportHistory(id,event,details,source = "admin") {
@@ -1238,6 +1483,7 @@
   const REPORT_STATUS_LABELS = {
     open: "待處理",
     in_progress: "處理中",
+    ai_completed: "已完成 AI 診斷",
     resolved: "已處理"
   };
 
@@ -1400,7 +1646,7 @@
 
     const uid = String(item.uid || "");
     const account = accounts[uid] || {};
-    const auto = item.source === "auto" || item.autoDetected === true;
+    const auto = item.source === "auto" || item.autoDetected === true || item.aiRealtime === true;
     $("reportId").value = String(id || "");
     $("reportCreatedAt").textContent = formatDate(item.createdAt);
     $("reportSource").textContent = auto ? "自動偵測" : "使用者手動回報";
@@ -1422,9 +1668,11 @@
         ? "確認為問題"
         : item.aiStatus === "still_present"
           ? "仍存在"
-          : item.aiStatus === "unavailable"
-            ? "AI 暫不可用"
-            : item.aiStatus || "尚未分析";
+          : item.aiStatus === "diagnosing"
+            ? "診斷中"
+            : item.aiStatus === "unavailable"
+              ? "AI 暫不可用"
+              : item.aiStatus || "尚未分析";
     const aiConfidence = Number(item.aiConfidence || 0);
     $("reportAiConfidence").textContent = aiConfidence > 0 ? Math.round(aiConfidence * 100) + "%" : "—";
     $("reportAiRootCause").textContent = String(item.aiRootCause || "—");
@@ -1493,10 +1741,13 @@
     $("reportDelete").classList.toggle("hidden", !currentCan("reports.manage"));
     $("reportSave").classList.toggle("hidden", !currentCan("reports.manage"));
     show("reportModal");
+    renderReportAiLive(item);
+    startReportDetailListener(String(id || ""));
     await loadReportHistory(String(id || ""));
   }
 
   function closeReportModal() {
+    stopReportDetailListener();
     hide("reportModal");
   }
 
