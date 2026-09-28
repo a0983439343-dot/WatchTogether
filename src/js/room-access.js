@@ -179,6 +179,19 @@
     });
     await db.ref("rooms/" + id + "/name").set(roomName);
 
+    if (visibility === "public") {
+      await db.ref("publicRooms/" + id).update({
+        id,
+        name: roomName,
+        searchName: roomName.toLowerCase().slice(0,40),
+        owner: String(window.WT_CORE?.state?.room?.owner || user()?.uid || ""),
+        sourceType: String(window.WT_CORE?.state?.room?.sourceType || "youtube"),
+        createdAt: Number(roomState.meta?.createdAt || Date.now())
+      }).catch(() => {});
+    } else {
+      await db.ref("publicRooms/" + id).remove().catch(() => {});
+    }
+
     if (window.WT_CORE?.state?.room) {
       window.WT_CORE.state.room.name = roomName;
       window.WT_CORE.state.room.settings = Object.assign({}, window.WT_CORE.state.room.settings || {}, {
