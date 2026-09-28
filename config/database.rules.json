@@ -623,6 +623,7 @@
     "sessions": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
+        ".indexOn": ["lastSeen"],
         "$sessionId": {
           ".write": "auth != null && auth.uid === $uid && $sessionId.length >= 20 && $sessionId.length <= 64",
           ".validate": "!newData.exists() || (newData.hasChildren(['id','label','createdAt','lastSeen']) && newData.child('id').isString() && newData.child('id').val() === $sessionId && newData.child('label').isString() && newData.child('label').val().length > 0 && newData.child('label').val().length <= 80 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 120000 && newData.child('lastSeen').isNumber() && newData.child('lastSeen').val() <= now + 120000 && (!newData.child('revokedAt').exists() || newData.child('revokedAt').isNumber()) && (!newData.child('revokedBy').exists() || (newData.child('revokedBy').isString() && newData.child('revokedBy').val() === auth.uid)) && (!newData.child('revoked').exists() || newData.child('revoked').isBoolean()))"
