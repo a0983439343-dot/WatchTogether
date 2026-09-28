@@ -120,6 +120,13 @@
 
     if (!current || !id || info?.isRoomOwner || info?.isExistingMember || info?.isAdminJoin) return true;
 
+    if (
+      info?.isInvited === true &&
+      settings.locked !== true
+    ) {
+      return true;
+    }
+
     const requiresApplication = settings.joinPolicy === "application" || settings.visibility === "private";
     if (!requiresApplication) return true;
     if (settings.locked === true) throw new Error("這個房間目前已鎖定，暫停新成員加入");
