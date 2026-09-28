@@ -16,6 +16,15 @@
     return window.db || window.firebase?.database?.();
   }
 
+  async function globalFeatureEnabled(feature){
+    const database=db();
+    if(!database)return true;
+    try{
+      const snap=await database.ref("system/featureFlags/"+String(feature||"")).once("value");
+      return snap.val()!==false;
+    }catch(_){return true;}
+  }
+
   function localDateTime(value){
     const date=new Date(Number(value||0));
     if(!Number.isFinite(date.getTime()))return "—";
@@ -37,6 +46,11 @@
 
   async function openModal(prefillRoom=""){
     ensureModal();
+    if(!(await globalFeatureEnabled("schedules"))){
+      $("wt2ScheduleError").textContent="目前暫停使用預約觀看。";
+      $("wt2ScheduleModal").classList.remove("hidden");
+      return;
+    }
     const user=currentUser(), database=db();
     if(!user || !database){ $("wt2ScheduleError").textContent="請先登入。"; $("wt2ScheduleModal").classList.remove("hidden"); return; }
     try{
@@ -70,6 +84,7 @@
 
   async function saveSchedule(){
     const user=currentUser(),database=db(),error=$("wt2ScheduleError");
+    if(!(await globalFeatureEnabled("schedules"))){if(error)error.textContent="目前暫停使用預約觀看。";return}
     if(user && database){
       try{
         const snap=await database.ref("admin/restrictionsByUid/"+user.uid).once("value");
