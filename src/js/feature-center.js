@@ -224,7 +224,7 @@ function renderGlobalSearchResults(body,query){
       '</div>'+
       '<div class="panel-title" style="margin-top:16px">公開房間</div>'+
       '<div class="wt-feature-list">'+
-        (rooms.length?rooms.map(function(x){var p=x[1]||{};return var fav=isRoomFavorite(p),star='<button type="button" class="tiny-btn" data-global-room-fav="'+esc(p.id||x[0])+'" title="'+(fav?"取消房間收藏":"收藏房間")+'">'+(fav?"★":"☆")+'</button>';return '<div class="wt-feature-row"><div><strong>'+esc(p.name||"一起看")+'</strong><div class="small muted">房間 '+esc(p.id||x[0])+'｜'+esc(p.sourceType||"youtube")+'</div></div><div class="wt-feature-actions" style="margin-top:0">'+star+'<button class="tiny-btn primary" data-global-public-room="'+esc(p.id||x[0])+'">加入</button></div></div>;}).join(""):'<div class="wt-feature-empty">沒有找到公開房間。</div>')+
+        (rooms.length?rooms.map(function(x){var p=x[1]||{},fav=isRoomFavorite(p),star='<button type="button" class="tiny-btn" data-global-room-fav="'+esc(p.id||x[0])+'" title="'+(fav?"取消房間收藏":"收藏房間")+'">'+(fav?"★":"☆")+'</button>';return '<div class="wt-feature-row"><div><strong>'+esc(p.name||"一起看")+'</strong><div class="small muted">房間 '+esc(p.id||x[0])+'｜'+esc(p.sourceType||"youtube")+'</div></div><div class="wt-feature-actions" style="margin-top:0">'+star+'<button class="tiny-btn primary" data-global-public-room="'+esc(p.id||x[0])+'">加入</button></div></div>';}).join(""):'<div class="wt-feature-empty">沒有找到公開房間。</div>')+
       '</div>'+
       '<div class="panel-title" style="margin-top:16px">最近房間</div>'+
       '<div class="wt-feature-list">'+
