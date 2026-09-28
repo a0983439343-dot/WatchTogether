@@ -309,15 +309,18 @@
               ? '<span class="status off">已封鎖 · ' + escapeHtml(formatRemaining(block)) + '</span>'
               : '<span class="status">正常</span>';
 
-          const canManage = currentCan("users.update");
+          const canEdit = currentCan("users.update");
+          const canRestrict = currentCan("users.restrict");
           let actions = '<div class="row-actions">';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
-          } else if (!canManage) {
+          } else if (!canEdit && !canRestrict) {
             actions += '<span class="muted">僅可查看</span>';
           } else {
-            actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
-            if (active) {
+            if (canEdit) {
+              actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
+            }
+            if (active && canRestrict) {
               if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
                 actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
               } else if (uid === currentUser?.uid) {
@@ -325,7 +328,7 @@
               } else {
                 actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
               }
-            } else {
+            } else if (canRestrict) {
               actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
             }
           }
@@ -1596,7 +1599,7 @@
   }
 
   async function openEditUser(uid) {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("users.update")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1624,7 +1627,7 @@
   }
 
   async function saveUser() {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("users.update")) return;
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1687,7 +1690,7 @@
   }
 
   function openBlockUser(uid) {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("users.restrict")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1705,7 +1708,7 @@
   }
 
   async function confirmBlock() {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("users.restrict")) return;
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1737,7 +1740,7 @@
   }
 
    async function unblockUser(uid) {
-     if (!currentCan("reports.manage")) return;
+     if (!currentCan("users.restrict")) return;
      const item = accounts[uid];
      if (!item) return;
      if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1764,7 +1767,7 @@
    }
 
   async function deleteRoom(roomId) {
-    if (!currentCan("reports.manage")) return;
+    if (!currentCan("rooms.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
