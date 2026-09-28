@@ -881,6 +881,38 @@ test("2.0 access control: chat.dm restriction and feature flag block private-cha
   await assertSucceeds(master.ref("admin/featureFlags/chat__dm").remove());
 });
 
+test("site settings: authenticated users can read, only master can write", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const user = db(USER_UID, userToken);
+  const viewer = db(VIEWER_UID, viewerToken);
+  const payload = {
+    siteName: "WatchTogether｜一起看",
+    siteDescription: "System settings test",
+    announcementEnabled: true,
+    announcementText: "Test announcement",
+    updatedAt: Date.now(),
+    updatedByUid: MASTER_UID
+  };
+
+  await assertSucceeds(master.ref("site/settings").set(payload));
+  await assertSucceeds(user.ref("site/settings").once("value"));
+  await assertSucceeds(viewer.ref("site/settings").once("value"));
+
+  await assertFails(user.ref("site/settings").set({
+    ...payload,
+    siteName: "forged",
+    updatedAt: Date.now(),
+    updatedByUid: USER_UID
+  }));
+
+  await assertFails(viewer.ref("site/settings").set({
+    ...payload,
+    siteName: "forged-viewer",
+    updatedAt: Date.now(),
+    updatedByUid: VIEWER_UID
+  }));
+});
+
 test("blocks: blocked user cannot mutate their own higher-role block", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("admin/blocksByUid/" + USER_UID).remove()
