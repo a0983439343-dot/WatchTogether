@@ -191,8 +191,19 @@
       "accounts/" + u.uid,
       "friendships/" + u.uid,
       "friendRequests/" + u.uid,
-      "blockedUsers/" + u.uid
+      "blockedUsers/" + u.uid,
+      "watchHistory/" + u.uid,
+      "watchStats/" + u.uid,
+      "userSettings/" + u.uid,
+      "presence/" + u.uid,
+      "notifications/" + u.uid,
+      "roomInvites/" + u.uid
     ].forEach(path => { updates[path] = null; });
+
+    const friendshipsSnapshot = await database.ref("friendships/" + u.uid).once("value").catch(() => null);
+    friendshipsSnapshot?.forEach?.(snap => {
+      if (snap.key) updates["friendships/" + snap.key + "/" + u.uid] = null;
+    });
     if (code) updates["profileCodes/" + code] = null;
     const publicRooms = await database.ref("publicRooms").orderByChild("owner").equalTo(u.uid).once("value").catch(() => null);
     publicRooms?.forEach?.(snap => { updates["publicRooms/" + snap.key] = null; });
