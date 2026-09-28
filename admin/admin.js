@@ -1249,19 +1249,11 @@
       handledByEmail: currentUser.email || "",
       ...(status !== "resolved" ? {autoResolvedAt: null, autoResolvedBuild: null, autoResolveReason: null} : {})
     });
-    try {
-      const historyRef = db.ref("reportHistory/" + id).push();
-      await historyRef.set({
-        event: "manual_status",
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        actorUid: currentUser.uid,
-        actorEmail: currentUser.email || "",
-        source: "admin",
-        details: "管理員將狀態改為 " + REPORT_STATUS_LABELS[status]
-      });
-    } catch (historyError) {
-      console.warn("寫入問題回報處理紀錄失敗:", historyError);
-    }
+    await writeReportHistory(
+      id,
+      "manual_status",
+      "管理員將狀態改為 " + REPORT_STATUS_LABELS[status]
+    );
     await loadReports();
     $("reportHandledBy").textContent = currentUser.email || currentUser.uid || "—";
     $("reportAutoResolve").textContent = status === "resolved" ? "已處理（手動）" : "監控中";
@@ -1282,8 +1274,7 @@
     if (!window.confirm("確定刪除這筆問題回報？刪除後無法復原。")) return;
     const historySnapshot = await db.ref("reportHistoryEvents/" + id).once("value");
     const updates = {
-      ["reports/" + id]: null,
-      ["reportHistory/" + id]: null
+      ["reports/" + id]: null
     };
     historySnapshot.forEach(child => {
       updates["reportHistoryEvents/" + id + "/" + child.key] = null;
