@@ -3788,6 +3788,30 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     await state.queueRef.update(updates);
     toast(direction < 0 ? "已上移" : "已下移");
   }
+  async function reorderQueueItem(queueId, targetQueueId) {
+    const item = state.queue?.[queueId];
+    await requireQueuePermissions(item?.platform || "youtube");
+    if (!canManageQueueOrder()) {
+      throw new Error("只有房主或 Co-host 可以調整待播放順序");
+    }
+    if (!state.queueRef || !queueId || !targetQueueId || queueId === targetQueueId) return;
+
+    const list = getSortedQueue();
+    const from = list.findIndex(item => String(item.queueId) === String(queueId));
+    const to = list.findIndex(item => String(item.queueId) === String(targetQueueId));
+    if (from < 0 || to < 0 || from === to) return;
+
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+
+    const updates = {};
+    list.forEach((entry, index) => {
+      updates[entry.queueId + "/order"] = (index + 1) * 1000;
+    });
+    await state.queueRef.update(updates);
+    toast("佇列順序已更新");
+  }
+
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
@@ -3920,6 +3944,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               data-queue-id="${escapeHtml(
                 item.queueId
               )}"
+              draggable="${canManageQueueOrder() ? "true" : "false"}"
             >
 
               <div
@@ -4093,6 +4118,41 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         }
       });
     });
+    let draggedQueueId = "";
+    container.querySelectorAll('.queue-item[draggable="true"]').forEach(itemEl => {
+      itemEl.addEventListener("dragstart", event => {
+        draggedQueueId = itemEl.dataset.queueId || "";
+        itemEl.classList.add("queue-dragging");
+        try {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", draggedQueueId);
+        } catch (_) {}
+      });
+      itemEl.addEventListener("dragend", () => {
+        draggedQueueId = "";
+        itemEl.classList.remove("queue-dragging","queue-drag-over");
+      });
+      itemEl.addEventListener("dragover", event => {
+        if (!draggedQueueId || draggedQueueId === itemEl.dataset.queueId) return;
+        event.preventDefault();
+        itemEl.classList.add("queue-drag-over");
+      });
+      itemEl.addEventListener("dragleave", () => itemEl.classList.remove("queue-drag-over"));
+      itemEl.addEventListener("drop", async event => {
+        event.preventDefault();
+        const sourceId = draggedQueueId || event.dataTransfer?.getData("text/plain") || "";
+        const targetId = itemEl.dataset.queueId || "";
+        itemEl.classList.remove("queue-drag-over");
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        try {
+          await reorderQueueItem(sourceId,targetId);
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "拖曳排序失敗");
+        }
+      });
+    });
+
     container
       .querySelectorAll(
         "[data-queue-remove]"
@@ -14833,6 +14893,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return name;
   };
   window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
+  window.WT_CORE.reorderQueueItem = reorderQueueItem;
   window.WT_CORE.state = state;
   window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
   window.WT_CORE.persistAuthenticatedAccount = persistAuthenticatedAccount;
