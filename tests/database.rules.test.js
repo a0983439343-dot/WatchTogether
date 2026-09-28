@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const test = require("node:test");
+const serialTest = (name, fn) => test(name, { concurrency: false }, fn);
 const assert = require("node:assert/strict");
 const {
   initializeTestEnvironment,
@@ -158,7 +159,7 @@ test.after(async () => {
   await env.cleanup();
 });
 
-test("reports: manually submitted reports can store verification but cannot self-resolve before approval", async () => {
+serialTest("reports: manually submitted reports can store verification but cannot self-resolve before approval", async () => {
   const ref = db(USER_UID, userToken).ref("reports/manual-verify");
   await assertSucceeds(ref.set({
     uid: USER_UID,
@@ -191,7 +192,7 @@ test("reports: manually submitted reports can store verification but cannot self
   await assertSucceeds(ref.child("status").set("resolved"));
 });
 
-test("reports: authenticated user can create only their own report", async () => {
+serialTest("reports: authenticated user can create only their own report", async () => {
   const ref = db(USER_UID, userToken).ref("reports/new-report");
 
   await assertSucceeds(ref.set({
@@ -212,7 +213,7 @@ test("reports: authenticated user can create only their own report", async () =>
   }));
 });
 
-test("reports: automatic bug records can be reopened and updated only by their owner", async () => {
+serialTest("reports: automatic bug records can be reopened and updated only by their owner", async () => {
   const ref = db(USER_UID, userToken).ref("reports/auto-report");
   await assertSucceeds(ref.set({
     uid: USER_UID,
@@ -260,7 +261,7 @@ test("reports: automatic bug records can be reopened and updated only by their o
   );
 });
 
-test("report history: owner and admin can append, non-owner cannot append, admin can delete", async () => {
+serialTest("report history: owner and admin can append, non-owner cannot append, admin can delete", async () => {
   const ref = db(USER_UID, userToken).ref("reports/history-target");
   await assertSucceeds(ref.set({
     uid: USER_UID,
@@ -312,7 +313,7 @@ test("report history: owner and admin can append, non-owner cannot append, admin
     adminEvent.remove()
   );
 });
-test("chat moderation: permitted admin can read and delete messages, viewer cannot moderate", async () => {
+serialTest("chat moderation: permitted admin can read and delete messages, viewer cannot moderate", async () => {
   const admin = db(ADMIN_UID, adminToken);
   const viewer = db(VIEWER_UID, viewerToken);
   const user = db(USER_UID, userToken);
@@ -333,7 +334,7 @@ test("chat moderation: permitted admin can read and delete messages, viewer cann
 });
 
 
-test("room chat rich metadata: members can reply and edit their own messages, owners can pin, others cannot", async () => {
+serialTest("room chat rich metadata: members can reply and edit their own messages, owners can pin, others cannot", async () => {
   const user = db(USER_UID, userToken);
   const other = db(OTHER_UID, {
     email: "other@example.com",
@@ -415,7 +416,7 @@ test("room chat rich metadata: members can reply and edit their own messages, ow
   await assertSucceeds(master.ref("rooms/RICH01").remove());
 });
 
-test("room chat reactions: members may change their own reaction only", async () => {
+serialTest("room chat reactions: members may change their own reaction only", async () => {
   const user = db(USER_UID, userToken);
   const other = db(OTHER_UID, {
     email: "other@example.com",
@@ -440,13 +441,13 @@ test("room chat reactions: members may change their own reaction only", async ()
   await assertSucceeds(db(MASTER_UID, masterToken).ref("rooms/RICH01").remove());
 });
 
-test("reports: normal users cannot read the collection", async () => {
+serialTest("reports: normal users cannot read the collection", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("reports").once("value")
   );
 });
 
-test("reports: admin and viewer can read, but viewer cannot modify", async () => {
+serialTest("reports: admin and viewer can read, but viewer cannot modify", async () => {
   await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("reports").once("value")
   );
@@ -462,7 +463,7 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
   );
 });
 
-test("chat moderation deletion can be atomic with its Audit Log", async () => {
+serialTest("chat moderation deletion can be atomic with its Audit Log", async () => {
   const admin = db(ADMIN_UID, adminToken);
   const user = db(USER_UID, userToken);
   const messageKey = user.ref("chat/ABC123").push().key;
@@ -493,7 +494,8 @@ test("chat moderation deletion can be atomic with its Audit Log", async () => {
   }));
 });
 
-test("atomic access and report updates require matching Audit permissions", async () => {
+serialTest("atomic access and report updates require matching Audit permissions", async () => {
+  const master = db(MASTER_UID, masterToken);
   const admin = db(ADMIN_UID, adminToken);
   const viewer = db(VIEWER_UID, viewerToken);
   const reportHistoryId = "atomic-history";
@@ -558,7 +560,7 @@ test("atomic access and report updates require matching Audit permissions", asyn
   }));
 });
 
-test("audit logs: admin can append, cannot modify, and audit.delete controls deletion", async () => {
+serialTest("audit logs: admin can append, cannot modify, and audit.delete controls deletion", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs");
 
   await assertSucceeds(ref.push({
@@ -623,7 +625,7 @@ test("audit logs: admin can append, cannot modify, and audit.delete controls del
   );
 });
 
-test("audit logs: viewer can read but cannot append", async () => {
+serialTest("audit logs: viewer can read but cannot append", async () => {
   await assertSucceeds(
     db(VIEWER_UID, viewerToken).ref("admin/auditLogs").once("value")
   );
@@ -642,7 +644,7 @@ test("audit logs: viewer can read but cannot append", async () => {
   );
 });
 
-test("2.0 access control: custom administrator can manage user blocks", async () => {
+serialTest("2.0 access control: custom administrator can manage user blocks", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const customAdmin = db(OTHER_UID, {
     email: "other@example.com",
@@ -698,7 +700,7 @@ test("2.0 access control: custom administrator can manage user blocks", async ()
   await assertSucceeds(master.ref("admin/access/roles/block-manager").remove());
 });
 
-test("2.0 access control: user restriction and block writes require audit.write", async () => {
+serialTest("2.0 access control: user restriction and block writes require audit.write", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const restrictedAdmin = db(OTHER_UID, {
     email: "other@example.com",
@@ -743,7 +745,7 @@ test("2.0 access control: user restriction and block writes require audit.write"
   await assertSucceeds(master.ref("admin/access/roles/restrict-only").remove());
 });
 
-test("room 2.0: application lifecycle and cohost role are owner controlled", async () => {
+serialTest("room 2.0: application lifecycle and cohost role are owner controlled", async () => {
   const ownerDb = db(USER_UID, userToken);
   await assertSucceeds(ownerDb.ref("roomMeta/ABC123").set({
     owner: USER_UID,
@@ -821,7 +823,7 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertSucceeds(db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true}).ref("roomMeta/ABC123").remove());
 });
 
-test("chat media messages: image and audio payloads pass validation", async () => {
+serialTest("chat media messages: image and audio payloads pass validation", async () => {
   const imageRef = db(USER_UID, userToken).ref("chat/ABC123/media-image-test");
   const audioRef = db(USER_UID, userToken).ref("chat/ABC123/media-audio-test");
 
@@ -849,7 +851,7 @@ test("chat media messages: image and audio payloads pass validation", async () =
   }));
 });
 
-test("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
+serialTest("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
   const adminDb = db(ADMIN_UID, {
     email: "admin@example.com",
     email_verified: true
@@ -874,7 +876,7 @@ test("2.0 access control: custom admin role can read and write its permitted adm
   }));
 });
 
-test("2.0 access control: master can manage roles, permissions, restrictions and feature flags", async () => {
+serialTest("2.0 access control: master can manage roles, permissions, restrictions and feature flags", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   await assertSucceeds(master.ref("admin/access/roles/custom2").set({
     name: "Custom 2",
@@ -905,7 +907,7 @@ test("2.0 access control: master can manage roles, permissions, restrictions and
   await assertSucceeds(master.ref("admin/featureFlags/chat__send").remove());
 });
 
-test("2.0 access control: per-user deny overrides legacy admin and allow grants a single permission", async () => {
+serialTest("2.0 access control: per-user deny overrides legacy admin and allow grants a single permission", async () => {
   const masterDb = db(MASTER_UID, masterToken);
   await assertSucceeds(
     masterDb.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/reports__read").set("deny")
@@ -925,7 +927,7 @@ test("2.0 access control: per-user deny overrides legacy admin and allow grants 
   );
 });
 
-test("2.0 access control: explicit users.restrict deny blocks legacy admin restriction writes", async () => {
+serialTest("2.0 access control: explicit users.restrict deny blocks legacy admin restriction writes", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const admin = db(ADMIN_UID, adminToken);
 
@@ -950,7 +952,7 @@ test("2.0 access control: explicit users.restrict deny blocks legacy admin restr
   );
 });
 
-test("2.0 access control: ai.agent is independently assignable", async () => {
+serialTest("2.0 access control: ai.agent is independently assignable", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const other = db(OTHER_UID, {
     email: "other@example.com",
@@ -978,7 +980,7 @@ test("2.0 access control: ai.agent is independently assignable", async () => {
   );
 });
 
-test("2.0 access control: management permissions cover maintenance, feature flags and settings", async () => {
+serialTest("2.0 access control: management permissions cover maintenance, feature flags and settings", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const operator = db(OTHER_UID, {
     email: "other@example.com",
@@ -1040,7 +1042,7 @@ test("2.0 access control: management permissions cover maintenance, feature flag
   await assertSucceeds(master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").remove());
 });
 
-test("2.0 access control: viewer cannot modify policy and user cannot forge their restriction", async () => {
+serialTest("2.0 access control: viewer cannot modify policy and user cannot forge their restriction", async () => {
   await assertFails(
     db(VIEWER_UID, viewerToken).ref("admin/access/roleByUid/" + USER_UID).set("admin")
   );
@@ -1057,7 +1059,7 @@ test("2.0 access control: viewer cannot modify policy and user cannot forge thei
   );
 });
 
-test("2.0 access control: server-side restriction and feature flag block room writes", async () => {
+serialTest("2.0 access control: server-side restriction and feature flag block room writes", async () => {
   const ref = db(USER_UID, userToken).ref("rooms/ZXY789");
   await assertSucceeds(ref.set({
     owner: USER_UID,
@@ -1090,7 +1092,7 @@ test("2.0 access control: server-side restriction and feature flag block room wr
   );
 });
 
-test("2.0 access control: audit.delete is separate from audit.write", async () => {
+serialTest("2.0 access control: audit.delete is separate from audit.write", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs").push();
   await assertSucceeds(ref.set({
     action: "delete-test",
@@ -1152,7 +1154,7 @@ test("2.0 access control: audit.delete is separate from audit.write", async () =
   );
 });
 
-test("2.0 access control: per-user deny overrides room, chat, queue and playback permissions", async () => {
+serialTest("2.0 access control: per-user deny overrides room, chat, queue and playback permissions", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const user = db(USER_UID, userToken);
   const other = db(OTHER_UID, {
@@ -1278,7 +1280,7 @@ test("2.0 access control: per-user deny overrides room, chat, queue and playback
   await assertSucceeds(master.ref("rooms/ODNY01").remove());
   await assertSucceeds(master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/chat__send").remove());
 });
-test("2.0 access control: room.join restriction and feature flag block membership creation", async () => {
+serialTest("2.0 access control: room.join restriction and feature flag block membership creation", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const target = db(OTHER_UID, {
     email: "other@example.com",
@@ -1339,7 +1341,7 @@ test("2.0 access control: room.join restriction and feature flag block membershi
   await assertSucceeds(master.ref("rooms/ZJOIN1").remove());
 });
 
-test("2.0 access control: chat.dm restriction and feature flag block private-chat writes", async () => {
+serialTest("2.0 access control: chat.dm restriction and feature flag block private-chat writes", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const other = db(OTHER_UID, {
     email: "other@example.com",
@@ -1408,7 +1410,7 @@ test("2.0 access control: chat.dm restriction and feature flag block private-cha
   await assertSucceeds(master.ref("admin/featureFlags/chat__dm").remove());
 });
 
-test("site settings: authenticated users can read, only master can write", async () => {
+serialTest("site settings: authenticated users can read, only master can write", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const user = db(USER_UID, userToken);
   const viewer = db(VIEWER_UID, viewerToken);
@@ -1440,13 +1442,13 @@ test("site settings: authenticated users can read, only master can write", async
   }));
 });
 
-test("blocks: blocked user cannot mutate their own higher-role block", async () => {
+serialTest("blocks: blocked user cannot mutate their own higher-role block", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("admin/blocksByUid/" + USER_UID).remove()
   );
 });
 
-test("blocks: disabled accounts cannot write site data", async () => {
+serialTest("blocks: disabled accounts cannot write site data", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const user = db(USER_UID, userToken);
 
@@ -1499,7 +1501,7 @@ test("blocks: disabled accounts cannot write site data", async () => {
   await assertSucceeds(master.ref("admin/blocksByUid/" + USER_UID).remove());
 });
 
-test("blocks: master account cannot be blocked", async () => {
+serialTest("blocks: master account cannot be blocked", async () => {
   await assertFails(
     db(ADMIN_UID, adminToken).ref("admin/blocksByUid/" + MASTER_UID).set({
       uid: MASTER_UID,
@@ -1515,7 +1517,7 @@ test("blocks: master account cannot be blocked", async () => {
   );
 });
 
-test("unauthenticated users cannot access protected admin paths", async () => {
+serialTest("unauthenticated users cannot access protected admin paths", async () => {
   const unauth = env.unauthenticatedContext();
 
   await assertFails(
