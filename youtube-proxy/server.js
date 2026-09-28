@@ -847,8 +847,6 @@ async function authorizeMaintenanceRequest(req) {
     };
   }
 
-  if (override === "allow") return {ok:true,user};
-
   const permissions = role && typeof role.permissions === "object"
     ? role.permissions
     : {};
@@ -875,18 +873,27 @@ async function authorizeMaintenanceRequest(req) {
     };
   }
 
-  if (customMaintenance || legacyAdmin) {
-    if (!auditWrite) {
-      return {
-        ok:false,
-        status:403,
-        error:"maintenance_audit_permission_required",
-        message:"控制網站維護模式需要 audit.write 權限。"
-      };
-    }
-    user.auditRole = roleId || "admin";
-    return {ok:true,user};
+  const allowByOverride = override === "allow";
+  if (!customMaintenance && !legacyAdmin && !allowByOverride) {
+    return {
+      ok:false,
+      status:403,
+      error:"maintenance_permission_denied",
+      message:"目前角色沒有 maintenance.manage 權限。"
+    };
   }
+
+  if (!auditWrite) {
+    return {
+      ok:false,
+      status:403,
+      error:"maintenance_audit_permission_required",
+      message:"控制網站維護模式需要 audit.write 權限。"
+    };
+  }
+
+  user.auditRole = roleId || "admin";
+  return {ok:true,user};
 
   return {
     ok:false,
@@ -1430,8 +1437,7 @@ async function authorizeAiRequest(req) {
     return {ok:false,status:403,error:"ai_permission_denied",message:"目前帳號被禁止使用 AI。"};
   }
 
-  if (override === "allow") return {ok:true,user};
-
+  const allowByOverride = override === "allow";
   const roleId = String(assignedRole || "").trim();
   if (roleId) {
     let definition;
@@ -1443,7 +1449,18 @@ async function authorizeAiRequest(req) {
     const permissions = definition && definition.permissions && typeof definition.permissions === "object"
       ? definition.permissions
       : null;
-    if (permissions && (permissions.__all__ === true || permissions.ai__use === true)) {
+    const adminAccess = Boolean(
+      permissions &&
+      (permissions.__all__ === true || permissions.admin__read === true)
+    );
+    const aiAccess = Boolean(
+      permissions &&
+      (permissions.__all__ === true || permissions.ai__use === true)
+    );
+    if (!adminAccess) {
+      return {ok:false,status:403,error:"ai_admin_required",message:"AI 只能由具備管理員權限的帳號使用。"};
+    }
+    if (aiAccess || allowByOverride) {
       return {ok:true,user};
     }
     return {ok:false,status:403,error:"ai_permission_denied",message:"目前角色沒有 AI 權限。"};
@@ -1453,7 +1470,11 @@ async function authorizeAiRequest(req) {
     return {ok:true,user};
   }
 
-  return {ok:false,status:403,error:"ai_permission_denied",message:"只有具備 AI 權限的管理角色可以使用 AI。"};
+  if (allowByOverride) {
+    return {ok:false,status:403,error:"ai_admin_required",message:"AI 只能由具備管理員權限的帳號使用。"};
+  }
+
+  return {ok:false,status:403,error:"ai_permission_denied",message:"只有具備 AI 權限的管理角色可以使用 AI。"};;
 }
 
 async function handleAdminAgent(req, res) {
