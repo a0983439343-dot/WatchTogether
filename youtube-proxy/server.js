@@ -765,6 +765,116 @@ async function writeMaintenanceState(idToken, user, enabled, reason, restoreAt) 
   return maintenance;
 }
 
+async function authorizeMaintenanceRequest(req) {
+  const idToken = getBearerToken(req);
+  if (!idToken) return {ok:false,status:401,error:"missing_auth_token"};
+
+  let user;
+  try {
+    user = await lookupFirebaseIdToken(idToken);
+  } catch (_) {
+    return {ok:false,status:401,error:"invalid_auth_token"};
+  }
+  if (!user) return {ok:false,status:401,error:"invalid_auth_token"};
+
+  const uid = String(user.uid || "");
+  const email = String(user.email || "").trim().toLowerCase();
+  const isMaster =
+    uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
+    email === "a0983439343@gmail.com";
+  if (isMaster) return {ok:true,user};
+
+  let roleId = "";
+  let role = null;
+  let override = null;
+  let restriction = null;
+  let flag = null;
+  let whitelist = null;
+
+  try {
+    roleId = String(await fetchFirebaseJson(
+      "admin/access/roleByUid/" + encodeURIComponent(uid),
+      idToken
+    ) || "").trim();
+
+    [role, override, restriction, flag, whitelist] = await Promise.all([
+      roleId
+        ? fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId), idToken)
+        : Promise.resolve(null),
+      fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/maintenance__manage", idToken),
+      fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/maintenance__manage", idToken),
+      fetchFirebaseJson("admin/featureFlags/maintenance__manage", idToken),
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid), idToken)
+    ]);
+  } catch (_) {
+    return {
+      ok:false,
+      status:503,
+      error:"maintenance_policy_unavailable",
+      message:"目前無法驗證網站維護權限。"
+    };
+  }
+
+  if (restriction && isActivePolicy(restriction)) {
+    return {
+      ok:false,
+      status:403,
+      error:"maintenance_restricted",
+      message:String(restriction.reason || "目前帳號無法控制網站維護模式。").slice(0,500)
+    };
+  }
+
+  if (flag && flag.enabled === false) {
+    return {
+      ok:false,
+      status:403,
+      error:"maintenance_feature_disabled",
+      message:String(flag.reason || "網站維護控制目前暫停。").slice(0,500)
+    };
+  }
+
+  if (override === "deny") {
+    return {
+      ok:false,
+      status:403,
+      error:"maintenance_permission_denied",
+      message:"目前帳號被禁止控制網站維護模式。"
+    };
+  }
+
+  if (override === "allow") return {ok:true,user};
+
+  const permissions = role && typeof role.permissions === "object"
+    ? role.permissions
+    : {};
+  const customAdmin =
+    Boolean(permissions.__all__ === true || permissions.admin__read === true);
+  const customMaintenance =
+    Boolean(permissions.__all__ === true || permissions.maintenance__manage === true);
+  const legacyAdmin =
+    !roleId &&
+    whitelist?.enabled === true &&
+    String(whitelist.role || "admin") !== "viewer";
+
+  if (!customAdmin && !legacyAdmin) {
+    return {
+      ok:false,
+      status:403,
+      error:"maintenance_admin_required",
+      message:"只有具備管理權限的帳號可以控制網站維護模式。"
+    };
+  }
+
+  if (customMaintenance || legacyAdmin) return {ok:true,user};
+
+  return {
+    ok:false,
+    status:403,
+    error:"maintenance_permission_denied",
+    message:"目前角色沒有 maintenance.manage 權限。"
+  };
+}
+
 async function handleMaintenanceControl(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
@@ -794,12 +904,16 @@ async function handleMaintenanceControl(req, res) {
     return;
   }
 
-  const masterUid = "35d45a23-b648-4caf-a6d5-a69112860551";
-  const masterEmail = "a0983439343@gmail.com";
-  if (!user || (user.uid !== masterUid && user.email !== masterEmail)) {
-    send(res, 403, JSON.stringify({ok:false,error:"master_only"}));
+  const authorization = await authorizeMaintenanceRequest(req);
+  if (!authorization.ok) {
+    send(res, authorization.status || 403, JSON.stringify({
+      ok:false,
+      error:authorization.error,
+      message:authorization.message || "網站維護權限驗證失敗"
+    }));
     return;
   }
+  user = authorization.user;
 
   const key = maintenanceLockKey(req, user.uid);
   const failureState = getMaintenanceFailureState(key);
@@ -1216,6 +1330,7 @@ async function authorizeAdminAgentRequest(req) {
       permissions.ai__agent === true
     );
   const legacyAdmin =
+    !roleId &&
     whitelist?.enabled === true &&
     String(whitelist.role || "admin") !== "viewer";
 
