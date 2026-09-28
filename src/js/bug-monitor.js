@@ -546,8 +546,10 @@
 
     if (category === "search") {
       categoryChecks = [
-        {name:"search_input",ok:!!document.getElementById("videoSearchInput")},
-        {name:"search_button",ok:!!document.getElementById("videoSearchBtn")}
+        {name:"search_modal_input",ok:!!document.getElementById("modalVideoSearchInput")},
+        {name:"search_modal_button",ok:!!document.getElementById("modalSearchVideoBtn")},
+        {name:"search_platform_select",ok:!!document.getElementById("sourceTypeModal")},
+        {name:"search_change_video_button",ok:!!document.getElementById("changeSourceBtn")}
       ];
     } else if (category === "room") {
       categoryChecks = [
