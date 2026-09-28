@@ -630,6 +630,31 @@ test("2.0 access control: per-user deny overrides legacy admin and allow grants 
   );
 });
 
+test("2.0 access control: explicit users.restrict deny blocks legacy admin restriction writes", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const admin = db(ADMIN_UID, adminToken);
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/users__restrict").set("deny")
+  );
+
+  await assertFails(
+    admin.ref("admin/access/restrictionsByUid/" + USER_UID + "/chat__send").set({
+      enabled: true,
+      permanent: true,
+      until: 0,
+      reason: "should be blocked by explicit deny",
+      createdAt: Date.now(),
+      createdByUid: ADMIN_UID,
+      createdByEmail: "admin@example.com"
+    })
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/users__restrict").remove()
+  );
+});
+
 test("2.0 access control: ai.agent is independently assignable", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const other = db(OTHER_UID, {
