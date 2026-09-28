@@ -10374,7 +10374,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     [
       "playPauseBtn",
       "backBtn",
-      "forwardBtn"
+      "forwardBtn",
+      "manualSyncBtn"
     ].forEach((id) => {
       const button =
         $(id);
@@ -13215,6 +13216,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             console.warn("手動同步失敗:", error);
             toast(error?.message || "手動同步失敗");
           } finally {
+            const button = $("manualSyncBtn");
+            if (button) {
+              button.disabled = false;
+              button.textContent = "立即同步";
+            }
             updateRoomOwnerUI();
           }
         }
