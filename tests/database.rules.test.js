@@ -368,7 +368,7 @@ serialTest("room chat rich metadata: members can reply and edit their own messag
     lastSeen: Date.now()
   }));
 
-  const messageRef = user.ref("chat/RICH02/reaction-message");
+  const messageRef = user.ref("chat/RICH01/room-rich-test-message");
   await assertSucceeds(messageRef.set({
     uid: USER_UID,
     name: "User",
