@@ -60,6 +60,8 @@ jobs:
 
       - name: Check feature completion v3 syntax
         run: node --check src/js/feature-complete-v3.js
+      - name: Check feature completion v5 syntax
+        run: node --check src/js/feature-complete-v5.js
 
       - name: Check room chat rich module syntax
         run: node --check src/js/room-chat-rich.js
@@ -128,13 +130,17 @@ jobs:
           const sw = fs.readFileSync('sw.js', 'utf8');
           const featureV2 = fs.readFileSync('src/js/feature-completion-v2.js', 'utf8');
           const featureV3 = fs.readFileSync('src/js/feature-complete-v3.js', 'utf8');
+          const featureV5 = fs.readFileSync('src/js/feature-complete-v5.js', 'utf8');
           if (/<input[^>]+id="videoSearchInput"|<button[^>]+id="videoSearchBtn"/.test(index)) throw new Error('Homepage video search UI regression detected.');
           if (!featureV2.includes('wt_platform_search_history_v2') || !featureV2.includes('wt_watch_history_v2')) throw new Error('Feature completion v2 history layer missing.');
           if (!rules.includes('roomChatReplies') || !rules.includes('roomChatEdits') || !rules.includes('roomChatPins') || !rules.includes('roomChatReactions')) throw new Error('Room chat rich rules missing.');
           if (!sw.includes('./src/js/feature-completion-v2.js')) throw new Error('Feature completion v2 is not precached.');
           if (!sw.includes('./src/js/feature-complete-v3.js')) throw new Error('Feature completion v3 is not precached.');
           if (!index.includes('feature-complete-v3.js')) throw new Error('Feature completion v3 is not loaded by the frontend.');
+          if (!index.includes('feature-complete-v5.js')) throw new Error('Feature completion v5 is not loaded by the frontend.');
+          if (!sw.includes('./src/js/feature-complete-v5.js')) throw new Error('Feature completion v5 is not precached.');
           if (!featureV3.includes('watchHistory') || !featureV3.includes('watchStats') || !featureV3.includes('notifications') || !featureV3.includes('presence') || !featureV3.includes('userSettings')) throw new Error('Feature completion v3 cloud layers are incomplete.');
+          if (!featureV5.includes('roomCaptions/') || !featureV5.includes('WebVTT') || !featureV5.includes('navigator.onLine')) throw new Error('Feature completion v5 cloud caption layer missing.');
           const completion = fs.readFileSync('src/js/feature-completion.js', 'utf8');
           if (!completion.includes('sessions/') || !completion.includes('openSessionManager')) throw new Error('Cross-device session management is missing.');
           if (!rules.includes('"sessions"')) throw new Error('Session security rules are missing.');
@@ -145,6 +151,8 @@ jobs:
           if (!rules.includes('"controlRequests"')) throw new Error('controlRequests rules missing.');
           if (!rules.includes("root.child('members').child($roomId).child(auth.uid).exists()")) throw new Error('Owner takeover membership guard missing.');
           if (/numChildren\s*\(/.test(rules)) throw new Error('Unsupported numChildren() remains in Firebase rules.');
+          if ((app.match(/function\s+scheduleQueueAdvanceAfterEnded\s*\(/g) || []).length !== 1) throw new Error('duplicate scheduleQueueAdvanceAfterEnded remains.');
+          if (!app.includes('state.playbackLastPlayerState = "ended"')) throw new Error('Native ended-state guard missing.');
           if (!app.includes('buildYoutubeNativePlayer') || !app.includes('createYoutubeNativePlayer')) throw new Error('Native YouTube playback adapter is missing.');
           if (/new\s+YT\.Player|youtube\.com\/iframe_api|loadYoutubeIframeApi|createYoutubeIframePlayer/.test(app)) throw new Error('Legacy YouTube IFrame playback path remains.');
           if (!app.includes('loadVimeoSdk') || !app.includes('new Vimeo.Player')) throw new Error('Vimeo Player SDK integration is missing.');
