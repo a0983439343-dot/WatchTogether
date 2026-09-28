@@ -180,7 +180,9 @@
     const adminScoped = /^(admin|users|audit)\./.test(key) ||
       key === "reports.manage" ||
       key === "analytics.read" ||
-      key === "ai.use";
+      key === "ai.use" ||
+      key === "ai.agent" ||
+      key === "rooms.manage";
 
     const role = normalizeRole(options.role || state.role);
     if (state.role) {
