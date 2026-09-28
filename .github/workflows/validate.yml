@@ -38,6 +38,34 @@ jobs:
       - name: Check admin page syntax
         run: node --check admin/admin.js
 
+      - name: Check access control syntax
+        run: node --check src/js/access-control.js
+
+      - name: Check database rules permission model
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const rules = JSON.parse(fs.readFileSync("config/database.rules.json", "utf8"));
+          const raw = JSON.stringify(rules);
+          if (!raw.includes("permissionsByUid")) throw new Error("Per-user permission overrides missing.");
+          if (!raw.includes("restrictionsByUid")) throw new Error("Per-user restrictions missing.");
+          if (!raw.includes("featureFlags")) throw new Error("Feature flags missing.");
+
+          for (const permission of [
+            "rooms.manage","room.create","room.join","room.queue","chat.send",
+            "sync.control","reports.manage","users.update","users.restrict",
+            "audit.write","audit.delete","maintenance.manage"
+          ]) {
+            const unsafe = "permissions').child('" + permission + "')";
+            if (raw.includes(unsafe)) throw new Error("Unsafe dotted permission key remains: " + permission);
+          }
+          if (!raw.includes("site').child('maintenance').child('enabled').val()")) {
+            throw new Error("Maintenance write guard missing.");
+          }
+          if (!raw.includes("audit__delete")) throw new Error("audit.delete rule missing.");
+          console.log("Access control and maintenance rule checks OK");
+          NODE
+
       - name: Check autonomous repair syntax
         run: node --check scripts/autonomous-repair.mjs
 
@@ -59,6 +87,21 @@ jobs:
 
       - name: Run Realtime Database security rule tests
         run: npm run test:rules
+
+      - name: Check access control test coverage
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const tests = fs.readFileSync("tests/database.rules.test.js", "utf8");
+          for (const marker of [
+            "Allow and Deny overrides affect Firebase writes",
+            "Allow and Deny overrides affect admin user updates",
+            "normal users are blocked while admin users keep access"
+          ]) {
+            if (!tests.includes(marker)) throw new Error("Missing access-control test: " + marker);
+          }
+          console.log("Access-control regression tests present");
+          NODE
 
       - name: Check for exposed YouTube API key
         run: |
