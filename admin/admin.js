@@ -344,7 +344,7 @@
     if (!confirmed) return;
 
     await writeAuditedUpdates(
-      {"chat/" + roomId + "/" + id:null},
+      {["chat/" + roomId + "/" + id]:null},
       "chat.message.delete",
       String(item.uid || ""),
       String(item.name || item.uid || ""),
