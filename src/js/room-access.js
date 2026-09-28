@@ -86,6 +86,7 @@
     roomState.roleListener = roleRef;
     roleRef.on("value", snapshot => {
       roomState.roles = snapshot.val() || {};
+      try { window.dispatchEvent(new CustomEvent("wt-room-role-changed")); } catch (_) {}
       renderManageModal();
     });
 
@@ -395,7 +396,9 @@
     saveRoomSettings,
     reviewApplication,
     cancelOwnApplication,
-    setCohost
+    setCohost,
+    isCohost,
+    getRole: uid => roomState.roles?.[String(uid || user()?.uid || "")]?.role || "member"
   };
 
   const start = () => {

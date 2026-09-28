@@ -75,7 +75,8 @@ async function seed() {
                 reports__manage: true,
                 audit__read: true,
                 audit__write: true,
-                audit__delete: true
+                audit__delete: true,
+                maintenance__manage: true
               }
             }
           },
@@ -557,6 +558,113 @@ test("chat media messages: image and audio payloads pass validation", async () =
     mediaSize: 256000,
     duration: 12,
     createdAt: Date.now()
+  }));
+});
+
+test("room 2.0: cohost can control playback and manage queue, but not roles", async () => {
+  const ownerDb = db(USER_UID, userToken);
+  const cohostDb = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(cohostDb.ref("members/ABC123/" + OTHER_UID).set({
+    name: "Cohost",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  await assertSucceeds(ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).set({
+    uid: OTHER_UID,
+    role: "cohost",
+    updatedAt: Date.now(),
+    updatedByUid: USER_UID
+  }));
+
+  await assertFails(cohostDb.ref("roomRoles/ABC123/" + USER_UID).set({
+    uid: USER_UID,
+    role: "cohost",
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(cohostDb.ref("playback/ABC123").set({
+    action: "play",
+    position: 0,
+    videoId: "video-1",
+    platform: "youtube",
+    issuedAt: Date.now(),
+    updatedAt: Date.now(),
+    updatedBy: OTHER_UID,
+    eventId: "cohost-playback-" + Date.now(),
+    playing: true,
+    playbackRate: 1
+  }));
+
+  await assertSucceeds(ownerDb.ref("queue/ABC123/first").set({
+    id: "video-queue-1",
+    platform: "youtube",
+    title: "Queue One",
+    thumbnail: "",
+    channel: "",
+    addedBy: USER_UID,
+    addedByName: "User",
+    addedAt: Date.now(),
+    order: 0
+  }));
+
+  await assertSucceeds(ownerDb.ref("queue/ABC123/second").set({
+    id: "video-queue-2",
+    platform: "youtube",
+    title: "Queue Two",
+    thumbnail: "",
+    channel: "",
+    addedBy: USER_UID,
+    addedByName: "User",
+    addedAt: Date.now(),
+    order: 1
+  }));
+
+  await assertSucceeds(cohostDb.ref("queue/ABC123/first").update({
+    order: 1
+  }));
+
+  await assertSucceeds(cohostDb.ref("queue/ABC123/second").update({
+    order: 0
+  }));
+
+  await assertSucceeds(cohostDb.ref("queue/ABC123/first").remove());
+});
+
+test("2.0 access control: custom admin can control maintenance, viewer cannot", async () => {
+  const adminDb = db(ADMIN_UID, adminToken);
+  const viewerDb = db(VIEWER_UID, viewerToken);
+
+  await assertSucceeds(adminDb.ref("site/maintenance").set({
+    enabled: true,
+    reason: "test maintenance",
+    restoreAt: Date.now() + 3600000,
+    updatedAt: Date.now(),
+    updatedByUid: ADMIN_UID
+  }));
+
+  await assertSucceeds(viewerDb.ref("site/maintenance").once("value"));
+
+  await assertFails(viewerDb.ref("site/maintenance").update({
+    enabled: false,
+    reason: "viewer must not control maintenance",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: VIEWER_UID
+  }));
+
+  await assertSucceeds(adminDb.ref("site/maintenance").set({
+    enabled: false,
+    reason: "test maintenance complete",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: ADMIN_UID
   }));
 });
 

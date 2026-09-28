@@ -34,7 +34,8 @@
       "chat.dm",
       "youtube.search",
       "youtube.queue",
-      "favorites.manage"
+      "favorites.manage",
+      "maintenance.manage"
     ],
     viewer: [
       "admin.read",
@@ -163,6 +164,7 @@
     if (!user) return false;
     if (isMaster(user)) return true;
     if (user.isAnonymous) {
+      if (key.startsWith("admin.") || key.startsWith("users.") || key.startsWith("audit.") || key === "reports.manage" || key === "analytics.read" || key === "ai.use" || key === "maintenance.manage") return false;
       const flag = state.featureFlags[key];
       return normalizeFlag(flag);
     }
@@ -180,7 +182,8 @@
     const adminScoped = /^(admin|users|audit)\./.test(key) ||
       key === "reports.manage" ||
       key === "analytics.read" ||
-      key === "ai.use";
+      key === "ai.use" ||
+      key === "maintenance.manage";
 
     const role = normalizeRole(options.role || state.role);
     if (state.role) {
