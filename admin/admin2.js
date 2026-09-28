@@ -367,21 +367,21 @@
     document.body.appendChild(dialog);
 
     const commands=[
-      ["overview","總覽","Dashboard"],
-      ["accounts","使用者管理","Users"],
-      ["rooms","房間管理","Rooms"],
-      ["reports","檢舉中心","Reports"],
-      ["audit","Audit Log","Audit"],
-      ["security","安全中心","Security"],
-      ["analytics","Analytics","Analytics"],
-      ["maintenance","維護中心","Maintenance"],
-      ["restrictions","使用者功能限制","Restrictions"],
-      ["roles","角色與權限","Roles"],
-      ["ai","AI 管理中心","AI"],
-      ["debug","Debug Center","Debug"],
-      ["versions","版本中心","Versions"],
-      ["settings","系統設定","Settings"]
-    ];
+      ["overview","總覽","Dashboard","users.view"],
+      ["accounts","使用者管理","Users","users.view"],
+      ["rooms","房間管理","Rooms","rooms.view"],
+      ["reports","檢舉中心","Reports","reports.handle"],
+      ["audit","Audit Log","Audit","audit.view"],
+      ["security","安全中心","Security","audit.view"],
+      ["analytics","Analytics","Analytics","analytics.view"],
+      ["maintenance","維護中心","Maintenance","maintenance.manage"],
+      ["restrictions","使用者功能限制","Restrictions","restrictions.manage"],
+      ["roles","角色與權限","Roles","roles.manage"],
+      ["ai","AI 管理中心","AI","ai.use"],
+      ["debug","Debug Center","Debug","analytics.view"],
+      ["versions","版本中心","Versions","users.view"],
+      ["settings","系統設定","Settings","settings.edit"]
+    ].filter(item=>hasPermission(item[3]));
     let filtered=commands.slice(),index=0;
     const list=()=>document.getElementById("ad2CommandList");
     const render=()=>{
