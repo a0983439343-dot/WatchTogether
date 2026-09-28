@@ -73,6 +73,20 @@
   async function analyzeWithAI(reportId, phase, state, evidence) {
     const endpoint = getAiEndpoint();
     if (!endpoint || !reportId) return null;
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("ai.use")) return null;
+    }
+    const currentUser = wt.auth.currentUser;
+    if (!currentUser || currentUser.isAnonymous) return null;
+    let idToken = "";
+    try {
+      idToken = await currentUser.getIdToken();
+    } catch (_) {
+      return null;
+    }
+    if (!idToken) return null;
     const localState = state && typeof state === "object" ? state : {};
     const now = Date.now();
     const lastAiAt = Number(localState.lastAiAt || 0);
@@ -111,7 +125,10 @@
         method:"POST",
         cache:"no-store",
         credentials:"omit",
-        headers:{"Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":"Bearer " + idToken
+        },
         signal:controller.signal,
         body:JSON.stringify(body)
       });
