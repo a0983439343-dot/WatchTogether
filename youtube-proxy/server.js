@@ -181,7 +181,7 @@ async function getFirebaseServiceAccessToken() {
   const assertionHeader = base64UrlJson({alg:"RS256",typ:"JWT"});
   const assertionClaim = base64UrlJson({
     iss: account.clientEmail,
-    scope: "https://www.googleapis.com/auth/firebase.database",
+    scope: "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database",
     aud: account.tokenUri,
     iat: now,
     exp: now + 3600
