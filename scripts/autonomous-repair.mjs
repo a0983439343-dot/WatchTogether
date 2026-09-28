@@ -466,6 +466,7 @@ async function syncAssetVersions(changed, original) {
     "src/js/bug-monitor.js",
     "src/js/chat.js",
     "src/js/access-control.js",
+    "src/js/feature-center.js",
     "src/js/feature-completion.js",
     "src/js/feature-completion-v2.js",
     "src/js/feature-complete-v3.js",
@@ -490,6 +491,7 @@ async function syncAssetVersions(changed, original) {
       changed.has("src/js/enhancements.js") ||
       changed.has("src/css/styles.css") ||
       changed.has("src/js/access-control.js") ||
+      changed.has("src/js/feature-center.js") ||
       changed.has("src/js/feature-completion.js") ||
       changed.has("src/js/feature-completion-v2.js") ||
       changed.has("src/js/feature-complete-v3.js") ||
@@ -518,6 +520,10 @@ async function syncAssetVersions(changed, original) {
       indexAfter = indexAfter.replace(
         /(src\/css\/enhancements\.css\?v=)[^"'&]+/,
         "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/feature-center\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-feature-center-")
       );
       indexAfter = indexAfter.replace(
         /(src\/js\/feature-completion\.js\?v=)[^"'&]+/,
