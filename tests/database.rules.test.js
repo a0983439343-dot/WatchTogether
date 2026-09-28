@@ -1211,7 +1211,6 @@ serialTest("2.0 access control: per-user deny overrides room, chat, queue and pl
     }
   }));
 
-  console.log("DEBUG_MEMBER_27_STATE", (await master.ref("admin/access/permissionsByUid/" + OTHER_UID).once("value")).val(), (await master.ref("admin/access/restrictionsByUid/" + OTHER_UID).once("value")).val(), (await master.ref("admin/blocksByUid/" + OTHER_UID).once("value")).val(), (await master.ref("admin/featureFlags/room__join").once("value")).val(), (await master.ref("roomMeta/ODNY01").once("value")).val());
   await assertSucceeds(other.ref("members/ODNY01/" + OTHER_UID).set({
     name: "Other",
     joinedAt: Date.now(),
@@ -1630,7 +1629,6 @@ serialTest("room captions: owner/cohost can write and members can read, outsider
     }
   }));
 
-  console.log("DEBUG_MEMBER_36_STATE", (await master.ref("admin/access/permissionsByUid/" + USER_UID).once("value")).val(), (await master.ref("admin/access/restrictionsByUid/" + USER_UID).once("value")).val(), (await master.ref("admin/blocksByUid/" + USER_UID).once("value")).val(), (await master.ref("admin/featureFlags/room__join").once("value")).val(), (await master.ref("roomMeta/CAP001").once("value")).val());
   await assertSucceeds(owner.ref("members/CAP001/" + USER_UID).set({
     name: "Owner",
     joinedAt: Date.now(),
