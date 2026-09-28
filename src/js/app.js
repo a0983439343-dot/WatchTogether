@@ -61,81 +61,11 @@
       player: "dailymotion"
     },
 
-    bilibili: {
-      name: "Bilibili",
-      icon: "📺",
-      searchable: false,
-      player: "bilibili"
-    },
-
     twitch: {
       name: "Twitch",
       icon: "🎮",
       searchable: false,
       player: "twitch"
-    },
-
-    netflix: {
-      name: "Netflix",
-      icon: "🔴",
-      searchable: false,
-      player: "external"
-    },
-
-    crunchyroll: {
-      name: "Crunchyroll",
-      icon: "🟠",
-      searchable: false,
-      player: "external"
-    },
-
-    disneyplus: {
-      name: "Disney+",
-      icon: "🔵",
-      searchable: false,
-      player: "external"
-    },
-
-    primevideo: {
-      name: "Prime Video",
-      icon: "🟦",
-      searchable: false,
-      player: "external"
-    },
-
-    appletv: {
-      name: "Apple TV+",
-      icon: "🍎",
-      searchable: false,
-      player: "external"
-    },
-
-    max: {
-      name: "Max",
-      icon: "🟣",
-      searchable: false,
-      player: "external"
-    },
-
-    hulu: {
-      name: "Hulu",
-      icon: "🟢",
-      searchable: false,
-      player: "external"
-    },
-
-    paramount: {
-      name: "Paramount+",
-      icon: "🟦",
-      searchable: false,
-      player: "external"
-    },
-
-    peacock: {
-      name: "Peacock",
-      icon: "🦚",
-      searchable: false,
-      player: "external"
     }
   };
 
@@ -2452,54 +2382,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return null;
   }
 
-
-  function getBilibiliId(value) {
-    if (!value) {
-      return null;
-    }
-
-    const text =
-      String(value).trim();
-
-    if (
-      /^BV[a-zA-Z0-9]+$/.test(text)
-    ) {
-      return text;
-    }
-
-    if (
-      /^av\d+$/i.test(text)
-    ) {
-      return text;
-    }
-
-    try {
-      const url =
-        new URL(text);
-
-      const bv =
-        url.pathname.match(
-          /(BV[a-zA-Z0-9]+)/
-        );
-
-      if (bv?.[1]) {
-        return bv[1];
-      }
-
-      const av =
-        url.pathname.match(
-          /\/av(\d+)/i
-        );
-
-      if (av?.[1]) {
-        return "av" + av[1];
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-
   function getTwitchValue(value) {
     if (!value) {
       return null;
@@ -3659,29 +3541,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       };
     }
 
-    if (platform === "bilibili") {
-      const id =
-        getBilibiliId(rawValue);
-
-      if (!id) {
-        return null;
-      }
-
-      return {
-        id,
-        url:
-          String(rawValue),
-        platform,
-        title:
-          title ||
-          "Bilibili 影片",
-        thumbnail:
-          "",
-        channel:
-          "Bilibili"
-      };
-    }
-
     if (platform === "twitch") {
       const value =
         getTwitchValue(rawValue);
@@ -3708,27 +3567,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       };
     }
 
-    return {
-      id:
-        String(rawValue),
-
-      url:
-        String(rawValue),
-
-      platform,
-
-      title:
-        title ||
-        PLATFORMS[platform]?.name ||
-        platform,
-
-      thumbnail:
-        "",
-
-      channel:
-        PLATFORMS[platform]?.name ||
-        platform
-    };
+    return null;
   }
 
 
@@ -4287,7 +4126,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     [
       "vimeoPlayer",
       "dailymotionPlayer",
-      "bilibiliPlayer",
       "twitchPlayer",
       "directVideo",
       "youtubePlayer",
@@ -5394,16 +5232,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         "twitch"
       ) {
         await old.destroy?.();
-      }
-
-      if (
-        oldType === "bilibili" ||
-        oldType === "dailymotion-iframe" ||
-        oldType === "twitch-clip"
-      ) {
-        try {
-          old.src = "about:blank";
-        } catch (_) {}
+      } catch (_) {}
 
         try {
           if (old.contentWindow) {
@@ -5623,10 +5452,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     if (!readout) {
       return;
     }
-
     const unsupportedTypes = [
-      "bilibili",
-      "external",
       "dailymotion-iframe",
       "twitch-clip"
     ];
@@ -6835,91 +6661,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     startPlaybackSeekDetector();
   }
 
-
-  async function buildBilibiliPlayer(
-    video
-  ) {
-    await destroyCurrentPlayer();
-
-    hidePlayers();
-
-    showPlayerElement(
-      "bilibiliPlayer"
-    );
-
-    const iframe =
-      $("bilibiliPlayer");
-
-    if (!iframe) {
-      throw new Error(
-        "找不到 bilibiliPlayer"
-      );
-    }
-
-    let src = "";
-
-    if (
-      /^BV/.test(
-        video.id
-      )
-    ) {
-      src =
-        "https://player.bilibili.com/player.html?bvid=" +
-        encodeURIComponent(
-          video.id
-        ) +
-        "&page=1&autoplay=1";
-    } else if (
-      /^av/i.test(
-        video.id
-      )
-    ) {
-      src =
-        "https://player.bilibili.com/player.html?aid=" +
-        encodeURIComponent(
-          video.id.replace(
-            /^av/i,
-            ""
-          )
-        ) +
-        "&page=1&autoplay=1";
-    } else {
-      src =
-        video.url ||
-        "https://www.bilibili.com/video/" +
-        encodeURIComponent(
-          video.id
-        );
-    }
-
-    iframe.src =
-      src;
-
-    iframe.allow =
-      "autoplay; fullscreen; picture-in-picture";
-
-    state.currentVideoId =
-      video.id;
-
-    state.currentVideoUrl =
-      video.url ||
-      null;
-
-    state.playerType =
-      "bilibili";
-
-    state.player =
-      iframe;
-
-    state.playerReady =
-      true;
-
-    updateRoomOwnerUI();
-
-    startLocalTimeUpdate();
-  }
-
-
   async function buildTwitchPlayer(video) {
     await destroyCurrentPlayer();
     await loadTwitchSdk();
@@ -7064,92 +6805,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
-  async function buildExternalPlayer(
-    video
-  ) {
-    await destroyCurrentPlayer();
-
-    hidePlayers();
-
-    const notice =
-      $("platformPlayerNotice");
-
-    if (!notice) {
-      throw new Error(
-        "找不到外部平台提示"
-      );
-    }
-
-    notice.classList.remove(
-      "hidden"
-    );
-
-    const name =
-      PLATFORMS[
-        video.platform
-      ]?.name ||
-      video.platform;
-
-    const url =
-      video.url ||
-      "";
-
-    if (
-      $("roomPlatformIcon")
-    ) {
-      $("roomPlatformIcon")
-        .textContent =
-        PLATFORMS[
-          video.platform
-        ]?.icon ||
-        "🌐";
-    }
-
-    if (
-      $("roomPlatformName")
-    ) {
-      $("roomPlatformName")
-        .textContent =
-        name;
-    }
-
-    if (
-      $("roomPlatformDescription")
-    ) {
-      $("roomPlatformDescription")
-        .textContent =
-        "此平台請使用官方網站播放。";
-    }
-
-    const button =
-      $("openPlatformBtn");
-
-    if (button) {
-      button.onclick =
-        () => {
-          if (!url) {
-            return;
-          }
-
-          window.open(
-            url,
-            "_blank",
-            "noopener,noreferrer"
-          );
-        };
-    }
-
-    state.playerType =
-      "external";
-
-    state.player =
-      null;
-
-    state.playerReady =
-      false;
-  }
-
-
   /*
    * =========================================================
    * PLAYER ROUTER
@@ -7209,17 +6864,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (
       video.platform ===
-      "bilibili"
-    ) {
-      await buildBilibiliPlayer(
-        video
-      );
-
-      return;
-    }
-
-    if (
-      video.platform ===
       "twitch"
     ) {
       await buildTwitchPlayer(
@@ -7228,10 +6872,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
       return;
     }
-
-    await buildExternalPlayer(
-      video
-    );
+    await destroyCurrentPlayer();
+    hidePlayers();
+    showPlayerElement("platformPlayerNotice");
+    if ($("roomPlatformIcon")) $("roomPlatformIcon").textContent = "⚠️";
+    if ($("roomPlatformName")) $("roomPlatformName").textContent = "不支援的平台";
+    if ($("roomPlatformDescription")) $("roomPlatformDescription").textContent = "此影片平台已不再支援，請改用 YouTube、Vimeo、Dailymotion 或 Twitch。";
+    if ($("openPlatformBtn")) $("openPlatformBtn").onclick = null;
+    state.playerType = null;
+    state.player = null;
+    state.playerReady = false;
+    return;
   }
 
 
@@ -8151,7 +7802,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     await buildPlatformPlayer(
       normalized
     );
-    if (state.playerReady && state.player && state.playerType !== "bilibili" && state.playerType !== "external") {
+    if (state.playerReady && state.player && state.playerType && state.playerReady && state.player) {
       await applyLatestRoomPlaybackState(true);
       startPlaybackSeekDetector();
     }
@@ -9392,7 +9043,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       !state.currentVideoId ||
       state.playbackApplyingRemote
     ) return;
-    if (state.playerType === "bilibili" || state.playerType === "external") return;
     if (Date.now() < Number(state.playbackAdGuardUntil || 0)) return;
 
     const roomVideoId =
@@ -9763,8 +9413,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     if (String(event.videoId || "") !== String(state.currentVideoId || "")) return;
     if (String(event.platform || "") !== String(state.playerType || "")) return;
     if (!["play", "pause", "seek"].includes(event.action)) return;
-    if (state.playerType === "bilibili" || state.playerType === "external") return;
-
     const eventId = String(event.eventId || "");
     if (!eventId) return;
 
