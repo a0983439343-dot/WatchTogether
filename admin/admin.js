@@ -855,11 +855,18 @@
   async function analyzeReportOnAdmin(id, report, verification, phase = "admin_review") {
     const endpoint = getBugAiEndpoint();
     if (!endpoint) return null;
+    const user = auth?.currentUser || currentUser;
+    if (!user || user.isAnonymous) throw new Error("請先使用 Google 帳號登入");
+    const token = await user.getIdToken();
+
     const response = await fetch(endpoint,{
       method:"POST",
       cache:"no-store",
       credentials:"omit",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        Authorization:"Bearer " + token
+      },
       body:JSON.stringify({
         phase,
         report:{
