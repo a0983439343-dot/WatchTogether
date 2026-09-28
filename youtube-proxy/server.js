@@ -2385,7 +2385,7 @@ function parseTwitchDuration(value) {
 }
 
 async function runPlatformSearch(platform, query, maxResults, page, twitchLiveOnly = false) {
-  const key = platform + ":" + query.toLowerCase() + ":" + maxResults + ":" + page;
+  const key = platform + ":" + query.toLowerCase() + ":" + maxResults + ":" + page + ":" + (twitchLiveOnly === true ? "live" : "all");
   if (platformSearchInflight.has(key)) return platformSearchInflight.get(key);
   let request;
   if (platform === "vimeo") request = runVimeoSearch(query, maxResults, page);
