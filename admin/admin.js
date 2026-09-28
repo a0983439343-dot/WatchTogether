@@ -533,6 +533,7 @@
     "maintenance.on": "進入網站維護模式",
     "maintenance.off": "重新開站",
     "maintenance.toggle": "切換全自動維護",
+    "system.settings.update": "更新系統設定",
     "ai.analyze": "AI 分析",
     "ai.agent": "AI Agent 操作",
     "audit.delete": "刪除操作紀錄"
@@ -2226,7 +2227,7 @@
   }
 
   const SYSTEM_SETTINGS_DEFAULTS = {
-    siteName: "WatchTogether",
+    siteName: "WatchTogether｜一起看",
     siteDescription: "WatchTogether - 和朋友一起同步看影片、聊天與加好友",
     announcementEnabled: false,
     announcementText: ""
