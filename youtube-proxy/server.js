@@ -2319,13 +2319,34 @@ async function twitchApi(path, params) {
   }
 }
 
-async function runTwitchSearch(query, maxResults) {
+async function runTwitchSearch(query, maxResults, liveOnly = false) {
   const [channelData, categoryData] = await Promise.all([
-    twitchApi("search/channels", {query, first: 8, live_only: false}),
+    twitchApi("search/channels", {query, first: 8, live_only: liveOnly === true}),
     twitchApi("search/categories", {query, first: 5})
   ]);
   const channels = Array.isArray(channelData?.data) ? channelData.data : [];
   const categories = Array.isArray(categoryData?.data) ? categoryData.data : [];
+  if (liveOnly === true) {
+    const items = channels.slice(0, maxResults).map(item => {
+      const id = String(item?.id || "");
+      if (!id) return null;
+      return searchResult(
+        id,
+        "twitch",
+        item?.display_name || item?.broadcaster_login || "Twitch",
+        "",
+        item?.display_name || item?.broadcaster_login || "Twitch",
+        "",
+        item?.thumbnail_url || "",
+        0,
+        0,
+        true,
+        "https://www.twitch.tv/" + String(item?.broadcaster_login || item?.display_name || "").replace(/^@/, ""),
+        "channel"
+      );
+    }).filter(Boolean);
+    return {items, nextPageToken:""};
+  }
   const channelIds = channels.slice(0, 6).map(item => String(item?.id || "")).filter(Boolean);
   const gameIds = categories.slice(0, 4).map(item => String(item?.id || "")).filter(Boolean);
   const videoResponses = await Promise.all([
@@ -2369,7 +2390,7 @@ async function runPlatformSearch(platform, query, maxResults, page) {
   let request;
   if (platform === "vimeo") request = runVimeoSearch(query, maxResults, page);
   else if (platform === "dailymotion") request = runDailymotionSearch(query, maxResults, page);
-  else if (platform === "twitch") request = runTwitchSearch(query, maxResults);
+  else if (platform === "twitch") request = runTwitchSearch(query, maxResults, arguments[4] === true);
   else request = runYoutubeSearch(query, maxResults, page);
   platformSearchInflight.set(key, request);
   request.finally(() => { if (platformSearchInflight.get(key) === request) platformSearchInflight.delete(key); }).catch(() => {});
@@ -2476,8 +2497,9 @@ async function handleSearch(req, res, url) {
   const requested = Number(url.searchParams.get("maxResults") || MAX_SEARCH_RESULTS);
   const maxResults = Number.isFinite(requested) ? Math.min(MAX_SEARCH_RESULTS, Math.max(1, Math.floor(requested))) : MAX_SEARCH_RESULTS;
   const page = parseSearchPage(url.searchParams.get("pageToken"));
+  const twitchLiveOnly = platform === "twitch" && ["1","true","yes"].includes(String(url.searchParams.get("liveOnly") || "").toLowerCase());
   try {
-    const result = await runPlatformSearch(platform, query, maxResults, page);
+    const result = await runPlatformSearch(platform, query, maxResults, page, twitchLiveOnly);
     send(res, 200, JSON.stringify(result));
   } catch (error) {
     console.error("[search:" + platform + "]", query, error?.message || error);
