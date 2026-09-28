@@ -67,6 +67,7 @@
     <button class="nav-item active" data-section="overview">總覽</button>
     <button class="nav-item" data-section="accounts">登入帳號</button>
     <button class="nav-item" data-section="rooms">🏠 房間監控</button>
+    <button class="nav-item" data-section="chat">💬 聊天管理</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
     <button class="nav-item" data-section="access">⚙️ 2.0 控制中心</button>
      <button class="nav-item" data-section="reports">🐛 問題回報</button>
@@ -124,6 +125,24 @@
         <table>
           <thead><tr><th>房間</th><th>房主</th><th>在線人數</th><th>目前影片</th><th>建立時間</th><th>操作</th></tr></thead>
           <tbody id="roomsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="section-chat" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">CHAT MODERATION</div><h2>聊天管理</h2></div><div class="section-head-actions"><button id="chatModerationRefreshBtn" class="btn">重新整理</button></div></div>
+      <div class="panel">
+        <div class="toolbar">
+          <input id="chatModerationRoomId" class="search" type="text" maxlength="6" inputmode="text" autocomplete="off" placeholder="輸入 6 碼房間 ID，例如 ABC123">
+          <input id="chatModerationSearch" class="search" type="search" placeholder="搜尋 UID、名稱、訊息">
+          <span id="chatModerationCount" class="muted">0 筆</span>
+          <button id="chatModerationLoadBtn" class="btn primary" type="button">載入聊天</button>
+        </div>
+      </div>
+      <div class="panel table-wrap">
+        <table class="chat-moderation-table">
+          <thead><tr><th>時間</th><th>使用者</th><th>類型</th><th>內容</th><th>操作</th></tr></thead>
+          <tbody id="chatModerationBody"></tbody>
         </table>
       </div>
     </section>
