@@ -19,6 +19,13 @@
       ""
     ).trim();
 
+  const SEARCH_PROXY_URL =
+    String(
+      APP_CONFIG.searchProxyUrl ||
+      YOUTUBE_SEARCH_PROXY_URL ||
+      ""
+    ).trim();
+
   const YOUTUBE_STREAM_PROXY_URL =
     String(
       APP_CONFIG.youtubeStreamProxyUrl ||
@@ -50,21 +57,21 @@
     vimeo: {
       name: "Vimeo",
       icon: "▶",
-      searchable: false,
+      searchable: true,
       player: "vimeo"
     },
 
     dailymotion: {
       name: "Dailymotion",
       icon: "▶",
-      searchable: false,
+      searchable: true,
       player: "dailymotion"
     },
 
     twitch: {
       name: "Twitch",
       icon: "🎮",
-      searchable: false,
+      searchable: true,
       player: "twitch"
     }
   };
@@ -2781,6 +2788,68 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return results;
   }
 
+  async function searchSelectedPlatform(
+    query,
+    append = false
+  ) {
+    const platform = String($("sourceTypeModal")?.value || "youtube").trim().toLowerCase();
+    if (platform === "youtube") return searchYoutube(query, append);
+    if (![ "vimeo", "dailymotion", "twitch" ].includes(platform)) {
+      throw new Error("不支援的搜尋平台");
+    }
+    const now = Date.now();
+    if (now - Number(state.lastYoutubeSearchAt || 0) < YOUTUBE_SEARCH_COOLDOWN_MS) {
+      throw new Error("搜尋太頻繁，請稍候再試");
+    }
+    if (!SEARCH_PROXY_URL) throw new Error("影片搜尋服務未設定");
+    const url = new URL(SEARCH_PROXY_URL);
+    url.searchParams.set("platform", platform);
+    url.searchParams.set("q", query);
+    url.searchParams.set("maxResults", String(YOUTUBE_SEARCH_PAGE_SIZE));
+    if (append && state.searchNextPageToken) url.searchParams.set("pageToken", state.searchNextPageToken);
+    let idToken = "";
+    try {
+      const currentUser = auth?.currentUser || null;
+      if (currentUser) idToken = await currentUser.getIdToken();
+    } catch (_) {}
+    if (!idToken) throw new Error("登入驗證尚未準備完成，請稍後再搜尋");
+    let response;
+    try {
+      response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {Accept: "application/json", Authorization: "Bearer " + idToken},
+        credentials: "omit",
+        mode: "cors"
+      });
+    } catch (error) {
+      console.error("平台搜尋服務連線失敗:", error);
+      throw new Error("影片搜尋服務無法連線，請確認 Render 搜尋服務已部署最新版本");
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || "影片搜尋失敗");
+    state.lastYoutubeSearchAt = Date.now();
+    const results = (Array.isArray(data?.items) ? data.items : []).map(item => ({
+      id: String(item?.id?.videoId || item?.id || "").trim(),
+      platform,
+      title: String(item?.title || item?.snippet?.title || "未命名影片"),
+      description: String(item?.description || item?.snippet?.description || ""),
+      channel: String(item?.channel || item?.snippet?.channelTitle || platform),
+      publishedAt: String(item?.publishedAt || item?.snippet?.publishedAt || ""),
+      thumbnail: String(item?.thumbnail || item?.snippet?.thumbnails?.maxres?.url || item?.snippet?.thumbnails?.high?.url || item?.snippet?.thumbnails?.medium?.url || ""),
+      viewCount: Number(item?.viewCount || 0),
+      likeCount: Number(item?.likeCount || 0),
+      duration: String(item?.duration || ""),
+      durationSeconds: Number(item?.durationSeconds || 0),
+      live: Boolean(item?.live),
+      url: String(item?.url || ""),
+      twitchType: String(item?.twitchType || "")
+    })).filter(item => item.id);
+    state.searchPageCount = append ? Number(state.searchPageCount || 0) + 1 : 1;
+    state.searchNextPageToken = data?.nextPageToken ? String(data.nextPageToken) : "";
+    state.searchResults = append ? state.searchResults.concat(results) : results;
+    renderSearchResults();
+    return results;
+  }
 
   function disconnectSearchObserver() {
     const container =
