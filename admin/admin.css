@@ -474,6 +474,16 @@ html[data-device="phone"][data-orientation="portrait"] .toast{
   flex-wrap: wrap;
 }
 
+.chat-moderation-table td:nth-child(4){min-width:320px;max-width:720px;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.chat-type{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#111a2c;color:#aeb8d0;font-size:12px}
+.chat-moderation-content{overflow-wrap:anywhere}
+@media(max-width:640px){
+  #chatModerationBody td:nth-child(1)::before{content:"時間"}
+  #chatModerationBody td:nth-child(2)::before{content:"使用者"}
+  #chatModerationBody td:nth-child(3)::before{content:"類型"}
+  #chatModerationBody td:nth-child(4)::before{content:"內容"}
+  #chatModerationBody td:nth-child(5)::before{content:"操作"}
+}
 .audit-table td {
   vertical-align: top;
 }
