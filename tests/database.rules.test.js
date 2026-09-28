@@ -1544,6 +1544,45 @@ serialTest("blocks: master account cannot be blocked", async () => {
   );
 });
 
+serialTest("sessions: users can manage only their own login sessions and cannot forge ids", async () => {
+  const user = db(USER_UID, userToken);
+  const other = db(OTHER_UID, {email: "other@example.com", email_verified: true});
+  const sessionId = "session-test-user-0123456789";
+  const otherSessionId = "session-test-other-0123456789";
+
+  await assertSucceeds(user.ref("sessions/" + USER_UID + "/" + sessionId).set({
+    id: sessionId,
+    label: "Desktop · Chrome",
+    createdAt: Date.now(),
+    lastSeen: Date.now(),
+    revoked: false
+  }));
+
+  await assertSucceeds(user.ref("sessions/" + USER_UID + "/" + sessionId).update({
+    lastSeen: Date.now(),
+    revokedAt: Date.now(),
+    revokedBy: USER_UID,
+    revoked: true
+  }));
+
+  await assertFails(other.ref("sessions/" + USER_UID + "/" + sessionId).once("value"));
+  await assertFails(other.ref("sessions/" + USER_UID + "/" + sessionId).update({
+    revokedAt: Date.now(),
+    revokedBy: OTHER_UID,
+    revoked: true
+  }));
+
+  await assertFails(user.ref("sessions/" + USER_UID + "/" + sessionId).set({
+    id: otherSessionId,
+    label: "Forged",
+    createdAt: Date.now(),
+    lastSeen: Date.now(),
+    revoked: false
+  }));
+
+  await assertSucceeds(user.ref("sessions/" + USER_UID + "/" + sessionId).remove());
+});
+
 serialTest("unauthenticated users cannot access protected admin paths", async () => {
   const unauth = env.unauthenticatedContext();
 
