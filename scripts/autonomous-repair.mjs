@@ -186,6 +186,7 @@ function repairContextPaths(category) {
       "src/js/enhancements.js",
       "src/js/chat.js",
       "src/js/bug-monitor.js",
+      "src/js/feature-completion-v2.js",
       "config/database.rules.json"
     ],
         account: [
@@ -207,7 +208,8 @@ function repairContextPaths(category) {
       "src/js/bug-monitor.js",
       "admin/admin.js",
       "admin/admin.html",
-      "admin/admin.css"
+      "admin/admin.css",
+      "src/js/feature-completion-v2.js"
     ],
         other: [
       "index.html",
@@ -219,6 +221,7 @@ function repairContextPaths(category) {
       "admin/admin.js",
       "admin/admin.html",
       "admin/admin.css",
+      "src/js/feature-completion-v2.js",
       "sw.js"
     ]
   };
