@@ -47,12 +47,10 @@ function injectCss(){
 
 function ensureTopbar(){
   var r=document.querySelector(".topbar-right");if(!r)return;var anchor=$("googleLoginBtn");
-  if(!$("wtFeatureNotificationBtn")){
-    var w=document.createElement("span");w.className="wt-nav-wrap";w.innerHTML='<button id="wtFeatureNotificationBtn" class="wt-nav-btn" type="button" title="通知中心">🔔</button><span id="wtFeatureNotificationBadge" class="wt-notice-dot" style="display:none"></span>';
-    w.firstElementChild.addEventListener("click",openNotifications);r.insertBefore(w,anchor||null);
-  }
+  if(!$("wtFeatureNotificationBtn")){var w=document.createElement("span");w.className="wt-nav-wrap";w.innerHTML='<button id="wtFeatureNotificationBtn" class="wt-nav-btn" type="button" title="通知中心">🔔</button><span id="wtFeatureNotificationBadge" class="wt-notice-dot" style="display:none"></span>';w.firstElementChild.addEventListener("click",openNotifications);r.insertBefore(w,anchor||null);}
+  if(!$("wtFeatureInviteBtn")){var iv=document.createElement("button");iv.id="wtFeatureInviteBtn";iv.className="wt-nav-btn";iv.type="button";iv.textContent="✉ 邀請";iv.addEventListener("click",openInvites);r.insertBefore(iv,anchor||null);}
   if(!$("wtFeatureFavoritesBtn")){var b=document.createElement("button");b.id="wtFeatureFavoritesBtn";b.className="wt-nav-btn";b.type="button";b.textContent="☆ 收藏";b.addEventListener("click",openFavorites);r.insertBefore(b,anchor||null);}
-  if(!$("wtFeatureReportBtn")){var c=document.createElement("button");c.id="wtFeatureReportBtn";c.className="wt-nav-btn";c.type="button";c.textContent="🐛 回報";c.addEventListener("click",function(){openReport("other");});r.insertBefore(c,anchor||null);}
+  if(!$("wtFeatureReportBtn")){var x=document.createElement("button");x.id="wtFeatureReportBtn";x.className="wt-nav-btn";x.type="button";x.textContent="🐛 回報";x.addEventListener("click",function(){openReport("other");});r.insertBefore(x,anchor||null);}
 }
 
 var notifications=[];
@@ -128,26 +126,32 @@ function openInvite(){
   var id=roomId();if(!id)return toast("目前不在房間內");
   var link=wt.roomLink?wt.roomLink(id):location.origin+location.pathname+"?room="+encodeURIComponent(id);
   var m=$("wtInviteFeatureModal");
-  if(!m){m=document.createElement("div");m.id="wtInviteFeatureModal";m.className="modal hidden wt-feature-modal";m.setAttribute("aria-hidden","true");m.innerHTML='<div class="modal-card wt-feature-card"><div class="wt-feature-head"><div class="panel-title">房間邀請</div><button type="button" class="tiny-btn" id="wtInviteClose">關閉</button></div><div class="wt-feature-link" id="wtInviteLink"></div><div class="wt-feature-actions" style="justify-content:flex-start"><button id="wtInviteCopy" class="primary-btn">複製連結</button><button id="wtInviteCode" class="secondary-btn">複製房間碼</button></div><div id="wtInviteQr" style="display:grid;place-items:center;padding:16px;background:#fff;border-radius:16px;margin-top:14px;min-height:220px"></div></div>';document.body.appendChild(m);m.addEventListener("click",function(e){if(e.target===m)close("wtInviteFeatureModal");});$("wtInviteClose").onclick=function(){close("wtInviteFeatureModal");};$("wtInviteCopy").onclick=async function(){try{await navigator.clipboard.writeText(link);toast("已複製邀請連結");}catch(_){toast(link);}};$("wtInviteCode").onclick=async function(){try{await navigator.clipboard.writeText(id);toast("已複製房間碼");}catch(_){toast(id);}};}
+  if(!m){
+    m=document.createElement("div");m.id="wtInviteFeatureModal";m.className="modal hidden wt-feature-modal";m.setAttribute("aria-hidden","true");
+    m.innerHTML='<div class="modal-card wt-feature-card"><div class="wt-feature-head"><div class="panel-title">房間邀請</div><button type="button" class="tiny-btn" id="wtInviteClose">關閉</button></div><div class="wt-feature-link" id="wtInviteLink"></div><div class="wt-feature-grid" style="margin-top:12px"><label>好友 ID（6 碼）<input id="wtInviteFriendCode" maxlength="6" placeholder="例如 A1B2C3" style="text-transform:uppercase"></label><div style="align-self:end"><button id="wtInviteSend" class="primary-btn" type="button">發送房間邀請</button></div></div><div class="wt-feature-actions" style="justify-content:flex-start"><button id="wtInviteCopy" class="primary-btn">複製連結</button><button id="wtInviteCode" class="secondary-btn">複製房間碼</button></div><div id="wtInviteQr" style="display:grid;place-items:center;padding:16px;background:#fff;border-radius:16px;margin-top:14px;min-height:220px"></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener("click",function(e){if(e.target===m)close("wtInviteFeatureModal");});
+    $("wtInviteClose").onclick=function(){close("wtInviteFeatureModal");};
+    $("wtInviteCopy").onclick=async function(){try{await navigator.clipboard.writeText(link);toast("已複製邀請連結");}catch(_){toast(link);}};
+    $("wtInviteCode").onclick=async function(){try{await navigator.clipboard.writeText(id);toast("已複製房間碼");}catch(_){toast(id);}};
+    $("wtInviteSend").onclick=function(){sendRoomInvite().catch(function(e){toast(e.message||"邀請發送失敗");});};
+  }
   $("wtInviteLink").textContent=link;
   var q=$("wtInviteQr");q.innerHTML="";
   try{if(typeof window.qrcode==="function"){var qr=window.qrcode(0,"M");qr.addData(link);qr.make();var img=document.createElement("img");img.alt="房間邀請 QR Code";img.src=qr.createDataURL(5,0);img.style.maxWidth="100%";q.appendChild(img);}else{q.textContent="QR Code 元件尚未載入";}}catch(_){q.textContent="QR Code 產生失敗";}
   openModal("wtInviteFeatureModal");
 }
 
-function openQueueMode(){
-  var s=st(),settings=s.room&&s.room.settings||window.WT_ROOM_ACCESS&&window.WT_ROOM_ACCESS.state&&window.WT_ROOM_ACCESS.state.meta&&window.WT_ROOM_ACCESS.state.meta.settings||{},current=String(settings.queueMode||"normal");
-  var body=modal("wtQueueModeModal","佇列播放模式",'<label>播放模式<select id="wtQueueModeSelect"><option value="normal" '+(current==="normal"?"selected":"")+'>依序播放</option><option value="repeat_one" '+(current==="repeat_one"?"selected":"")+'>重播目前影片</option><option value="shuffle" '+(current==="shuffle"?"selected":"")+'>隨機播放下一部</option></select></label><div class="small muted" style="margin-top:10px">設定會同步到房間，影片播完後由房主依此規則處理下一部。</div><div class="wt-feature-actions"><button id="wtQueueModeSave" class="primary-btn">儲存</button></div>');
-  body.querySelector("#wtQueueModeSave").onclick=async function(){try{if(!s.isOwner&&!window.WT_ROOM_ACCESS?.isCohost?.(s.uid))throw new Error("只有房主或 Co-host 可以設定佇列模式");var mode=$("wtQueueModeSelect").value;if(!["normal","repeat_one","shuffle"].includes(mode))throw new Error("佇列模式無效");await db.ref("roomMeta/"+roomId()+"/settings").update({queueMode:mode});if(s.room)s.room.settings=Object.assign({},s.room.settings||{},{queueMode:mode});toast(mode==="repeat_one"?"已設定重播目前影片":mode==="shuffle"?"已設定隨機播放":"已設定依序播放");close("wtQueueModeModal");}catch(e){toast(e.message||"佇列模式儲存失敗");}};
-}
-
-async function openRoomTools(){
-  var id=roomId(),s=st(),u=user();if(!id||!u)return;if(!s.isOwner)return toast("只有房主可以使用房主工具");
-  var snap=await db.ref("members/"+id).once("value").catch(function(){return null;}),members=snap?.val()||{};
-  var entries=Object.entries(members).filter(function(x){return x[0]!==u.uid;});
-  var body=modal("wtRoomToolsModal","房主工具",'<div class="wt-feature-grid"><label class="full">房間名稱<input id="wtRoomRename" maxlength="40" value="'+esc(s.room?.name||"一起看")+'"></label><label class="full">轉移房主<select id="wtTransferOwner"><option value="">保留目前房主</option>'+entries.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1]?.name||x[0])+'｜'+esc(x[0])+'</option>';}).join("")+'</select></label></div><div class="small muted">轉移後你會成為一般成員，新的房主會接管房間控制權。</div><div class="wt-feature-actions"><button id="wtRoomRenameSave" class="secondary-btn">儲存房名</button><button id="wtTransferOwnerBtn" class="primary-btn">轉移房主</button></div>');
-  body.querySelector("#wtRoomRenameSave").onclick=async function(){try{var name=String($("wtRoomRename").value||"").trim().slice(0,40);if(!name)throw new Error("房間名稱不能為空");var updates={};updates["rooms/"+id+"/name"]=name;updates["roomMeta/"+id+"/name"]=name;await db.ref().update(updates);if(s.room)s.room.name=name;if($("roomTitle"))$("roomTitle").textContent=name;toast("房間名稱已更新");}catch(e){toast(e.message||"房間名稱更新失敗");}};
-  body.querySelector("#wtTransferOwnerBtn").onclick=async function(){var target=$("wtTransferOwner").value;if(!target)return toast("請先選擇新房主");var name=String(members[target]?.name||target);if(!window.confirm("確定把房主權限轉移給「"+name+"」嗎？"))return;try{await db.ref("rooms/"+id+"/owner").set(target);toast("房主已轉移給 "+name);close("wtRoomToolsModal");}catch(e){toast(e.message||"房主轉移失敗");}};
+async function sendRoomInvite(){
+  var id=roomId(),u=user();if(!id||!u)throw new Error("請先進入房間並完成登入");
+  var isCohost=Boolean(window.WT_ROOM_ACCESS&&window.WT_ROOM_ACCESS.isCohost&&window.WT_ROOM_ACCESS.isCohost(u.uid));
+  if(!st().isOwner&&!isCohost)throw new Error("只有房主或 Co-host 可以發送房間邀請");
+  var code=String($("wtInviteFriendCode")&&$("wtInviteFriendCode").value||"").trim().toUpperCase();if(!/^[A-Z0-9]{6}$/.test(code))throw new Error("請輸入有效的好友 ID");
+  var target=(await db.ref("profileCodes/"+code).once("value")).val();if(!target)throw new Error("找不到這個使用者 ID");if(String(target)===String(u.uid))throw new Error("不能邀請自己");
+  var link=wt.roomLink?wt.roomLink(id):location.origin+location.pathname+"?room="+encodeURIComponent(id);
+  var ref=db.ref("roomInvites/"+target).push();
+  await ref.set({inviteId:ref.key,roomId:id,roomName:String(st().room&&st().room.name||"一起看").slice(0,40),toUid:String(target),fromUid:u.uid,fromName:String(wt.currentName&&wt.currentName()||"玩家").slice(0,30),createdAt:firebase.database.ServerValue.TIMESTAMP,status:"pending",link:link});
+  toast("房間邀請已送出");
 }
 
 function ensureRoomTools(){
@@ -174,6 +178,25 @@ function installFriendRequestWatcher(){
   seen.friendReqUid=u.uid;seen.friendReqRef=ref;
 }
 
+function openInvites(){
+  var u=user();if(!u||u.isAnonymous)return toast("請先登入 Google 帳號");
+  db.ref("roomInvites/"+u.uid).once("value").then(function(snap){
+    var list=[];snap.forEach(function(child){var x=child.val();if(x&&x.status==="pending")list.push(Object.assign({key:child.key},x));});
+    list.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0);});
+    var html='<div class="small muted">好友傳給你的房間邀請會保留在這裡。</div><div class="wt-feature-list">';
+    html+=list.length?list.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.roomName||"一起看")+'</strong><div class="small">'+esc(x.fromName||"好友")+' 邀請你加入</div><div class="small muted">'+esc(fmtDate(x.createdAt))+'</div></div><div class="wt-feature-actions" style="margin-top:0"><button class="tiny-btn primary" data-invite-join="'+esc(x.key)+'">加入</button><button class="tiny-btn danger" data-invite-decline="'+esc(x.key)+'">忽略</button></div></div>';}).join(""):'<div class="wt-feature-empty">目前沒有待處理邀請。</div>';
+    html+='</div>';
+    var body=modal("wtInvitesModal","房間邀請",html);
+    body.querySelectorAll("[data-invite-join]").forEach(function(b){b.onclick=async function(){var item=list.find(function(x){return x.key===b.dataset.inviteJoin;});if(!item)return;try{await db.ref("roomInvites/"+u.uid+"/"+item.key+"/status").set("accepted");location.href=location.pathname+"?room="+encodeURIComponent(item.roomId);}catch(e){toast(e.message||"無法加入房間");}};});
+    body.querySelectorAll("[data-invite-decline]").forEach(function(b){b.onclick=async function(){try{await db.ref("roomInvites/"+u.uid+"/"+b.dataset.inviteDecline+"/status").set("declined");openInvites();}catch(e){toast(e.message||"操作失敗");}};});
+  }).catch(function(e){toast(e.message||"載入邀請失敗");});
+}
+function installRoomInviteWatcher(){
+  var u=user();if(!u||u.isAnonymous||!db||window.__WT_ROOM_INVITE_WATCHER_UID===u.uid)return;
+  window.__WT_ROOM_INVITE_WATCHER_UID=u.uid;
+  db.ref("roomInvites/"+u.uid).on("child_added",function(s){var x=s.val();if(!x||x.status!=="pending")return;var k="wt_room_invite:"+u.uid+":"+s.key+":"+String(x.createdAt||"");if(localStorage.getItem(k))return;localStorage.setItem(k,String(Date.now()));if(prefs().roomNotifications)pushNotification("新的房間邀請",String(x.fromName||"好友")+" 邀請你加入「"+String(x.roomName||"一起看")+"」。","room");});
+}
+
 function track(){
   var s=st(),key=String(s.room&&s.room.sourceType||"")+":"+String(s.currentVideoId||"");
   if(s.isPlaying){var x=stats();saveStats({watchSeconds:x.watchSeconds+5,lastAt:Date.now()});}
@@ -194,6 +217,6 @@ function init(){
   setInterval(installFriendRequestWatcher,2000);
   installFriendRequestWatcher();
 }
-wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.pushNotification=pushNotification;
+wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
