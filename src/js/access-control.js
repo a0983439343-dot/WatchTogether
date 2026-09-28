@@ -69,6 +69,7 @@
 
   let auth = null;
   let db = null;
+  let restrictionRefreshTimer = null;
 
   function isMaster(user = state.user) {
     if (!user || user.isAnonymous) return false;
@@ -246,7 +247,32 @@
     } catch (_) {}
   }
 
+  function clearRestrictionRefreshTimer() {
+    if (!restrictionRefreshTimer) return;
+    clearTimeout(restrictionRefreshTimer);
+    restrictionRefreshTimer = null;
+  }
+
+  function scheduleRestrictionRefresh() {
+    clearRestrictionRefreshTimer();
+    const now = Date.now();
+    const expiries = Object.values(state.restrictions || {})
+      .filter(item => isActiveRestriction(item) && item && item.permanent !== true)
+      .map(item => Number(item.until || item.restrictedUntil || 0))
+      .filter(value => Number.isFinite(value) && value > now);
+    if (!expiries.length) return;
+    const next = Math.min(...expiries);
+    const delay = Math.min(2147483647, Math.max(250, next - now + 50));
+    restrictionRefreshTimer = setTimeout(() => {
+      restrictionRefreshTimer = null;
+      renderRestrictionNotice();
+      emit();
+      scheduleRestrictionRefresh();
+    }, delay);
+  }
+
   function detach() {
+    clearRestrictionRefreshTimer();
     Object.values(state.refs).forEach(ref => {
       try { ref && ref.off(); } catch (_) {}
     });
@@ -362,6 +388,7 @@
       state.refs.restrictions.on("value", snapshot => {
         state.restrictions = normalizePolicyMap(snapshot.val());
         renderRestrictionNotice();
+        scheduleRestrictionRefresh();
         emit();
       });
     } catch (_) {}
@@ -477,6 +504,7 @@
       state.loading = false;
       renderMaintenance();
       renderRestrictionNotice();
+      scheduleRestrictionRefresh();
       emit();
       return true;
     } catch (error) {
