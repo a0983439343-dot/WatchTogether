@@ -148,8 +148,10 @@
     const id = roomId();
     if (!id) throw new Error("目前不在房間中");
 
+    const roomName = String(document.getElementById("roomAccessName")?.value || roomState.meta?.name || "一起看").trim().slice(0, 40);
     const visibility = document.getElementById("roomAccessVisibility")?.value === "private" ? "private" : "public";
     const joinPolicy = document.getElementById("roomAccessJoinPolicy")?.value === "application" ? "application" : "open";
+    if (!roomName) throw new Error("房間名稱不能為空");
     const maxMembers = Math.max(2, Math.min(10, Number(document.getElementById("roomAccessMaxMembers")?.value || 2)));
     const locked = document.getElementById("roomAccessLocked")?.checked === true;
     const queueModeValue = document.getElementById("roomAccessQueueMode")?.value || "normal";
@@ -157,13 +159,29 @@
       ? queueModeValue
       : "normal";
 
-    await db.ref("roomMeta/" + id + "/settings").update({
-      visibility,
-      joinPolicy,
-      maxMembers,
-      locked,
-      queueMode
+    await db.ref("roomMeta/" + id).update({
+      name: roomName,
+      settings: {
+        ...(roomState.meta?.settings || {}),
+        visibility,
+        joinPolicy,
+        maxMembers,
+        locked,
+        queueMode
+      }
     });
+    await db.ref("rooms/" + id + "/name").set(roomName);
+
+    if (window.WT_CORE?.state?.room) {
+      window.WT_CORE.state.room.name = roomName;
+      window.WT_CORE.state.room.settings = Object.assign({}, window.WT_CORE.state.room.settings || {}, {
+        visibility,
+        joinPolicy,
+        maxMembers,
+        locked,
+        queueMode
+      });
+    }
 
     await loadRoomAccess();
     showMessage("房間設定已更新");
@@ -264,6 +282,7 @@
     card.innerHTML =
       '<div class="panel-title">房間權限與管理</div>' +
       '<div class="room-access-grid">' +
+        '<label>房間名稱<input id="roomAccessName" maxlength="40" value=""></label>' +
         '<label>可見性<select id="roomAccessVisibility"><option value="public">公開</option><option value="private">私人</option></select></label>' +
         '<label>加入方式<select id="roomAccessJoinPolicy"><option value="open">直接加入</option><option value="application">需要房主審核</option></select></label>' +
         '<label>最多成員<input id="roomAccessMaxMembers" type="number" min="2" max="10" value="2"></label>' +
@@ -311,6 +330,7 @@
     const owner = isOwner() || isMaster();
     const settings = roomState.meta?.settings || {};
 
+    const nameEl = document.getElementById("roomAccessName");
     const visibilityEl = document.getElementById("roomAccessVisibility");
     const joinPolicyEl = document.getElementById("roomAccessJoinPolicy");
     const maxEl = document.getElementById("roomAccessMaxMembers");
@@ -318,13 +338,14 @@
     const queueModeEl = document.getElementById("roomAccessQueueMode");
     const saveEl = document.getElementById("roomAccessSaveBtn");
 
+    if (nameEl) nameEl.value = String(roomState.meta?.name || window.WT_CORE?.state?.room?.name || "一起看").slice(0, 40);
     if (visibilityEl) visibilityEl.value = settings.visibility === "private" ? "private" : "public";
     if (joinPolicyEl) joinPolicyEl.value = settings.joinPolicy === "application" ? "application" : "open";
     if (maxEl) maxEl.value = String(Math.max(2, Math.min(10, Number(settings.maxMembers || 2))));
     if (queueModeEl) queueModeEl.value = ["normal", "repeat_one", "shuffle"].includes(String(settings.queueMode || "")) ? String(settings.queueMode) : "normal";
     if (lockedEl) lockedEl.checked = settings.locked === true;
 
-    [visibilityEl, joinPolicyEl, maxEl, queueModeEl, lockedEl, saveEl].forEach(el => { if (el) el.disabled = !owner; });
+    [nameEl, visibilityEl, joinPolicyEl, maxEl, queueModeEl, lockedEl, saveEl].forEach(el => { if (el) el.disabled = !owner; });
 
     const ownerArea = document.getElementById("roomAccessOwnerArea");
     const cohostArea = document.getElementById("roomAccessCohostArea");
