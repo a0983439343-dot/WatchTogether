@@ -13,6 +13,7 @@ const SITE_URL = String(process.env.WATCHTOGETHER_SITE_URL || "https://a09834393
 const BUG_SERVICE_URL = String(process.env.WATCHTOGETHER_BUG_SERVICE_URL || "https://watchtogether-youtube-proxy-2026.onrender.com").trim().replace(/\/+$/, "");
 const FIREBASE_DATABASE_URL = String(process.env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app").trim();
 const REPOSITORY = String(process.env.GITHUB_REPOSITORY || "").trim();
+const MASTER_UID = "35d45a23-b648-4caf-a6d5-a69112860551";
 const MAX_REPORTS = Math.max(
   1,
   Math.min(5, Number(process.env.AUTONOMOUS_REPAIR_MAX_REPORTS || 3))
