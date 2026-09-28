@@ -1,9 +1,10 @@
-const CACHE_NAME = "wt-shell-20260928-v75";
+const CACHE_NAME = "wt-shell-20260928-v76";
 const ASSETS = [
   "./",
   "./src/css/styles.css",
   "./src/js/app.js",
   "./src/css/enhancements.css",
+  "./src/css/ui-v2.css",
   "./src/js/enhancements.js",
   "./src/js/chat.js",
   "./src/js/i18n.js",
@@ -13,6 +14,7 @@ const ASSETS = [
   "./src/vendor/qrcode-generator.js",
   "./admin/admin.html",
   "./admin/admin.css",
+  "./admin/admin-v2.css",
   "./admin/admin.js"
 ];
 
