@@ -520,7 +520,7 @@
     if (!panel || !toggle || !status || !hint) return;
     const enabled = autonomousMaintenanceEnabled === true;
     toggle.checked = enabled;
-    toggle.disabled = currentRole !== "master";
+    toggle.disabled = !hasAdminPermission("maintenance.autonomous");
     panel.classList.toggle("is-enabled", enabled);
     panel.classList.toggle("is-disabled", !enabled);
     status.textContent = enabled ? "已啟用 · 全自動維護中" : "未啟用";
@@ -565,7 +565,7 @@
   }
 
   async function setAutonomousMaintenance(enabled) {
-    if (currentRole !== "master") {
+    if (!hasAdminPermission("maintenance.autonomous")) {
       renderAutonomousMaintenance();
       return;
     }
@@ -822,7 +822,7 @@
   }
 
   async function upsertScannerFinding(finding, scanResult) {
-    if (!currentUser || !isAdminOperator() || finding?.ok === true) return null;
+    if (!currentUser || !hasAdminPermission("reports.handle") || finding?.ok === true) return null;
     const categoryMap = {
       playback:"playback",
       search:"search",
@@ -938,7 +938,7 @@
   }
 
   async function scanWebsiteAndReports() {
-    if (!currentHasAdminAccess || !isAdminOperator() || reportScanRunning) return;
+    if (!currentHasAdminAccess || !hasAdminPermission("reports.handle") || reportScanRunning) return;
     reportScanRunning = true;
     const banner = $("reportScanBanner");
     if (banner) {
@@ -1003,13 +1003,13 @@
 
   function startReportAutomation() {
     if (reportScanTimer) clearInterval(reportScanTimer);
-    if (!currentHasAdminAccess || !isAdminOperator()) return;
+    if (!currentHasAdminAccess || !hasAdminPermission("reports.handle")) return;
     void scanWebsiteAndReports();
     reportScanTimer = setInterval(() => void scanWebsiteAndReports(), 90000);
   }
 
   async function repairDecisionStart() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) return;
@@ -1030,7 +1030,7 @@
   }
 
   async function recheckCurrentReport() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) return;
