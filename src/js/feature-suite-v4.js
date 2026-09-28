@@ -386,6 +386,7 @@
         '<div class="panel-title">帳號與社交</div>' +
         '<div class="wt-suite-actions">' +
           '<button type="button" class="secondary-btn" data-suite-open="friends">👥 好友</button>' +
+          '<button type="button" class="secondary-btn" data-suite-open="dm">💬 私訊</button>' +
           '<button type="button" class="secondary-btn" data-suite-open="notifications">🔔 通知</button>' +
           '<button type="button" class="secondary-btn" data-suite-open="history">☁️ 歷史</button>' +
           '<button type="button" class="secondary-btn" data-suite-open="settings">⚙️ 完整設定</button>' +
@@ -433,6 +434,7 @@
           return;
         }
         if (action === "friends") return openFeatureById("wtFriendsBtn","openFriends","好友功能目前不可用");
+        if (action === "dm") return openFeatureById("wtSocialV6DmBtn","openDmList","私訊功能目前不可用");
         if (action === "notifications") return openFeatureById("wtFeatureNotificationBtn","openNotifications","通知功能目前不可用");
         if (action === "history") return openFeatureById("wtV3HistoryBtn","openCloudHistory","歷史功能目前不可用");
         if (action === "settings") return openFeatureById("wtSettingsBtn","openSettings","設定功能目前不可用");
