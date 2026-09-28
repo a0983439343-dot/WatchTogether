@@ -551,6 +551,36 @@
         ".write": "auth != null && root.child('members').child($roomId).child(auth.uid).exists() && root.child('rooms').child($roomId).child('owner').val() === auth.uid",
         ".validate": "!newData.exists() || (newData.hasChildren(['volume','updatedAt','updatedByUid']) && newData.child('volume').isNumber() && newData.child('volume').val() >= 0 && newData.child('volume').val() <= 100 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid)"
       }
+    },
+    "watchHistory": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$entryId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.hasChildren(['id','platform','title','lastWatchedAt','position','updatedAt']) && newData.child('id').isString() && newData.child('id').val().length > 0 && newData.child('id').val().length <= 200 && newData.child('platform').isString() && (newData.child('platform').val() === 'youtube' || newData.child('platform').val() === 'vimeo' || newData.child('platform').val() === 'dailymotion' || newData.child('platform').val() === 'twitch') && newData.child('title').isString() && newData.child('title').val().length <= 200 && newData.child('lastWatchedAt').isNumber() && newData.child('lastWatchedAt').val() <= now + 120000 && newData.child('position').isNumber() && newData.child('position').val() >= 0 && newData.child('position').val() <= 864000 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000)"
+        }
+      }
+    },
+    "watchStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.child('watchSeconds').isNumber() && newData.child('watchSeconds').val() >= 0 && newData.child('watchSeconds').val() <= 315360000 && newData.child('videosStarted').isNumber() && newData.child('videosStarted').val() >= 0 && newData.child('videosStarted').val() <= 100000000 && newData.child('roomsJoined').isNumber() && newData.child('roomsJoined').val() >= 0 && newData.child('roomsJoined').val() <= 100000000 && newData.child('messagesSent').isNumber() && newData.child('messagesSent').val() >= 0 && newData.child('messagesSent').val() <= 100000000 && newData.child('lastAt').isNumber() && newData.child('lastAt').val() <= now + 120000 && (!newData.child('platformStarts').exists() || newData.child('platformStarts').hasChildren()))"
+      }
+    },
+    "userSettings": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.child('showOnline').isBoolean() && newData.child('browserNotifications').isBoolean() && newData.child('cloudHistory').isBoolean() && newData.child('cloudStats').isBoolean() && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000)"
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friendships').child(auth.uid).child($uid).exists()) && root.child('userSettings').child($uid).child('showOnline').val() !== false",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('lastSeen').val() <= now + 120000 && (!newData.child('device').exists() || (newData.child('device').isString() && newData.child('device').val().length <= 20)))"
+      }
     }
   }
 }
