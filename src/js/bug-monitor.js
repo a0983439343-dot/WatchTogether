@@ -40,6 +40,17 @@
     }
   }
 
+  async function getAiHeaders() {
+    const user = wt.auth.currentUser;
+    if (!user || user.isAnonymous) return {};
+    try {
+      const token = await user.getIdToken();
+      return {Authorization:"Bearer " + token};
+    } catch (_) {
+      return {};
+    }
+  }
+
   function getVerifyEndpoint() {
     try {
       const config = window.WATCHTOGETHER_CONFIG || {};
@@ -111,7 +122,10 @@
         method:"POST",
         cache:"no-store",
         credentials:"omit",
-        headers:{"Content-Type":"application/json"},
+        headers:{
+        "Content-Type":"application/json",
+        ...(await getAiHeaders())
+      },
         signal:controller.signal,
         body:JSON.stringify(body)
       });
