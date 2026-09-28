@@ -1904,7 +1904,7 @@
       const adminDefaults = [
         "admin.read","users.read","users.update","users.restrict",
         "rooms.read","rooms.manage","chat.read","chat.moderate",
-        "reports.read","reports.manage","analytics.read","ai.use",
+        "reports.read","reports.manage","analytics.read","ai.use","ai.agent",
         "audit.read","audit.write","audit.delete","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
         "chat.dm","youtube.search","youtube.queue","favorites.manage"
@@ -2519,6 +2519,154 @@
     });
   }
 
+  function buildAgentSnapshot() {
+    const safeAccounts = Object.entries(accounts || {}).slice(-120).map(([uid,item]) => ({
+      uid,
+      email: String(item?.email || "").slice(0,320),
+      name: String(item?.displayName || item?.name || "").slice(0,80),
+      enabled: item?.enabled !== false
+    }));
+    const safeRooms = Object.entries(rooms || {}).slice(-120).map(([id,item]) => ({
+      roomId:id,
+      owner:String(item?.owner || "").slice(0,128),
+      name:String(item?.name || "").slice(0,120),
+      sourceType:String(item?.sourceType || "").slice(0,40),
+      updatedAt:Number(item?.updatedAt || item?.createdAt || 0)
+    }));
+    const safeReports = Object.entries(reports || {}).slice(-120).map(([id,item]) => ({
+      id,
+      uid:String(item?.uid || "").slice(0,128),
+      category:String(item?.category || "").slice(0,80),
+      status:String(item?.status || "open").slice(0,40),
+      occurrences:Number(item?.occurrences || 0),
+      fingerprint:String(item?.fingerprint || "").slice(0,80),
+      details:String(item?.details || "").slice(0,600)
+    }));
+    const safeAudit = Object.entries(auditLogs || {}).slice(-120).map(([id,item]) => ({
+      id,
+      action:String(item?.action || "").slice(0,80),
+      actorUid:String(item?.actorUid || "").slice(0,128),
+      actorEmail:String(item?.actorEmail || "").slice(0,320),
+      targetUid:String(item?.targetUid || "").slice(0,128),
+      targetName:String(item?.targetName || "").slice(0,120),
+      createdAt:Number(item?.createdAt || 0),
+      details:String(item?.details || "").slice(0,600)
+    }));
+    return {
+      generatedAt:Date.now(),
+      currentAdmin:{uid:String(currentUser?.uid || ""),role:String(currentRole || ""),roleSource:String(currentRoleSource || "")},
+      accounts:safeAccounts,
+      rooms:safeRooms,
+      reports:safeReports,
+      auditLogs:safeAudit
+    };
+  }
+
+  async function executeAgentAction(action,args) {
+    const name = String(action || "");
+    const data = args && typeof args === "object" ? args : {};
+    const uid = String(data.uid || "").trim();
+    const permission = String(data.permission || "").trim();
+    const reason = String(data.reason || "").trim().slice(0,500);
+
+    if (name === "set_user_restriction") {
+      if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
+      if (!uid || uid === MASTER_UID || uid === currentUser?.uid) throw new Error("無效或禁止的 UID");
+      if (!permission) throw new Error("缺少限制功能");
+      if (!reason) throw new Error("限制原因不可空白");
+      const duration = String(data.durationMs || "3600000");
+      const permanent = duration === "permanent";
+      const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
+      await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set({
+        enabled:true, permanent, until, reason,
+        createdAt:firebase.database.ServerValue.TIMESTAMP,
+        createdByUid:currentUser.uid,
+        createdByEmail:currentUser.email || ""
+      });
+      await loadAccessControl();
+      await writeAuditLog("access.user.restriction",uid,permission,reason + " · " + (permanent ? "永久" : formatDate(until)));
+      return;
+    }
+
+    if (name === "clear_user_restriction") {
+      if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
+      if (!uid || !permission) throw new Error("缺少 UID 或功能");
+      await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).remove();
+      await loadAccessControl();
+      await writeAuditLog("access.user.restriction.clear",uid,permission,"AI Agent 解除功能限制");
+      return;
+    }
+
+    if (name === "set_feature_flag") {
+      if (!isMasterOperator()) throw new Error("只有最高管理員可以修改 Feature Flag");
+      const flag = encodeAccessPermission(permission);
+      if (!flag) throw new Error("缺少 Feature Flag 名稱");
+      await db.ref("admin/featureFlags/" + flag).set({
+        enabled:data.enabled !== false,
+        reason,
+        updatedAt:firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid:currentUser.uid,
+        updatedByEmail:currentUser.email || ""
+      });
+      await loadAccessControl();
+      await writeAuditLog("feature.flag",currentUser.uid,flag,(data.enabled === false ? "關閉 " : "啟用 ") + flag + (reason ? " · " + reason : ""));
+      return;
+    }
+
+    if (name === "assign_role") {
+      if (!isMasterOperator()) throw new Error("只有最高管理員可以指派角色");
+      if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
+      const role = safeKey(data.role,80);
+      if (!role || !accessRoles[role]) throw new Error("角色不存在");
+      await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(role);
+      await loadAccessControl();
+      await writeAuditLog("access.role.assign",uid,role,"AI Agent 指派自訂角色");
+      return;
+    }
+
+    if (name === "set_override") {
+      if (!isMasterOperator()) throw new Error("只有最高管理員可以設定個人 Allow / Deny");
+      if (!uid || uid === MASTER_UID || !permission) throw new Error("無效或禁止的目標");
+      const effect = String(data.effect || "").toLowerCase();
+      if (effect !== "allow" && effect !== "deny") throw new Error("effect 必須是 allow 或 deny");
+      await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set(effect);
+      await loadAccessControl();
+      await writeAuditLog("access.permission.override",uid,permission,effect.toUpperCase() + " " + permission);
+      return;
+    }
+
+    if (name === "set_whitelist") {
+      if (!isMasterOperator()) throw new Error("只有最高管理員可以管理白名單");
+      if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
+      const role = data.role === "viewer" ? "viewer" : "admin";
+      await db.ref("admin/whitelistByUid/" + safeKey(uid,128)).set({
+        uid,
+        email:String(data.email || "").slice(0,320),
+        role,
+        enabled:data.enabled !== false,
+        addedAt:firebase.database.ServerValue.TIMESTAMP,
+        updatedAt:firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid:currentUser.uid
+      });
+      await loadWhitelist();
+      await writeAuditLog(data.enabled === false ? "whitelist.toggle" : "whitelist.add",uid,role,"AI Agent 更新白名單");
+      return;
+    }
+
+    if (name === "delete_audit") {
+      if (!currentCan("audit.delete")) throw new Error("沒有 audit.delete 權限");
+      if (!uid && !data.id) throw new Error("缺少 Audit ID");
+      const id = safeKey(data.id || uid,256);
+      if (!id) throw new Error("無效的 Audit ID");
+      await db.ref("admin/auditLogs/" + id).remove();
+      await loadAuditLogs();
+      await writeAuditLog("audit.delete",id,"Audit Log","AI Agent 刪除操作紀錄 " + id);
+      return;
+    }
+
+    throw new Error("不支援的 AI Agent 操作");
+  }
+
   function restoreAdminSection() {
     let section = String(window.location.hash || "").replace(/^#/, "").trim();
     if (!section) {
@@ -2693,6 +2841,25 @@
       });
     });
   }
+
+  window.WT_ADMIN_CONTEXT = {
+    isAuthorized: () => Boolean(currentHasAdminAccess),
+    hasPermission: (permission) => currentCan(permission),
+    snapshot: () => buildAgentSnapshot(),
+    executeAction: (action,args) => executeAgentAction(action,args),
+    overview: () => buildAgentSnapshot().currentAdmin,
+    searchUsers: (query) => {
+      const q=String(query||"").trim().toLowerCase();
+      return Object.entries(accounts||{}).filter(([uid,item]) => !q || [uid,item?.email,item?.displayName,item?.name].join(" ").toLowerCase().includes(q)).slice(0,50).map(([uid,item])=>({uid,email:item?.email||"",name:item?.displayName||item?.name||""}));
+    },
+    searchRooms: (query) => {
+      const q=String(query||"").trim().toLowerCase();
+      return Object.entries(rooms||{}).filter(([id,item]) => !q || [id,item?.name,item?.owner,item?.sourceType].join(" ").toLowerCase().includes(q)).slice(0,50).map(([id,item])=>({roomId:id,name:item?.name||"",owner:item?.owner||"",sourceType:item?.sourceType||""}));
+    },
+    reportsSummary: () => Object.entries(reports||{}).slice(-50).map(([id,item])=>({id,status:item?.status||"open",category:item?.category||"",uid:item?.uid||"",details:item?.details||""})),
+    recentAudit: () => Object.entries(auditLogs||{}).slice(-50).map(([id,item])=>({id,action:item?.action||"",actorUid:item?.actorUid||"",targetUid:item?.targetUid||"",createdAt:item?.createdAt||0,details:item?.details||""})),
+    maintenance: () => window.WT_ACCESS_CONTROL?.getMaintenance?.() || {enabled:false}
+  };
 
   setupEvents();
   initialize();
