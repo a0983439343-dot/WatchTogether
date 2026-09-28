@@ -656,22 +656,29 @@
     const canWrite = currentCan("audit.write") ||
       (normalizedAction === "audit.delete" && currentCan("audit.delete"));
     if (!currentUser || !canWrite) return false;
-    try {
-      await db.ref("admin/auditLogs").push({
-        action:normalizedAction,
-        actorUid:String(currentUser?.uid || "").slice(0,128),
-        actorEmail:String(currentUser?.email || "").slice(0,320),
-        actorRole:String(currentRole || "").slice(0,20),
-        targetUid:String(targetUid || "").slice(0,128),
-        targetName:String(targetName || "").slice(0,200),
-        details:String(details || "").slice(0,1000),
-        createdAt:firebase.database.ServerValue.TIMESTAMP
-      });
-      return true;
-    } catch (error) {
-      console.warn("寫入管理員操作紀錄失敗:", error);
-      return false;
+    const payload = {
+      action:normalizedAction,
+      actorUid:String(currentUser?.uid || "").slice(0,128),
+      actorEmail:String(currentUser?.email || "").slice(0,320),
+      actorRole:String(currentRole || "").slice(0,40),
+      targetUid:String(targetUid || "").slice(0,128),
+      targetName:String(targetName || "").slice(0,200),
+      details:String(details || "").slice(0,1000),
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    };
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await db.ref("admin/auditLogs").push(payload);
+        return true;
+      } catch (error) {
+        if (attempt === 3) {
+          console.warn("寫入管理員操作紀錄失敗:", error);
+          return false;
+        }
+        await new Promise(resolve => setTimeout(resolve, 250 * attempt));
+      }
     }
+    return false;
   }
 
   async function loadAuditLogs() {
