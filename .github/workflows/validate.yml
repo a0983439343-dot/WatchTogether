@@ -26,6 +26,12 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Check access control core syntax
+        run: node --check src/js/access-control.js
+
+      - name: Check room access module syntax
+        run: node --check src/js/room-access.js
+
       - name: Check src/js/app.js syntax
         run: node --check src/js/app.js
 
@@ -53,6 +59,16 @@ jobs:
       - name: Validate JSON files
         run: |
           node -e "JSON.parse(require('fs').readFileSync('config/database.rules.json','utf8')); JSON.parse(require('fs').readFileSync('firebase.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8')); console.log('JSON OK')"
+
+      - name: Check Firebase Rules root structure
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const parsed = JSON.parse(fs.readFileSync("config/database.rules.json", "utf8"));
+          if (!parsed.rules || typeof parsed.rules !== "object") throw new Error("Firebase Rules root is missing.");
+          if (parsed.rules.rules) throw new Error("Nested rules.rules root detected.");
+          console.log("Firebase Rules root structure OK");
+          NODE
 
       - name: Install rules test dependencies
         run: npm install --no-audit --no-fund
