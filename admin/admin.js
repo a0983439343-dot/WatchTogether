@@ -1935,7 +1935,10 @@
     "chat.dm",
     "youtube.search",
     "youtube.queue",
-    "favorites.manage"
+    "favorites.manage",
+    "maintenance.manage",
+    "featureflags.manage",
+    "settings.manage"
   ];
 
   let accessRoles = {};
@@ -1959,7 +1962,8 @@
         "reports.read","reports.manage","analytics.read","ai.use","ai.agent",
         "audit.read","audit.write","audit.delete","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
-        "chat.dm","youtube.search","youtube.queue","favorites.manage"
+        "chat.dm","youtube.search","youtube.queue","favorites.manage",
+        "maintenance.manage","featureflags.manage","settings.manage"
       ];
       return adminDefaults.includes(key);
     }
@@ -2158,12 +2162,13 @@
     hint.textContent = active
       ? "原因：" + String(item.reason || "未提供") + " · 預計恢復：" + (Number(item.restoreAt || 0) > 0 ? formatDate(item.restoreAt) : "未設定")
       : "目前沒有啟用網站維護模式。";
-    if (openBtn) openBtn.disabled = !isMasterOperator() || active;
-    if (closeBtn) closeBtn.disabled = !isMasterOperator() || !active;
+    const canManageMaintenance = currentCan("maintenance.manage");
+    if (openBtn) openBtn.disabled = !canManageMaintenance || active;
+    if (closeBtn) closeBtn.disabled = !canManageMaintenance || !active;
   }
 
   async function setSiteMaintenance(enabled) {
-    if (!isMasterOperator()) throw new Error("只有最高管理員可以控制網站維護模式");
+    if (!currentCan("maintenance.manage")) throw new Error("目前管理員沒有網站維護權限");
     const passwordEl = $("maintenancePassword");
     const reasonEl = $("maintenanceReason");
     const restoreEl = $("maintenanceRestoreAt");
@@ -2216,7 +2221,7 @@
           : data.error === "invalid_password"
             ? "維護密碼錯誤。剩餘嘗試次數：" + String(data.attemptsRemaining ?? "—")
             : data.error === "master_only"
-              ? "只有最高管理員可以操作。"
+              ? "目前管理員沒有網站維護權限。"
               : String(data.message || data.error || "維護模式操作失敗");
       throw new Error(message);
     }
