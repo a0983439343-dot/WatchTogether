@@ -7,7 +7,7 @@
   const SET_KEY="wt_v3_settings_v1", LOCAL_NOTIF="wt_notifications_v2", LOCAL_HIST="wt_watch_history_v2", LOCAL_STATS="wt_stats_v1";
   const PLATFORMS=new Set(["youtube","vimeo","dailymotion","twitch"]);
   let notifRef=null,presenceRef=null,cloudNotifs={},cloudHistoryData={};
-  let notifReady=false,lastHistKey="",lastHistAt=0,statsAt=0;
+  let notifReady=false,lastHistKey="",lastHistAt=0,statsAt=0,lastTrackedRoom="",lastTrackedVideo="";
 
   const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
   const toast=m=>{try{if(typeof wt.toast==="function")return wt.toast(m);if(typeof window.toast==="function")window.toast(m)}catch(_){}};
@@ -16,6 +16,7 @@
   const local=(k,f)=>{try{const v=JSON.parse(localStorage.getItem(k)||"");return v==null?f:v}catch(_){return f}};
   const saveLocal=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(_){return false}};
   const settings=()=>Object.assign({showOnline:true,browserNotifications:true,cloudHistory:true,cloudStats:true},local(SET_KEY,{}));
+  async function loadUserSettings(){const u=user();if(!u||!db)return;try{const snap=await db.ref("userSettings/"+u.uid).once("value");const cloud=snap.val();if(cloud&&typeof cloud==="object"){const merged={showOnline:cloud.showOnline!==false,browserNotifications:cloud.browserNotifications!==false,cloudHistory:cloud.cloudHistory!==false,cloudStats:cloud.cloudStats!==false};saveLocal(SET_KEY,Object.assign({},settings(),merged));}}catch(e){console.warn("雲端使用設定讀取失敗",e)}}
   const key=v=>v?.id?String(v.platform||"youtube").toLowerCase()+":"+String(v.id):"";
   const safe=v=>String(v||"").slice(0,180).replace(/[.#$\[\]/]/g,"_");
   const date=v=>{const n=Number(v||0);return n>0?new Date(n).toLocaleString("zh-TW"):"—"};
@@ -216,8 +217,22 @@
 
   function track(){
     setInterval(()=>{
-      const v=video(),x=stats();if(!v?.id)return;
-      if(st().isPlaying){x.watchSeconds=Number(x.watchSeconds||0)+5;x.lastAt=Date.now();saveLocal(LOCAL_STATS,x);void recordCloudHistory(false);void syncStats()}
+      const s=st(),v=video(),x=stats();
+      if(s.roomId&&String(s.roomId)!==lastTrackedRoom){
+        lastTrackedRoom=String(s.roomId);
+        let seen=[];try{seen=JSON.parse(sessionStorage.getItem("wt_v3_rooms_seen")||"[]")}catch(_){}
+        if(!Array.isArray(seen))seen=[];
+        if(!seen.includes(lastTrackedRoom)){seen.push(lastTrackedRoom);while(seen.length>50)seen.shift();try{sessionStorage.setItem("wt_v3_rooms_seen",JSON.stringify(seen))}catch(_){}x.roomsJoined=Number(x.roomsJoined||0)+1;}
+      }
+      const vk=key(v);
+      if(vk&&vk!==lastTrackedVideo){
+        lastTrackedVideo=vk;
+        let seen=[];try{seen=JSON.parse(sessionStorage.getItem("wt_v3_videos_seen")||"[]")}catch(_){}
+        if(!Array.isArray(seen))seen=[];
+        if(!seen.includes(vk)){seen.push(vk);while(seen.length>100)seen.shift();try{sessionStorage.setItem("wt_v3_videos_seen",JSON.stringify(seen))}catch(_){}x.videosStarted=Number(x.videosStarted||0)+1;const p=String(v.platform||"youtube").toLowerCase();x.platformStarts[p]=Number(x.platformStarts[p]||0)+1;}
+      }
+      if(v?.id&&s.isPlaying){x.watchSeconds=Number(x.watchSeconds||0)+5;x.lastAt=Date.now();saveLocal(LOCAL_STATS,x);void recordCloudHistory(false);void syncStats();}
+      else if(Number(x.roomsJoined||0)>0||Number(x.videosStarted||0)>0){saveLocal(LOCAL_STATS,x);void syncStats();}
     },5000);
   }
 
@@ -225,8 +240,8 @@
     if(document.documentElement.dataset.wtV3Init)return;
     document.documentElement.dataset.wtV3Init="1";
     const style=document.createElement("style");style.id="wtV3Style";style.textContent='.wt-v3-card{width:min(920px,calc(100vw - 24px));max-height:90vh;overflow:auto}.wt-v3-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.wt-v3-list{display:grid;gap:8px}.wt-v3-row{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px;border:1px solid rgba(148,163,184,.14);border-radius:12px;background:rgba(15,23,42,.28);color:inherit;text-align:left}.wt-v3-row.unread{border-color:rgba(96,165,250,.45)}.wt-v3-row>div{display:grid;gap:3px;min-width:0}.wt-v3-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}.wt-v3-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wt-v3-check{display:flex;gap:8px;align-items:center;padding:11px;border:1px solid rgba(148,163,184,.14);border-radius:12px}.wt-v3-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.wt-v3-stat{padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:12px}.wt-v3-stat span{display:block;font-size:11px;color:#94a3b8}.wt-v3-stat strong{display:block;margin-top:4px}.wt-v3-online{font-size:12px;color:#94a3b8;white-space:nowrap}.wt-v3-online.on{color:#86efac}.wt-v3-empty{padding:18px;text-align:center;color:#94a3b8}@media(max-width:650px){.wt-v3-stat-grid{grid-template-columns:1fr 1fr}}@media(max-width:430px){.wt-v3-grid,.wt-v3-stat-grid{grid-template-columns:1fr}}';document.head.appendChild(style);
-    patchPush();startNotifications();void startPresence();void loadHistory();track();setInterval(()=>{ensureTopbar();patchPush();void presenceBeat()},25000);ensureTopbar();
-    auth?.onAuthStateChanged?.(u=>{startNotifications();void startPresence();if(u&&!u.isAnonymous)void loadHistory()});
+    patchPush();startNotifications();void loadUserSettings().then(()=>startPresence());void loadHistory();track();setInterval(()=>{ensureTopbar();patchPush();void presenceBeat()},25000);ensureTopbar();
+    auth?.onAuthStateChanged?.(u=>{startNotifications();void loadUserSettings().then(()=>startPresence());if(u&&!u.isAnonymous)void loadHistory()});
   }
 
   function ensureTopbar(){
