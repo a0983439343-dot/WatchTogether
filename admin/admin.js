@@ -1849,7 +1849,7 @@
     toast(permanent ? "已永久封鎖使用者" : "已封鎖使用者");
   }
 
-   async function unblockUser(uid) {
+   async function unblockUser(uid, options = {}) {
      if (!currentCan("users.restrict")) return;
      const item = accounts[uid];
      if (!item) return;
@@ -1857,7 +1857,6 @@
        toast("最高管理員不能解除或修改封鎖");
        return;
      }
-
 
      const block = blocks[uid];
      if (!block) {
@@ -1869,21 +1868,21 @@
        throw new Error("這個封鎖是由權限更高的管理員建立，你不能自行解除");
      }
 
-     if (!window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
+     if (options.skipConfirm !== true && !window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
      await db.ref("admin/blocksByUid/" + uid).remove();
      await loadBlocks();
-     void writeAuditLog("unblock", uid, item.displayName || item.email || uid, "解除封鎖");
+     void writeAuditLog("unblock", uid, item.displayName || item.email || uid, options.source === "ai" ? "AI Agent 解除封鎖" : "解除封鎖");
      toast("已解除封鎖");
    }
 
-  async function deleteRoom(roomId) {
+  async function deleteRoom(roomId, options = {}) {
     if (!currentCan("rooms.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
     const name = item.name || item.__meta?.name || "一起看";
 
-    if (!window.confirm("確定刪除房間「" + name + "」(" + key + ")？\n房間與播放、聊天、成員、待播放資料都會一起刪除。")) {
+    if (options.skipConfirm !== true && !window.confirm("確定刪除房間「" + name + "」(" + key + ")？\n房間與播放、聊天、成員、待播放資料都會一起刪除。")) {
       return;
     }
 
@@ -1896,7 +1895,7 @@
     delete rooms[key];
     renderRooms();
     updateStats();
-    void writeAuditLog("room.delete", key, name, "刪除房間");
+    void writeAuditLog("room.delete", key, name, options.source === "ai" ? "AI Agent 刪除房間" : "刪除房間");
     toast("房間已刪除");
   }
 
@@ -2617,6 +2616,34 @@
     const uid = String(data.uid || "").trim();
     const permission = String(data.permission || "").trim();
     const reason = String(data.reason || "").trim().slice(0,500);
+
+    if (name === "block_user") {
+      if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
+      if (!uid || uid === MASTER_UID || uid === currentUser?.uid) throw new Error("無效或禁止的 UID");
+      if (!accounts[uid]) throw new Error("找不到指定使用者");
+      const rawDuration = String(data.durationMs || "3600000");
+      const allowedDurations = new Set(["600000","3600000","86400000","604800000","2592000000","permanent"]);
+      if (!allowedDurations.has(rawDuration)) throw new Error("不支援的封鎖時間");
+      $("blockUserUid").value = uid;
+      $("blockDuration").value = rawDuration;
+      await confirmBlock();
+      return;
+    }
+
+    if (name === "unblock_user") {
+      if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
+      if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
+      await unblockUser(uid, {skipConfirm:true, source:"ai"});
+      return;
+    }
+
+    if (name === "delete_room") {
+      if (!currentCan("rooms.manage")) throw new Error("沒有 rooms.manage 權限");
+      const roomId = String(data.roomId || "").trim().toUpperCase();
+      if (!roomId) throw new Error("缺少房間 ID");
+      await deleteRoom(roomId, {skipConfirm:true, source:"ai"});
+      return;
+    }
 
     if (name === "set_user_restriction") {
       if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
