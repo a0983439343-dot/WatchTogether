@@ -57,6 +57,12 @@
   }
 
   async function translate(text){
+    try{
+      const snap=await window.firebase?.database?.().ref("system/featureFlags/translation").once("value");
+      if(snap && snap.val()===false) throw new Error("目前暫停使用聊天翻譯");
+    }catch(error){
+      if(error?.message==="目前暫停使用聊天翻譯") throw error;
+    }
     if (window.WT_ENHANCEMENTS?.isFeatureBlocked && await window.WT_ENHANCEMENTS.isFeatureBlocked("translation")) {
       throw new Error("你的帳號目前無法使用聊天翻譯");
     }
