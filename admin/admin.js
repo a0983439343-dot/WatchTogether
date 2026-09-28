@@ -30,6 +30,8 @@
   let reportsRef = null;
   let auditLogsRef = null;
   let aiStatus = null;
+  let chatModerationRoomId = "";
+  let chatModerationMessages = {};
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -245,6 +247,98 @@
     rooms = valid;
     renderRooms();
     updateStats();
+  }
+
+  async function loadChatModeration() {
+    if (!currentCan("chat.moderate")) {
+      chatModerationRoomId = "";
+      chatModerationMessages = {};
+      renderChatModeration();
+      throw new Error("目前沒有 chat.moderate 權限");
+    }
+    const roomId = String($("chatModerationRoomId")?.value || "").trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(roomId)) {
+      throw new Error("請輸入 6 碼房間 ID");
+    }
+    const snapshot = await db.ref("chat/" + roomId).once("value");
+    chatModerationRoomId = roomId;
+    chatModerationMessages = snapshot.val() || {};
+    renderChatModeration();
+  }
+
+  function renderChatModeration() {
+    const body = $("chatModerationBody");
+    const count = $("chatModerationCount");
+    if (!body || !count) return;
+
+    const query = String($("chatModerationSearch")?.value || "").trim().toLowerCase();
+    const rows = Object.entries(chatModerationMessages || {})
+      .filter(([id,item]) => {
+        if (!item || typeof item !== "object") return false;
+        const hay = [
+          id,
+          item.uid,
+          item.name,
+          item.text,
+          item.type,
+          item.sticker
+        ].join(" ").toLowerCase();
+        return !query || hay.includes(query);
+      })
+      .sort((a,b) => Number(a[1]?.createdAt || 0) - Number(b[1]?.createdAt || 0));
+
+    count.textContent = rows.length + " 筆";
+    body.innerHTML = rows.length
+      ? rows.map(([id,item]) => {
+          const type = String(item.type || "text");
+          let content = "";
+          if (type === "image") content = "📷 圖片";
+          else if (type === "audio") content = "🎤 語音";
+          else if (type === "sticker") content = "貼圖：" + String(item.sticker || "");
+          else content = String(item.text || "");
+          return '<tr>' +
+            '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
+            '<td><div class="primary-text">' + escapeHtml(item.name || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || "") + '</span></td>' +
+            '<td><span class="chat-type">' + escapeHtml(type) + '</span></td>' +
+            '<td class="chat-moderation-content">' + escapeHtml(content) + '</td>' +
+            '<td><button class="btn danger" type="button" data-chat-delete="' + escapeHtml(id) + '">🗑️ 刪除</button></td>' +
+          '</tr>';
+        }).join("")
+      : '<tr><td colspan="5" class="muted">目前沒有符合條件的聊天訊息。</td></tr>';
+
+    body.querySelectorAll("[data-chat-delete]").forEach(button => {
+      button.addEventListener("click", () => deleteChatModerationMessage(button.dataset.chatDelete)
+        .catch(error => {
+          console.error(error);
+          toast(error?.message || "刪除聊天訊息失敗");
+        }));
+    });
+  }
+
+  async function deleteChatModerationMessage(messageId) {
+    if (!currentCan("chat.moderate")) throw new Error("目前沒有 chat.moderate 權限");
+    const roomId = String(chatModerationRoomId || "").trim().toUpperCase();
+    const id = String(messageId || "").trim();
+    const item = chatModerationMessages?.[id];
+    if (!/^[A-Z0-9]{6}$/.test(roomId) || !id || !item) throw new Error("找不到要刪除的聊天訊息");
+
+    const confirmed = window.confirm(
+      "確定要刪除這則聊天訊息嗎？\n\n" +
+      "使用者：" + String(item.name || item.uid || "—") + "\n" +
+      "內容：" + String(item.text || (item.type === "image" ? "圖片" : item.type === "audio" ? "語音" : item.sticker || item.type || "—")).slice(0, 300)
+    );
+    if (!confirmed) return;
+
+    await db.ref("chat/" + roomId + "/" + id).remove();
+    await writeAuditLog(
+      "chat.message.delete",
+      String(item.uid || ""),
+      String(item.name || item.uid || ""),
+      "房間 " + roomId + " 刪除聊天訊息 " + id
+    );
+    delete chatModerationMessages[id];
+    renderChatModeration();
+    toast("聊天訊息已刪除，操作已記錄");
   }
 
   function renderRooms() {
@@ -2362,6 +2456,8 @@
       reports = {};
       auditLogs = {};
       reportHistory = {};
+      chatModerationRoomId = "";
+      chatModerationMessages = {};
 
       hide("loadingScreen");
       hide("setupScreen");
@@ -2496,6 +2592,21 @@
     ]).then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("roomsRefreshBtn")?.addEventListener("click", () => loadRooms().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
+    $("chatModerationLoadBtn")?.addEventListener("click", () => loadChatModeration().then(() => toast("聊天紀錄已載入")).catch(error => {
+      console.error(error);
+      toast(error?.message || "聊天紀錄載入失敗");
+    }));
+    $("chatModerationRefreshBtn")?.addEventListener("click", () => loadChatModeration().then(() => toast("聊天紀錄已重新整理")).catch(error => {
+      console.error(error);
+      toast(error?.message || "聊天紀錄重新整理失敗");
+    }));
+    $("chatModerationSearch")?.addEventListener("input", renderChatModeration);
+    $("chatModerationRoomId")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void loadChatModeration().catch(error => toast(error?.message || "聊天紀錄載入失敗"));
+      }
+    });
 
     $("reportsRefreshBtn")?.addEventListener("click", () => loadReports().then(() => toast("問題回報已重新整理")).catch(error => {
       console.error(error);
