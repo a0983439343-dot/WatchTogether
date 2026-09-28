@@ -537,12 +537,27 @@ async function authorizeSearchPolicy(
   }
 
   try {
-    const [restriction, flag, assignedRole, whitelist] = await Promise.all([
+    const [restriction, flag, override, assignedRole, whitelist, block] = await Promise.all([
       fetchFirebaseJson(databaseUrl, "admin/access/restrictionsByUid/" + uid + "/youtube__search", idToken),
       fetchFirebaseJson(databaseUrl, "admin/featureFlags/youtube__search", idToken),
+      fetchFirebaseJson(databaseUrl, "admin/access/permissionsByUid/" + uid + "/youtube__search", idToken),
       fetchFirebaseJson(databaseUrl, "admin/access/roleByUid/" + uid, idToken),
-      fetchFirebaseJson(databaseUrl, "admin/whitelistByUid/" + uid, idToken)
+      fetchFirebaseJson(databaseUrl, "admin/whitelistByUid/" + uid, idToken),
+      fetchFirebaseJson(databaseUrl, "admin/blocksByUid/" + uid, idToken)
     ]);
+
+    if (block && typeof block === "object" && (
+      block.permanent === true ||
+      Number(block.blockedUntil || 0) === 0 ||
+      Number(block.blockedUntil || 0) > Date.now()
+    )) {
+      return {
+        ok:false,
+        status:403,
+        error:"user_blocked",
+        message:"目前帳號已被停用。"
+      };
+    }
 
     if (activeRestriction(restriction)) {
       return {
@@ -560,6 +575,21 @@ async function authorizeSearchPolicy(
         error:"search_feature_disabled",
         message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)
       };
+    }
+
+    const overrideEffect = String(
+      typeof override === "string" ? override : override?.effect || ""
+    ).trim().toLowerCase();
+    if (overrideEffect === "deny") {
+      return {
+        ok:false,
+        status:403,
+        error:"search_permission_denied",
+        message:"目前帳號被禁止使用 YouTube 搜尋。"
+      };
+    }
+    if (overrideEffect === "allow") {
+      return {ok:true};
     }
 
     const roleId = String(assignedRole || "").trim();
