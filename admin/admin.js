@@ -522,8 +522,8 @@
   }
 
   async function deleteAuditLog(id) {
-    if (!isAdminOperator()) {
-      toast("沒有刪除操作紀錄的權限");
+    if (currentRole !== "master") {
+      toast("只有最高管理員可以刪除操作紀錄");
       return;
     }
     const key = String(id || "").trim();
@@ -576,7 +576,7 @@
           const label = AUDIT_ACTION_LABELS[action] || action;
           const actor = String(item.actorEmail || item.actorUid || "—");
           const target = String(item.targetName || item.targetUid || "—");
-          const canDelete = isAdminOperator();
+          const canDelete = currentRole === "master";
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
