@@ -1,0 +1,1 @@
+Temporary validation marker for WatchTogether 2.0 rules and regression checks.
