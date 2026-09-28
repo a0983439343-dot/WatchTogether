@@ -58,6 +58,9 @@ jobs:
       - name: Check feature completion v2 syntax
         run: node --check src/js/feature-completion-v2.js
 
+      - name: Check feature completion v3 syntax
+        run: node --check src/js/feature-complete-v3.js
+
       - name: Check room chat rich module syntax
         run: node --check src/js/room-chat-rich.js
 
@@ -122,11 +125,15 @@ jobs:
           const index = fs.readFileSync('index.html', 'utf8');
           const sw = fs.readFileSync('sw.js', 'utf8');
           const featureV2 = fs.readFileSync('src/js/feature-completion-v2.js', 'utf8');
+          const featureV3 = fs.readFileSync('src/js/feature-complete-v3.js', 'utf8');
           if (/<input[^>]+id="videoSearchInput"|<button[^>]+id="videoSearchBtn"/.test(index)) throw new Error('Homepage video search UI regression detected.');
           if (!featureV2.includes('wt_platform_search_history_v2') || !featureV2.includes('wt_watch_history_v2')) throw new Error('Feature completion v2 history layer missing.');
           const rules = fs.readFileSync('config/database.rules.json', 'utf8');
           if (!rules.includes('roomChatReplies') || !rules.includes('roomChatEdits') || !rules.includes('roomChatPins') || !rules.includes('roomChatReactions')) throw new Error('Room chat rich rules missing.');
           if (!sw.includes('./src/js/feature-completion-v2.js')) throw new Error('Feature completion v2 is not precached.');
+          if (!sw.includes('./src/js/feature-complete-v3.js')) throw new Error('Feature completion v3 is not precached.');
+          if (!index.includes('feature-complete-v3.js')) throw new Error('Feature completion v3 is not loaded by the frontend.');
+          if (!featureV3.includes('watchHistory') || !featureV3.includes('watchStats') || !featureV3.includes('notifications') || !featureV3.includes('presence') || !featureV3.includes('userSettings')) throw new Error('Feature completion v3 cloud layers are incomplete.');
 
           if (!app.includes('requestPlaybackControl(')) throw new Error('Member playback request function missing.');
           if (!app.includes('attachPlaybackControlRequestListener(')) throw new Error('Owner control-request listener missing.');
