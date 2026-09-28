@@ -119,10 +119,81 @@ function openFavorites(){
 }
 
 async function openReport(category){
-  var u=user();if(!u) return toast("請先完成登入");
-  var cats=["playback","search","room","chat","account","ui","other"],c=cats.indexOf(category)>=0?category:"other";
-  var body=modal("wtReportModal","回報問題",'<div class="wt-feature-grid"><label>問題類型<select id="wtReportCat">'+cats.map(function(x){return '<option value="'+x+'" '+(x===c?"selected":"")+'>'+({playback:"播放／同步",search:"搜尋",room:"房間",chat:"聊天室",account:"帳號",ui:"介面",other:"其他"})[x]+'</option>';}).join("")+'</select></label><label>目前頁面<input value="'+esc(location.href)+'" readonly></label><label class="full">問題描述<textarea id="wtReportDetails" maxlength="2000" rows="7" placeholder="描述發生什麼、如何重現，以及原本期待的結果。"></textarea></label></div><div class="small muted">送出時會附上目前頁面、瀏覽器、房間與播放器診斷資訊。</div><div class="wt-feature-actions"><button id="wtReportSend" class="primary-btn">送出回報</button></div>');
-  body.querySelector("#wtReportSend").onclick=async function(){try{var details=String($("wtReportDetails").value||"").trim();if(details.length<8)throw new Error("請至少描述 8 個字的問題");var s=st(),ref=db.ref("reports").push();await ref.set({uid:u.uid,category:$("wtReportCat").value,details:details,createdAt:firebase.database.ServerValue.TIMESTAMP,status:"open",source:"manual",autoDetected:false,autoVerifyEnabled:true,buildVersion:String(window.__WATCHTOGETHER_BUILD__||"").slice(0,100),firstSeenAt:firebase.database.ServerValue.TIMESTAMP,lastSeenAt:firebase.database.ServerValue.TIMESTAMP,occurrences:1,page:location.href.slice(0,2000),roomId:String(s.roomId||"").slice(0,6),userAgent:navigator.userAgent.slice(0,1000)});try{window.reportWatchTogetherBug&&window.reportWatchTogetherBug($("wtReportCat").value,details,s);}catch(_){}pushNotification("問題回報已送出","管理系統已收到你的回報。","report");toast("問題回報已送出");close("wtReportModal");}catch(e){toast(e.message||"回報送出失敗");}};
+  var u=user();
+  if(!u) return toast("請先完成登入");
+  var cats=["playback","search","room","chat","account","ui","other"];
+  var labels={playback:"播放／同步",search:"搜尋",room:"房間",chat:"聊天室",account:"帳號",ui:"介面",other:"其他"};
+  var current=cats.indexOf(category)>=0?category:"other";
+  var body=modal("wtReportModal","回報問題",
+    '<div class="wt-feature-grid">'+
+      '<label>問題類型<select id="wtReportCat">'+cats.map(function(x){return '<option value="'+x+'" '+(x===current?"selected":"")+'>'+labels[x]+'</option>';}).join("")+'</select></label>'+
+      '<label>優先程度<select id="wtReportPriority"><option value="normal">一般</option><option value="high">高</option><option value="urgent">緊急</option></select></label>'+
+      '<label class="full">問題描述<textarea id="wtReportDetails" maxlength="2000" rows="7" placeholder="描述發生什麼、如何重現，以及原本期待的結果。"></textarea></label>'+
+      '<label class="full">截圖（可選）<input id="wtReportScreenshot" type="file" accept="image/png,image/jpeg,image/webp"></label>'+
+      '<label class="full">目前頁面<input value="'+esc(location.href)+'" readonly></label>'+
+    '</div>'+
+    '<div class="small muted">系統會附上瀏覽器、螢幕尺寸、房間、播放器、網路狀態與目前版本等診斷資訊。截圖會壓縮成小型資料直接附在回報中。</div>'+
+    '<div class="wt-feature-actions"><button id="wtReportSend" class="primary-btn">送出回報</button></div>'
+  );
+  body.querySelector("#wtReportSend").onclick=async function(){
+    try{
+      var details=String($("wtReportDetails").value||"").trim();
+      if(details.length<8)throw new Error("請至少描述 8 個字的問題");
+      var context={
+        page:location.href.slice(0,2000),
+        userAgent:navigator.userAgent.slice(0,1000),
+        language:navigator.language||"",
+        screenWidth:window.screen.width,
+        screenHeight:window.screen.height,
+        viewportWidth:window.innerWidth,
+        viewportHeight:window.innerHeight,
+        online:navigator.onLine===true,
+        connectionType:navigator.connection?.effectiveType||"",
+        roomId:String(st().roomId||"").slice(0,6),
+        playerType:String(st().playerType||"").slice(0,50),
+        videoId:String(st().currentVideoId||"").slice(0,200),
+        syncStatus:String($("syncStatus")?.textContent||"").slice(0,300)
+      };
+      var screenshot="";
+      var file=$("wtReportScreenshot")?.files?.[0]||null;
+      if(file){
+        if(!/^image\/(png|jpeg|webp)$/.test(file.type))throw new Error("截圖格式只支援 PNG、JPG、WebP");
+        if(file.size>700000)throw new Error("截圖檔案請控制在 700 KB 以內");
+        screenshot=await new Promise(function(resolve,reject){
+          var reader=new FileReader();
+          reader.onload=function(){var value=String(reader.result||"");if(value.length>900000)reject(new Error("截圖資料過大，請換一張較小的圖片"));else resolve(value);};
+          reader.onerror=function(){reject(new Error("截圖讀取失敗"));};
+          reader.readAsDataURL(file);
+        });
+      }
+      var ref=db.ref("reports").push();
+      var payload={
+        uid:u.uid,
+        category:$("wtReportCat").value,
+        details:details,
+        createdAt:firebase.database.ServerValue.TIMESTAMP,
+        status:"open",
+        source:"manual",
+        autoDetected:false,
+        autoVerifyEnabled:true,
+        priority:$("wtReportPriority").value,
+        buildVersion:String(window.__WATCHTOGETHER_BUILD__||"").slice(0,100),
+        firstSeenAt:firebase.database.ServerValue.TIMESTAMP,
+        lastSeenAt:firebase.database.ServerValue.TIMESTAMP,
+        occurrences:1,
+        page:context.page,
+        roomId:context.roomId,
+        userAgent:context.userAgent,
+        context:JSON.stringify(context).slice(0,5000)
+      };
+      if(screenshot)payload.screenshotDataUrl=screenshot.slice(0,900000);
+      await ref.set(payload);
+      try{window.reportWatchTogetherBug&&window.reportWatchTogetherBug($("wtReportCat").value,details,context);}catch(_){}
+      pushNotification("問題回報已送出","管理系統已收到你的回報。","report");
+      toast("問題回報已送出");
+      close("wtReportModal");
+    }catch(e){toast(e.message||"回報送出失敗");}
+  };
 }
 
 function openInvite(){
