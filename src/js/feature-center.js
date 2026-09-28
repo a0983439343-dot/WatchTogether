@@ -8,6 +8,8 @@ const auth = window.firebase && firebase.apps.length ? firebase.auth() : null;
 const PREFS_KEY = "wt_preferences_v1";
 const NOTIFY_KEY = "wt_notifications_v2";
 const STATS_KEY = "wt_stats_v1";
+const SEARCH_KEY = "wt_search_queries_v1";
+const LOGIN_KEY = "wt_login_history_v1";
 const seen = {};
 let lastTrackedRoom = "";
 let lastTrackedVideo = "";
@@ -63,10 +65,13 @@ function loadNotifications(){try{var x=JSON.parse(localStorage.getItem(NOTIFY_KE
 function saveNotifications(){notifications=notifications.slice(0,100);try{localStorage.setItem(NOTIFY_KEY,JSON.stringify(notifications));}catch(_){}updateBadge();}
 function updateBadge(){var b=$("wtFeatureNotificationBadge");if(!b)return;var n=notifications.filter(function(x){return !x.read;}).length;b.textContent=n>99?"99+":String(n);b.style.display=n?"block":"none";}
 function pushNotification(title,body,kind){
-  var n={id:"n_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),title:String(title||"WatchTogether"),body:String(body||""),kind:kind||"system",createdAt:Date.now(),read:false};
+  var type=String(kind||"system"),p=prefs();
+  if(type==="dm"&&!p.dmNotifications)return;
+  if((type==="friend"||type==="friend-request")&&!p.friendNotifications)return;
+  if(["room","room-invite","connection","report"].includes(type)&&!p.roomNotifications)return;
+  var n={id:"n_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),title:String(title||"WatchTogether"),body:String(body||""),kind:type,createdAt:Date.now(),read:false};
   notifications.unshift(n);saveNotifications();
-  var p=prefs();
-  if(p.browserNotifications&&"Notification" in window&&Notification.permission==="granted"&&document.visibilityState!=="visible"){try{new Notification(n.title,{body:n.body});}catch(_){}}
+  if(p.browserNotifications&&"Notification" in window&&Notification.permission==="granted"&&document.visibilityState!=="visible"){try{new Notification(n.title,{body:n.body,tag:n.id});}catch(_){}}
   else if(document.visibilityState==="visible")toast(n.title+(n.body?"｜"+n.body:""));
 }
 function openNotifications(){
@@ -206,10 +211,41 @@ function renderGlobalSearchResults(body,query){
   });
 }
 
+function searchQueries(){
+  try{var list=JSON.parse(localStorage.getItem(SEARCH_KEY)||"[]");return Array.isArray(list)?list.filter(Boolean).slice(0,15):[];}catch(_){return [];}
+}
+function rememberSearchQuery(query){
+  var q=String(query||"").trim().slice(0,100);if(!q)return;
+  var list=searchQueries().filter(function(x){return String(x).toLowerCase()!==q.toLowerCase();});
+  list.unshift(q);try{localStorage.setItem(SEARCH_KEY,JSON.stringify(list.slice(0,15)));}catch(_){}
+}
+function loginHistory(){
+  try{var list=JSON.parse(localStorage.getItem(LOGIN_KEY)||"[]");return Array.isArray(list)?list.slice(0,20):[];}catch(_){return [];}
+}
+function recordLogin(current){
+  if(!current||current.isAnonymous)return;
+  var item={uid:String(current.uid||"").slice(0,128),email:String(current.email||"").slice(0,320),provider:String((current.providerData&&current.providerData[0]&&current.providerData[0].providerId)||"google.com").slice(0,50),at:Date.now(),device:/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?"mobile":"desktop"};
+  var list=loginHistory();
+  if(list[0]&&list[0].uid===item.uid&&Date.now()-Number(list[0].at||0)<60000)return;
+  list.unshift(item);try{localStorage.setItem(LOGIN_KEY,JSON.stringify(list.slice(0,20)));}catch(_){}
+}
+function openLoginHistory(){
+  var list=loginHistory();
+  var html='<div class="small muted">登入活動只儲存在目前裝置。</div><div class="wt-feature-list">'+(list.length?list.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.email||"Google 帳號")+'</strong><div class="small muted">'+esc(x.provider||"google.com")+'｜'+esc(x.device||"")+'｜UID '+esc(x.uid||"")+'</div></div><span class="small muted">'+esc(fmtDate(x.at))+'</span></div>';}).join(""):'<div class="wt-feature-empty">目前沒有登入紀錄。</div>')+'</div><div class="wt-feature-actions"><button id="wtLoginHistoryClear" class="tiny-btn danger">清除登入紀錄</button></div>';
+  var body=modal("wtLoginHistoryModal","登入活動",html);
+  body.querySelector("#wtLoginHistoryClear").onclick=function(){localStorage.removeItem(LOGIN_KEY);openLoginHistory();};
+}
 function openGlobalSearch(){
-  var body=modal("wtGlobalSearchModal","站內搜尋",'<div class="wt-feature-actions" style="margin-top:0"><input id="wtGlobalSearchInput" class="search" type="search" maxlength="100" placeholder="搜尋使用者、好友或最近房間…" style="flex:1"><button id="wtGlobalSearchGo" class="primary-btn">搜尋</button></div><div id="wtGlobalSearchBody" class="wt-feature-list"><div class="wt-feature-empty">輸入關鍵字後開始搜尋。</div></div>');
+  var body=modal("wtGlobalSearchModal","站內搜尋",'<div class="wt-feature-actions" style="margin-top:0"><input id="wtGlobalSearchInput" class="search" type="search" maxlength="100" placeholder="搜尋使用者、公開房間或好友…" style="flex:1"><button id="wtGlobalSearchGo" class="primary-btn">搜尋</button></div><div id="wtGlobalSearchBody" class="wt-feature-list"><div class="wt-feature-empty">輸入關鍵字後開始搜尋。</div></div>');
   var input=$("wtGlobalSearchInput"),results=$("wtGlobalSearchBody");
-  var run=function(){var q=String(input.value||"").trim();if(!q)return results.innerHTML='<div class="wt-feature-empty">請輸入搜尋內容。</div>';results.innerHTML='<div class="wt-feature-empty">搜尋中…</div>';renderGlobalSearchResults(results,q).catch(function(){results.innerHTML='<div class="wt-feature-empty">搜尋失敗，請稍後再試。</div>';});};
+  var queryBox=document.createElement("div");queryBox.className="wt-feature-actions";queryBox.style.cssText="justify-content:flex-start;margin:8px 0 0";results.parentElement.insertBefore(queryBox,results);
+  function renderQueries(){
+    var qs=searchQueries();
+    queryBox.innerHTML=qs.length?'<span class="small muted">最近</span>'+qs.map(function(q){return '<button type="button" class="tiny-btn" data-search-query="'+esc(q)+'">'+esc(q)+'</button>';}).join(""):"";
+    queryBox.querySelectorAll("[data-search-query]").forEach(function(btn){btn.onclick=function(){input.value=btn.dataset.searchQuery;run();};});
+  }
+  var run=function(){var q=String(input.value||"").trim();if(!q)return results.innerHTML='<div class="wt-feature-empty">請輸入搜尋內容。</div>';rememberSearchQuery(q);renderQueries();results.innerHTML='<div class="wt-feature-empty">搜尋中…</div>';renderGlobalSearchResults(results,q).catch(function(){results.innerHTML='<div class="wt-feature-empty">搜尋失敗，請稍後再試。</div>';});};
+  renderQueries();
   body.querySelector("#wtGlobalSearchGo").onclick=run;
   input.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();run();}};
   setTimeout(function(){input.focus();},30);
@@ -534,6 +570,7 @@ function init(){
   if($("sourceTypeInput")&&["youtube","vimeo","dailymotion","twitch"].includes(p.defaultPlatform))$("sourceTypeInput").value=p.defaultPlatform;
   installRoomInviteWatcher();
   if(auth)auth.onAuthStateChanged(function(current){
+    recordLogin(current);
     if (!current) {
       try { window.__WT_FRIENDSHIP_WATCHER_REF?.off(); } catch (_) {}
       try { window.__WT_ROOM_INVITE_WATCHER_REF?.off(); } catch (_) {}
@@ -554,7 +591,7 @@ function init(){
   setInterval(installFriendRequestWatcher,5000);
   setInterval(installFriendshipWatcher,5000);
   setInterval(installRoomInviteWatcher,5000);
-}wt.openGlobalSearch=openGlobalSearch;wt.openSettings=openSettings
+}wt.openLoginHistory=openLoginHistory;wt.openGlobalSearch=openGlobalSearch;wt.openSettings=openSettings
 wt.openMyReports=openMyReports;wt.openStatus=openStatus;wt.openStats=openStats;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
