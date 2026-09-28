@@ -1462,7 +1462,7 @@ async function handleAdminAgent(req, res) {
     message:String(result.reply || "").slice(0,3000),
     action,
     actionArgs,
-    requiresConfirmation:result.requiresConfirmation === true
+    requiresConfirmation: action !== "none"
   }));
 }
 
