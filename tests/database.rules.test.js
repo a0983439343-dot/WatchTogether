@@ -630,6 +630,34 @@ test("2.0 access control: per-user deny overrides legacy admin and allow grants 
   );
 });
 
+test("2.0 access control: ai.agent is independently assignable", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const other = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(master.ref("admin/access/roles/agent-operator").set({
+    name: "Agent Operator",
+    permissions: {
+      admin__read: true,
+      ai__agent: true
+    }
+  }));
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).set("agent-operator"));
+
+  await assertSucceeds(
+    other.ref("admin/access/roleByUid/" + OTHER_UID).once("value")
+  );
+
+  const override = other.ref("admin/access/permissionsByUid/" + OTHER_UID + "/ai__agent");
+  await assertFails(override.set("allow"));
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/ai__agent").set("deny")
+  );
+});
+
 test("2.0 access control: viewer cannot modify policy and user cannot forge their restriction", async () => {
   await assertFails(
     db(VIEWER_UID, viewerToken).ref("admin/access/roleByUid/" + USER_UID).set("admin")
