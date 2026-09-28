@@ -902,11 +902,18 @@
     body.querySelectorAll("[data-v6-edit]").forEach(b=>b.onclick=async()=>{
       const m=dmMessages.find(v=>v.id===b.dataset.v6Edit);if(!m)return;
       const next=String(window.prompt("編輯私訊：",m.text||"")||"").trim().slice(0,MAX_TEXT);if(!next||next===m.text)return;
-      try{await db.ref("conversations/"+activeConversationId+"/messages/"+m.id).update({text:next,editedAt:firebase.database.ServerValue.TIMESTAMP});}catch(e){toast(e.message||"編輯失敗");}
+      try{
+        await db.ref("conversations/"+activeConversationId+"/messages/"+m.id).update({text:next,editedAt:firebase.database.ServerValue.TIMESTAMP});
+        const last=await db.ref("conversations/"+activeConversationId+"/lastMessage/messageId").once("value");
+        if(String(last.val()||"")===String(m.id)) await refreshLastMessage();
+      }catch(e){toast(e.message||"編輯失敗");}
     });
     body.querySelectorAll("[data-v6-delete]").forEach(b=>b.onclick=async()=>{
       if(!window.confirm("確定刪除這則訊息嗎？"))return;
-      try{await db.ref("conversations/"+activeConversationId+"/messages/"+b.dataset.v6Delete).remove();}catch(e){toast(e.message||"刪除失敗");}
+      try{
+        await db.ref("conversations/"+activeConversationId+"/messages/"+b.dataset.v6Delete).remove();
+        await refreshLastMessage();
+      }catch(e){toast(e.message||"刪除失敗");}
     });
     body.querySelectorAll("[data-v6-pin]").forEach(b=>b.onclick=async()=>{
       const m=dmMessages.find(v=>v.id===b.dataset.v6Pin);if(!m)return;
@@ -941,6 +948,25 @@
   async function markRead() {
     if(!activeConversationId||!uid()||!db)return;
     try{await db.ref("conversations/"+activeConversationId+"/reads/"+uid()).set(firebase.database.ServerValue.TIMESTAMP);}catch(_){}
+  }
+  async function refreshLastMessage() {
+    if(!activeConversationId||!db)return;
+    try {
+      const snap=await db.ref("conversations/"+activeConversationId+"/messages").limitToLast(1).once("value");
+      let last=null;
+      snap.forEach(child=>{ last=Object.assign({id:String(child.key)},child.val()||{}); });
+      const ref=db.ref("conversations/"+activeConversationId+"/lastMessage");
+      if(!last){ await ref.remove(); return; }
+      const type=String(last.type||"text");
+      await ref.set({
+        uid:String(last.uid||"").slice(0,128),
+        name:String(last.name||"玩家").slice(0,30),
+        type,
+        preview:(type==="text"?String(last.text||""):type==="sticker"?String(last.sticker||"貼圖"):"圖片/GIF").slice(0,300),
+        createdAt:Number(last.createdAt||Date.now()),
+        messageId:String(last.id||"").slice(0,120)
+      });
+    } catch(_) {}
   }
   function typing(active) {
     if(!activeConversationId||!uid()||!db)return;
