@@ -332,6 +332,91 @@ test("chat moderation: permitted admin can read and delete messages, viewer cann
   await assertFails(viewer.ref("chat/ABC123/" + messageRef.key).remove());
 });
 
+
+test("room chat rich metadata: members can reply and edit their own messages, owners can pin, others cannot", async () => {
+  const user = db(USER_UID, userToken);
+  const other = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+  const master = db(MASTER_UID, masterToken);
+
+  await assertSucceeds(master.ref("members/ABC123/" + OTHER_UID).set({
+    name: "Other",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  const messageRef = user.ref("chat/ABC123/room-rich-test-message");
+  await assertSucceeds(messageRef.set({
+    uid: USER_UID,
+    name: "User",
+    type: "text",
+    text: "原始房間訊息",
+    createdAt: Date.now()
+  }));
+
+  const replyRef = user.ref("roomChatReplies/ABC123").push();
+  await assertSucceeds(replyRef.set({
+    uid: USER_UID,
+    name: "User",
+    replyToId: messageRef.key,
+    replyToName: "User",
+    replyToText: "原始房間訊息",
+    replyToType: "text",
+    text: "我的回覆",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(user.ref("roomChatEdits/ABC123/" + messageRef.key).set({
+    uid: USER_UID,
+    text: "編輯後的房間訊息",
+    editedAt: Date.now()
+  }));
+
+  await assertSucceeds(user.ref("roomChatPins/ABC123/" + messageRef.key).set({
+    pinned: true,
+    uid: USER_UID,
+    updatedAt: Date.now()
+  }));
+
+  await assertFails(other.ref("roomChatEdits/ABC123/" + messageRef.key).set({
+    uid: OTHER_UID,
+    text: "不應該能改",
+    editedAt: Date.now()
+  }));
+
+  await assertFails(other.ref("roomChatPins/ABC123/" + messageRef.key).set({
+    pinned: false,
+    uid: OTHER_UID,
+    updatedAt: Date.now()
+  }));
+});
+
+test("room chat reactions: members may change their own reaction only", async () => {
+  const user = db(USER_UID, userToken);
+  const other = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  const ref = user.ref("roomChatReactions/ABC123/room-rich-test-message/" + USER_UID);
+  await assertSucceeds(ref.set({
+    emoji: "👍",
+    updatedAt: Date.now()
+  }));
+
+  await assertSucceeds(ref.remove());
+
+  await assertFails(
+    other.ref("roomChatReactions/ABC123/room-rich-test-message/" + USER_UID).set({
+      emoji: "🔥",
+      updatedAt: Date.now()
+    })
+  );
+});
+
 test("reports: normal users cannot read the collection", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("reports").once("value")
