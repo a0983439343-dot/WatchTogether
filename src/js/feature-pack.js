@@ -524,12 +524,11 @@
 
   function ensureRoomChatExtras() {
     if (!inRoom()) return;
+
     const form = $("chatForm");
     const input = $("chatInput");
-    if (!form || !input || $("wtRoomStickerBtn")) return;
+    if (!form || !input || $("wtRoomImageBtn")) return;
 
-    const wrap = document.createElement("span");
-    wrap.style.cssText = "position:relative;display:inline-flex;align-items:center";
     const mediaInput = document.createElement("input");
     mediaInput.type = "file";
     mediaInput.accept = "image/*";
@@ -546,34 +545,115 @@
     imageButton.className = "tiny-btn";
     imageButton.textContent = "🖼️";
     imageButton.title = "傳送圖片";
-    imageButton.addEventListener("click",() => mediaInput.click());
+    imageButton.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      mediaInput.click();
+    });
     imageWrap.appendChild(imageButton);
     imageWrap.appendChild(mediaInput);
-
-    const button = document.createElement("button");
-    button.id = "wtRoomStickerBtn";
-    button.type = "button";
-    button.className = "tiny-btn";
-    button.textContent = "⭐";
-    button.title = "貼圖";
-    const picker = document.createElement("div");
-    picker.className = "wt-room-sticker-picker hidden";
-    picker.setAttribute("aria-label","房間貼圖");
-    picker.innerHTML = roomStickerList().map(item =>
-      '<button type="button" data-room-sticker="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>'
-    ).join("");
-    picker.querySelectorAll("[data-room-sticker]").forEach(item => {
-      item.addEventListener("click",() => void sendRoomSticker(item.dataset.roomSticker));
-    });
-    button.addEventListener("click",() => picker.classList.toggle("hidden"));
-    wrap.appendChild(button);
-    wrap.appendChild(picker);
-
     form.insertBefore(imageWrap, input);
-    form.insertBefore(wrap, input);
-    document.addEventListener("click",event => {
-      if (!wrap.contains(event.target)) picker.classList.add("hidden");
-    });
+
+    if (!form.dataset.wtRoomImagePasteDrop) {
+      form.dataset.wtRoomImagePasteDrop = "1";
+
+      form.addEventListener("paste", event => {
+        if (!inRoom()) return;
+        const files = Array.from(event.clipboardData?.files || [])
+          .filter(file => String(file.type || "").indexOf("image/") === 0)
+          .slice(0, 4);
+        if (!files.length) return;
+        event.preventDefault();
+        files.forEach(file => void uploadRoomImage(file));
+      });
+
+      form.addEventListener("dragover", event => {
+        if (!inRoom()) return;
+        if (Array.from(event.dataTransfer?.types || []).includes("Files")) {
+          event.preventDefault();
+        }
+      });
+
+      form.addEventListener("drop", event => {
+        if (!inRoom()) return;
+        const files = Array.from(event.dataTransfer?.files || [])
+          .filter(file => String(file.type || "").indexOf("image/") === 0)
+          .slice(0, 4);
+        if (!files.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        files.forEach(file => void uploadRoomImage(file));
+      });
+    }
+
+    const box = $("chatMessages");
+    if (box && !box.dataset.wtRoomImagePreview) {
+      box.dataset.wtRoomImagePreview = "1";
+      box.addEventListener("click", event => {
+        const target = event.target?.closest?.("[data-chat-image]");
+        if (!target) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const url = String(target.dataset.chatImage || target.querySelector("img")?.src || "").trim();
+        if (!url) return;
+
+        document.getElementById("wtRoomImageLightbox")?.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "wtRoomImageLightbox";
+        Object.assign(overlay.style, {
+          position:"fixed",
+          inset:"0",
+          zIndex:"1900",
+          display:"grid",
+          placeItems:"center",
+          padding:"20px",
+          background:"rgba(0,0,0,.82)"
+        });
+
+        const image = document.createElement("img");
+        image.src = url;
+        image.alt = "聊天室圖片預覽";
+        Object.assign(image.style, {
+          position:"relative",
+          maxWidth:"94vw",
+          maxHeight:"92dvh",
+          objectFit:"contain",
+          borderRadius:"14px",
+          boxShadow:"0 24px 80px rgba(0,0,0,.5)"
+        });
+
+        const close = document.createElement("button");
+        close.type = "button";
+        close.textContent = "×";
+        close.setAttribute("aria-label","關閉圖片預覽");
+        Object.assign(close.style, {
+          position:"absolute",
+          top:"16px",
+          right:"16px",
+          zIndex:"2",
+          width:"42px",
+          height:"42px",
+          border:"1px solid rgba(255,255,255,.18)",
+          borderRadius:"50%",
+          background:"rgba(0,0,0,.55)",
+          color:"#fff",
+          fontSize:"24px",
+          cursor:"pointer"
+        });
+
+        const closeOverlay = () => overlay.remove();
+        overlay.addEventListener("click", event2 => {
+          if (event2.target === overlay) closeOverlay();
+        });
+        close.addEventListener("click", closeOverlay);
+
+        overlay.appendChild(image);
+        overlay.appendChild(close);
+        document.body.appendChild(overlay);
+      });
+    }
   }
 
   function ensureRoomToolsButton() {
