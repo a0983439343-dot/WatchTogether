@@ -11,6 +11,7 @@
   let currentUser = null;
   let currentHasAdminAccess = false;
   let currentRole = null;
+  let currentRoleSource = "none";
   let currentRolePermissions = {};
   let accounts = {};
   let whitelist = {};
@@ -81,8 +82,12 @@
 
   async function resolveAdminRole(user) {
     currentRolePermissions = {};
+    currentRoleSource = "none";
     if (!user || user.isAnonymous) return null;
-    if (isMasterUser(user)) return "master";
+    if (isMasterUser(user)) {
+      currentRoleSource = "master";
+      return "master";
+    }
 
     try {
       const assignedSnapshot = await db.ref("admin/access/roleByUid/" + user.uid).once("value");
@@ -100,6 +105,7 @@
               ])
           );
           if (currentRolePermissions["admin.read"] === true || currentRolePermissions["*"] === true) {
+            currentRoleSource = "custom";
             return assignedRole;
           }
         }
@@ -111,6 +117,7 @@
     const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
     const item = snapshot.val();
     if (!item || item.uid !== user.uid || item.enabled !== true) return null;
+    currentRoleSource = "whitelist";
     return item.role === "viewer" ? "viewer" : "admin";
   }
 
@@ -1668,7 +1675,7 @@
     if (isMasterOperator()) return true;
     const key = String(permission || "").trim();
     if (currentRolePermissions[key] === true) return true;
-    if (currentRole === "admin") {
+    if (currentRole === "admin" && currentRoleSource !== "custom") {
       const adminDefaults = [
         "admin.read","users.read","users.update","users.restrict",
         "rooms.read","rooms.manage","chat.read","chat.moderate",
@@ -1679,7 +1686,7 @@
       ];
       return adminDefaults.includes(key);
     }
-    if (currentRole === "viewer") {
+    if (currentRole === "viewer" && currentRoleSource !== "custom") {
       return [
         "admin.read","users.read","rooms.read","chat.read",
         "reports.read","analytics.read","audit.read"
@@ -2191,6 +2198,7 @@
       currentUser = user || null;
       currentHasAdminAccess = false;
       currentRole = null;
+      currentRoleSource = "none";
       currentRolePermissions = {};
       if (reportScanTimer) {
         clearInterval(reportScanTimer);
