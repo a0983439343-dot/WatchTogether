@@ -452,6 +452,15 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
     email_verified: true
   });
 
+  await assertFails(
+    applicant.ref("members/ABC123/" + OTHER_UID).set({
+      name: "Applicant",
+      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      online: true,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
+    })
+  );
+
   await assertSucceeds(applicant.ref("roomApplications/ABC123/" + OTHER_UID).set({
     uid: OTHER_UID,
     name: "Applicant",
