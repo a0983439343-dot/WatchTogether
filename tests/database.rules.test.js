@@ -368,7 +368,7 @@ serialTest("room chat rich metadata: members can reply and edit their own messag
     lastSeen: Date.now()
   }));
 
-  const messageRef = user.ref("chat/RICH01/room-rich-test-message");
+  const messageRef = user.ref("chat/RICH02/reaction-message");
   await assertSucceeds(messageRef.set({
     uid: USER_UID,
     name: "User",
@@ -422,8 +422,35 @@ serialTest("room chat reactions: members may change their own reaction only", as
     email: "other@example.com",
     email_verified: true
   });
+  const master = db(MASTER_UID, masterToken);
 
-  const ref = user.ref("roomChatReactions/RICH01/room-rich-test-message/" + USER_UID);
+  await assertSucceeds(master.ref("rooms/RICH02").set({
+    owner: USER_UID,
+    name: "Reaction Test",
+    sourceType: "youtube",
+    video: {
+      id: "reaction-video",
+      platform: "youtube",
+      title: "Reaction",
+      thumbnail: "",
+      channel: ""
+    }
+  }));
+  await assertSucceeds(master.ref("members/RICH02/" + USER_UID).set({
+    name: "User",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+  await assertSucceeds(master.ref("chat/RICH02/reaction-message").set({
+    uid: USER_UID,
+    name: "User",
+    type: "text",
+    text: "reaction target",
+    createdAt: Date.now()
+  }));
+
+  const ref = user.ref("roomChatReactions/RICH02/reaction-message/" + USER_UID);
   await assertSucceeds(ref.set({
     emoji: "👍",
     updatedAt: Date.now()
@@ -432,13 +459,13 @@ serialTest("room chat reactions: members may change their own reaction only", as
   await assertSucceeds(ref.remove());
 
   await assertFails(
-    other.ref("roomChatReactions/RICH01/room-rich-test-message/" + USER_UID).set({
+    other.ref("roomChatReactions/RICH02/reaction-message/" + USER_UID).set({
       emoji: "🔥",
       updatedAt: Date.now()
     })
   );
 
-  await assertSucceeds(db(MASTER_UID, masterToken).ref("rooms/RICH01").remove());
+  await assertSucceeds(master.ref("rooms/RICH02").remove());
 });
 
 serialTest("reports: normal users cannot read the collection", async () => {
