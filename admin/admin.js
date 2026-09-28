@@ -1512,8 +1512,14 @@
     const accountsCount = Object.keys(accounts || {}).length;
     const roomsList = Object.entries(rooms || {});
     let onlineMembers = 0;
+    let onlineKnown = true;
     roomsList.forEach(([, room]) => {
-      onlineMembers += Number(room?.__onlineCount || room?.onlineCount || 0);
+      const count = Number(room?.__members);
+      if (!Number.isFinite(count)) {
+        onlineKnown = false;
+        return;
+      }
+      onlineMembers += count;
     });
 
     let openReports = 0;
@@ -1533,7 +1539,7 @@
     });
 
     if ($("analyticsAccounts")) $("analyticsAccounts").textContent = accountsCount;
-    if ($("analyticsOnlineMembers")) $("analyticsOnlineMembers").textContent = onlineMembers;
+    if ($("analyticsOnlineMembers")) $("analyticsOnlineMembers").textContent = onlineKnown ? onlineMembers : "—";
     if ($("analyticsRooms")) $("analyticsRooms").textContent = roomsList.length;
     if ($("analyticsOpenReports")) $("analyticsOpenReports").textContent = openReports;
     if ($("analyticsResolvedReports")) $("analyticsResolvedReports").textContent = resolvedReports;
