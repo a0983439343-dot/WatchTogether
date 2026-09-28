@@ -221,7 +221,7 @@ async function sendRoomInvite(){
   var isCohost=Boolean(window.WT_ROOM_ACCESS&&window.WT_ROOM_ACCESS.isCohost&&window.WT_ROOM_ACCESS.isCohost(u.uid));
   if(!st().isOwner&&!isCohost)throw new Error("只有房主或 Co-host 可以發送房間邀請");
   var code=String($("wtInviteFriendCode")&&$("wtInviteFriendCode").value||"").trim().toUpperCase();if(!/^[A-Z0-9]{6}$/.test(code))throw new Error("請輸入有效的好友 ID");
-  var target=(await db.ref("profileCodes/"+code).once("value")).val();if(!target)throw new Error("找不到這個使用者 ID");if(String(target)===String(u.uid))throw new Error("不能邀請自己");
+  var target=(await db.ref("profileCodes/"+code).once("value")).val();if(!target)throw new Error("找不到這個使用者 ID");if(String(target)===String(u.uid))throw new Error("不能邀請自己");var friendship=(await db.ref("friendships/"+u.uid+"/"+target).once("value")).exists();if(!friendship)throw new Error("這個使用者還不是你的好友");
   var link=wt.roomLink?wt.roomLink(id):location.origin+location.pathname+"?room="+encodeURIComponent(id);
   var ref=db.ref("roomInvites/"+target).push();
   await ref.set({inviteId:ref.key,roomId:id,roomName:String(st().room&&st().room.name||"一起看").slice(0,40),toUid:String(target),fromUid:u.uid,fromName:String(wt.currentName&&wt.currentName()||"玩家").slice(0,30),createdAt:firebase.database.ServerValue.TIMESTAMP,status:"pending",link:link});
@@ -306,7 +306,7 @@ function openInvites(){
     html+=list.length?list.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.roomName||"一起看")+'</strong><div class="small">'+esc(x.fromName||"好友")+' 邀請你加入</div><div class="small muted">'+esc(fmtDate(x.createdAt))+'</div></div><div class="wt-feature-actions" style="margin-top:0"><button class="tiny-btn primary" data-invite-join="'+esc(x.key)+'">加入</button><button class="tiny-btn danger" data-invite-decline="'+esc(x.key)+'">忽略</button></div></div>';}).join(""):'<div class="wt-feature-empty">目前沒有待處理邀請。</div>';
     html+='</div>';
     var body=modal("wtInvitesModal","房間邀請",html);
-    body.querySelectorAll("[data-invite-join]").forEach(function(b){b.onclick=async function(){var item=list.find(function(x){return x.key===b.dataset.inviteJoin;});if(!item)return;try{await db.ref("roomInvites/"+u.uid+"/"+item.key+"/status").set("accepted");location.href=location.pathname+"?room="+encodeURIComponent(item.roomId);}catch(e){toast(e.message||"無法加入房間");}};});
+    body.querySelectorAll("[data-invite-join]").forEach(function(b){b.onclick=async function(){var item=list.find(function(x){return x.key===b.dataset.inviteJoin;});if(!item)return;try{await db.ref("roomInvites/"+u.uid+"/"+item.key+"/status").set("accepted");location.href=location.pathname+"?room="+encodeURIComponent(item.roomId)+"&invite="+encodeURIComponent(item.key);}catch(e){toast(e.message||"無法加入房間");}};});
     body.querySelectorAll("[data-invite-decline]").forEach(function(b){b.onclick=async function(){try{await db.ref("roomInvites/"+u.uid+"/"+b.dataset.inviteDecline+"/status").set("declined");openInvites();}catch(e){toast(e.message||"操作失敗");}};});
   }).catch(function(e){toast(e.message||"載入邀請失敗");});
 }
@@ -336,6 +336,7 @@ function init(){
   setInterval(ensureRoomTools,1000);
   setInterval(track,5000);
   setInterval(installFriendWatcher,5000);
+  setInterval(installRoomInviteWatcher,5000);
 }wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
