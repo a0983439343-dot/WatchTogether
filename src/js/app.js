@@ -13164,6 +13164,64 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     );
 
     /*
+     * MANUAL SYNC
+     */
+
+    $("manualSyncBtn")
+      ?.addEventListener(
+        "click",
+        async () => {
+          if (
+            !state.roomId ||
+            !state.uid ||
+            !state.wasMemberInRoom ||
+            !state.playerReady ||
+            !state.player ||
+            !state.currentVideoId
+          ) {
+            toast("請先進入房間並選擇影片");
+            return;
+          }
+
+          const access = window.WT_ACCESS_CONTROL;
+          try {
+            await access?.waitUntilReady?.(2500);
+            if (access?.state?.ready && !access.hasPermission("sync.manual")) {
+              toast("你目前沒有立即同步權限");
+              return;
+            }
+
+            const ref = playbackSyncRef();
+            if (!ref) {
+              throw new Error("目前沒有可同步的房間播放時間軸");
+            }
+
+            const snapshot = await ref.once("value");
+            const event = snapshot.val();
+            if (!event || !event.eventId) {
+              throw new Error("目前房間還沒有可同步的播放狀態");
+            }
+
+            const button = $("manualSyncBtn");
+            if (button) {
+              button.disabled = true;
+              button.textContent = "同步中…";
+            }
+
+            await applyRemotePlaybackEvent(event, true);
+            updateTimeUI();
+            toast("已重新鎖定房間播放同步");
+          } catch (error) {
+            console.warn("手動同步失敗:", error);
+            toast(error?.message || "手動同步失敗");
+          } finally {
+            updateRoomOwnerUI();
+          }
+        }
+      );
+
+
+    /*
      * PLAY / PAUSE
      */
 
