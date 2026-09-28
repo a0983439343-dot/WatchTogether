@@ -1835,6 +1835,87 @@
     });
   }
 
+  function renderMaintenanceControl() {
+    const status = $("maintenanceControlStatus");
+    const hint = $("maintenanceControlHint");
+    const openBtn = $("maintenanceOpenBtn");
+    const closeBtn = $("maintenanceCloseBtn");
+    if (!status || !hint) return;
+    const item = window.WT_ACCESS_CONTROL?.getMaintenance?.() || {enabled:false};
+    const active = item.enabled === true;
+    status.textContent = active ? "網站維護中" : "網站運作中";
+    status.className = "status " + (active ? "off" : "");
+    hint.textContent = active
+      ? "原因：" + String(item.reason || "未提供") + " · 預計恢復：" + (Number(item.restoreAt || 0) > 0 ? formatDate(item.restoreAt) : "未設定")
+      : "目前沒有啟用網站維護模式。";
+    if (openBtn) openBtn.disabled = !isMasterOperator() || active;
+    if (closeBtn) closeBtn.disabled = !isMasterOperator() || !active;
+  }
+
+  async function setSiteMaintenance(enabled) {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以控制網站維護模式");
+    const passwordEl = $("maintenancePassword");
+    const reasonEl = $("maintenanceReason");
+    const restoreEl = $("maintenanceRestoreAt");
+    const password = String(passwordEl?.value || "");
+    const reason = String(reasonEl?.value || "").trim().slice(0,500);
+    const rawRestore = String(restoreEl?.value || "").trim();
+    let restoreAt = 0;
+    if (rawRestore) {
+      const parsed = new Date(rawRestore).getTime();
+      if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("預計恢復時間格式錯誤");
+      restoreAt = parsed;
+    }
+    if (!password) throw new Error("請輸入維護密碼");
+    if (enabled && !reason) throw new Error("關站前請輸入維護原因");
+
+    const confirmed = window.confirm(
+      enabled
+        ? "確定要關閉網站嗎？\n\n關站後一般使用者會看到維護頁面，管理系統仍可使用。"
+        : "確定要重新開站嗎？\n\n網站會立即恢復給一般使用者使用。"
+    );
+    if (!confirmed) return;
+
+    const base = String(
+      window.WATCHTOGETHER_CONFIG?.adminControlUrl ||
+      window.WATCHTOGETHER_CONFIG?.youtubeStreamProxyUrl ||
+      ""
+    ).trim().replace(/\/+$/,"");
+    if (!base) throw new Error("尚未設定管理控制服務網址");
+
+    const token = await currentUser.getIdToken(true);
+    const response = await fetch(base + "/admin/maintenance", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer " + token
+      },
+      body:JSON.stringify({
+        enabled:enabled === true,
+        password,
+        reason: enabled ? reason : "管理員手動重新開站",
+        restoreAt: enabled ? restoreAt : 0
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data.error === "maintenance_password_locked"
+        ? "維護密碼錯誤次數過多，已暫時鎖定。"
+        : data.error === "maintenance_password_not_configured"
+          ? "Render 尚未設定維護密碼雜湊。"
+          : data.error === "invalid_password"
+            ? "維護密碼錯誤。剩餘嘗試次數：" + String(data.attemptsRemaining ?? "—")
+            : data.error === "master_only"
+              ? "只有最高管理員可以操作。"
+              : String(data.message || data.error || "維護模式操作失敗");
+      throw new Error(message);
+    }
+    if (passwordEl) passwordEl.value = "";
+    await window.WT_ACCESS_CONTROL?.refresh?.();
+    renderMaintenanceControl();
+    toast(enabled ? "網站已進入維護模式" : "網站已重新開站");
+  }
+
   async function loadAccessControl() {
     if (!currentHasAdminAccess) return;
     const [rolesSnap, assignmentsSnap, overridesSnap, restrictionsSnap, flagsSnap] = await Promise.all([
@@ -1856,6 +1937,7 @@
     renderAccessOverrides();
     renderAccessRestrictions();
     renderAccessFeatureFlags();
+    renderMaintenanceControl();
     const master = isMasterOperator();
     const canRestrict = currentCan("users.restrict");
     [
@@ -2139,6 +2221,7 @@
         startReportsListener();
         startAuditLogsListener();
         startAutonomousMaintenanceListener();
+        window.addEventListener("wt-access-changed", renderMaintenanceControl);
         populateAccessPermissionCatalog();
         renderAccessSummary();
         renderAutonomousMaintenance();
@@ -2245,6 +2328,9 @@
       $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
     });
     $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("maintenanceOpenBtn")?.addEventListener("click", () => setSiteMaintenance(true).catch(error => { console.error(error); toast(error?.message || "關站失敗"); }));
+    $("maintenanceCloseBtn")?.addEventListener("click", () => setSiteMaintenance(false).catch(error => { console.error(error); toast(error?.message || "重新開站失敗"); }));
+
     $("accessRoleSaveBtn")?.addEventListener("click", () => saveAccessRole().catch(error => { console.error(error); toast(error?.message || "儲存角色失敗"); }));
     $("accessAssignBtn")?.addEventListener("click", () => assignAccessRole().catch(error => { console.error(error); toast(error?.message || "指派角色失敗"); }));
     $("accessOverrideBtn")?.addEventListener("click", () => saveAccessOverride().catch(error => { console.error(error); toast(error?.message || "設定 Allow / Deny 失敗"); }));
