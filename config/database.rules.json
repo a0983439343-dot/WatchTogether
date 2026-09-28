@@ -209,7 +209,7 @@
           ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
           ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
           "$roleId": {
-            ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+            ".read": "auth != null && (((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true) || root.child('admin').child('access').child('roleByUid').child(auth.uid).val() === $roleId)",
             ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
             ".validate": "!newData.exists() || (newData.hasChildren(['name','permissions']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 80 && newData.child('permissions').hasChildren())",
             "permissions": {
