@@ -7243,6 +7243,23 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               .ServerValue
               .TIMESTAMP
         });
+    try {
+      await db
+        .ref(
+          "publicRooms/" + roomId
+        )
+        .set({
+          id: roomId,
+          name: roomName,
+          searchName: roomName.toLowerCase().slice(0, 40),
+          owner: state.uid,
+          sourceType: sourceType,
+          createdAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    } catch (error) {
+      console.warn("建立公開房間索引失敗，房間本身仍可使用:", error);
+    }
+
     } catch (error) {
       console.error(
         "建立 roomMeta 節點失敗:",
