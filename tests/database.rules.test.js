@@ -347,6 +347,26 @@ test("report history: owner and admin can append, non-owner cannot append, admin
     adminEvent.remove()
   );
 });
+test("chat moderation: permitted admin can read and delete messages, viewer cannot moderate", async () => {
+  const admin = db(ADMIN_UID, adminToken);
+  const viewer = db(VIEWER_UID, viewerToken);
+  const user = db(USER_UID, userToken);
+  const messageRef = user.ref("chat/ABC123").push();
+
+  await assertSucceeds(messageRef.set({
+    uid: USER_UID,
+    name: "User",
+    type: "text",
+    text: "moderation target",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(admin.ref("chat/ABC123").once("value"));
+  await assertFails(viewer.ref("chat/ABC123").once("value"));
+  await assertSucceeds(admin.ref("chat/ABC123/" + messageRef.key).remove());
+  await assertFails(viewer.ref("chat/ABC123/" + messageRef.key).remove());
+});
+
 test("reports: normal users cannot read the collection", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("reports").once("value")
