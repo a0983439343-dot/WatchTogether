@@ -1769,6 +1769,10 @@
     return String(permission || "").trim().replace(/\./g, "__").replace(/[^A-Za-z0-9_-]/g, "_").slice(0,80);
   }
 
+  function decodeAccessPermission(permission) {
+    return String(permission || "").replace(/__/g, ".");
+  }
+
   const ACCESS_PERMISSION_CATALOG = [
     "admin.read",
     "users.read",
@@ -1864,9 +1868,9 @@
     return Array.from(new Set([
       ...ACCESS_PERMISSION_CATALOG,
       ...fromCore,
-      ...Object.keys(accessFeatureFlags || {}),
-      ...Object.keys(accessOverrides || {}),
-      ...Object.keys(accessRestrictions || {})
+      ...Object.keys(accessFeatureFlags || {}).map(decodeAccessPermission),
+      ...Object.keys(accessOverrides || {}).flatMap(map => Object.keys(map || {}).map(decodeAccessPermission)),
+      ...Object.keys(accessRestrictions || {}).flatMap(map => Object.keys(map || {}).map(decodeAccessPermission))
     ].filter(Boolean))).sort();
   }
 
@@ -1904,7 +1908,7 @@
     box.innerHTML = entries.length
       ? entries.map(([id,item]) => {
           const permissions = item && item.permissions && typeof item.permissions === "object"
-            ? Object.keys(item.permissions).filter(key => item.permissions[key] === true).sort()
+            ? Object.keys(item.permissions).filter(key => item.permissions[key] === true).map(decodeAccessPermission).sort()
             : [];
           return '<div class="access-policy-row">' +
             '<div><strong>' + escapeHtml(item?.name || id) + '</strong><span class="small">' + escapeHtml(id) + '</span></div>' +
@@ -1944,7 +1948,11 @@
     if (!box) return;
     const rows = [];
     Object.entries(accessOverrides || {}).forEach(([uid, map]) => {
-      Object.entries(map || {}).forEach(([permission,effect]) => rows.push({uid,permission,effect}));
+      Object.entries(map || {}).forEach(([permission,effect]) => rows.push({
+        uid,
+        permission: decodeAccessPermission(permission),
+        effect
+      }));
     });
     rows.sort((a,b) => (a.uid + a.permission).localeCompare(b.uid + b.permission));
     box.innerHTML = rows.length
@@ -1974,7 +1982,11 @@
     if (!box) return;
     const rows = [];
     Object.entries(accessRestrictions || {}).forEach(([uid,map]) => {
-      Object.entries(map || {}).forEach(([permission,item]) => rows.push({uid,permission,item}));
+      Object.entries(map || {}).forEach(([permission,item]) => rows.push({
+        uid,
+        permission: decodeAccessPermission(permission),
+        item
+      }));
     });
     rows.sort((a,b) => Number(b.item?.createdAt || 0) - Number(a.item?.createdAt || 0));
     box.innerHTML = rows.length
@@ -1998,14 +2010,16 @@
   function renderAccessFeatureFlags() {
     const box = $("accessFeatureFlagList");
     if (!box) return;
-    const entries = Object.entries(accessFeatureFlags || {}).sort((a,b) => a[0].localeCompare(b[0]));
+    const entries = Object.entries(accessFeatureFlags || {})
+      .map(([name,item]) => [decodeAccessPermission(name),item,name])
+      .sort((a,b) => a[0].localeCompare(b[0]));
     box.innerHTML = entries.length
-      ? entries.map(([name,item]) =>
+      ? entries.map(([name,item,dbName]) =>
           '<div class="access-policy-row">' +
             '<div><strong>' + escapeHtml(name) + '</strong><span class="small">' + escapeHtml(item?.reason || "—") + '</span></div>' +
             '<span class="status ' + (item?.enabled === false ? "off" : "admin") + '">' + (item?.enabled === false ? "關閉" : "啟用") + '</span>' +
             '<span class="small">' + escapeHtml(formatDate(item?.updatedAt)) + '</span>' +
-            (isMasterOperator() ? '<button class="btn danger" type="button" data-access-flag-delete="' + escapeHtml(name) + '">刪除</button>' : '') +
+            (isMasterOperator() ? '<button class="btn danger" type="button" data-access-flag-delete="' + escapeHtml(dbName) + '">刪除</button>' : '') +
           '</div>'
         ).join("")
       : '<div class="muted">目前沒有 Feature Flag。</div>';
@@ -2128,12 +2142,13 @@
   async function saveAccessOverride() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以設定個人 Allow / Deny");
     const uid = String($("accessOverrideUid")?.value || "").trim();
-    const permission = safeKey($("accessOverridePermission")?.value,80);
+    const permission = String($("accessOverridePermission")?.value || "").trim().slice(0,80);
+    const dbPermission = encodeAccessPermission(permission);
     const effect = $("accessOverrideEffect")?.value === "deny" ? "deny" : "allow";
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!permission) throw new Error("請輸入權限名稱");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被限制權限");
-    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + permission).set(effect);
+    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + dbPermission).set(effect);
     await loadAccessControl();
     void writeAuditLog("access.permission.override", uid, permission, effect.toUpperCase() + " " + permission);
     $("accessOverrideUid").value = "";
@@ -2144,7 +2159,7 @@
   async function removeAccessOverride(uid, permission) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以移除個人權限覆寫");
     const u = safeKey(uid,128);
-    const p = safeKey(permission,80);
+    const p = encodeAccessPermission(permission);
     if (!u || !p) return;
     await db.ref("admin/access/permissionsByUid/" + u + "/" + p).remove();
     await loadAccessControl();
@@ -2155,7 +2170,8 @@
   async function saveAccessRestriction() {
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能設定功能限制");
     const uid = String($("accessRestrictionUid")?.value || "").trim();
-    const permission = safeKey($("accessRestrictionPermission")?.value,80);
+    const permission = String($("accessRestrictionPermission")?.value || "").trim().slice(0,80);
+    const dbPermission = encodeAccessPermission(permission);
     const duration = String($("accessRestrictionDuration")?.value || "3600000");
     const reason = String($("accessRestrictionReason")?.value || "").trim().slice(0,500);
     if (!uid) throw new Error("請輸入使用者 UID");
@@ -2164,7 +2180,7 @@
     if (uid === MASTER_UID || uid === currentUser?.uid) throw new Error("不能限制最高管理員或自己");
     const permanent = duration === "permanent";
     const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
-    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + permission).set({
+    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + dbPermission).set({
       enabled:true,
       permanent,
       until,
@@ -2184,7 +2200,7 @@
   async function removeAccessRestriction(uid, permission) {
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能解除功能限制");
     const u = safeKey(uid,128);
-    const p = safeKey(permission,80);
+    const p = encodeAccessPermission(permission);
     if (!u || !p) return;
     await db.ref("admin/access/restrictionsByUid/" + u + "/" + p).remove();
     await loadAccessControl();
@@ -2194,11 +2210,12 @@
 
   async function saveAccessFeatureFlag() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以管理 Feature Flag");
-    const name = safeKey($("accessFlagName")?.value,80);
+    const name = String($("accessFlagName")?.value || "").trim().slice(0,80);
+    const dbName = encodeAccessPermission(name);
     const enabled = $("accessFlagEnabled")?.value !== "false";
     const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
     if (!name) throw new Error("請輸入功能名稱");
-    await db.ref("admin/featureFlags/" + name).set({
+    await db.ref("admin/featureFlags/" + dbName).set({
       enabled,
       reason,
       updatedAt:firebase.database.ServerValue.TIMESTAMP,
@@ -2214,10 +2231,11 @@
 
   async function deleteAccessFeatureFlag(name) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以刪除 Feature Flag");
-    const key = safeKey(name);
+    const key = String(name || "").trim();
+    const dbKey = encodeAccessPermission(key);
     if (!key) return;
     if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
-    await db.ref("admin/featureFlags/" + key).remove();
+    await db.ref("admin/featureFlags/" + dbKey).remove();
     await loadAccessControl();
     void writeAuditLog("feature.flag.delete", currentUser.uid, key, "刪除 Feature Flag");
     toast("Feature Flag 已刪除");
