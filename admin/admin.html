@@ -194,6 +194,16 @@
         <div class="panel-head"><h3>AI 權限</h3></div>
         <p id="aiPermissionSummary" class="modal-hint"></p>
       </div>
+      <div class="panel">
+        <div class="panel-head"><div><h3>Admin AI Agent</h3><span class="small">受 ai.agent、細分管理權限與 Firebase Rules 控制</span></div><button id="aiAgentClear" class="btn" type="button">清除</button></div>
+        <div id="aiAgentChat" style="display:grid;gap:8px;max-height:360px;overflow:auto;padding:10px 0"></div>
+        <div id="aiAgentAction" class="hidden" style="white-space:pre-wrap;padding:12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;margin:10px 0"></div>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <textarea id="aiAgentInput" class="search" rows="3" maxlength="2000" style="flex:1;resize:vertical" placeholder="例如：把 UID xxx 的 YouTube 搜尋限制 1 天，原因寫成違反規範。"></textarea>
+          <button id="aiAgentSend" class="btn primary" type="button">送出</button>
+        </div>
+        <p id="aiAgentStatus" class="modal-hint"></p>
+      </div>
     </section>
 
     <section id="section-access" class="admin-section hidden">
@@ -434,6 +444,7 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260928-admin-v33"></script>
+<script src="admin.js?v=20260928-admin-v34"></script>
+<script src="admin-agent.js?v=20260928-agent-v1"></script>
 </body>
 </html>
