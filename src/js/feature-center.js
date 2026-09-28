@@ -134,10 +134,44 @@ function openInvite(){
   try{if(typeof window.qrcode==="function"){var qr=window.qrcode(0,"M");qr.addData(link);qr.make();var img=document.createElement("img");img.alt="房間邀請 QR Code";img.src=qr.createDataURL(5,0);img.style.maxWidth="100%";q.appendChild(img);}else{q.textContent="QR Code 元件尚未載入";}}catch(_){q.textContent="QR Code 產生失敗";}
   openModal("wtInviteFeatureModal");
 }
+
+function openQueueMode(){
+  var s=st(),settings=s.room&&s.room.settings||window.WT_ROOM_ACCESS&&window.WT_ROOM_ACCESS.state&&window.WT_ROOM_ACCESS.state.meta&&window.WT_ROOM_ACCESS.state.meta.settings||{},current=String(settings.queueMode||"normal");
+  var body=modal("wtQueueModeModal","佇列播放模式",'<label>播放模式<select id="wtQueueModeSelect"><option value="normal" '+(current==="normal"?"selected":"")+'>依序播放</option><option value="repeat_one" '+(current==="repeat_one"?"selected":"")+'>重播目前影片</option><option value="shuffle" '+(current==="shuffle"?"selected":"")+'>隨機播放下一部</option></select></label><div class="small muted" style="margin-top:10px">設定會同步到房間，影片播完後由房主依此規則處理下一部。</div><div class="wt-feature-actions"><button id="wtQueueModeSave" class="primary-btn">儲存</button></div>');
+  body.querySelector("#wtQueueModeSave").onclick=async function(){try{if(!s.isOwner&&!window.WT_ROOM_ACCESS?.isCohost?.(s.uid))throw new Error("只有房主或 Co-host 可以設定佇列模式");var mode=$("wtQueueModeSelect").value;if(!["normal","repeat_one","shuffle"].includes(mode))throw new Error("佇列模式無效");await db.ref("roomMeta/"+roomId()+"/settings").update({queueMode:mode});if(s.room)s.room.settings=Object.assign({},s.room.settings||{},{queueMode:mode});toast(mode==="repeat_one"?"已設定重播目前影片":mode==="shuffle"?"已設定隨機播放":"已設定依序播放");close("wtQueueModeModal");}catch(e){toast(e.message||"佇列模式儲存失敗");}};
+}
+
+async function openRoomTools(){
+  var id=roomId(),s=st(),u=user();if(!id||!u)return;if(!s.isOwner)return toast("只有房主可以使用房主工具");
+  var snap=await db.ref("members/"+id).once("value").catch(function(){return null;}),members=snap?.val()||{};
+  var entries=Object.entries(members).filter(function(x){return x[0]!==u.uid;});
+  var body=modal("wtRoomToolsModal","房主工具",'<div class="wt-feature-grid"><label class="full">房間名稱<input id="wtRoomRename" maxlength="40" value="'+esc(s.room?.name||"一起看")+'"></label><label class="full">轉移房主<select id="wtTransferOwner"><option value="">保留目前房主</option>'+entries.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1]?.name||x[0])+'｜'+esc(x[0])+'</option>';}).join("")+'</select></label></div><div class="small muted">轉移後你會成為一般成員，新的房主會接管房間控制權。</div><div class="wt-feature-actions"><button id="wtRoomRenameSave" class="secondary-btn">儲存房名</button><button id="wtTransferOwnerBtn" class="primary-btn">轉移房主</button></div>');
+  body.querySelector("#wtRoomRenameSave").onclick=async function(){try{var name=String($("wtRoomRename").value||"").trim().slice(0,40);if(!name)throw new Error("房間名稱不能為空");var updates={};updates["rooms/"+id+"/name"]=name;updates["roomMeta/"+id+"/name"]=name;await db.ref().update(updates);if(s.room)s.room.name=name;if($("roomTitle"))$("roomTitle").textContent=name;toast("房間名稱已更新");}catch(e){toast(e.message||"房間名稱更新失敗");}};
+  body.querySelector("#wtTransferOwnerBtn").onclick=async function(){var target=$("wtTransferOwner").value;if(!target)return toast("請先選擇新房主");var name=String(members[target]?.name||target);if(!window.confirm("確定把房主權限轉移給「"+name+"」嗎？"))return;try{await db.ref("rooms/"+id+"/owner").set(target);toast("房主已轉移給 "+name);close("wtRoomToolsModal");}catch(e){toast(e.message||"房主轉移失敗");}};
+}
+
 function ensureRoomTools(){
   var id=roomId(),copy=$("copyRoomBtn");if(!id||!copy)return;
   if(!$("wtRoomInviteBtn")){var b=document.createElement("button");b.id="wtRoomInviteBtn";b.className="tiny-btn";b.type="button";b.textContent="邀請";b.onclick=openInvite;copy.insertAdjacentElement("afterend",b);}
   if(!$("wtRoomReportBtn")){var c=document.createElement("button");c.id="wtRoomReportBtn";c.className="tiny-btn";c.type="button";c.textContent="回報";c.onclick=function(){openReport("room");};copy.insertAdjacentElement("afterend",c);}
+  if(!$("wtRoomHostToolsBtn")){var h=document.createElement("button");h.id="wtRoomHostToolsBtn";h.className="tiny-btn";h.type="button";h.textContent="房主工具";h.onclick=openRoomTools;copy.insertAdjacentElement("afterend",h);}
+  if(!$("wtQueueModeBtn")){var q=document.createElement("button");q.id="wtQueueModeBtn";q.className="tiny-btn";q.type="button";q.textContent="佇列模式";q.onclick=openQueueMode;$("playQueueNowBtn")?.insertAdjacentElement("afterend",q);}
+}
+
+
+function installFriendRequestWatcher(){
+  var u=user();if(!u||u.isAnonymous||!db)return;
+  if(seen.friendReqUid===u.uid&&seen.friendReqRef)return;
+  if(seen.friendReqRef){try{seen.friendReqRef.off();}catch(_){}}
+  var ref=db.ref("friendRequests/"+u.uid);
+  ref.on("child_added",function(snapshot){
+    var item=snapshot.val();if(!item)return;
+    var key="wt_feature_friendreq_"+u.uid+"_"+snapshot.key+"_"+String(item.createdAt||"");
+    if(localStorage.getItem(key))return;
+    try{localStorage.setItem(key,String(Date.now()));}catch(_){}
+    if(prefs().friendNotifications)pushNotification("新的好友邀請",String(item.fromName||item.name||"有人")+" 想加你為好友。","friend");
+  });
+  seen.friendReqUid=u.uid;seen.friendReqRef=ref;
 }
 
 function track(){
@@ -157,6 +191,8 @@ function init(){
   if($("sourceTypeInput")&&["youtube","vimeo","dailymotion","twitch"].includes(p.defaultPlatform))$("sourceTypeInput").value=p.defaultPlatform;
   setInterval(ensureRoomTools,1000);
   setInterval(track,5000);
+  setInterval(installFriendRequestWatcher,2000);
+  installFriendRequestWatcher();
 }
 wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
