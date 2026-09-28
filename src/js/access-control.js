@@ -159,12 +159,27 @@
     return "";
   }
 
+  function hasAdminBypass(user) {
+    if (!user || isMaster(user)) return true;
+    const role = normalizeRole(state.role);
+    if (!state.role) return false;
+    const permissions = rolePermissions(role, state.roleDefinition);
+    return permissions.has("*") || permissions.has("admin.read");
+  }
+
   function hasPermission(permission, options = {}) {
     const key = String(permission || "").trim();
     if (!key) return false;
     const user = options.user || state.user;
     if (!user) return false;
     if (isMaster(user)) return true;
+    if (
+      state.maintenance?.enabled === true &&
+      key !== "maintenance.manage" &&
+      !hasAdminBypass(user)
+    ) {
+      return false;
+    }
     const restriction = state.restrictions[key];
     if (isActiveRestriction(restriction)) return false;
 
