@@ -1,4 +1,5 @@
 const http = require("node:http");
+const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { Readable } = require("node:stream");
 
@@ -40,6 +41,15 @@ const VERIFY_SITE_URL =
   String(process.env.WATCHTOGETHER_SITE_URL || "https://a0983439343-dot.github.io/WatchTogether")
     .trim()
     .replace(/\/+$/, "");
+const FIREBASE_API_KEY = String(process.env.FIREBASE_API_KEY || "").trim();
+const FIREBASE_DATABASE_URL = String(
+  process.env.FIREBASE_DATABASE_URL ||
+  "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app"
+).trim().replace(/\/+$/, "");
+const MAINTENANCE_PASSWORD_HASH = String(process.env.MAINTENANCE_PASSWORD_HASH || "").trim();
+const MAINTENANCE_MAX_ATTEMPTS = Math.max(1, Math.min(20, Number(process.env.MAINTENANCE_MAX_ATTEMPTS || 5)));
+const MAINTENANCE_LOCKOUT_MS = Math.max(60_000, Math.min(86_400_000, Number(process.env.MAINTENANCE_LOCKOUT_MS || 900_000)));
+const maintenanceFailures = new Map();
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
@@ -576,6 +586,259 @@ async function analyzeBugWithGemini(input) {
     },
     model: usedModel
   };
+}
+
+
+function getBearerToken(req) {
+  const value = String(req.headers.authorization || "").trim();
+  if (!/^Bearer\\s+/i.test(value)) return "";
+  return value.replace(/^Bearer\\s+/i, "").trim();
+}
+
+function getMaintenanceHashConfig() {
+  const raw = MAINTENANCE_PASSWORD_HASH;
+  const match = raw.match(/^scrypt\\$(\\d+)\\$(\\d+)\\$(\\d+)\\$([0-9a-fA-F]+)\\$([0-9a-fA-F]+)$/);
+  if (!match) return null;
+  const N = Number(match[1]);
+  const r = Number(match[2]);
+  const p = Number(match[3]);
+  const salt = Buffer.from(match[4], "hex");
+  const digest = Buffer.from(match[5], "hex");
+  if (!Number.isSafeInteger(N) || !Number.isSafeInteger(r) || !Number.isSafeInteger(p) || !salt.length || !digest.length) {
+    return null;
+  }
+  if (N < 2 ** 10 || N > 2 ** 20 || (N & (N - 1)) !== 0 || r < 1 || r > 64 || p < 1 || p > 16) {
+    return null;
+  }
+  return {N, r, p, salt, digest};
+}
+
+function verifyMaintenancePassword(password) {
+  const config = getMaintenanceHashConfig();
+  if (!config) return false;
+  const derived = crypto.scryptSync(
+    String(password || ""),
+    config.salt,
+    config.digest.length,
+    {N: config.N, r: config.r, p: config.p, maxmem: 128 * 1024 * 1024}
+  );
+  return crypto.timingSafeEqual(derived, config.digest);
+}
+
+function maintenanceLockKey(req, uid) {
+  return getClientIp(req) + ":" + uid;
+}
+
+function getMaintenanceFailureState(key) {
+  const current = maintenanceFailures.get(key);
+  if (!current) return null;
+  if (current.lockedUntil > Date.now()) return current;
+  if (Date.now() - current.lastFailureAt > MAINTENANCE_LOCKOUT_MS) {
+    maintenanceFailures.delete(key);
+    return null;
+  }
+  return current;
+}
+
+function registerMaintenanceFailure(key) {
+  const current = getMaintenanceFailureState(key) || {attempts: 0, lastFailureAt: 0, lockedUntil: 0};
+  current.attempts += 1;
+  current.lastFailureAt = Date.now();
+  if (current.attempts >= MAINTENANCE_MAX_ATTEMPTS) {
+    current.lockedUntil = Date.now() + MAINTENANCE_LOCKOUT_MS;
+  }
+  maintenanceFailures.set(key, current);
+  return current;
+}
+
+function clearMaintenanceFailures(key) {
+  maintenanceFailures.delete(key);
+}
+
+async function lookupFirebaseIdToken(idToken) {
+  if (!FIREBASE_API_KEY || !idToken) return null;
+  const response = await fetch(
+    "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" +
+      encodeURIComponent(FIREBASE_API_KEY),
+    {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({idToken})
+    }
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(String(data?.error?.message || "Firebase token verification failed").slice(0,300));
+    error.httpStatus = response.status;
+    throw error;
+  }
+  const user = Array.isArray(data?.users) ? data.users[0] : null;
+  return user && user.localId ? {
+    uid: String(user.localId),
+    email: String(user.email || "").trim().toLowerCase(),
+    emailVerified: user.emailVerified === true
+  } : null;
+}
+
+function createFirebasePushId() {
+  const PUSH_CHARS = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+  let now = Date.now();
+  let id = "";
+  const timeChars = new Array(8);
+  for (let i = 7; i >= 0; i -= 1) {
+    timeChars[i] = PUSH_CHARS.charAt(now % 64);
+    now = Math.floor(now / 64);
+  }
+  id += timeChars.join("");
+  const randomBytes = crypto.randomBytes(12);
+  for (let i = 0; i < 12; i += 1) {
+    id += PUSH_CHARS.charAt(randomBytes[i] % 64);
+  }
+  return id;
+}
+
+async function writeMaintenanceState(idToken, user, enabled, reason, restoreAt) {
+  const maintenance = {
+    enabled: enabled === true,
+    reason: String(reason || "").trim().slice(0,500),
+    restoreAt: Math.max(0, Number(restoreAt) || 0),
+    updatedAt: Date.now(),
+    updatedByUid: user.uid,
+    updatedByEmail: user.email
+  };
+  const auditId = createFirebasePushId();
+  const action = maintenance.enabled ? "maintenance.on" : "maintenance.off";
+  const details = maintenance.enabled
+    ? "網站關站： " + maintenance.reason + " · 預計恢復 " + (maintenance.restoreAt ? new Date(maintenance.restoreAt).toISOString() : "未設定")
+    : "網站重新開站";
+  const updates = {};
+  updates["site/maintenance"] = maintenance;
+  updates["admin/auditLogs/" + auditId] = {
+    action,
+    actorUid: user.uid,
+    actorEmail: user.email,
+    actorRole: "master",
+    targetUid: user.uid,
+    targetName: "網站維護模式",
+    details,
+    createdAt: maintenance.updatedAt
+  };
+
+  const response = await fetch(FIREBASE_DATABASE_URL + ".json?auth=" + encodeURIComponent(idToken), {
+    method: "PATCH",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(updates)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(String(data?.error || "Firebase maintenance write failed").slice(0,500));
+    error.httpStatus = response.status;
+    throw error;
+  }
+  return maintenance;
+}
+
+async function handleMaintenanceControl(req, res) {
+  if (req.method !== "POST") {
+    send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+
+  if (!MAINTENANCE_PASSWORD_HASH || !getMaintenanceHashConfig()) {
+    send(res, 503, JSON.stringify({
+      ok:false,
+      error:"maintenance_password_not_configured",
+      message:"Render 尚未設定有效的 MAINTENANCE_PASSWORD_HASH"
+    }));
+    return;
+  }
+
+  const idToken = getBearerToken(req);
+  if (!idToken) {
+    send(res, 401, JSON.stringify({ok:false,error:"missing_auth_token"}));
+    return;
+  }
+
+  let user;
+  try {
+    user = await lookupFirebaseIdToken(idToken);
+  } catch (error) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_auth_token"}));
+    return;
+  }
+
+  const masterUid = "35d45a23-b648-4caf-a6d5-a69112860551";
+  const masterEmail = "a0983439343@gmail.com";
+  if (!user || (user.uid !== masterUid && user.email !== masterEmail)) {
+    send(res, 403, JSON.stringify({ok:false,error:"master_only"}));
+    return;
+  }
+
+  const key = maintenanceLockKey(req, user.uid);
+  const failureState = getMaintenanceFailureState(key);
+  if (failureState?.lockedUntil > Date.now()) {
+    const retryAfter = Math.max(1, Math.ceil((failureState.lockedUntil - Date.now()) / 1000));
+    res.setHeader("Retry-After", String(retryAfter));
+    send(res, 429, JSON.stringify({
+      ok:false,
+      error:"maintenance_password_locked",
+      retryAfter
+    }));
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, 16_384);
+  } catch (error) {
+    send(res, 400, JSON.stringify({ok:false,error:"invalid_json"}));
+    return;
+  }
+
+  const enabled = body?.enabled === true;
+  const password = String(body?.password || "");
+  const reason = String(body?.reason || "").trim().slice(0,500);
+  const restoreAt = Math.max(0, Number(body?.restoreAt || 0));
+
+  if (!password || password.length > 256) {
+    registerMaintenanceFailure(key);
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_password"}));
+    return;
+  }
+
+  if (!verifyMaintenancePassword(password)) {
+    const next = registerMaintenanceFailure(key);
+    const locked = next.lockedUntil > Date.now();
+    send(res, locked ? 429 : 401, JSON.stringify({
+      ok:false,
+      error: locked ? "maintenance_password_locked" : "invalid_password",
+      attemptsRemaining: locked ? 0 : Math.max(0, MAINTENANCE_MAX_ATTEMPTS - next.attempts),
+      retryAfter: locked ? Math.max(1, Math.ceil((next.lockedUntil - Date.now()) / 1000)) : 0
+    }));
+    return;
+  }
+
+  if (enabled && !reason) {
+    send(res, 400, JSON.stringify({ok:false,error:"maintenance_reason_required"}));
+    return;
+  }
+  if (restoreAt && restoreAt < Date.now() - 60_000) {
+    send(res, 400, JSON.stringify({ok:false,error:"invalid_restore_time"}));
+    return;
+  }
+
+  try {
+    const maintenance = await writeMaintenanceState(idToken, user, enabled, reason || "手動維護", restoreAt);
+    clearMaintenanceFailures(key);
+    send(res, 200, JSON.stringify({ok:true,maintenance}));
+  } catch (error) {
+    console.error("[maintenance-control]", error?.message || error);
+    send(res, Number(error?.httpStatus) >= 400 ? Number(error.httpStatus) : 502, JSON.stringify({
+      ok:false,
+      error:"maintenance_write_failed",
+      message:String(error?.message || "maintenance write failed").slice(0,500)
+    }));
+  }
 }
 
 async function fetchVerifyText(url, timeoutMs = 8000) {
@@ -1887,6 +2150,11 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/ai/analyze") {
     handleAiAnalyze(req, res);
+    return;
+  }
+
+  if (url.pathname === "/admin/maintenance") {
+    handleMaintenanceControl(req, res);
     return;
   }
 
