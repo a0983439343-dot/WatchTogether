@@ -1651,6 +1651,7 @@ serialTest("room captions: owner/cohost can write and members can read, outsider
     updatedByUid: USER_UID
   };
 
+  console.log("DEBUG_CAPTION_STATE", JSON.stringify({authUid:user.uid, roomOwner:(await master.ref("rooms/CAP001/owner").once("value")).val(), ownerMember:(await master.ref("members/CAP001/"+USER_UID).once("value")).val(), caption:(await master.ref("roomCaptions/CAP001").once("value")).val(), admin:(await master.ref("admin").once("value")).val()}));
   await assertSucceeds(owner.ref("roomCaptions/CAP001").set(payload));
   await assertSucceeds(member.ref("roomCaptions/CAP001").once("value"));
 
