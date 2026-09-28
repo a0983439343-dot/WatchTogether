@@ -90,8 +90,10 @@
     style.textContent = [
       ".wt-pack-health{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:4px 8px;border-radius:999px;border:1px solid rgba(148,163,184,.18);font-size:11px;color:#94a3b8}",
       ".wt-pack-health.good{color:#86efac}.wt-pack-health.warn{color:#fde68a}.wt-pack-health.bad{color:#fca5a5}",
-      ".wt-pack-drop-zone{transition:.15s ease}.wt-pack-drop-zone.drag-over{outline:2px dashed rgba(96,165,250,.7);outline-offset:3px}",
       ".wt-chat-mention{font-weight:800;color:#93c5fd;background:rgba(59,130,246,.12);border-radius:5px;padding:1px 3px}",
+      ".wt-chat-pinned-bar{display:grid;gap:6px;padding:8px 10px;margin:0 0 8px;border:1px solid rgba(148,163,184,.16);border-radius:12px;background:rgba(15,23,42,.34)}",
+      ".wt-chat-pinned-list{display:flex;gap:6px;overflow:auto}.wt-chat-pinned-item{flex:0 0 auto;max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(148,163,184,.14);background:rgba(59,130,246,.08);color:inherit;border-radius:999px;padding:6px 9px;cursor:pointer}",
+      ".queue-item[draggable='true']{cursor:grab}.queue-item.queue-dragging{opacity:.55}.queue-item.queue-drag-over{outline:2px dashed rgba(96,165,250,.7);outline-offset:2px}",
       ".wt-explore-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wt-explore-grid .full{grid-column:1/-1}",
       ".wt-explore-result{padding:12px;border:1px solid rgba(148,163,184,.14);border-radius:14px;background:rgba(15,23,42,.32);display:flex;align-items:center;justify-content:space-between;gap:12px}",
       ".wt-explore-result strong{display:block}.wt-explore-result .small{word-break:break-all}",
@@ -382,38 +384,6 @@
     setHealth("","待命");
   }
 
-  function installQueueDnD() {
-    const list = $("queueList");
-    const reorder = core?.reorderQueueItem;
-    if (!list || typeof reorder !== "function" || list.dataset.wtDnDBound) return;
-    list.dataset.wtDnDBound = "1";
-    const observer = new MutationObserver(() => {
-      list.querySelectorAll(".queue-item[draggable='true']").forEach(item => {
-        if (item.dataset.wtPackDnD) return;
-        item.dataset.wtPackDnD = "1";
-        item.addEventListener("dragenter", event => {
-          event.preventDefault();
-          item.classList.add("wt-pack-drop-zone","drag-over");
-        });
-        item.addEventListener("dragover", event => {
-          event.preventDefault();
-          item.classList.add("wt-pack-drop-zone","drag-over");
-        });
-        item.addEventListener("dragleave", () => item.classList.remove("wt-pack-drop-zone","drag-over"));
-        item.addEventListener("drop", async event => {
-          event.preventDefault();
-          const source = event.dataTransfer?.getData("text/plain") || "";
-          item.classList.remove("wt-pack-drop-zone","drag-over");
-          if (!source || source === item.dataset.queueId) return;
-          try { await reorder(source,item.dataset.queueId); toast("佇列順序已更新"); }
-          catch (error) { toast(error?.message || "拖曳排序失敗"); }
-        });
-      });
-    });
-    observer.observe(list,{childList:true,subtree:true});
-    list.querySelectorAll(".queue-item[draggable='true']").forEach(item => item.dispatchEvent(new Event("dragenter")));
-  }
-
   function ensureRoomToolsButton() {
     if (!inRoom()) return;
     const anchor = $("copyRoomBtn");
@@ -497,28 +467,13 @@
     const s = core?.state;
     if (!s) return;
     const stats = getStats();
-    let changed = false;
     const key = String(s.room?.sourceType || "") + ":" + String(s.currentVideoId || "");
-    if (s.roomId && s.isPlaying) {
-      stats.watchSeconds = Number(stats.watchSeconds || 0) + 5;
-      changed = true;
-    }
-    if (key && key !== ":" && key !== track.lastVideo) {
-      stats.videosStarted = Number(stats.videosStarted || 0) + 1;
-      const platform = String(s.room?.sourceType || "youtube");
-      stats.platformStarts[platform] = Number(stats.platformStarts[platform] || 0) + 1;
-      track.lastVideo = key;
-      changed = true;
-    }
-    if (s.roomId && s.roomId !== track.lastRoom) {
-      stats.roomsJoined = Number(stats.roomsJoined || 0) + 1;
-      track.lastRoom = s.roomId;
-      changed = true;
-    }
-    if (changed) {
-      stats.lastAt = Date.now();
-      localStorage.setItem(STATS_KEY,JSON.stringify(stats));
-    }
+    if (!key || key === ":" || key === track.lastVideo) return;
+    const platform = String(s.room?.sourceType || "youtube");
+    stats.platformStarts[platform] = Number(stats.platformStarts[platform] || 0) + 1;
+    stats.lastAt = Date.now();
+    track.lastVideo = key;
+    localStorage.setItem(STATS_KEY,JSON.stringify(stats));
   }
 
   function init() {
@@ -529,7 +484,6 @@
       ensureRoomToolsButton();
       ensureShortcutsNotice();
       installPlayerHealth();
-      installQueueDnD();
     },1000);
     setInterval(track,5000);
   }
