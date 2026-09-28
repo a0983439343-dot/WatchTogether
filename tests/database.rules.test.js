@@ -353,6 +353,70 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
   );
 });
 
+test("atomic access and report updates require matching Audit permissions", async () => {
+  const admin = db(ADMIN_UID, adminToken);
+  const viewer = db(VIEWER_UID, viewerToken);
+  const reportHistoryId = "atomic-history";
+  const historyKey = admin.ref("reportHistoryEvents/" + reportHistoryId).push().key;
+  const auditKey = admin.ref("admin/auditLogs").push().key;
+  assert.ok(historyKey);
+  assert.ok(auditKey);
+
+  const atomicUpdates = {
+    ["admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send"]: {
+      enabled: true,
+      permanent: false,
+      until: Date.now() + 3600000,
+      reason: "atomic test restriction",
+      createdAt: Date.now(),
+      createdByUid: ADMIN_UID,
+      createdByEmail: "admin@example.com"
+    },
+    ["reportHistoryEvents/" + reportHistoryId + "/" + historyKey]: {
+      reportId: reportHistoryId,
+      event: "manual_status",
+      createdAt: Date.now(),
+      actorUid: ADMIN_UID,
+      actorEmail: "admin@example.com",
+      source: "admin",
+      details: "atomic report history"
+    },
+    ["admin/auditLogs/" + auditKey]: {
+      action: "access.user.restriction",
+      actorUid: ADMIN_UID,
+      actorEmail: "admin@example.com",
+      actorRole: "custom",
+      targetUid: OTHER_UID,
+      targetName: "atomic test",
+      details: "atomic access test",
+      createdAt: Date.now()
+    }
+  };
+
+  await assertSucceeds(admin.ref().update(atomicUpdates));
+  await assertFails(viewer.ref().update({
+    ["admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send"]: {
+      enabled: true,
+      permanent: false,
+      until: Date.now() + 3600000,
+      reason: "viewer should fail",
+      createdAt: Date.now(),
+      createdByUid: VIEWER_UID,
+      createdByEmail: "viewer@example.com"
+    },
+    ["admin/auditLogs/" + viewer.ref("admin/auditLogs").push().key]: {
+      action: "access.user.restriction",
+      actorUid: VIEWER_UID,
+      actorEmail: "viewer@example.com",
+      actorRole: "viewer",
+      targetUid: OTHER_UID,
+      targetName: "viewer test",
+      details: "must be rejected",
+      createdAt: Date.now()
+    }
+  }));
+});
+
 test("audit logs: admin can append, cannot modify, and audit.delete controls deletion", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs");
 
