@@ -531,6 +531,13 @@
 
   };
 
+  const restrictionRefreshTimer = window.setInterval(() => {
+    try {
+      renderRestrictionNotice();
+      renderMaintenance();
+    } catch (_) {}
+  }, 30000);
+
   if (!window.WT_ACCESS_CONTROL_READY) {
     window.WT_ACCESS_CONTROL_READY = true;
     if (document.readyState === "loading") {
