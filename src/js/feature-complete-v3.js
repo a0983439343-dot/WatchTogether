@@ -57,7 +57,7 @@
     const u=user();
     if(!u||!db||!settings().cloudHistory){cloudHistoryData={};return}
     try{cloudHistoryData=(await db.ref("watchHistory/"+u.uid).limitToLast(100).once("value")).val()||{}}
-    catch(_){cloudHistory={}}
+    catch(_){cloudHistoryData={}}
   }
 
   function mergedHistory(){
