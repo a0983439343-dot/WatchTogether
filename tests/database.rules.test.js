@@ -513,6 +513,33 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   );
 });
 
+test("chat media messages: image and audio payloads pass validation", async () => {
+  const ref = db(USER_UID, userToken).ref("chat/ABC123/media-test");
+
+  await assertSucceeds(ref.set({
+    uid: USER_UID,
+    name: "User",
+    type: "image",
+    mediaUrl: "https://example.com/image.webp",
+    mediaPath: "chatMedia/" + USER_UID + "/" + OTHER_UID + "/image.webp",
+    mediaName: "image.webp",
+    mediaSize: 128000,
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(ref.set({
+    uid: USER_UID,
+    name: "User",
+    type: "audio",
+    mediaUrl: "https://example.com/voice.webm",
+    mediaPath: "chatMedia/" + USER_UID + "/" + OTHER_UID + "/voice.webm",
+    mediaName: "voice.webm",
+    mediaSize: 256000,
+    duration: 12,
+    createdAt: Date.now()
+  }));
+});
+
 test("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
   const adminDb = db(ADMIN_UID, {
     email: "admin@example.com",
