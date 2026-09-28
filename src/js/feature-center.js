@@ -378,9 +378,12 @@ function installRoomInviteWatcher(){
 }
 
 function installFriendshipWatcher(){
-  var u=user();if(!u||u.isAnonymous||!db||window.__WT_FRIENDSHIP_WATCH_UID===u.uid)return;
-  window.__WT_FRIENDSHIP_WATCH_UID=u.uid;
+  var u=user();if(!u||u.isAnonymous||!db)return;
+  if(window.__WT_FRIENDSHIP_WATCHER_UID===u.uid)return;
+  if(window.__WT_FRIENDSHIP_WATCHER_REF){try{window.__WT_FRIENDSHIP_WATCHER_REF.off();}catch(_){}}
+  window.__WT_FRIENDSHIP_WATCHER_UID=u.uid;
   var ref=db.ref("friendships/"+u.uid);
+  window.__WT_FRIENDSHIP_WATCHER_REF=ref;
   ref.once("value").then(function(initial){
     var known={};
     initial.forEach(function(child){known[String(child.key||"")]=true;});
@@ -390,9 +393,7 @@ function installFriendshipWatcher(){
       db.ref("profiles/"+uid).once("value").then(function(ps){
         var p=ps.val()||{};
         if(prefs().friendNotifications)pushNotification("好友已加入",String(p.displayName||"你的好友")+" 現在已成為好友。","friend");
-      }).catch(function(){
-        if(prefs().friendNotifications)pushNotification("好友已加入","你有一位新的好友。","friend");
-      });
+      }).catch(function(){});
     });
   }).catch(function(){});
 }
