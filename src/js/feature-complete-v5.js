@@ -1089,6 +1089,7 @@
   }
 
   wt.openFriends=openFriends;
+  wt.openChat=openFriends;
   wt.openDm=openDm;
   wt.openDmList=openDmList;
   wt.sendFriendRequest=sendFriendRequest;
