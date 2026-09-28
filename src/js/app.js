@@ -10963,6 +10963,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     state.membersRef =
       null;
 
+    state.roomMutesRef =
+      null;
+
+    state.roomMutes =
+      {};
+
+    state.roomBansRef =
+      null;
+
+    state.roomBans =
+      {};
+
     state.kickedRef =
       null;
 
