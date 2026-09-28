@@ -717,7 +717,7 @@ async function writeMaintenanceState(idToken, user, enabled, reason, restoreAt) 
     action,
     actorUid: user.uid,
     actorEmail: user.email,
-    actorRole: "master",
+    actorRole: String(user.role || "admin").slice(0,80),
     targetUid: user.uid,
     targetName: "網站維護模式",
     details,
@@ -738,6 +738,61 @@ async function writeMaintenanceState(idToken, user, enabled, reason, restoreAt) 
   return maintenance;
 }
 
+async function authorizeMaintenanceRequest(req) {
+  const idToken = getBearerToken(req);
+  if (!idToken) return {ok:false,status:401,error:"missing_auth_token"};
+
+  let user;
+  try {
+    user = await lookupFirebaseIdToken(idToken);
+  } catch (_) {
+    return {ok:false,status:401,error:"invalid_auth_token"};
+  }
+  if (!user) return {ok:false,status:401,error:"invalid_auth_token"};
+
+  const uid = user.uid;
+  const email = String(user.email || "").trim().toLowerCase();
+  const isMaster = uid === "35d45a23-b648-4caf-a6d5-a69112860551" || email === "a0983439343@gmail.com";
+  if (isMaster) return {ok:true,user,role:"master"};
+
+  let restriction;
+  let flag;
+  let override;
+  let assignedRole;
+  let whitelist;
+  try {
+    [restriction, flag, override, assignedRole, whitelist] = await Promise.all([
+      fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/maintenance__manage",idToken),
+      fetchFirebaseJson("admin/featureFlags/maintenance__manage",idToken),
+      fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/maintenance__manage",idToken),
+      fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
+    ]);
+  } catch (_) {
+    return {ok:false,status:503,error:"maintenance_policy_unavailable",message:"目前無法驗證維護權限，請稍後再試。"};
+  }
+
+  if (isActivePolicy(restriction)) return {ok:false,status:403,error:"maintenance_restricted",message:String(restriction.reason || "目前帳號無法控制網站維護模式。").slice(0,500)};
+  if (flag && flag.enabled === false) return {ok:false,status:403,error:"maintenance_feature_disabled",message:String(flag.reason || "維護控制功能目前停用。").slice(0,500)};
+  if (override === "deny") return {ok:false,status:403,error:"maintenance_permission_denied",message:"目前帳號被禁止控制網站維護模式。"};
+  if (override === "allow") return {ok:true,user,role:"override"};
+
+  const roleId = String(assignedRole || "").trim();
+  if (roleId) {
+    let definition;
+    try {
+      definition = await fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId),idToken);
+    } catch (_) {
+      return {ok:false,status:503,error:"maintenance_policy_unavailable",message:"目前無法驗證維護角色權限，請稍後再試。"};
+    }
+    const permissions = definition && definition.permissions && typeof definition.permissions === "object" ? definition.permissions : null;
+    if (permissions && (permissions.__all__ === true || permissions.maintenance__manage === true)) return {ok:true,user,role:roleId};
+    return {ok:false,status:403,error:"maintenance_permission_denied",message:"目前角色沒有維護控制權限。"};
+  }
+
+  if (whitelist && whitelist.enabled === true && String(whitelist.role || "admin") === "admin") return {ok:true,user,role:"admin"};
+  return {ok:false,status:403,error:"maintenance_permission_denied",message:"只有具備維護控制權限的管理角色可以操作。"};
+}
 async function handleMaintenanceControl(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
@@ -767,12 +822,16 @@ async function handleMaintenanceControl(req, res) {
     return;
   }
 
-  const masterUid = "35d45a23-b648-4caf-a6d5-a69112860551";
-  const masterEmail = "a0983439343@gmail.com";
-  if (!user || (user.uid !== masterUid && user.email !== masterEmail)) {
-    send(res, 403, JSON.stringify({ok:false,error:"master_only"}));
+  const authorization = await authorizeMaintenanceRequest(req);
+  if (!authorization.ok) {
+    send(res, authorization.status, JSON.stringify({
+      ok:false,
+      error:authorization.error,
+      message:authorization.message || authorization.error
+    }));
     return;
   }
+  user = {...user, role: authorization.role};
 
   const key = maintenanceLockKey(req, user.uid);
   const failureState = getMaintenanceFailureState(key);
