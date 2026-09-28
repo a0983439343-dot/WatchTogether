@@ -70,6 +70,8 @@
     <button class="nav-item" data-section="whitelist">白名單</button>
     <button class="nav-item" data-section="access">⚙️ 2.0 控制中心</button>
      <button class="nav-item" data-section="reports">🐛 問題回報</button>
+     <button class="nav-item" data-section="analytics">📊 Analytics</button>
+     <button class="nav-item" data-section="ai">🤖 AI 管理</button>
      <button class="nav-item" data-section="audit">📜 操作紀錄</button>
   </aside>
 
@@ -146,6 +148,34 @@
          </table>
        </div>
      </section>
+
+    <section id="section-analytics" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">SYSTEM ANALYTICS</div><h2>Analytics</h2></div><button id="analyticsRefreshBtn" class="btn primary">重新整理</button></div>
+      <div class="stats-grid">
+        <article class="stat-card"><span>使用者</span><strong id="analyticsAccounts">—</strong></article>
+        <article class="stat-card"><span>目前在線房間成員</span><strong id="analyticsOnlineMembers">—</strong></article>
+        <article class="stat-card"><span>房間</span><strong id="analyticsRooms">—</strong></article>
+        <article class="stat-card"><span>待處理回報</span><strong id="analyticsOpenReports">—</strong></article>
+        <article class="stat-card"><span>已處理回報</span><strong id="analyticsResolvedReports">—</strong></article>
+        <article class="stat-card"><span>24 小時 Audit</span><strong id="analyticsAudit24h">—</strong></article>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Audit 操作分布</h3></div>
+        <div id="analyticsAuditActions" class="access-policy-list"></div>
+      </div>
+    </section>
+
+    <section id="section-ai" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">AI MANAGEMENT</div><h2>AI 管理</h2></div><button id="aiStatusRefreshBtn" class="btn primary">檢查 AI 狀態</button></div>
+      <div class="panel">
+        <div id="aiStatusGrid" class="info-grid"></div>
+        <p id="aiStatusHint" class="modal-hint"></p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>AI 權限</h3></div>
+        <p id="aiPermissionSummary" class="modal-hint"></p>
+      </div>
+    </section>
 
     <section id="section-access" class="admin-section hidden">
       <div class="section-head"><div><div class="eyebrow">ACCESS CONTROL 2.0</div><h2>權限與限制控制中心</h2></div><button id="accessRefreshBtn" class="btn primary">重新整理</button></div>
@@ -385,6 +415,6 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260928-admin-v32"></script>
+<script src="admin.js?v=20260928-admin-v33"></script>
 </body>
 </html>
