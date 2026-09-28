@@ -201,7 +201,7 @@ jobs:
           BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
         run: |
           node - <<'NODE'
-          const base = String(process.env.BUG_SERVICE_URL || "").replace(/\\/+$/, "");
+          const base = String(process.env.BUG_SERVICE_URL || "").replace(/\/+$/, "");
           const healthUrl = base + "/ai/health";
           const analyzeUrl = base + "/ai/analyze";
 
@@ -209,7 +209,9 @@ jobs:
           const healthText = await healthResponse.text();
           let health = {};
           try { health = JSON.parse(healthText); } catch (_) {}
-          if (!healthResponse.ok || health.ok !== true || health.provider !== "gemini" || !/^gemini-(?:3\\.|2\\.5-)/.test(String(health.model || ""))) {
+          const healthModel = String(health.model || "");
+          const healthModelOk = healthModel.startsWith("gemini-3.") || healthModel.startsWith("gemini-2.5-");
+          if (!healthResponse.ok || health.ok !== true || health.provider !== "gemini" || !healthModelOk) {
             throw new Error("Bug AI health verification failed: HTTP " + healthResponse.status + " " + healthText.slice(0, 500));
           }
           console.log("Bug AI service health verified:", JSON.stringify({ok:health.ok, provider:health.provider, model:health.model, repairModel:health.repairModel, configuredKeys:health.configuredKeys}));
@@ -218,7 +220,7 @@ jobs:
           const response = await fetch(analyzeUrl, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({phase:"detect",report:{category:"other",details:"CI authentication gate probe " + probeId,fingerprint:probeId,buildVersion:probeId,source:"ci",occurrences:1,createdAt:Date.now()},evidence:{liveErrorPresent:false},current:{healthy:true}}
+            body: JSON.stringify({phase:"detect",report:{category:"other",details:"CI authentication gate probe " + probeId,fingerprint:probeId,buildVersion:probeId,source:"ci",occurrences:1,createdAt:Date.now()},evidence:{liveErrorPresent:false},current:{healthy:true}})
           });
           const text = await response.text();
           let json = {};
