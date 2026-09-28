@@ -235,6 +235,8 @@
 
     roomMutesRef: null,
     roomMutes: {},
+    roomBansRef: null,
+    roomBans: {},
 
     kickedRef: null,
 
@@ -7296,6 +7298,42 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
     }
 
+    if (!state.adminJoinOverride) {
+      const roomBanSnapshot =
+        await db
+          .ref(
+            `roomBans/${roomId}/${state.uid}`
+          )
+          .once("value");
+
+      const roomBan =
+        roomBanSnapshot.val() || {};
+
+      if (isActiveRoomBan(roomBan)) {
+        if (roomBan.permanent === true) {
+          throw new Error(
+            "你已被此房間封鎖，無法加入"
+          );
+        }
+
+        const minutes =
+          Math.max(
+            1,
+            Math.ceil(
+              Math.max(
+                0,
+                Number(roomBan.until || 0) -
+                Date.now()
+              ) / 60000
+            )
+          );
+
+        throw new Error(
+          `你已被此房間封鎖，請 ${minutes} 分鐘後再加入`
+        );
+      }
+    }
+
     state.roomId =
       roomId;
 
@@ -7372,6 +7410,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.membersRef = null;
       state.roomMutesRef = null;
       state.roomMutes = {};
+      state.roomBansRef = null;
+      state.roomBans = {};
       state.kickedRef = null;
       state.chatRef = null;
       state.queueRef = null;
@@ -10660,6 +10700,78 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  function isActiveRoomBan(item) {
+    if (!item || typeof item !== "object") return false;
+    if (item.permanent === true) return true;
+    return Number(item.until || 0) > Date.now();
+  }
+
+  async function toggleRoomBan(targetUid, targetName) {
+    const isCohost = Boolean(
+      window.WT_ROOM_ACCESS?.isCohost?.(state.uid)
+    );
+
+    if (!state.isOwner && !isCohost) {
+      toast("只有房主或 Co-host 可以管理房間封鎖");
+      return;
+    }
+
+    if (!targetUid || targetUid === state.uid) return;
+    if (String(targetUid) === String(state.room?.owner || "")) return;
+
+    const ref = db.ref(
+      "roomBans/" + state.roomId + "/" + targetUid
+    );
+
+    if (isActiveRoomBan(state.roomBans?.[targetUid])) {
+      try {
+        await ref.remove();
+        toast("已解除 " + (targetName || "成員") + " 的房間封鎖");
+      } catch (error) {
+        toast(error?.message || "解除房間封鎖失敗");
+      }
+      return;
+    }
+
+    const raw = window.prompt(
+      "輸入封鎖分鐘數，輸入 0 代表永久封鎖。",
+      "60"
+    );
+
+    if (raw === null) return;
+
+    const minutes = Number(raw);
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      toast("封鎖時間無效");
+      return;
+    }
+
+    const safeMinutes = Math.min(43200, Math.floor(minutes));
+    const permanent = safeMinutes === 0;
+    const until = permanent ? 0 : Date.now() + safeMinutes * 60000;
+
+    try {
+      await ref.set({
+        uid: targetUid,
+        until,
+        permanent,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid: state.uid
+      });
+
+      await state.membersRef?.child(targetUid).remove().catch(() => {});
+
+      toast(
+        permanent
+          ? "已永久封鎖 " + (targetName || "成員")
+          : "已封鎖 " + (targetName || "成員") + " " + safeMinutes + " 分鐘"
+      );
+    } catch (error) {
+      toast(error?.message || "房間封鎖失敗");
+    }
+  }
+
+
   /*
    * 房主踢人。
    *
@@ -12784,6 +12896,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     try {
       state.membersRef?.off();
       state.roomMutesRef?.off();
+      state.roomBansRef?.off();
       state.kickedRef?.off();
 
       state.chatRef?.off();
