@@ -540,11 +540,37 @@ function updateHistorySelectionBar() {
   if (modeBtn) modeBtn.textContent = active ? "完成選取" : "選取刪除";
 }
 
+async function pruneInvalidRecentRooms() {
+  if (state.recentRoomValidationAt && Date.now() - state.recentRoomValidationAt < 60000) return false;
+  if (!firebase || !firebase.database || !auth || !auth.currentUser) return false;
+  state.recentRoomValidationAt = Date.now();
+  var list = recentRooms();
+  if (!list.length) return false;
+  var keep = [];
+  var changed = false;
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    try {
+      var snap = await firebase.database().ref("rooms/" + item.id).once("value");
+      if (snap.exists()) keep.push(item);
+      else changed = true;
+    } catch (_) {
+      keep.push(item);
+    }
+  }
+  if (!changed) return false;
+  writeJson(KEYS.recentRooms, keep);
+  return true;
+}
+
 function renderRecentRooms() {
   var box = $("wtRecentRooms");
   if (!box) return;
   var list = recentRooms();
   updateRecentRoomSelectionBar();
+  void pruneInvalidRecentRooms().then(function(changed){
+    if (changed && $("wtRecentRooms")) renderRecentRooms();
+  });
   if (!list.length) {
     box.innerHTML = '<div class="wt-card-section" style="grid-column:1/-1;"><div class="wt-small">目前沒有最近房間。加入或建立房間後會顯示在這裡。</div></div>';
     return;
