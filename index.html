@@ -1,1216 +1,282 @@
 <!doctype html>
-<html lang="zh-Hant" translate="no">
+<html lang="zh-Hant">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b1020">
-  <meta name="google" content="notranslate">
-  <meta name="description" content="WatchTogether - 和朋友一起同步看影片、聊天與加好友"><meta name="robots" content="index,follow"><meta property="og:title" content="WatchTogether｜一起看"><meta property="og:description" content="和朋友一起同步看影片、聊天、貼圖與私訊。"><meta property="og:type" content="website"><meta property="og:url" content="https://a0983439343-dot.github.io/WatchTogether/"><link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="./icon.svg">
-  <title>WatchTogether｜一起看</title>
-
-  <!--
-    GitHub Pages 沒有可自訂的 HTTP COOP header。
-    先註冊同源 Service Worker，讓後續頁面導覽使用
-    same-origin-allow-popups，以相容 Firebase Google Popup Auth。
-  -->
-  <script>
-  (() => {
-    if (!("serviceWorker" in navigator)) {
-      return;
-    }
-
-    window.__WATCHTOGETHER_BUILD__ = "20260928-formal-v99";
-
-    window.addEventListener("load", async () => {
-      try {
-        const currentBuild = "20260928-formal-v99";
-
-        const registrations =
-          await navigator.serviceWorker.getRegistrations();
-
-        await Promise.all(
-          registrations
-            .filter(registration => {
-              const scriptURL =
-                registration.active?.scriptURL ||
-                registration.installing?.scriptURL ||
-                registration.waiting?.scriptURL ||
-                "";
-              return !scriptURL.includes(currentBuild);
-            })
-            .map(registration => registration.unregister())
-        );
-
-        if ("caches" in window) {
-          const cacheKeys = await caches.keys();
-
-          await Promise.all(
-            cacheKeys
-              .filter(
-                key =>
-                  key.startsWith("wt-shell-") &&
-                  key !== "wt-shell-20260928-v99"
-              )
-              .map(key => caches.delete(key))
-          );
-        }
-
-        const registration =
-          await navigator.serviceWorker.register(
-            "./sw.js?v=20260928-formal-v99",
-            {
-              scope: "./"
-            }
-          );
-
-        await registration.update();
-
-        if (
-          !navigator.serviceWorker.controller &&
-          !sessionStorage.getItem(
-            "wt-sw-coop-reloaded"
-          )
-        ) {
-          sessionStorage.setItem(
-            "wt-sw-coop-reloaded",
-            "1"
-          );
-
-          navigator.serviceWorker.addEventListener(
-            "controllerchange",
-            () => {
-              window.location.reload();
-            },
-            { once: true }
-          );
-
-          setTimeout(() => {
-            if (
-              !navigator.serviceWorker.controller
-            ) {
-              window.location.reload();
-            }
-          }, 1200);
-        } else {
-          sessionStorage.removeItem(
-            "wt-sw-coop-reloaded"
-          );
-        }
-      } catch (error) {
-        console.warn(
-          "[WatchTogether] Service Worker 註冊失敗:",
-          error
-        );
-      }
-    });
-  })();
-  </script>
-
-  <link rel="stylesheet" href="src/css/styles.css?v=20260928-formal-v99"><link rel="stylesheet" href="src/css/enhancements.css?v=20260928-formal-v99"><link rel="stylesheet" href="src/css/ui-v2.css?v=20260928-ui-v2">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#070b18">
+<meta name="description" content="Project SEKAI 工具箱｜玩家看板、音遊特訓、活動精算、影音圖鑑">
+<title>Project SEKAI｜工具箱</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root{--accent:#67e8f9;--accent2:#a78bfa;--accent3:#f472b6;--bg:#070b18;--panel:rgba(13,19,38,.82);--panel2:rgba(17,24,49,.92);--line:rgba(103,232,249,.28)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(circle at 80% 0%,color-mix(in srgb,var(--accent2) 16%,transparent),transparent 34%),radial-gradient(circle at 0% 30%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 34%),var(--bg);color:#eef2ff;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;overflow-x:hidden}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:38px 38px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.7),transparent 80%)}
+.glass{background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.018)),var(--panel);border:1px solid var(--line);box-shadow:0 0 0 1px rgba(255,255,255,.02) inset,0 18px 55px rgba(0,0,0,.3),0 0 36px color-mix(in srgb,var(--accent) 8%,transparent);backdrop-filter:blur(18px)}
+.clip{clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px)}
+.clip-lg{clip-path:polygon(22px 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%,0 22px)}
+.neon{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 58%,transparent),0 0 24px color-mix(in srgb,var(--accent) 18%,transparent),0 0 55px color-mix(in srgb,var(--accent2) 8%,transparent) inset}
+.glow{color:var(--accent);text-shadow:0 0 16px color-mix(in srgb,var(--accent) 55%,transparent)}
+.world-btn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);transition:.2s}
+.world-btn:hover{transform:translateY(-2px);border-color:var(--accent);color:var(--accent)}
+.world-btn.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,transparent);color:#fff;box-shadow:0 0 22px color-mix(in srgb,var(--accent) 16%,transparent)}
+.input{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);outline:none}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.badge{background:color-mix(in srgb,var(--accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);color:#dffbff}
+.speed.active,.mode.active,.mirror.active{background:var(--accent);color:#07111d;border-color:var(--accent);font-weight:800;box-shadow:0 0 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.track{position:relative;height:220px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.08)}
+.track:before{content:"";position:absolute;left:50%;bottom:-86px;transform:translateX(-50%) perspective(700px) rotateX(62deg);width:82%;height:250px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.09) 0 1px,transparent 1px 25%);border:2px solid color-mix(in srgb,var(--accent) 52%,transparent);box-shadow:0 0 28px color-mix(in srgb,var(--accent) 18%,transparent)}
+.track:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,var(--accent) 7%,transparent));pointer-events:none}
+.lane{position:absolute;left:50%;bottom:23px;transform:translateX(-50%) perspective(650px) rotateX(61deg);width:72%;height:90px;border:1px solid rgba(255,255,255,.2)}
+.stat{background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08)}
+.pulse-dot{width:8px;height:8px;border-radius:99px;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.matrix-cell{min-height:58px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);transition:.18s}
+.matrix-cell:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 48%,transparent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.section-tag{letter-spacing:.18em;color:#a5b4fc;font-size:11px;font-weight:800}
+@media(max-width:720px){.hide-mobile{display:none}.track{height:180px}.matrix-cell{min-height:52px}.world-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style>
 </head>
-
 <body>
-
-<div id="globalBlockScreen" class="global-block-screen hidden" role="alertdialog" aria-modal="true" aria-labelledby="globalBlockTitle" aria-describedby="globalBlockMessage">
-  <div class="global-block-card">
-    <div class="global-block-icon" aria-hidden="true">⛔</div>
-    <div class="eyebrow">ACCOUNT RESTRICTION</div>
-    <h1 id="globalBlockTitle">帳號已被封鎖</h1>
-    <p id="globalBlockMessage">你的帳號目前無法使用 WatchTogether。</p>
-    <div id="globalBlockMeta" class="global-block-meta"></div>
-    <button id="globalBlockRefreshBtn" class="primary-btn" type="button">重新檢查狀態</button>
-  </div>
+<div class="min-h-screen">
+<header class="sticky top-0 z-50 border-b border-white/10 bg-[#070b18]/88 backdrop-blur-xl">
+<div class="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+<div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+<div class="flex items-center justify-between gap-4 lg:w-64">
+<a href="#" class="flex items-center gap-3">
+<div class="clip flex h-10 w-10 items-center justify-center bg-gradient-to-br from-cyan-300 via-violet-300 to-pink-300 text-slate-950 font-black text-lg">P</div>
+<div>
+<div class="text-[10px] font-black tracking-[.28em] text-cyan-300">PROJECT SEKAI</div>
+<div class="text-base font-black">工具箱<span class="text-cyan-300">／</span>SEKAI LAB</div>
 </div>
-
-<div class="app-shell">
-
-  <!-- =========================
-       頂部
-  ========================== -->
-
-  <header class="topbar">
-
-    <div class="brand">
-      WATCH<span>TOGETHER</span>
-    </div>
-
-    <div class="topbar-right">
-
-      <div
-        id="authStatus"
-        class="status-pill"
-      >
-        連線中…
-      </div>
-
-      <button id="googleLoginBtn" class="tiny-btn" type="button">Google 登入</button>
-      <button id="logoutBtn" class="tiny-btn hidden" type="button">登出</button>
-
-    </div>
-
-  </header>
-
-
-  <main>
-
-    <!-- =========================
-         首頁
-    ========================== -->
-
-    <section
-      id="homeView"
-      class="view"
-    >
-
-      <div class="hero">
-
-        <div class="hero-badge">
-          🎬 WATCH PARTY
-        </div>
-
-        <h1>
-          和朋友
-          <br>
-          <span>一起看</span>
-        </h1>
-
-        <p>
-          建立房間、選擇平台。
-          進入觀看房間後，再搜尋並選擇影片，
-          大家一起看影片。
-        </p>
-
-      </div>
-
-
-      <!-- =========================
-           建立 / 加入
-      ========================== -->
-
-      <div class="home-grid">
-
-        <!-- 建立房間 -->
-
-        <section class="panel creator-panel">
-
-          <div class="panel-title">
-            建立房間
-          </div>
-
-
-          <label for="roomNameInput">
-            房間名稱
-          </label>
-
-          <input
-            id="roomNameInput"
-            type="text"
-            maxlength="40"
-            placeholder="例如：今晚一起看動漫"
-            autocomplete="off"
-          >
-
-
-          <label for="sourceTypeInput">
-            影片平台
-          </label>
-
-          <select
-            id="sourceTypeInput"
-          >
-
-            <option value="youtube">
-              ▶ YouTube
-            </option>
-
-            <option value="vimeo">
-              ▶ Vimeo
-            </option>
-
-            <option value="dailymotion">
-              ▶ Dailymotion
-            </option>
-
-            <option value="twitch">
-              🎮 Twitch
-            </option>
-
-            </select>
-
-
-          <button
-            id="createRoomBtn"
-            class="primary-btn"
-            type="button"
-          >
-            建立房間
-          </button>
-
-
-          <div
-            id="homeError"
-            class="error-text"
-          ></div>
-
-        </section>
-
-
-        <!-- 加入房間 -->
-
-        <section class="panel join-panel">
-
-          <div class="panel-title">
-            加入房間
-          </div>
-
-
-          <label for="joinCodeInput">
-            房間碼
-          </label>
-
-          <input
-            id="joinCodeInput"
-            type="text"
-            maxlength="6"
-            placeholder="例如：K7M4Q9"
-            autocomplete="off"
-            spellcheck="false"
-          >
-
-
-          <button
-            id="joinRoomBtn"
-            class="secondary-btn"
-            type="button"
-          >
-            加入朋友的房間
-          </button>
-
-
-          <div class="divider">
-            <span>或</span>
-          </div>
-
-
-          <p class="muted">
-            朋友也可以直接把邀請連結傳給你。
-            打開後會自動進入同一個房間。
-          </p>
-
-
-          <div
-            class="join-feature-list"
-          >
-
-            <div class="join-feature">
-              <span>✓</span>
-              同一部影片
-            </div>
-
-            <div class="join-feature">
-              <span>✓</span>
-              一起觀看
-            </div>
-
-            <div class="join-feature">
-              <span>✓</span>
-              即時聊天室
-            </div>
-
-            <div class="join-feature">
-              <span>✓</span>
-              房間成員
-            </div>
-
-          </div>
-
-        </section>
-
-      </div>
-
-
-      <!-- =========================
-           平台
-      ========================== -->
-
-      <section
-        class="panel platform-panel"
-        style="margin-top:20px;"
-      >
-
-        <div class="panel-title">
-          🎞️ 影片平台
-        </div>
-
-
-        <div
-          id="platformGrid"
-          class="platform-grid"
-        >
-
-          <button
-            class="platform-card active"
-            data-platform="youtube"
-            type="button"
-          >
-            <span>▶</span>
-            <strong>YouTube</strong>
-            <small>影片</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="vimeo"
-            type="button"
-          >
-            <span>▶</span>
-            <strong>Vimeo</strong>
-            <small>影片</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="dailymotion"
-            type="button"
-          >
-            <span>▶</span>
-            <strong>Dailymotion</strong>
-            <small>影片</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="twitch"
-            type="button"
-          >
-            <span>🎮</span>
-            <strong>Twitch</strong>
-            <small>直播</small>
-          </button>
-
-
-          </div>
-
-
-        <div
-          class="muted"
-          style="
-            margin-top:14px;
-            font-size:12px;
-            line-height:1.65;
-          "
-        >
-          WatchTogether 會依平台提供的官方嵌入或播放器能力處理。
-          能直接嵌入的來源會顯示在本站播放器裡。
-        </div>
-
-      </section>
-
-    </section>
-
-
-
-    <!-- =========================
-         房間頁面
-    ========================== -->
-
-    <section
-      id="roomView"
-      class="view hidden"
-    >
-
-      <!-- 房間頂部 -->
-
-      <div class="room-toolbar">
-
-        <div>
-
-          <div class="eyebrow">
-            WATCH PARTY
-          </div>
-
-
-          <h2 id="roomTitle">
-            一起看
-          </h2>
-
-
-          <div class="room-meta">
-
-            <span id="roomCodeLabel">
-              ------
-            </span>
-
-            <span id="roomOwnerStatus" class="muted" style="margin-left:8px;">成員</span>
-
-
-            <button
-              id="copyRoomBtn"
-              class="tiny-btn"
-              type="button"
-            >
-              複製房間連結
-            </button>
-
-          </div>
-
-        </div>
-
-
-        <button
-          id="leaveRoomBtn"
-          class="ghost-btn"
-          type="button"
-        >
-          離開房間
-        </button>
-
-      </div>
-
-
-      <!-- =========================
-           影片 + 聊天
-      ========================== -->
-
-      <div class="room-layout">
-
-
-        <!-- =========================
-             播放器
-        ========================== -->
-
-        <section
-          class="watch-panel panel"
-        >
-
-          <div
-            id="playerWrap"
-            class="player-wrap"
-          >
-
-            <!-- Vimeo -->
-
-            <iframe
-              id="vimeoPlayer"
-              class="external-player hidden"
-              title="Vimeo Player"
-              allow="autoplay; fullscreen; picture-in-picture"
-            ></iframe>
-
-
-            <!-- Dailymotion -->
-
-            <div
-              id="dailymotionPlayer"
-              class="external-player hidden"
-              title="Dailymotion Player"
-            ></div>
-
-
-            <div id="twitchPlayer"
-              class="external-player hidden"
-            ></div>
-
-
-            <!-- YouTube 官方播放器 -->
-            <div
-              id="youtubePlayer"
-              class="youtube-player hidden"
-            ></div>
-
-
-            <!-- 直接影片備用 -->
-
-            <video
-              id="directVideo"
-              class="direct-video hidden"
-              playsinline
-              controls
-              preload="metadata"
-            ></video>
-
-
-            <!-- 尚未選擇影片 -->
-
-            <div
-              id="emptyPlayer"
-              class="empty-player hidden"
-            >
-
-              <div class="empty-player-icon">
-                🎬
-              </div>
-
-              <h3>
-                選擇一部影片開始觀看
-              </h3>
-
-              <p>
-                選擇影片後，
-                房間裡的成員會開始同步播放。
-              </p>
-
-            </div>
-
-
-            <!-- 外部平台提示 -->
-
-            <div
-              id="platformPlayerNotice"
-              class="platform-player-notice hidden"
-            >
-
-              <div
-                id="roomPlatformIcon"
-                class="room-platform-icon"
-              >
-                🌐
-              </div>
-
-
-              <h3
-                id="roomPlatformName"
-              >
-                影片平台
-              </h3>
-
-
-              <p
-                id="roomPlatformDescription"
-              >
-                正在準備播放器。
-              </p>
-
-
-              <button
-                id="openPlatformBtn"
-                class="primary-btn"
-                type="button"
-              >
-                開啟官方平台
-              </button>
-
-            </div>
-
-
-            <div
-              id="playerPlaceholder"
-              class="player-placeholder hidden"
-            >
-              載入影片中…
-            </div>
-
-          </div>
-
-
-          <!-- =========================
-               房間狀態
-          ========================== -->
-
-          <div id="syncStatus" class="muted" style="margin:10px 0 6px;font-size:12px;">尚未同步</div>
-
-          <!-- =========================
-               控制列
-          ========================== -->
-
-          <div
-            id="roomControls"
-            class="room-controls"
-          >
-
-            <button
-              id="playPauseBtn"
-              class="control-btn"
-              type="button"
-            >
-              ▶
-            </button>
-
-
-            <button
-              id="backBtn"
-              class="control-btn"
-              type="button"
-            >
-              ↶ 10
-            </button>
-
-
-            <button
-              id="forwardBtn"
-              class="control-btn"
-              type="button"
-            >
-              10 ↷
-            </button>
-
-
-            <button
-              id="manualSyncBtn"
-              class="control-btn"
-              type="button"
-              title="立即同步"
-              aria-label="立即同步"
-            >
-              立即同步
-            </button>
-
-
-            <div
-              id="timeReadout"
-              class="time-readout"
-            >
-              00:00 / 00:00
-            </div>
-
-
-            <input
-              id="volumeInput"
-              class="volume"
-              type="range"
-              min="0"
-              max="100"
-              value="100"
-            >
-
-
-            <button
-              id="fullscreenBtn"
-              class="control-btn"
-              type="button"
-            >
-              ⛶
-            </button>
-
-          </div>
-
-
-          <!-- 房間操作 -->
-
-          <div class="room-actions">
-
-            <button
-              id="copyTimeBtn"
-              class="secondary-btn"
-              type="button"
-            >
-              複製目前時間
-            </button>
-
-
-            <button
-              id="changeSourceBtn"
-              class="secondary-btn"
-              type="button"
-            >
-              更換影片
-            </button>
-
-          </div>
-
-        </section>
-
-
-
-        <!-- =========================
-             右側
-        ========================== -->
-
-        <aside class="side-column">
-
-
-          <!-- 成員 -->
-
-          <section
-            class="panel members-panel"
-          >
-
-            <div
-              class="panel-title row-title"
-            >
-
-              <span>
-                👥 房間成員
-              </span>
-
-
-              <span id="memberCount">
-                0
-              </span>
-
-            </div>
-
-
-            <div
-              id="memberList"
-              class="member-list"
-            ></div>
-
-          </section>
-
-
-
-          <section class="panel queue-panel">
-            <div class="panel-title row-title">
-              <span>📋 待播放清單</span>
-              <button id="playQueueNowBtn" class="tiny-btn" type="button">播放下一部</button>
-            </div>
-            <div id="queueList" style="display:flex;flex-direction:column;gap:8px;"></div>
-          </section>
-
-          <!-- 聊天 -->
-
-          <section
-            class="panel chat-panel"
-          >
-
-            <div class="panel-title">
-              💬 聊天室
-            </div>
-
-
-            <div
-              id="chatMessages"
-              class="chat-messages"
-            ></div>
-
-
-            <form
-              id="chatForm"
-              class="chat-form"
-            >
-
-              <input
-                id="chatInput"
-                maxlength="300"
-                placeholder="說點什麼…"
-                autocomplete="off"
-              >
-
-
-              <button type="submit">
-                送出
-              </button>
-
-            </form>
-
-          </section>
-
-        </aside>
-
-      </div>
-
-    </section>
-
-  </main>
-
+</a>
 </div>
-
-
-
-<!-- =========================
-     更換影片視窗
-========================== -->
-
-<div
-  id="sourceModal"
-  class="modal hidden"
->
-
-  <div class="modal-card">
-
-    <div class="panel-title">
-      更換影片
-    </div>
-
-
-    <label for="sourceTypeModal">
-      影片平台
-    </label>
-
-
-    <select
-      id="sourceTypeModal"
-    >
-
-      <option value="youtube">
-        ▶ YouTube
-      </option>
-
-      <option value="vimeo">
-        ▶ Vimeo
-      </option>
-
-      <option value="dailymotion">
-        ▶ Dailymotion
-      </option>
-
-      <option value="twitch">
-        🎮 Twitch
-      </option>
-
-      </select>
-
-
-    <div
-      id="modalVideoSearchArea"
-      style="margin-top:14px;"
-    >
-
-      <label for="modalVideoSearchInput">
-        搜尋影片
-      </label>
-
-
-      <div class="search-row">
-
-        <input
-          id="modalVideoSearchInput"
-          type="search"
-          maxlength="100"
-          placeholder="搜尋影片…"
-          autocomplete="off"
-        >
-
-
-        <button
-          id="modalSearchVideoBtn"
-          class="search-btn"
-          type="button"
-        >
-          搜尋
-        </button>
-
-      </div>
-
-
-      <div
-        id="modalSearchHistory"
-        class="muted"
-        style="margin-top:8px;font-size:12px;line-height:1.5;display:flex;gap:5px;flex-wrap:wrap;align-items:center;"
-      ></div>
-
-
-      <div
-        id="modalVideoSearchResults"
-        class="video-search-results"
-      ></div>
-
-    </div>
-
-
-
-    <div id="modalExternalSourceArea" class="hidden" style="margin-top:14px;">
-      <label for="modalSourceUrlInput">影片網址或 ID</label>
-      <input id="modalSourceUrlInput" type="url" maxlength="2000" placeholder="貼上影片網址或 ID" autocomplete="off">
-    </div>
-
-    <div class="modal-actions">
-
-      <button
-        id="cancelModalBtn"
-        class="secondary-btn"
-        type="button"
-      >
-        取消
-      </button>
-
-
-      <button
-        id="saveSourceBtn"
-        class="primary-btn"
-        type="button"
-      >
-        切換影片
-      </button>
-
-    </div>
-
-
-    <div
-      id="modalError"
-      class="error-text"
-    ></div>
-
-  </div>
-
+<div class="relative flex-1">
+<input id="globalSearch" class="input w-full rounded-none px-11 py-2.5 text-sm text-white placeholder:text-slate-500" placeholder="搜尋角色、歌曲、活動、功能…">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
 </div>
+<div class="grid world-grid grid-cols-6 gap-1.5 lg:w-[520px]">
+<button class="world-btn active px-2 py-2 text-[11px] font-bold" data-world="classroom">教室</button>
+<button class="world-btn px-2 py-2 text-[11px] font-bold" data-world="stage">舞台</button>
+<button class="world-btn px-2 py-2 text-[11px] font-bold" data-world="street">街頭</button>
+<button class="world-btn px-2 py-2 text-[11px] font-bold" data-world="fantasy">奇幻</button>
+<button class="world-btn px-2 py-2 text-[11px] font-bold" data-world="empty">無人</button>
+<button class="world-btn px-2 py-2 text-[11px] font-bold" data-world="virtual">虛擬</button>
+</div>
+</div>
+</div>
+</header>
 
+<main class="mx-auto max-w-7xl px-4 pb-16 pt-5 sm:px-6">
+<section class="glass clip-lg relative overflow-hidden p-5 sm:p-7">
+<div class="absolute -right-24 -top-24 h-64 w-64 rounded-full border border-cyan-300/10"></div>
+<div class="absolute -right-4 -top-4 h-40 w-40 rounded-full border border-violet-300/10"></div>
+<div class="relative grid gap-6 lg:grid-cols-[1.35fr_.65fr]">
+<div>
+<div class="section-tag">HOME / PLAYER DASHBOARD</div>
+<h1 class="mt-2 text-3xl font-black tracking-tight sm:text-5xl">把 SEKAI 的每一場歌唱與特訓，<span class="glow">變成可計算的攻略。</span></h1>
+<p id="worldCaption" class="mt-3 max-w-2xl text-sm leading-7 text-slate-300">教室 SEKAI｜以角色培育、CR、AP/FC 與協力配置為中心的玩家工具首頁。</p>
+<div class="mt-5 flex flex-wrap gap-2">
+<span class="badge px-3 py-1.5 text-xs">RWD</span>
+<span class="badge px-3 py-1.5 text-xs">即時主題</span>
+<span class="badge px-3 py-1.5 text-xs">原生 JS</span>
+<span class="badge px-3 py-1.5 text-xs">單檔首頁</span>
+</div>
+</div>
+<div class="clip glass flex min-h-[170px] flex-col justify-between p-5 neon">
+<div class="flex items-center justify-between">
+<span class="section-tag">PLAYER ID</span>
+<span id="modeStatus" class="text-xs text-cyan-200">協力模式</span>
+</div>
+<div>
+<input id="playerId" class="input mt-3 w-full px-4 py-3 text-lg font-black tracking-wider" placeholder="輸入玩家 ID">
+<div class="mt-3 grid grid-cols-2 gap-2">
+<button class="mode active border px-3 py-2 text-xs" data-mode="coop">協力模式</button>
+<button class="mode border border-white/10 bg-white/5 px-3 py-2 text-xs" data-mode="solo">單人模式</button>
+</div>
+</div>
+</div>
+</div>
+</section>
 
+<div id="searchEmpty" class="mt-4 hidden glass clip p-5 text-sm text-slate-300">沒有找到符合的工具區塊。</div>
 
+<section class="section-block mt-5" data-search="玩家看板 player dashboard player id 角色 cr ap fc 出賽">
+<div class="mb-3 flex items-end justify-between gap-4">
+<div><div class="section-tag">01 / PLAYER BOARD</div><h2 class="text-2xl font-black">玩家看板</h2></div>
+<div class="text-right text-xs text-slate-400">5 人配置 × ★4 × 總合力</div>
+</div>
+<div class="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+<div class="glass clip p-4">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+<div class="stat clip p-3 sm:col-span-1">
+<div class="text-[10px] text-slate-500">SLOT 01</div><div class="mt-2 text-xs text-cyan-200">PLAYER</div><div class="mt-1 truncate font-black">一歌</div><span class="mt-2 inline-block rounded px-2 py-1 text-[10px] font-black badge">★4</span><div class="mt-2 text-sm font-black">31,240</div>
+</div>
+<div class="stat clip p-3"><div class="text-[10px] text-slate-500">SLOT 02</div><div class="mt-2 text-xs text-pink-200">LEAD</div><div class="mt-1 truncate font-black">咲希</div><span class="mt-2 inline-block rounded px-2 py-1 text-[10px] font-black badge">★4</span><div class="mt-2 text-sm font-black">29,860</div></div>
+<div class="stat clip p-3"><div class="text-[10px] text-slate-500">SLOT 03</div><div class="mt-2 text-xs text-violet-200">SUB</div><div class="mt-1 truncate font-black">志步</div><span class="mt-2 inline-block rounded px-2 py-1 text-[10px] font-black badge">★4</span><div class="mt-2 text-sm font-black">28,910</div></div>
+<div class="stat clip p-3"><div class="text-[10px] text-slate-500">SLOT 04</div><div class="mt-2 text-xs text-amber-200">SUB</div><div class="mt-1 truncate font-black">穗波</div><span class="mt-2 inline-block rounded px-2 py-1 text-[10px] font-black badge">★4</span><div class="mt-2 text-sm font-black">27,640</div></div>
+<div class="stat clip p-3"><div class="text-[10px] text-slate-500">SLOT 05</div><div class="mt-2 text-xs text-emerald-200">SUB</div><div class="mt-1 truncate font-black">KAITO</div><span class="mt-2 inline-block rounded px-2 py-1 text-[10px] font-black badge">★4</span><div class="mt-2 text-sm font-black">30,110</div></div>
+</div>
+<div class="mt-4 grid gap-3 sm:grid-cols-3">
+<div class="stat clip p-4"><div class="text-xs text-slate-500">TOTAL POWER</div><div class="mt-1 text-2xl font-black text-cyan-200">147,760</div></div>
+<div class="stat clip p-4"><div class="text-xs text-slate-500">AP TRACK</div><div class="mt-1 text-2xl font-black text-emerald-300">128</div><div class="text-[10px] text-slate-500">/ 146</div></div>
+<div class="stat clip p-4"><div class="text-xs text-slate-500">FC TRACK</div><div class="mt-1 text-2xl font-black text-violet-300">312</div><div class="text-[10px] text-slate-500">/ 428</div></div>
+</div>
+</div>
+<div class="glass clip p-4">
+<div class="mb-3 flex items-center justify-between"><div><div class="section-tag">CR MATRIX</div><div class="font-black">26 角色 Career Rank</div></div><span class="text-xs text-slate-500">01—26</span></div>
+<div id="crMatrix" class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3"></div>
+</div>
+</div>
+</section>
 
+<section class="section-block mt-5" data-search="3d 音遊 特訓房 梯形 賽道 倍速 鏡像 ap offset">
+<div class="mb-3"><div class="section-tag">02 / RHYTHM TRAINING</div><h2 class="text-2xl font-black">3D 音遊特訓房</h2></div>
+<div class="grid gap-4 lg:grid-cols-[1.25fr_.75fr]">
+<div class="glass clip p-4">
+<div class="track clip-lg">
+<div class="absolute left-4 top-4 z-10 text-[10px] font-black tracking-[.18em] text-slate-400">3D LANE PREVIEW</div>
+<div class="absolute right-4 top-4 z-10 rounded-full border border-cyan-300/20 bg-black/30 px-2.5 py-1 text-[10px] text-cyan-200">BPM 180</div>
+<div class="lane"></div>
+<div class="absolute bottom-5 left-1/2 z-10 -translate-x-1/2 text-xs font-black text-cyan-100">PERFECT / GREAT / GOOD / MISS</div>
+</div>
+</div>
+<div class="glass clip p-4">
+<div class="section-tag">TRAINING CONTROL</div>
+<div class="mt-3 text-xs text-slate-400">倍速</div>
+<div class="mt-2 grid grid-cols-5 gap-1.5">
+<button class="speed border border-white/10 px-2 py-2 text-xs" data-speed=".5">0.5x</button>
+<button class="speed border border-white/10 px-2 py-2 text-xs" data-speed=".75">0.75x</button>
+<button class="speed active border px-2 py-2 text-xs" data-speed="1">1.0x</button>
+<button class="speed border border-white/10 px-2 py-2 text-xs" data-speed="1.25">1.25x</button>
+<button class="speed border border-white/10 px-2 py-2 text-xs" data-speed="1.5">1.5x</button>
+</div>
+<div class="mt-3 grid grid-cols-2 gap-2">
+<button id="mirrorBtn" class="mirror border border-white/10 bg-white/5 px-3 py-2 text-xs">鏡像：OFF</button>
+<button class="border border-white/10 bg-white/5 px-3 py-2 text-xs">AP Offset：+0ms</button>
+</div>
+<div class="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-xs">
+<span class="text-slate-500">目前訓練倍率</span><span id="speedLabel" class="font-black text-cyan-200">1.0x</span>
+</div>
+</div>
+</div>
+</section>
 
-<!-- =========================
-     Toast
-========================== -->
+<section class="section-block mt-5" data-search="戰略 精算 活動 吃火 體力 回滿 倒數">
+<div class="mb-3"><div class="section-tag">03 / STRATEGY LAB</div><h2 class="text-2xl font-black">戰略精算區</h2></div>
+<div class="grid gap-4 md:grid-cols-2">
+<div class="glass clip p-5">
+<div class="flex items-center justify-between"><div><div class="section-tag">EVENT BOOST CALCULATOR</div><h3 class="mt-1 text-lg font-black">活動吃火精算器</h3></div><span class="badge rounded px-2 py-1 text-[10px]">BETA</span></div>
+<div class="mt-4 grid grid-cols-2 gap-3">
+<label class="text-xs text-slate-400">目前火焰<input id="fire" type="number" value="12" min="0" class="input mt-1 w-full px-3 py-2 text-sm"></label>
+<label class="text-xs text-slate-400">每輪消耗<input id="cost" type="number" value="2" min="1" class="input mt-1 w-full px-3 py-2 text-sm"></label>
+<label class="text-xs text-slate-400">每輪獲得<input id="reward" type="number" value="320" min="0" class="input mt-1 w-full px-3 py-2 text-sm"></label>
+<label class="text-xs text-slate-400">剩餘輪數<input id="runs" type="number" value="10" min="0" class="input mt-1 w-full px-3 py-2 text-sm"></label>
+</div>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="stat p-3"><div class="text-[10px] text-slate-500">可跑</div><div id="calcRuns" class="mt-1 text-xl font-black">6</div></div>
+<div class="stat p-3"><div class="text-[10px] text-slate-500">活動點</div><div id="calcPoint" class="mt-1 text-xl font-black text-cyan-200">1,920</div></div>
+<div class="stat p-3"><div class="text-[10px] text-slate-500">缺口</div><div id="calcGap" class="mt-1 text-xl font-black text-pink-300">4</div></div>
+</div>
+</div>
+<div class="glass clip p-5">
+<div class="section-tag">STAMINA RECOVERY</div><h3 class="mt-1 text-lg font-black">體力回滿倒數</h3>
+<div class="mt-5 flex items-center gap-3"><span class="pulse-dot"></span><span class="text-sm text-slate-300">剩餘體力</span><span class="ml-auto text-xl font-black">78 / 100</span></div>
+<div class="mt-5 text-center"><div id="timer" class="text-4xl font-black tracking-widest text-cyan-200">01:58:24</div><div class="mt-2 text-xs text-slate-500">預估回滿時間</div></div>
+<div class="mt-5 h-2 overflow-hidden rounded-full bg-white/5"><div class="h-full w-[78%] bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300"></div></div>
+</div>
+</div>
+</section>
 
-<div
-  id="toast"
-  class="toast"
-></div>
+<section class="section-block mt-5" data-search="影音 圖鑑 youtube mv 卡片 特訓 前後 切換">
+<div class="mb-3"><div class="section-tag">04 / MEDIA INDEX</div><h2 class="text-2xl font-black">影音圖鑑快捷區</h2></div>
+<div class="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
+<div class="glass clip p-4">
+<div class="mb-3 flex items-center justify-between"><div><div class="section-tag">OFFICIAL YOUTUBE MV</div><div class="font-black">官方 YouTube MV 播放框</div></div><span class="badge rounded px-2 py-1 text-[10px]">YOUTUBE</span></div>
+<div class="relative aspect-video overflow-hidden border border-white/10 bg-black/60">
+<div class="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_center,rgba(103,232,249,.16),transparent_42%)]">
+<div class="text-center"><div class="mx-auto grid h-16 w-16 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-2xl">▶</div><div class="mt-3 text-sm font-black">PROJECT SEKAI OFFICIAL MV</div><div class="mt-1 text-xs text-slate-500">播放框骨架｜可接正式 YouTube Embed</div></div>
+</div>
+</div>
+</div>
+<div class="glass clip p-4">
+<div class="mb-3 flex items-center justify-between"><div><div class="section-tag">CARD TRAINING PREVIEW</div><div class="font-black">卡片特訓前後切換</div></div><span id="cardState" class="text-xs text-cyan-200">特訓前</span></div>
+<div class="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-slate-900 via-violet-950/60 to-pink-950/60">
+<div id="cardBefore" class="absolute inset-0 grid place-items-center"><div class="text-center"><div class="text-6xl">✦</div><div class="mt-3 text-lg font-black">★4 CARD</div><div class="mt-1 text-xs text-slate-500">TRAINING BEFORE</div></div></div>
+<div id="cardAfter" class="absolute inset-0 hidden items-center justify-center bg-gradient-to-br from-cyan-950/50 via-violet-950/60 to-pink-950/70"><div class="text-center"><div class="text-6xl">★</div><div class="mt-3 text-lg font-black">★4 AWAKENED</div><div class="mt-1 text-xs text-cyan-200">TRAINING AFTER</div></div></div>
+</div>
+<button id="cardToggle" class="mt-3 w-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black hover:border-cyan-300/40 hover:text-cyan-200">切換特訓前／後</button>
+</div>
+</div>
+</section>
+</main>
 
-
-
-<!-- =========================
-     Firebase
-========================== -->
-
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js"></script>
-
-
-<!-- =========================
-     Vimeo Player SDK
-========================== -->
-
-<script src="https://player.vimeo.com/api/player.js"></script>
-
-<script src="src/vendor/qrcode-generator.js?v=20260928-qr-v1"></script>
-
-
-<!-- =========================
-     Firebase 設定
-========================== -->
-
-<script src="config/firebase-config.js?v=20260926-ai-v1"></script>
-<script src="src/js/access-control.js?v=20260928-access-v3"></script>
-<script src="src/js/i18n.js?v=20260928-formal-v98"></script>
-
-
-<!-- =========================
-     主程式
-========================== -->
+<footer class="border-t border-white/10 px-4 py-5 text-center text-[10px] tracking-[.18em] text-slate-600">SEKAI LAB / PLAYER TOOLBOX</footer>
+</div>
 
 <script>
-  window.__WT_EARLY_ERRORS__ = window.__WT_EARLY_ERRORS__ || [];
-  window.addEventListener("error", function(event) {
-    window.__WT_EARLY_ERRORS__.push({
-      source: "early-window-error",
-      message: String(event && event.message || "Uncaught error").slice(0, 1000),
-      stack: String(event && event.error && event.error.stack || "").slice(0, 1800)
-    });
-    if (window.__WT_EARLY_ERRORS__.length > 30) window.__WT_EARLY_ERRORS__.shift();
-  });
-  window.addEventListener("unhandledrejection", function(event) {
-    var reason = event && event.reason;
-    window.__WT_EARLY_ERRORS__.push({
-      source: "early-unhandled-rejection",
-      message: String(reason && reason.message || reason || "Unhandled rejection").slice(0, 1000),
-      stack: String(reason && reason.stack || "").slice(0, 1800)
-    });
-    if (window.__WT_EARLY_ERRORS__.length > 30) window.__WT_EARLY_ERRORS__.shift();
-  });
-</script>
-<script src="src/js/app.js?v=20260928-formal-v99"></script><script src="src/js/room-access.js?v=20260928-room-v2"></script><script src="src/js/enhancements.js?v=20260928-formal-v99"></script><script src="src/js/feature-center.js?v=20260928-feature-v7"></script><script src="src/js/bug-monitor.js?v=20260928-ai-v1"></script><script src="src/js/chat.js?v=20260928-chat-v3"></script><script src="src/js/feature-pack.js?v=20260928-feature-pack-v3"></script><script src="src/js/feature-completion.js?v=20260928-feature-completion-v4"></script><script src="src/js/feature-completion-v2.js?v=20260928-feature-completion-v2"></script><script src="src/js/feature-complete-v3.js?v=20260928-feature-complete-v3"></script><script src="src/js/room-chat-rich.js?v=20260928-room-chat-rich-v2"></script><script src="src/js/feature-suite-v4.js?v=20260928-feature-suite-v5"></script>
-<script src="src/js/feature-complete-v5.js?v=20260928-feature-social-v8"></script>
-
-
-<!-- =========================
-     UI 小功能
-========================== -->
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-
-  const sourceSelect =
-    document.getElementById(
-      "sourceTypeInput"
-    );
-
-  const sourceCards =
-    document.querySelectorAll(
-      ".platform-card"
-    );
-
-  const description =
-    document.getElementById(
-      "platformDescription"
-    );
-
-  const notice =
-    document.getElementById(
-      "platformNotice"
-    );
-
-  const noticeIcon =
-    document.getElementById(
-      "platformNoticeIcon"
-    );
-
-  const noticeTitle =
-    document.getElementById(
-      "platformNoticeTitle"
-    );
-
-  const noticeText =
-    document.getElementById(
-      "platformNoticeText"
-    );
-
-
-  const platformInfo = {
-
-    youtube: {
-      icon: "▶",
-      name: "YouTube",
-      text: "搜尋影片後，在 WatchTogether 裡直接播放。"
-    },
-
-    vimeo: {
-      icon: "▶",
-      name: "Vimeo",
-      text: "使用官方嵌入播放器。支援程度依影片設定而定。"
-    },
-
-    dailymotion: {
-      icon: "▶",
-      name: "Dailymotion",
-      text: "依官方播放器與嵌入能力處理。"
-    },
-
-    twitch: {
-      icon: "🎮",
-      name: "Twitch",
-      text: "適合直播內容，使用官方播放器能力。"
-    }
-
-  };
-
-
-  function updatePlatform(
-    platform
-  ) {
-
-    const info =
-      platformInfo[platform] ||
-      platformInfo.youtube;
-
-
-    if (description) {
-      description.textContent =
-        info.text;
-    }
-
-
-    if (noticeIcon) {
-      noticeIcon.textContent =
-        info.icon;
-    }
-
-
-    if (noticeTitle) {
-      noticeTitle.textContent =
-        info.name;
-    }
-
-
-    if (noticeText) {
-      noticeText.textContent =
-        info.text;
-    }
-
-
-    if (notice) {
-
-      const searchable =
-        platform ===
-          "youtube" ||
-        platform ===
-          "vimeo" ||
-        platform ===
-          "dailymotion" ||platform ===
-          "twitch";
-
-
-      notice.classList.toggle(
-        "hidden",
-        searchable
-      );
-
-    }
-
-
-    sourceCards.forEach(
-      (card) => {
-
-        card.classList.toggle(
-          "active",
-          card.dataset.platform ===
-            platform
-        );
-
-      }
-    );
-
-  }
-
-
-  if (sourceSelect) {
-
-    sourceSelect.addEventListener(
-      "change",
-      () => {
-
-        updatePlatform(
-          sourceSelect.value
-        );
-
-      }
-    );
-
-
-    updatePlatform(
-      sourceSelect.value
-    );
-
-  }
-
-
-  sourceCards.forEach(
-    (card) => {
-
-      card.addEventListener(
-        "click",
-        () => {
-
-          const platform =
-            card.dataset.platform;
-
-          if (!sourceSelect) {
-            return;
-          }
-
-
-          sourceSelect.value =
-            platform;
-
-
-          updatePlatform(
-            platform
-          );
-
-
-          sourceSelect.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
-
-        }
-      );
-
-    }
-  );
-
+const themes={
+classroom:["#67e8f9","#a78bfa","#f472b6","教室 SEKAI｜以角色培育、CR、AP/FC 與協力配置為中心的玩家工具首頁。"],
+stage:["#fb7185","#f9a8d4","#fde68a","舞台 SEKAI｜聚焦演出配置、歌曲紀錄與玩家成果整理。"],
+street:["#f59e0b","#fb7185","#38bdf8","街頭 SEKAI｜以節奏、路線與高密度訓練資訊呈現。"],
+fantasy:["#c084fc","#60a5fa","#f0abfc","奇幻 SEKAI｜用高亮邊框與夢境色調整理角色與卡片資料。"],
+empty:["#94a3b8","#64748b","#cbd5e1","無人 SEKAI｜低干擾、冷色系介面，適合長時間資料查詢。"],
+virtual:["#22d3ee","#818cf8","#e879f9","虛擬 SEKAI｜偏科技 HUD 風格的影音與特訓工作區。"]
+};
+const root=document.documentElement;
+const worldCaption=document.getElementById("worldCaption");
+document.querySelectorAll(".world-btn").forEach(btn=>{
+btn.addEventListener("click",()=>{
+const [a,b,c,caption]=themes[btn.dataset.world];
+root.style.setProperty("--accent",a);root.style.setProperty("--accent2",b);root.style.setProperty("--accent3",c);
+document.querySelectorAll(".world-btn").forEach(x=>x.classList.toggle("active",x===btn));
+worldCaption.textContent=caption;
+});
+});
+document.querySelectorAll(".mode").forEach(btn=>{
+btn.addEventListener("click",()=>{
+document.querySelectorAll(".mode").forEach(x=>x.classList.toggle("active",x===btn));
+document.getElementById("modeStatus").textContent=btn.dataset.mode==="coop"?"協力模式":"單人模式";
+});
+});
+let mirror=false;
+document.getElementById("mirrorBtn").addEventListener("click",e=>{
+mirror=!mirror;e.currentTarget.textContent="鏡像："+(mirror?"ON":"OFF");e.currentTarget.classList.toggle("active",mirror);
+});
+document.querySelectorAll(".speed").forEach(btn=>btn.addEventListener("click",()=>{
+document.querySelectorAll(".speed").forEach(x=>x.classList.toggle("active",x===btn));
+document.getElementById("speedLabel").textContent=Number(btn.dataset.speed).toFixed(2).replace(/0$/,"")+"x";
+}));
+const chars=["星乃一歌","天馬咲希","望月穗波","日野森志步","花里實乃理","桐谷遙","桃井愛莉","日野森雫","小豆澤心羽","白石杏","東雲彰人","青柳冬彥","天馬司","鳳えむ","草薙寧寧","神代類","宵崎奏","朝比奈真冬","東雲繪名","曉山瑞希","初音ミク","鏡音リン","鏡音レン","巡音ルカ","MEIKO","KAITO"];
+const crMatrix=document.getElementById("crMatrix");
+crMatrix.innerHTML=chars.map((n,i)=>'<div class="matrix-cell clip p-2.5" data-name="'+n+'"><div class="flex items-center justify-between gap-2"><span class="truncate text-xs font-bold">'+n+'</span><span class="text-[10px] text-slate-500">'+String(i+1).padStart(2,"0")+'</span></div><div class="mt-2 flex items-end justify-between"><span class="text-[10px] text-slate-500">CR</span><span class="text-sm font-black text-cyan-200">'+(i<4?32:18+(i%13))+'</span></div></div>').join("");
+function calc(){
+const fire=+document.getElementById("fire").value||0;
+const cost=+document.getElementById("cost").value||1;
+const reward=+document.getElementById("reward").value||0;
+const runs=+document.getElementById("runs").value||0;
+const available=Math.min(runs,Math.floor(fire/cost));
+document.getElementById("calcRuns").textContent=available;
+document.getElementById("calcPoint").textContent=(available*reward).toLocaleString();
+document.getElementById("calcGap").textContent=Math.max(0,runs-available);
+}
+["fire","cost","reward","runs"].forEach(id=>document.getElementById(id).addEventListener("input",calc));
+calc();
+let seconds=5904;
+setInterval(()=>{seconds=Math.max(0,seconds-1);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;document.getElementById("timer").textContent=[h,m,s].map(v=>String(v).padStart(2,"0")).join(":")},1000);
+document.getElementById("cardToggle").addEventListener("click",()=>{
+const before=document.getElementById("cardBefore"),after=document.getElementById("cardAfter"),label=document.getElementById("cardState"),afterOn=after.classList.contains("flex");
+before.classList.toggle("hidden",!afterOn);before.classList.toggle("grid",afterOn);
+after.classList.toggle("hidden",afterOn);after.classList.toggle("flex",!afterOn);
+label.textContent=afterOn?"特訓前":"特訓後";
+});
+const search=document.getElementById("globalSearch");
+const sections=[...document.querySelectorAll(".section-block")];
+search.addEventListener("input",()=>{
+const q=search.value.trim().toLowerCase();let visible=0;
+sections.forEach(s=>{const ok=!q||s.dataset.search.toLowerCase().includes(q);s.classList.toggle("hidden",!ok);if(ok)visible++});
+document.getElementById("searchEmpty").classList.toggle("hidden",visible!==0);
 });
 </script>
-
 </body>
 </html>
