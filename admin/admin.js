@@ -476,7 +476,7 @@
   }
 
   async function setAutonomousMaintenance(enabled) {
-    if (currentRole !== "master") {
+    if (!currentCan("audit.delete")) {
       renderAutonomousMaintenance();
       return;
     }
@@ -584,11 +584,25 @@
   function renderAuditLogs() {
     const query = String($("auditSearch")?.value || "").trim().toLowerCase();
     const filter = String($("auditActionFilter")?.value || "all");
+    const userFilter = String($("auditUserFilter")?.value || "").trim().toLowerCase();
+    const fromRaw = String($("auditFrom")?.value || "").trim();
+    const toRaw = String($("auditTo")?.value || "").trim();
+    const fromTime = fromRaw ? new Date(fromRaw).getTime() : 0;
+    const toTime = toRaw ? new Date(toRaw).getTime() : 0;
     const rows = Object.entries(auditLogs || {})
       .filter(([id,item]) => {
         if (!item || typeof item !== "object") return false;
         const action = String(item.action || "other");
         if (filter !== "all" && action !== filter) return false;
+        const createdAt = Number(item.createdAt || 0);
+        if (fromTime > 0 && (!Number.isFinite(createdAt) || createdAt < fromTime)) return false;
+        if (toTime > 0 && (!Number.isFinite(createdAt) || createdAt > toTime)) return false;
+        if (userFilter) {
+          const userHay = [
+            item.actorEmail,item.actorUid,item.targetName,item.targetUid
+          ].join(" ").toLowerCase();
+          if (!userHay.includes(userFilter)) return false;
+        }
         const hay = [
           id,item.actorEmail,item.actorUid,item.actorRole,
           item.targetName,item.targetUid,item.details,
@@ -605,7 +619,7 @@
           const label = AUDIT_ACTION_LABELS[action] || action;
           const actor = String(item.actorEmail || item.actorUid || "—");
           const target = String(item.targetName || item.targetUid || "—");
-          const canDelete = currentRole === "master";
+          const canDelete = currentCan("audit.delete");
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
@@ -1654,7 +1668,7 @@
         "admin.read","users.read","users.update","users.restrict",
         "rooms.read","rooms.manage","chat.read","chat.moderate",
         "reports.read","reports.manage","analytics.read","ai.use",
-        "audit.read","audit.write","sync.control","sync.manual",
+        "audit.read","audit.write","audit.delete","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
         "chat.dm","youtube.search","youtube.queue","favorites.manage"
       ];
@@ -2358,6 +2372,9 @@
 
     $("auditSearch")?.addEventListener("input", renderAuditLogs);
     $("auditActionFilter")?.addEventListener("change", renderAuditLogs);
+    $("auditUserFilter")?.addEventListener("input", renderAuditLogs);
+    $("auditFrom")?.addEventListener("change", renderAuditLogs);
+    $("auditTo")?.addEventListener("change", renderAuditLogs);
     $("auditRefreshBtn")?.addEventListener("click", () => loadAuditLogs().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("logoutBtn")?.addEventListener("click", () => auth.signOut());
