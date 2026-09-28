@@ -1595,6 +1595,10 @@
     toast("房間已刪除");
   }
 
+  function encodeAccessPermission(permission) {
+    return String(permission || "").trim().replace(/\./g, "__").replace(/[^A-Za-z0-9_-]/g, "_").slice(0,80);
+  }
+
   const ACCESS_PERMISSION_CATALOG = [
     "admin.read",
     "users.read",
@@ -1880,7 +1884,14 @@
     if (!name) throw new Error("請輸入角色名稱");
     if (!permissions.length) throw new Error("至少需要一項權限");
     const map = {};
-    permissions.forEach(permission => { map[safeKey(permission,80)] = true; });
+    permissions.forEach(permission => {
+      const normalized = String(permission || "").trim();
+      if (normalized === "*") {
+        map.__all__ = true;
+      } else {
+        map[encodeAccessPermission(normalized)] = true;
+      }
+    });
     await db.ref("admin/access/roles/" + id).set({
       name,
       permissions: map,
