@@ -977,7 +977,6 @@
               ? "已完成 AI 診斷；完整分析已保存到此回報。"
               : String(item.aiError || "") || $("reportHint").textContent || "";
       }
-      renderReports();
     });
   }
 
