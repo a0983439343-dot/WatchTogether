@@ -497,6 +497,18 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['uid','until','permanent','updatedAt','updatedByUid']) && newData.child('uid').isString() && newData.child('uid').val() === $uid && newData.child('until').isNumber() && newData.child('until').val() >= 0 && newData.child('permanent').isBoolean() && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid)"
         }
       }
+    },
+    "publicUsers": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "searchName",
+        "publicCode"
+      ],
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.hasChildren(['displayName','publicCode','avatarEmoji','searchName','updatedAt']) && newData.child('displayName').isString() && newData.child('displayName').val().length > 0 && newData.child('displayName').val().length <= 30 && newData.child('publicCode').isString() && newData.child('publicCode').val().length <= 6 && newData.child('avatarEmoji').isString() && newData.child('avatarEmoji').val().length > 0 && newData.child('avatarEmoji').val().length <= 4 && newData.child('searchName').isString() && newData.child('searchName').val().length > 0 && newData.child('searchName').val().length <= 30 && newData.child('updatedAt').isNumber())"
+      }
     }
   }
 }
