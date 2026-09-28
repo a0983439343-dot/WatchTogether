@@ -536,7 +536,7 @@ test("2.0 access control: server-side restriction and feature flag block room wr
   }));
   await assertSucceeds(
     db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
-      .ref("admin/featureFlags/rooms.manage")
+      .ref("admin/featureFlags/rooms__manage")
       .update({
         enabled: false,
         reason: "disabled",
