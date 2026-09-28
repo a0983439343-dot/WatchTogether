@@ -372,9 +372,19 @@ function openInvites(){
   }).catch(function(e){toast(e.message||"載入邀請失敗");});
 }
 function installRoomInviteWatcher(){
-  var u=user();if(!u||u.isAnonymous||!db||window.__WT_ROOM_INVITE_WATCHER_UID===u.uid)return;
+  var u=user();if(!u||u.isAnonymous||!db)return;
+  if(window.__WT_ROOM_INVITE_WATCHER_UID===u.uid)return;
+  if(window.__WT_ROOM_INVITE_WATCHER_REF){try{window.__WT_ROOM_INVITE_WATCHER_REF.off();}catch(_){}}
   window.__WT_ROOM_INVITE_WATCHER_UID=u.uid;
-  db.ref("roomInvites/"+u.uid).on("child_added",function(s){var x=s.val();if(!x||x.status!=="pending")return;var k="wt_room_invite:"+u.uid+":"+s.key+":"+String(x.createdAt||"");if(localStorage.getItem(k))return;localStorage.setItem(k,String(Date.now()));if(prefs().roomNotifications)pushNotification("新的房間邀請",String(x.fromName||"好友")+" 邀請你加入「"+String(x.roomName||"一起看")+"」。","room");});
+  var ref=db.ref("roomInvites/"+u.uid);
+  window.__WT_ROOM_INVITE_WATCHER_REF=ref;
+  ref.on("child_added",function(s){
+    var x=s.val();if(!x||x.status!=="pending")return;
+    var k="wt_room_invite:"+u.uid+":"+s.key+":"+String(x.createdAt||"");
+    if(localStorage.getItem(k))return;
+    localStorage.setItem(k,String(Date.now()));
+    if(prefs().roomNotifications)pushNotification("新的房間邀請",String(x.fromName||"好友")+" 邀請你加入「"+String(x.roomName||"一起看")+"」。","room");
+  });
 }
 
 function installFriendshipWatcher(){
