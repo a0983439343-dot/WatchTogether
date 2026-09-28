@@ -2659,9 +2659,7 @@
       if (!uid && !data.id) throw new Error("缺少 Audit ID");
       const id = safeKey(data.id || uid,256);
       if (!id) throw new Error("無效的 Audit ID");
-      await db.ref("admin/auditLogs/" + id).remove();
-      await loadAuditLogs();
-      await writeAuditLog("audit.delete",id,"Audit Log","AI Agent 刪除操作紀錄 " + id);
+      await deleteAuditLog(id);
       return;
     }
 
