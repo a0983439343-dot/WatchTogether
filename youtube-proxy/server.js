@@ -744,7 +744,7 @@ async function writeMaintenanceState(idToken, user, enabled, reason, restoreAt) 
     action,
     actorUid: user.uid,
     actorEmail: user.email,
-    actorRole: "master",
+    actorRole: String(user.auditRole || "admin").slice(0,40),
     targetUid: user.uid,
     targetName: "網站維護模式",
     details,
@@ -782,11 +782,15 @@ async function authorizeMaintenanceRequest(req) {
   const isMaster =
     uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
     email === "a0983439343@gmail.com";
-  if (isMaster) return {ok:true,user};
+  if (isMaster) {
+    user.auditRole = "master";
+    return {ok:true,user};
+  }
 
   let roleId = "";
   let role = null;
   let override = null;
+  let auditOverride = null;
   let restriction = null;
   let flag = null;
   let whitelist = null;
@@ -797,11 +801,12 @@ async function authorizeMaintenanceRequest(req) {
       idToken
     ) || "").trim();
 
-    [role, override, restriction, flag, whitelist] = await Promise.all([
+    [role, override, auditOverride, restriction, flag, whitelist] = await Promise.all([
       roleId
         ? fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId), idToken)
         : Promise.resolve(null),
       fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/maintenance__manage", idToken),
+      fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/audit__write", idToken),
       fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/maintenance__manage", idToken),
       fetchFirebaseJson("admin/featureFlags/maintenance__manage", idToken),
       fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid), idToken)
@@ -851,6 +856,11 @@ async function authorizeMaintenanceRequest(req) {
     Boolean(permissions.__all__ === true || permissions.admin__read === true);
   const customMaintenance =
     Boolean(permissions.__all__ === true || permissions.maintenance__manage === true);
+  const auditWrite =
+    auditOverride === "allow" ||
+    permissions.__all__ === true ||
+    permissions.audit__write === true ||
+    (!roleId && Boolean(whitelist?.enabled === true && String(whitelist.role || "admin") === "admin"));
   const legacyAdmin =
     !roleId &&
     whitelist?.enabled === true &&
@@ -865,7 +875,18 @@ async function authorizeMaintenanceRequest(req) {
     };
   }
 
-  if (customMaintenance || legacyAdmin) return {ok:true,user};
+  if (customMaintenance || legacyAdmin) {
+    if (!auditWrite) {
+      return {
+        ok:false,
+        status:403,
+        error:"maintenance_audit_permission_required",
+        message:"控制網站維護模式需要 audit.write 權限。"
+      };
+    }
+    user.auditRole = roleId || "admin";
+    return {ok:true,user};
+  }
 
   return {
     ok:false,
