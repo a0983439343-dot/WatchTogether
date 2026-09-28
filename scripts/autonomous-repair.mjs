@@ -127,6 +127,8 @@ function allowedPaths(category) {
     "src/js/chat.js",
     "src/js/access-control.js",
     "src/js/feature-completion-v2.js",
+    "src/js/room-chat-rich.js",
+    "src/js/feature-complete-v3.js",
     "sw.js",
     "admin/admin.js",
     "admin/admin.html",
@@ -195,9 +197,14 @@ function repairContextPaths(category) {
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
+      "src/js/feature-completion-v2.js",
+      "src/js/feature-complete-v3.js",
+      "src/js/room-chat-rich.js",
       "admin/admin.js",
       "admin/admin.html",
       "admin/admin.css",
+      "src/js/feature-complete-v3.js",
+      "src/js/room-chat-rich.js",
       "config/database.rules.json"
     ],
         ui: [
@@ -209,7 +216,9 @@ function repairContextPaths(category) {
       "admin/admin.js",
       "admin/admin.html",
       "admin/admin.css",
-      "src/js/feature-completion-v2.js"
+      "src/js/feature-completion-v2.js",
+      "src/js/feature-complete-v3.js",
+      "src/js/room-chat-rich.js"
     ],
         other: [
       "index.html",
@@ -458,6 +467,8 @@ async function syncAssetVersions(changed, original) {
     "src/js/chat.js",
     "src/js/access-control.js",
     "src/js/feature-completion-v2.js",
+    "src/js/feature-complete-v3.js",
+    "src/js/room-chat-rich.js",
     "sw.js"
   ].some(file => changed.has(file));
 
@@ -476,6 +487,8 @@ async function syncAssetVersions(changed, original) {
       changed.has("src/css/styles.css") ||
       changed.has("src/js/access-control.js") ||
       changed.has("src/js/feature-completion-v2.js") ||
+      changed.has("src/js/feature-complete-v3.js") ||
+      changed.has("src/js/room-chat-rich.js") ||
       changed.has("sw.js")
     ) {
       indexAfter = indexAfter.replace(
