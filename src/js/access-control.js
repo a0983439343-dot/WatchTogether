@@ -265,6 +265,7 @@
       state.refs.featureFlags.on("value", snapshot => {
         state.featureFlags = snapshot.val() || {};
         renderMaintenance();
+        renderRestrictionNotice();
         emit();
       });
     } catch (_) {}
@@ -307,6 +308,50 @@
         emit();
       });
     } catch (_) {}
+  }
+
+  function createRestrictionNotice() {
+    if (location.pathname.includes("/admin/")) return;
+    if (document.getElementById("wtRestrictionNotice")) return;
+    const notice = document.createElement("div");
+    notice.id = "wtRestrictionNotice";
+    notice.style.cssText = [
+      "position:fixed",
+      "left:16px",
+      "right:16px",
+      "bottom:16px",
+      "z-index:2147482999",
+      "display:none",
+      "padding:14px 16px",
+      "border:1px solid rgba(251,191,36,.35)",
+      "border-radius:16px",
+      "background:rgba(30,25,12,.96)",
+      "color:#fff",
+      "font:13px/1.6 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+      "box-shadow:0 16px 40px rgba(0,0,0,.3)"
+    ].join(";");
+    notice.innerHTML = '<strong style="display:block;margin-bottom:4px">目前有功能限制</strong><div id="wtRestrictionNoticeBody"></div>';
+    document.body.appendChild(notice);
+  }
+
+  function renderRestrictionNotice() {
+    if (location.pathname.includes("/admin/") || !document.body) return;
+    createRestrictionNotice();
+    const notice = document.getElementById("wtRestrictionNotice");
+    const body = document.getElementById("wtRestrictionNoticeBody");
+    if (!notice || !body) return;
+    const rows = Object.entries(state.restrictions || {})
+      .filter(([, item]) => isActiveRestriction(item))
+      .map(([permission, item]) => {
+        const until = item.permanent === true || Number(item.until || 0) === 0
+          ? "永久"
+          : new Date(Number(item.until)).toLocaleString("zh-TW");
+        return '<div style="margin-top:5px"><strong>' + String(permission).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c])) + '</strong> · ' +
+          String(item.reason || "管理員設定的功能限制").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c])) +
+          ' · 到期：' + until + '</div>';
+      });
+    body.innerHTML = rows.join("");
+    notice.style.display = rows.length ? "block" : "none";
   }
 
   function createMaintenanceScreen() {
@@ -374,6 +419,7 @@
       state.ready = true;
       state.loading = false;
       renderMaintenance();
+      renderRestrictionNotice();
       emit();
       return true;
     } catch (error) {
