@@ -477,6 +477,51 @@ test("2.0 access control: custom administrator can manage user blocks", async ()
   await assertSucceeds(master.ref("admin/access/roles/block-manager").remove());
 });
 
+test("2.0 access control: user restriction and block writes require audit.write", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const restrictedAdmin = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(master.ref("admin/access/roles/restrict-only").set({
+    name: "Restrict Only",
+    permissions: {
+      admin__read: true,
+      users__read: true,
+      users__restrict: true
+    }
+  }));
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).set("restrict-only"));
+
+  await assertFails(restrictedAdmin.ref(
+    "admin/access/restrictionsByUid/" + USER_UID + "/youtube__search"
+  ).set({
+    enabled: true,
+    permanent: false,
+    until: Date.now() + 3600000,
+    reason: "test without audit permission",
+    createdAt: Date.now(),
+    createdByUid: OTHER_UID,
+    createdByEmail: "other@example.com"
+  }));
+
+  await assertFails(restrictedAdmin.ref("admin/blocksByUid/" + USER_UID).set({
+    uid: USER_UID,
+    email: "user@example.com",
+    displayName: "User",
+    permanent: false,
+    blockedUntil: Date.now() + 3600000,
+    blockedAt: Date.now(),
+    blockedByUid: OTHER_UID,
+    blockedByEmail: "other@example.com",
+    blockedByRole: "admin"
+  }));
+
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).remove());
+  await assertSucceeds(master.ref("admin/access/roles/restrict-only").remove());
+});
+
 test("room 2.0: application lifecycle and cohost role are owner controlled", async () => {
   const ownerDb = db(USER_UID, userToken);
   await assertSucceeds(ownerDb.ref("roomMeta/ABC123").set({
