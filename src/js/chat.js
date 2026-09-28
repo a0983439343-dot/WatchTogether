@@ -215,18 +215,18 @@ async function toggleBlock(uid) {
   var name = String(profile.displayName || "這位好友").slice(0,30);
   if (!window.confirm("確定封鎖「" + name + "」嗎？封鎖後會停止新的好友邀請與私訊。")) return;
 
-  await ref.set({
-    uid:uid,
-    name:name,
-    createdAt:firebase.database.ServerValue.TIMESTAMP
-  });
-
   var updates = {};
   updates["friendships/" + me.uid + "/" + uid] = null;
   updates["friendships/" + uid + "/" + me.uid] = null;
   updates["friendRequests/" + me.uid + "/" + uid] = null;
   updates["friendRequests/" + uid + "/" + me.uid] = null;
   await wt.db.ref().update(updates);
+
+  await ref.set({
+    uid:uid,
+    name:name,
+    createdAt:firebase.database.ServerValue.TIMESTAMP
+  });
 
   state.blocked[uid] = {uid:uid,name:name,createdAt:Date.now()};
   delete state.friends[uid];
