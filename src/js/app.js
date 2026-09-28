@@ -14972,6 +14972,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
   window.WT_CORE.persistAuthenticatedAccount = persistAuthenticatedAccount;
   window.WT_CORE.changeVideo = changeVideo;
+  window.WT_CORE.toggleRoomMute = toggleRoomMute;
+  window.WT_CORE.toggleRoomBan = toggleRoomBan;
+  window.WT_CORE.kickMember = kickMember;
   window.WT_CORE.refreshYoutubeStreamIfNeeded = refreshYoutubeStreamIfNeeded;
   window.WT_CORE.applyPlayerPosition = applyPlayerPosition;
 
