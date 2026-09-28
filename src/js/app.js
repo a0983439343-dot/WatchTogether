@@ -7621,6 +7621,60 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     const isExistingMember =
       currentMemberSnapshot.exists();
 
+    let isRoomInvite = false;
+    const inviteId =
+      String(
+        new URLSearchParams(location.search).get("invite") ||
+        ""
+      ).trim();
+
+    if (
+      !isRoomOwner &&
+      !isExistingMember &&
+      inviteId &&
+      auth?.currentUser &&
+      !auth.currentUser.isAnonymous
+    ) {
+      try {
+        const inviteSnapshot =
+          await db
+            .ref(
+              `roomInvites/${state.uid}/${inviteId}`
+            )
+            .once("value");
+
+        const invite =
+          inviteSnapshot.val() ||
+          {};
+
+        isRoomInvite =
+          String(invite.roomId || "") ===
+            String(roomId || "") &&
+          String(invite.toUid || "") ===
+            String(state.uid || "") &&
+          ["pending", "accepted"].includes(
+            String(invite.status || "")
+          );
+
+        if (
+          isRoomInvite &&
+          String(invite.status || "") ===
+            "pending"
+        ) {
+          await db
+            .ref(
+              `roomInvites/${state.uid}/${inviteId}/status`
+            )
+            .set("accepted");
+        }
+      } catch (inviteError) {
+        console.warn(
+          "房間邀請驗證失敗:",
+          inviteError
+        );
+      }
+    }
+
     const isRoomOwner =
       actualOwnerUid ===
       String(
@@ -7641,7 +7695,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         memberName: state.memberName,
         isRoomOwner,
         isExistingMember,
-        isAdminJoin: false
+        isAdminJoin: false,
+        isInvited: isRoomInvite
       });
     }
 
@@ -7688,6 +7743,46 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       throw new Error(
         `你已被房主移出這個房間，請 ${remainingMinutes} 分鐘後再加入`
       );
+    }
+
+    if (!state.adminJoinOverride) {
+      const banSnapshot =
+        await db
+          .ref(
+            `roomBans/${roomId}/${state.uid}`
+          )
+          .once("value");
+
+      const ban =
+        banSnapshot.val() ||
+        {};
+
+      if (
+        ban.permanent === true ||
+        Number(ban.until || 0) > Date.now()
+      ) {
+        if (ban.permanent === true) {
+          throw new Error(
+            "你已被此房間封鎖，無法加入"
+          );
+        }
+
+        const remainingMinutes =
+          Math.max(
+            1,
+            Math.ceil(
+              Math.max(
+                0,
+                Number(ban.until || 0) -
+                Date.now()
+              ) / 60000
+            )
+          );
+
+        throw new Error(
+          `你已被此房間封鎖，請 ${remainingMinutes} 分鐘後再加入`
+        );
+      }
     }
 
     state.roomId =
