@@ -2592,6 +2592,49 @@
     toast("Feature Flag 已刪除");
   }
 
+  function applyNavigationPermissions() {
+    const sectionPermissions = {
+      overview: "admin.read",
+      accounts: "users.read",
+      rooms: "rooms.read",
+      chat: "chat.read",
+      whitelist: "users.update",
+      access: "admin.read",
+      settings: "__master__",
+      reports: "reports.read",
+      analytics: "analytics.read",
+      ai: "ai.use",
+      audit: "audit.read"
+    };
+    let activeSection = "";
+    document.querySelectorAll(".nav-item").forEach(btn => {
+      const section = String(btn.dataset.section || "");
+      const required = sectionPermissions[section];
+      const allowed = required === "__master__"
+        ? isMasterOperator()
+        : currentCan(required || "admin.read");
+      btn.classList.toggle("hidden", !allowed);
+      btn.setAttribute("aria-hidden", allowed ? "false" : "true");
+      if (!allowed && btn.classList.contains("active")) {
+        activeSection = section;
+      }
+    });
+    if (activeSection) {
+      const fallback = document.querySelector('.nav-item[data-section="overview"]');
+      if (fallback && !fallback.classList.contains("hidden")) {
+        document.querySelectorAll(".nav-item").forEach(x => x.classList.remove("active"));
+        fallback.classList.add("active");
+        document.querySelectorAll(".admin-section").forEach(x => x.classList.add("hidden"));
+        show("section-overview");
+        try {
+          history.replaceState(null, "", "#overview");
+          localStorage.setItem("watchtogether-admin-section", "overview");
+          sessionStorage.setItem("watchtogether-admin-section", "overview");
+        } catch (_) {}
+      }
+    }
+  }
+
   function applyRoleUi() {
     const master = isMasterOperator();
     const addPanel = $("whitelistAddPanel");
@@ -2606,6 +2649,7 @@
       addPanel?.classList.add("hidden");
       if (help) help.textContent = "你目前是觀察型管理角色，僅可使用被授予的查看權限。";
     }
+    applyNavigationPermissions();
   }
 
   async function initialize() {
@@ -2673,8 +2717,8 @@
 
         $("adminAccount").textContent = user.email || "";
         show("app");
-        restoreAdminSection();
         applyRoleUi();
+        restoreAdminSection();
 
         await Promise.all([
           loadAccounts(),
