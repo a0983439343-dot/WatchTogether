@@ -13372,128 +13372,56 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       ?.addEventListener(
         "click",
         async () => {
-          const platform =
-            $("sourceTypeModal")
-              ?.value ||
-            "youtube";
+          const platform = $("sourceTypeModal")?.value || "youtube";
+          if (![ "youtube", "vimeo", "dailymotion", "twitch" ].includes(platform)) return;
+          if (state.searchBusy) return;
 
-          if (
-            platform !==
-            "youtube"
-          ) {
-            return;
-          }
-
-          if (
-            state.searchBusy
-          ) {
-            return;
-          }
-
-          const query =
-            $("modalVideoSearchInput")
-              ?.value
-              .trim();
-
+          const query = $("modalVideoSearchInput")?.value.trim();
           saveYoutubeSearchHistory(query);
           renderYoutubeSearchHistory();
-
           if (!query) {
-            setError(
-              $("modalError"),
-              "請輸入影片名稱"
-            );
-
+            setError($("modalError"), "請輸入影片名稱");
             return;
           }
 
-          state.searchBusy =
-            true;
-
-          state.searchLoadingMore =
-            false;
-
+          state.searchBusy = true;
+          state.searchLoadingMore = false;
+          state.searchPlatform = platform;
           disconnectSearchObserver();
+          state.searchResults = [];
+          state.searchNextPageToken = "";
+          state.searchPageCount = 0;
+          state.searchQuery = query;
+          state.modalSelectedVideo = null;
+          state.modalSelectedVideoId = "";
 
-          state.searchResults =
-            [];
-
-          state.searchNextPageToken =
-            "";
-
-          state.searchPageCount =
-            0;
-
-          state.searchQuery =
-            query;
-
-          state.modalSelectedVideo =
-            null;
-
-          state.modalSelectedVideoId =
-            "";
-
-          const button =
-            $("modalSearchVideoBtn");
-
+          const button = $("modalSearchVideoBtn");
           if (button) {
-            button.disabled =
-              true;
-
-            button.textContent =
-              "搜尋中…";
+            button.disabled = true;
+            button.textContent = "搜尋中…";
           }
 
-          setError(
-            $("modalError"),
-            ""
-          );
+          setError($("modalError"), "");
 
           try {
-            await searchYoutube(
-              query,
-              false
-            );
-
-            const resultsContainer =
-              $("modalVideoSearchResults");
-
-            if (
-              resultsContainer
-            ) {
-              resultsContainer.scrollTop =
-                0;
-
-              requestAnimationFrame(
-                () => {
-                  configureSearchScroll();
-                  resultsContainer.scrollTop =
-                    0;
-                }
-              );
+            await searchSelectedPlatform(query, false);
+            const resultsContainer = $("modalVideoSearchResults");
+            if (resultsContainer) {
+              resultsContainer.scrollTop = 0;
+              requestAnimationFrame(() => {
+                configureSearchScroll();
+                resultsContainer.scrollTop = 0;
+              });
             }
           } catch (error) {
-            console.error(
-              error
-            );
-
-            setError(
-              $("modalError"),
-              error.message ||
-                "搜尋失敗"
-            );
+            console.error(error);
+            setError($("modalError"), error.message || "搜尋失敗");
           } finally {
-            state.searchBusy =
-              false;
-
+            state.searchBusy = false;
             if (button) {
-              button.disabled =
-                false;
-
-              button.textContent =
-                "搜尋";
+              button.disabled = false;
+              button.textContent = "搜尋";
             }
-
             configureSearchScroll();
           }
         }
