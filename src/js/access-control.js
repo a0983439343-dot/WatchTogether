@@ -92,13 +92,23 @@
     return item && item.enabled === false ? false : true;
   }
 
+  function encodePermissionKey(permission) {
+    return String(permission || "").trim().replace(/\./g, "__").replace(/[^A-Za-z0-9_-]/g, "_");
+  }
+
+  function decodePermissionKey(key) {
+    return String(key || "").replace(/__/g, ".");
+  }
+
   function rolePermissions(role, definition) {
     if (Array.isArray(definition)) return new Set(definition.map(String));
     if (definition && Array.isArray(definition.permissions)) {
       return new Set(definition.permissions.map(String));
     }
     if (definition && definition.permissions && typeof definition.permissions === "object") {
-      return new Set(Object.entries(definition.permissions).filter(([, value]) => value === true).map(([key]) => key));
+      return new Set(Object.entries(definition.permissions)
+        .filter(([, value]) => value === true)
+        .map(([key]) => key === "__all__" ? "*" : decodePermissionKey(key)));
     }
     return new Set(BUILTIN_ROLES[role] || []);
   }
@@ -112,7 +122,7 @@
           Object.values(state.roleDefinition || {}).flatMap(value => {
             if (Array.isArray(value)) return value.map(String);
             if (value && typeof value === "object") {
-              return Object.entries(value).filter(([, enabled]) => enabled === true).map(([key]) => String(key));
+              return Object.entries(value).filter(([, enabled]) => enabled === true).map(([key]) => key === "__all__" ? "*" : decodePermissionKey(key));
             }
             return [];
           }),
