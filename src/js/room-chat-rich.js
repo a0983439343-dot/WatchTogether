@@ -142,275 +142,6 @@
     return String(reactions?.[messageId]?.[currentUid()]?.emoji || "");
   }
 
-  async function sendSticker(emoji) {
-    const s = st();
-    const uid = currentUid();
-    if (!db || !s.chatRef || !uid) return;
-    const mute = s.roomMutes?.[uid];
-    if (mute && (mute.permanent === true || Number(mute.until || 0) > Date.now())) {
-      toast("你目前被房間禁言");
-      return;
-    }
-    try {
-      const access = window.WT_ACCESS_CONTROL;
-      if (access) {
-        await access.waitUntilReady(2500).catch(() => {});
-        if (access.state?.ready && !access.hasPermission("chat.send")) {
-          toast("你目前無法在聊天室發言");
-          return;
-        }
-      }
-      await s.chatRef.push({
-        uid,
-        name:String(s.memberName || "玩家").slice(0,30),
-        type:"sticker",
-        sticker:String(emoji || "😊").slice(0,4),
-        createdAt:firebase.database.ServerValue.TIMESTAMP
-      });
-    } catch (error) {
-      toast(error?.message || "貼圖送出失敗");
-    }
-  }
-
-  async function sendRoomImage(file) {
-    const s = st();
-    const uid = currentUid();
-    const room = roomId();
-    if (!db || !s.chatRef || !uid || !room || !s.wasMemberInRoom) {
-      toast("目前不在房間內");
-      return;
-    }
-    if (!file || String(file.type || "").indexOf("image/") !== 0) {
-      toast("請選擇圖片檔案");
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      toast("圖片太大，單檔上限 8 MB");
-      return;
-    }
-
-    const mute = s.roomMutes?.[uid];
-    if (mute && (mute.permanent === true || Number(mute.until || 0) > Date.now())) {
-      toast("你目前被房間禁言");
-      return;
-    }
-
-    try {
-      const access = window.WT_ACCESS_CONTROL;
-      if (access) {
-        await access.waitUntilReady(2500).catch(() => {});
-        if (access.state?.ready && !access.hasPermission("chat.send")) {
-          toast("你目前無法在聊天室發言");
-          return;
-        }
-        if (access.state?.ready && !access.hasPermission("chat.media")) {
-          toast("你目前無法傳送圖片");
-          return;
-        }
-      }
-
-      let blob = file;
-      let contentType = String(file.type || "image/jpeg");
-      let safeName = String(file.name || "image").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-
-      if (contentType !== "image/gif") {
-        blob = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onerror = () => reject(new Error("圖片讀取失敗"));
-          reader.onload = () => {
-            const image = new Image();
-            image.onerror = () => reject(new Error("圖片格式無法讀取"));
-            image.onload = () => {
-              const scale = Math.min(1, 1600 / Math.max(image.width || 1, image.height || 1));
-              const width = Math.max(1, Math.round((image.width || 1) * scale));
-              const height = Math.max(1, Math.round((image.height || 1) * scale));
-              const canvas = document.createElement("canvas");
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) {
-                reject(new Error("圖片處理失敗"));
-                return;
-              }
-              ctx.drawImage(image, 0, 0, width, height);
-              canvas.toBlob(result => {
-                if (!result) {
-                  reject(new Error("圖片壓縮失敗"));
-                  return;
-                }
-                resolve(result);
-              }, "image/webp", 0.84);
-            };
-            image.src = String(reader.result || "");
-          };
-          reader.readAsDataURL(file);
-        });
-        contentType = "image/webp";
-        safeName = safeName.replace(/.[^.]+$/, "") + ".webp";
-      }
-
-      if (blob.size > 8 * 1024 * 1024) {
-        throw new Error("圖片壓縮後仍超過 8 MB");
-      }
-
-      if (!firebase.storage) {
-        throw new Error("Firebase Storage 尚未載入");
-      }
-
-      const fileId =
-        Date.now() + "_" +
-        (window.crypto?.randomUUID
-          ? window.crypto.randomUUID()
-          : Math.random().toString(36).slice(2));
-
-      const path =
-        "chatRoomMedia/" + room + "/" + uid + "/" + fileId + ".webp";
-
-      const storageRef = firebase.storage().ref(path);
-      await storageRef.put(blob, {
-        contentType,
-        customMetadata: {
-          ownerUid: uid,
-          roomId: room
-        }
-      });
-
-      const url = await storageRef.getDownloadURL();
-
-      await s.chatRef.push({
-        uid,
-        name: String(s.memberName || "玩家").slice(0, 30),
-        type: "image",
-        mediaUrl: String(url).slice(0, 1000000),
-        mediaPath: path.slice(0, 500),
-        mediaName: safeName.slice(0, 100),
-        mediaSize: Number(blob.size),
-        createdAt: firebase.database.ServerValue.TIMESTAMP
-      });
-
-      toast("圖片已送出");
-    } catch (error) {
-      toast(error?.message || "圖片上傳失敗");
-    }
-  }
-
-  function openRoomImage(url) {
-    const safeUrl = String(url || "").trim();
-    if (!safeUrl) return;
-
-    document.getElementById("wtRoomImageLightbox")?.remove();
-
-    const box = document.createElement("div");
-    box.id = "wtRoomImageLightbox";
-    box.className = "wt-room-image-lightbox";
-    box.innerHTML =
-      '<div class="wt-room-image-lightbox-backdrop"></div>' +
-      '<button type="button" class="wt-room-image-lightbox-close" aria-label="關閉圖片">×</button>' +
-      '<img src="' + esc(safeUrl) + '" alt="聊天室圖片預覽">';
-
-    document.body.appendChild(box);
-
-    const close = () => box.remove();
-    box.querySelector(".wt-room-image-lightbox-backdrop")?.addEventListener("click", close);
-    box.querySelector(".wt-room-image-lightbox-close")?.addEventListener("click", close);
-  }
-
-  function ensureImageToolbar() {
-    const form = $("chatForm");
-    if (!form || $("wtRoomChatImageBtn") || $("wtRoomChatImageInput")) return;
-
-    const input = document.createElement("input");
-    input.id = "wtRoomChatImageInput";
-    input.type = "file";
-    input.accept = "image/*";
-    input.multiple = true;
-    input.hidden = true;
-
-    const button = document.createElement("button");
-    button.id = "wtRoomChatImageBtn";
-    button.type = "button";
-    button.className = "tiny-btn";
-    button.textContent = "🖼️ 圖片";
-    button.title = "傳送房間圖片";
-
-    button.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      input.click();
-    });
-
-    input.addEventListener("change", event => {
-      const files = Array.from(event.target.files || []).filter(file =>
-        String(file.type || "").indexOf("image/") === 0
-      ).slice(0, 6);
-      event.target.value = "";
-      files.forEach(file => void sendRoomImage(file));
-    });
-
-    form.insertBefore(button, form.firstChild);
-    form.appendChild(input);
-
-    const onPaste = event => {
-      const files = Array.from(event.clipboardData?.files || []).filter(file =>
-        String(file.type || "").indexOf("image/") === 0
-      );
-      if (!files.length) return;
-      event.preventDefault();
-      files.slice(0, 6).forEach(file => void sendRoomImage(file));
-    };
-
-    const onDrop = event => {
-      const files = Array.from(event.dataTransfer?.files || []).filter(file =>
-        String(file.type || "").indexOf("image/") === 0
-      );
-      if (!files.length) return;
-      event.preventDefault();
-      event.stopPropagation();
-      files.slice(0, 6).forEach(file => void sendRoomImage(file));
-    };
-
-    form.addEventListener("paste", onPaste);
-    form.addEventListener("dragover", event => event.preventDefault());
-    form.addEventListener("drop", onDrop);
-  }
-
-  function ensureStickerToolbar() {
-    const tools = $("wtRoomChatTools");
-    const form = $("chatForm");
-    if ((!tools && !form) || $("wtRoomChatStickerBtn")) return;
-    const host = tools || form;
-    const button = document.createElement("button");
-    button.id = "wtRoomChatStickerBtn";
-    button.type = "button";
-    button.className = "tiny-btn";
-    button.textContent = "😊 貼圖";
-    const menu = document.createElement("div");
-    menu.id = "wtRoomChatStickerMenu";
-    menu.className = "wt-room-chat-sticker-menu hidden";
-    ["😊","😂","👍","❤️","🔥","🎉","😍","😎","🤔","🥳","😢","😮","👏","🙏","🍿","🎬"].forEach(emoji => {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = "wt-room-chat-sticker-item";
-      item.textContent = emoji;
-      item.title = "送出 " + emoji;
-      item.addEventListener("click", () => {
-        void sendSticker(emoji);
-        menu.classList.add("hidden");
-      });
-      menu.appendChild(item);
-    });
-    button.addEventListener("click", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      menu.classList.toggle("hidden");
-    });
-    host.appendChild(button);
-    host.appendChild(menu);
-    document.addEventListener("click", e => {
-      if (!host.contains(e.target)) menu.classList.add("hidden");
-    });
-  }
-
   async function writeReply(message) {
     if (!db || !activeRoom || !currentUid()) return;
     const text = String(prompt("回覆這則訊息：", "") || "").trim().slice(0,300);
@@ -490,7 +221,7 @@
 
   function replyHtml(reply) {
     if (!reply) return "";
-    return '<div class="wt-room-reply-preview"><span>↩ 回覆 ' + esc(reply.replyToName || "玩家") + '</span><small>' + esc(reply.replyToText || "") + '</small><strong>' + esc(reply.text || "") + '</strong></div>';
+    return '<div class="wt-room-reply-preview"><span>↩ 回覆 ' + esc(reply.replyToName || "玩家") + '</span><small>' + esc(reply.replyToText || "") + '</small></div>';
   }
 
   function decorateMessage(el) {
@@ -625,15 +356,6 @@
     const box = $("chatMessages");
     if (!box) return;
     box.querySelectorAll(".wt-message[data-chat-id]").forEach(decorateMessage);
-    box.querySelectorAll("[data-chat-image]").forEach(node => {
-      if (node.dataset.wtRoomImageBound === "1") return;
-      node.dataset.wtRoomImageBound = "1";
-      node.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
-        openRoomImage(node.dataset.chatImage || node.querySelector("img")?.src || "");
-      });
-    });
   }
 
   function interceptLegacyPin() {
@@ -665,8 +387,6 @@
     if (now - lastRoomCheck < 900) return;
     lastRoomCheck = now;
     installObserver();
-    ensureStickerToolbar();
-    ensureImageToolbar();
     if (!id) {
       closeRefs();
       observer?.disconnect();
@@ -683,17 +403,9 @@
       ".wt-room-chat-rich-actions .wt-message-delete{font-size:11px;padding:3px 7px}",
       ".wt-room-reply-preview{display:flex;flex-direction:column;gap:2px;margin:4px 0 7px;padding:7px 9px;border-left:3px solid currentColor;border-radius:6px;background:rgba(148,163,184,.08);font-size:11px}",
       ".wt-room-reply-preview small{opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}",
-      ".wt-room-reply-preview strong{font-size:12px;font-weight:600;line-height:1.45;white-space:pre-wrap;word-break:break-word}",
       ".wt-room-chat-edited{font-size:10px;opacity:.55;margin-left:6px}",
       ".wt-room-message-pinned{outline:1px solid rgba(250,204,21,.25)}",
-      ".wt-room-chat-rich-actions .active{box-shadow:0 0 0 1px currentColor inset}",
-      ".wt-room-chat-sticker-menu{position:absolute;z-index:1000;margin-top:6px;padding:7px;display:grid;grid-template-columns:repeat(8,1fr);gap:4px;background:#0f172a;border:1px solid rgba(148,163,184,.18);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.3)}",
-      ".wt-room-chat-sticker-menu.hidden{display:none!important}",
-      ".wt-room-chat-sticker-item{border:0;background:transparent;border-radius:8px;padding:5px;font-size:19px;cursor:pointer}.wt-room-chat-sticker-item:hover{background:rgba(148,163,184,.12)}",
-      ".wt-room-image-lightbox{position:fixed;inset:0;z-index:1900;display:grid;place-items:center;padding:20px}",
-      ".wt-room-image-lightbox-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(10px)}",
-      ".wt-room-image-lightbox img{position:relative;z-index:1;max-width:min(94vw,1200px);max-height:92dvh;border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.5)}",
-      ".wt-room-image-lightbox-close{position:absolute;right:16px;top:16px;z-index:2;width:42px;height:42px;border:1px solid rgba(255,255,255,.16);border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:24px}"
+      ".wt-room-chat-rich-actions .active{box-shadow:0 0 0 1px currentColor inset}"
     ].join("");
     document.head.appendChild(style);
   }
