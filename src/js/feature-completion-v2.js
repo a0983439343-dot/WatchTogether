@@ -455,7 +455,7 @@
     render("videos");
   }
 
-  function openHealth() {
+  async function openHealth() {
     const s = state();
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
     const video = $("directVideo");
