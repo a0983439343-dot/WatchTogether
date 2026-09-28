@@ -1151,44 +1151,85 @@ async function authorizeAdminAgentRequest(req) {
   let override = null;
   let restriction = null;
   let flag = null;
+  let whitelist = null;
 
   try {
-    [roleId, role, override, restriction, flag] = await Promise.all([
-      fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
-      fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken).then(async value => {
-        const assigned = String(value || "").trim();
-        return assigned
-          ? fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(assigned),idToken)
-          : null;
-      }),
+    roleId = String(await fetchFirebaseJson(
+      "admin/access/roleByUid/" + encodeURIComponent(uid),
+      idToken
+    ) || "").trim();
+
+    [role, override, restriction, flag, whitelist] = await Promise.all([
+      roleId
+        ? fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId),idToken)
+        : Promise.resolve(null),
       fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/ai__agent",idToken),
       fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/ai__agent",idToken),
-      fetchFirebaseJson("admin/featureFlags/ai__agent",idToken)
+      fetchFirebaseJson("admin/featureFlags/ai__agent",idToken),
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
     ]);
   } catch (_) {
     return {ok:false,status:503,error:"agent_policy_unavailable",message:"目前無法驗證 AI Agent 權限。"};
   }
 
   if (restriction && isActivePolicy(restriction)) {
-    return {ok:false,status:403,error:"agent_restricted",message:String(restriction.reason || "目前帳號無法使用 AI Agent。").slice(0,500)};
+    return {
+      ok:false,
+      status:403,
+      error:"agent_restricted",
+      message:String(restriction.reason || "目前帳號無法使用 AI Agent。").slice(0,500)
+    };
   }
+
   if (flag && flag.enabled === false) {
-    return {ok:false,status:403,error:"agent_feature_disabled",message:String(flag.reason || "AI Agent 目前暫停。").slice(0,500)};
+    return {
+      ok:false,
+      status:403,
+      error:"agent_feature_disabled",
+      message:String(flag.reason || "AI Agent 目前暫停。").slice(0,500)
+    };
   }
+
   if (override === "deny") {
-    return {ok:false,status:403,error:"agent_permission_denied",message:"目前帳號被禁止使用 AI Agent。"};
-  }
-  if (override === "allow") return {ok:true,user};
-
-  const permissions = role && typeof role.permissions === "object" ? role.permissions : {};
-  if (permissions.__all__ === true || permissions.admin__read === true) {
-    if (permissions.ai__agent === true || permissions.__all__ === true) {
-      return {ok:true,user};
-    }
+    return {
+      ok:false,
+      status:403,
+      error:"agent_permission_denied",
+      message:"目前帳號被禁止使用 AI Agent。"
+    };
   }
 
-  const legacyWhitelist = await fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken).catch(() => null);
-  if (legacyWhitelist?.enabled === true && String(legacyWhitelist.role || "admin") !== "viewer") {
+  const permissions = role && typeof role.permissions === "object"
+    ? role.permissions
+    : {};
+  const customAdmin =
+    Boolean(
+      permissions.__all__ === true ||
+      permissions.admin__read === true
+    );
+  const customAgent =
+    Boolean(
+      permissions.__all__ === true ||
+      permissions.ai__agent === true
+    );
+  const legacyAdmin =
+    whitelist?.enabled === true &&
+    String(whitelist.role || "admin") !== "viewer";
+
+  if (!customAdmin && !legacyAdmin) {
+    return {
+      ok:false,
+      status:403,
+      error:"agent_admin_required",
+      message:"AI Agent 只能由具備管理權限的帳號使用。"
+    };
+  }
+
+  if (override === "allow") {
+    return {ok:true,user};
+  }
+
+  if (customAgent || legacyAdmin) {
     return {ok:true,user};
   }
 
@@ -1199,6 +1240,7 @@ async function authorizeAdminAgentRequest(req) {
     message:"目前角色沒有 AI Agent 權限。"
   };
 }
+
 
 async function authorizeAiRequest(req) {
   const idToken = getBearerToken(req);
