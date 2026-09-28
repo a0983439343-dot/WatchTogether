@@ -1169,7 +1169,7 @@ async function authorizeAdminAgentRequest(req) {
     return {ok:false,status:503,error:"agent_policy_unavailable",message:"目前無法驗證 AI Agent 權限。"};
   }
 
-  if (restriction && activePolicy(restriction)) {
+  if (restriction && isActivePolicy(restriction)) {
     return {ok:false,status:403,error:"agent_restricted",message:String(restriction.reason || "目前帳號無法使用 AI Agent。").slice(0,500)};
   }
   if (flag && flag.enabled === false) {
