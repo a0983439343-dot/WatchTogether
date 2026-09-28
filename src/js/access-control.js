@@ -32,7 +32,8 @@
       "chat.dm",
       "youtube.search",
       "youtube.queue",
-      "favorites.manage"
+      "favorites.manage",
+      "maintenance.manage"
     ],
     viewer: [
       "admin.read",
