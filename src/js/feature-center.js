@@ -9,6 +9,8 @@ const PREFS_KEY = "wt_preferences_v1";
 const NOTIFY_KEY = "wt_notifications_v2";
 const STATS_KEY = "wt_stats_v1";
 const seen = {};
+let lastTrackedRoom = "";
+let lastTrackedVideo = "";
 
 function esc(v){return String(v == null ? "" : v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c];});}
 function toast(v){try{if(typeof wt.toast==="function")return wt.toast(v);if(typeof window.toast==="function")window.toast(v);}catch(_){}}
@@ -342,7 +344,7 @@ function init(){
   var p=prefs();
   if($("sourceTypeInput")&&["youtube","vimeo","dailymotion","twitch"].includes(p.defaultPlatform))$("sourceTypeInput").value=p.defaultPlatform;
   installRoomInviteWatcher();
-  if(auth)auth.onAuthStateChanged(function(){installFriendWatcher();installRoomInviteWatcher();ensureTopbar();});
+  if(auth)auth.onAuthStateChanged(function(){installFriendRequestWatcher();installRoomInviteWatcher();ensureTopbar();});
   setInterval(ensureRoomTools,1000);
   setInterval(track,5000);
   setInterval(installFriendWatcher,5000);
