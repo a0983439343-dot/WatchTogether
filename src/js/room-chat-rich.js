@@ -221,7 +221,7 @@
 
   function replyHtml(reply) {
     if (!reply) return "";
-    return '<div class="wt-room-reply-preview"><span>↩ 回覆 ' + esc(reply.replyToName || "玩家") + '</span><small>' + esc(reply.replyToText || "") + '</small></div>';
+    return '<div class="wt-room-reply-preview"><span>↩ 回覆 ' + esc(reply.replyToName || "玩家") + '</span><small>' + esc(reply.replyToText || "") + '</small><strong>' + esc(reply.text || "") + '</strong></div>';
   }
 
   function decorateMessage(el) {
@@ -403,6 +403,7 @@
       ".wt-room-chat-rich-actions .wt-message-delete{font-size:11px;padding:3px 7px}",
       ".wt-room-reply-preview{display:flex;flex-direction:column;gap:2px;margin:4px 0 7px;padding:7px 9px;border-left:3px solid currentColor;border-radius:6px;background:rgba(148,163,184,.08);font-size:11px}",
       ".wt-room-reply-preview small{opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}",
+      ".wt-room-reply-preview strong{font-size:12px;font-weight:600;line-height:1.45;white-space:pre-wrap;word-break:break-word}",
       ".wt-room-chat-edited{font-size:10px;opacity:.55;margin-left:6px}",
       ".wt-room-message-pinned{outline:1px solid rgba(250,204,21,.25)}",
       ".wt-room-chat-rich-actions .active{box-shadow:0 0 0 1px currentColor inset}"
