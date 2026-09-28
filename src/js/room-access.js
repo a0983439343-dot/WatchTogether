@@ -36,6 +36,11 @@
     return Boolean(u && roomId() && String(state.room?.owner || "") === u.uid);
   }
 
+  function isCohost(uid) {
+    const key = String(uid || user()?.uid || "");
+    return Boolean(key && roomState.roles && roomState.roles[key] && roomState.roles[key].role === "cohost");
+  }
+
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
   }
