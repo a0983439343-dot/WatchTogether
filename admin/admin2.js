@@ -132,6 +132,7 @@
       deny:Object.assign({},state.permissionOverrides?.deny||{}),
       baseRole:String(window.WT2_ADMIN_ROLE||window.WT_ADMIN_CONTEXT?.getRole?.()||"")
     };
+    window.dispatchEvent(new Event("wt2-admin-permission-ready"));
   }
 
   function addNav(name,label,icon){
