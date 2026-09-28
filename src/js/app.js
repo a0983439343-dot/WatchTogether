@@ -235,8 +235,6 @@
 
     roomMutesRef: null,
     roomMutes: {},
-    roomBansRef: null,
-    roomBans: {},
 
     kickedRef: null,
 
@@ -1351,50 +1349,6 @@
       lastLoginAt: firebase.database.ServerValue.TIMESTAMP,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
-
-    let publicProfile = null;
-    try {
-      const profileSnapshot = await db.ref("profiles/" + user.uid).once("value");
-      publicProfile = profileSnapshot.val() || null;
-    } catch (_) {}
-
-    if (!publicProfile) {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        const candidate = randomRoomCode();
-        const reservation = await db.ref("profileCodes/" + candidate).transaction(current => {
-          return current === null || String(current) === String(user.uid)
-            ? String(user.uid)
-            : current;
-        }).catch(() => null);
-
-        if (reservation?.committed && String(reservation.snapshot?.val() || "") === String(user.uid)) {
-          publicProfile = {
-            displayName: String(user.displayName || "玩家").trim().slice(0, 30) || "玩家",
-            publicCode: candidate,
-            avatarEmoji: "🙂",
-            theme: "aurora",
-            notifications: true,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-          };
-          try {
-            await db.ref("profiles/" + user.uid).set(publicProfile);
-          } catch (_) {}
-          break;
-        }
-      }
-    }
-
-    if (publicProfile) {
-      const publicUsersRef = db.ref("publicUsers/" + user.uid);
-      await publicUsersRef.set({
-        displayName: String(publicProfile.displayName || user.displayName || "玩家").trim().slice(0, 30) || "玩家",
-        publicCode: String(publicProfile.publicCode || "").trim().toUpperCase().slice(0, 6),
-        avatarEmoji: String(publicProfile.avatarEmoji || "🙂").slice(0, 4),
-        searchName: String(publicProfile.displayName || user.displayName || "玩家").trim().toLowerCase().slice(0, 30) || "玩家",
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-      }).catch(() => {});
-    }
 
     return true;
   }
@@ -3694,50 +3648,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     });
   }
 
-  function queueHistory() {
-    try {
-      const value = JSON.parse(localStorage.getItem("wt_queue_history_v1") || "[]");
-      return Array.isArray(value) ? value.slice(0, 50) : [];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function rememberQueueHistory(video, playedByName) {
-    if (!video || !video.id) return;
-    const item = {
-      key: String(video.platform || "youtube") + ":" + String(video.id),
-      id: String(video.id),
-      platform: String(video.platform || "youtube"),
-      title: String(video.title || "未命名影片").slice(0, 200),
-      thumbnail: String(video.thumbnail || "").slice(0, 2000),
-      channel: String(video.channel || "").slice(0, 100),
-      playedAt: Date.now(),
-      playedByName: String(playedByName || state.memberName || "玩家").slice(0, 30)
-    };
-    const list = queueHistory().filter(entry => entry.key !== item.key);
-    list.unshift(item);
-    try {
-      localStorage.setItem("wt_queue_history_v1", JSON.stringify(list.slice(0, 50)));
-    } catch (_) {}
-  }
-
-  async function clearQueue() {
-    await requireQueuePermissions("youtube");
-    if (!state.queueRef) throw new Error("目前不在房間內");
-    if (!state.isOwner) throw new Error("只有房主可以清空待播放清單");
-    const entries = Object.keys(state.queue || {});
-    if (!entries.length) {
-      toast("待播放清單已經是空的");
-      return;
-    }
-    if (!window.confirm("確定清空目前待播放清單嗎？")) return;
-    await Promise.all(entries.map(id => state.queueRef.child(id).remove()));
-    state.queue = {};
-    renderQueue();
-    toast("已清空待播放清單");
-  }
-
   async function removeQueuedCopiesOfVideo(video) {
     if (!state.queueRef || !video) return;
 
@@ -3871,28 +3781,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     await state.queueRef.update(updates);
     toast(direction < 0 ? "已上移" : "已下移");
   }
-
-  async function reorderQueueItem(queueId, targetQueueId) {
-    const item = state.queue?.[queueId];
-    await requireQueuePermissions(item?.platform || "youtube");
-    if (!canManageQueueOrder()) {
-      throw new Error("只有房主或 Co-host 可以調整待播放順序");
-    }
-    if (!state.queueRef || !queueId || !targetQueueId || queueId === targetQueueId) return;
-    const list = getSortedQueue().filter(item => !isCurrentVideo(item));
-    const from = list.findIndex(item => String(item.queueId) === String(queueId));
-    const to = list.findIndex(item => String(item.queueId) === String(targetQueueId));
-    if (from < 0 || to < 0 || from === to) return;
-
-    const [moved] = list.splice(from, 1);
-    list.splice(to, 0, moved);
-
-    const updates = {};
-    list.forEach((entry, index) => {
-      updates[entry.queueId + "/order"] = (index + 1) * 1000;
-    });
-    await state.queueRef.update(updates);
-  }
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
@@ -3944,8 +3832,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     await changeVideo(
       video
     );
-
-    rememberQueueHistory(video, item.addedByName);
 
     if (
       state.queueRef &&
@@ -4027,7 +3913,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               data-queue-id="${escapeHtml(
                 item.queueId
               )}"
-              draggable="${canManageQueueOrder() ? "true" : "false"}"
             >
 
               <div
@@ -4201,42 +4086,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         }
       });
     });
-
-    let draggedQueueId = "";
-    container.querySelectorAll('.queue-item[draggable="true"]').forEach(itemEl => {
-      itemEl.addEventListener("dragstart", event => {
-        draggedQueueId = itemEl.dataset.queueId || "";
-        itemEl.classList.add("queue-dragging");
-        try { event.dataTransfer.effectAllowed = "move"; } catch (_) {}
-        try { event.dataTransfer.setData("text/plain", draggedQueueId); } catch (_) {}
-      });
-      itemEl.addEventListener("dragend", () => {
-        draggedQueueId = "";
-        itemEl.classList.remove("queue-dragging");
-        container.querySelectorAll(".queue-drag-over").forEach(el => el.classList.remove("queue-drag-over"));
-      });
-      itemEl.addEventListener("dragover", event => {
-        if (!draggedQueueId || draggedQueueId === itemEl.dataset.queueId) return;
-        event.preventDefault();
-        itemEl.classList.add("queue-drag-over");
-        try { event.dataTransfer.dropEffect = "move"; } catch (_) {}
-      });
-      itemEl.addEventListener("dragleave", () => itemEl.classList.remove("queue-drag-over"));
-      itemEl.addEventListener("drop", async event => {
-        event.preventDefault();
-        itemEl.classList.remove("queue-drag-over");
-        const targetId = itemEl.dataset.queueId || "";
-        const sourceId = draggedQueueId || event.dataTransfer?.getData("text/plain") || "";
-        if (!sourceId || !targetId || sourceId === targetId) return;
-        try {
-          await reorderQueueItem(sourceId, targetId);
-        } catch (error) {
-          console.error(error);
-          toast(error?.message || "拖曳排序失敗");
-        }
-      });
-    });
-
     container
       .querySelectorAll(
         "[data-queue-remove]"
@@ -7401,53 +7250,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
     }
 
-    await db.ref("publicRooms/" + roomId).set({
-      id: roomId,
-      name: roomName,
-      searchName: String(roomName || "一起看").trim().toLowerCase().slice(0, 40) || "一起看",
-      owner: String(state.uid),
-      sourceType: sourceType,
-      createdAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(error => {
-      console.warn("建立公開房間搜尋索引失敗:", error);
-    });
-
-    if (!state.adminJoinOverride) {
-      const roomBanSnapshot =
-        await db
-          .ref(
-            `roomBans/${roomId}/${state.uid}`
-          )
-          .once("value");
-
-      const roomBan =
-        roomBanSnapshot.val() || {};
-
-      if (isActiveRoomBan(roomBan)) {
-        if (roomBan.permanent === true) {
-          throw new Error(
-            "你已被此房間封鎖，無法加入"
-          );
-        }
-
-        const minutes =
-          Math.max(
-            1,
-            Math.ceil(
-              Math.max(
-                0,
-                Number(roomBan.until || 0) -
-                Date.now()
-              ) / 60000
-            )
-          );
-
-        throw new Error(
-          `你已被此房間封鎖，請 ${minutes} 分鐘後再加入`
-        );
-      }
-    }
-
     state.roomId =
       roomId;
 
@@ -7524,8 +7326,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.membersRef = null;
       state.roomMutesRef = null;
       state.roomMutes = {};
-      state.roomBansRef = null;
-      state.roomBans = {};
       state.kickedRef = null;
       state.chatRef = null;
       state.queueRef = null;
@@ -7814,55 +7614,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     const isExistingMember =
       currentMemberSnapshot.exists();
 
-    let isRoomInvite = false;
-    const inviteId =
-      String(
-        new URLSearchParams(location.search).get("invite") ||
-        ""
-      ).trim();
-
-    if (
-      !isRoomOwner &&
-      !isExistingMember &&
-      inviteId &&
-      auth?.currentUser &&
-      !auth.currentUser.isAnonymous
-    ) {
-      try {
-        const inviteSnapshot =
-          await db
-            .ref(`roomInvites/${state.uid}/${inviteId}`)
-            .once("value");
-
-        const invite =
-          inviteSnapshot.val() || {};
-
-        isRoomInvite =
-          String(invite.roomId || "") ===
-            String(roomId || "") &&
-          String(invite.toUid || "") ===
-            String(state.uid || "") &&
-          ["pending", "accepted"].includes(
-            String(invite.status || "")
-          );
-
-        if (
-          isRoomInvite &&
-          String(invite.status || "") ===
-            "pending"
-        ) {
-          await db
-            .ref(`roomInvites/${state.uid}/${inviteId}/status`)
-            .set("accepted");
-        }
-      } catch (inviteError) {
-        console.warn(
-          "房間邀請驗證失敗:",
-          inviteError
-        );
-      }
-    }
-
     const isRoomOwner =
       actualOwnerUid ===
       String(
@@ -7883,8 +7634,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         memberName: state.memberName,
         isRoomOwner,
         isExistingMember,
-        isAdminJoin: false,
-        isInvited: isRoomInvite
+        isAdminJoin: false
       });
     }
 
@@ -10814,78 +10564,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
-  function isActiveRoomBan(item) {
-    if (!item || typeof item !== "object") return false;
-    if (item.permanent === true) return true;
-    return Number(item.until || 0) > Date.now();
-  }
-
-  async function toggleRoomBan(targetUid, targetName) {
-    const isCohost = Boolean(
-      window.WT_ROOM_ACCESS?.isCohost?.(state.uid)
-    );
-
-    if (!state.isOwner && !isCohost) {
-      toast("只有房主或 Co-host 可以管理房間封鎖");
-      return;
-    }
-
-    if (!targetUid || targetUid === state.uid) return;
-    if (String(targetUid) === String(state.room?.owner || "")) return;
-
-    const ref = db.ref(
-      "roomBans/" + state.roomId + "/" + targetUid
-    );
-
-    if (isActiveRoomBan(state.roomBans?.[targetUid])) {
-      try {
-        await ref.remove();
-        toast("已解除 " + (targetName || "成員") + " 的房間封鎖");
-      } catch (error) {
-        toast(error?.message || "解除房間封鎖失敗");
-      }
-      return;
-    }
-
-    const raw = window.prompt(
-      "輸入封鎖分鐘數，輸入 0 代表永久封鎖。",
-      "60"
-    );
-
-    if (raw === null) return;
-
-    const minutes = Number(raw);
-    if (!Number.isFinite(minutes) || minutes < 0) {
-      toast("封鎖時間無效");
-      return;
-    }
-
-    const safeMinutes = Math.min(43200, Math.floor(minutes));
-    const permanent = safeMinutes === 0;
-    const until = permanent ? 0 : Date.now() + safeMinutes * 60000;
-
-    try {
-      await ref.set({
-        uid: targetUid,
-        until,
-        permanent,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        updatedByUid: state.uid
-      });
-
-      await state.membersRef?.child(targetUid).remove().catch(() => {});
-
-      toast(
-        permanent
-          ? "已永久封鎖 " + (targetName || "成員")
-          : "已封鎖 " + (targetName || "成員") + " " + safeMinutes + " 分鐘"
-      );
-    } catch (error) {
-      toast(error?.message || "房間封鎖失敗");
-    }
-  }
-
-
   /*
    * 房主踢人。
    *
@@ -11776,37 +11454,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     if (
-      !state.roomBansRef &&
-      state.roomId
-    ) {
-      state.roomBansRef =
-        db.ref(
-          "roomBans/" +
-          state.roomId
-        );
-
-      state.roomBansRef.on(
-        "value",
-        (snapshot) => {
-          state.roomBans =
-            snapshot.val() ||
-            {};
-
-          if (state.membersRef) {
-            state.membersRef.once(
-              "value"
-            ).then((memberSnapshot) => {
-              renderMembers(
-                memberSnapshot.val() ||
-                {}
-              );
-            }).catch(() => {});
-          }
-        }
-      );
-    }
-
-    if (
       !state.membersListenerAttached
     ) {
       state.membersRef.on(
@@ -12007,26 +11654,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 state.roomMutes?.[uid]
               );
 
-            const banned =
-              isActiveRoomBan(
-                state.roomBans?.[uid]
-              );
-
-            const banButton =
-              canModerateMember
-                ? (
-                  '<button type="button" class="tiny-btn" data-member-ban="' +
-                  escapeHtml(uid) +
-                  '" data-member-name="' +
-                  escapeHtml(name) +
-                  '" style="margin-left:6px;color:' +
-                  (banned ? "#86efac" : "#fda4af") +
-                  ';border-color:rgba(244,63,94,.2);">' +
-                  (banned ? "解除封鎖" : "封鎖") +
-                  "</button>"
-                )
-                : "";
-
             const muteButton =
               canModerateMember
                 ? (
@@ -12127,7 +11754,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 ></span>
 
                 ${muteButton}
-                ${banButton}
                 ${kickButton}
 
               </div>
@@ -12147,24 +11773,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             async () => {
               await toggleRoomMute(
                 button.dataset.memberMute,
-                button.dataset.memberName
-              );
-            }
-          );
-        }
-      );
-
-    $("memberList")
-      .querySelectorAll(
-        "[data-member-ban]"
-      )
-      .forEach(
-        (button) => {
-          button.addEventListener(
-            "click",
-            async () => {
-              await toggleRoomBan(
-                button.dataset.memberBan,
                 button.dataset.memberName
               );
             }
@@ -12308,67 +11916,184 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
-  function renderRoomChatRichText(text) {
-    let value = escapeHtml(text || "");
-    value = value.replace(/(^|[\s])(@[^\s@]{1,30})/g, '$1<span class="wt-chat-mention">$2</span>');
-    return value;
-  }
-
-  async function toggleRoomMessagePin(messageId) {
-    if (!state.chatRef || !state.uid || !messageId) return;
-    const snapshot = await state.chatRef.child(messageId).once("value").catch(() => null);
-    const message = snapshot?.val() || null;
-    if (!message || String(message.uid || "") !== String(state.uid)) {
-      toast("只能置頂自己的訊息");
-      return;
-    }
-    const next = message.pinned !== true;
-    await state.chatRef.child(messageId).update({
-      pinned: next,
-      pinnedAt: next ? firebase.database.ServerValue.TIMESTAMP : null
-    });
-    toast(next ? "訊息已置頂" : "已取消置頂");
-  }
-
   function renderChat(messages) {
-    const list = Object.entries(messages || {})
-      .map(([id, message]) => ({ id, ...(message || {}) }))
-      .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
-    if (!$('chatMessages')) return;
-    if (!list.length) {
-      $('chatMessages').innerHTML = '<div class="muted" style="padding:12px;">開始聊天吧 👋</div>';
+    const list =
+      Object.entries(
+        messages || {}
+      )
+        .map(([id, message]) => ({
+          id,
+          ...(message || {})
+        }))
+        .sort(
+          (a, b) =>
+            Number(a.createdAt || 0) -
+            Number(b.createdAt || 0)
+        );
+
+    if (!$("chatMessages")) {
       return;
     }
-    $('chatMessages').innerHTML = list.map(message => {
-      const isSticker = message?.type === "sticker";
-      const body = isSticker
-        ? '<div class="wt-sticker" aria-label="貼圖">' + escapeHtml(message?.sticker || "😊") + '</div>'
-        : '<p>' + renderRoomChatRichText(message?.text || "") + '</p>';
-      const isOwnMessage = Boolean(state.uid && message?.uid && String(message.uid) === String(state.uid));
-      const pinBadge = message?.pinned === true ? '<span class="small" style="margin-left:6px">📌</span>' : '';
-      const pinButton = isOwnMessage ? '<button type="button" class="wt-message-delete" data-chat-pin="' + escapeHtml(message.id) + '">' + (message?.pinned === true ? '取消置頂' : '置頂') + '</button>' : '';
-      const deleteButton = isOwnMessage ? '<button type="button" class="wt-message-delete" data-chat-delete="' + escapeHtml(message.id) + '">刪除訊息</button>' : '';
-      const time = message?.createdAt ? new Date(Number(message.createdAt)).toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'}) : '';
-      return '<div class="message wt-message' + (isOwnMessage ? ' self' : '') + '">' +
-        '<div class="wt-message-top"><b class="wt-message-name">' + escapeHtml(message?.name || '玩家') + pinBadge + '</b><span class="wt-message-time">' + time + '</span></div>' +
-        body + pinButton + deleteButton +
-        '</div>';
-    }).join('');
-    const box = $('chatMessages');
-    box.scrollTop = box.scrollHeight;
-    box.querySelectorAll('[data-chat-pin]').forEach(button => {
-      button.addEventListener('click', async () => {
-        try { await toggleRoomMessagePin(button.dataset.chatPin); }
-        catch (error) { console.error('置頂聊天室訊息失敗:', error); toast(error?.message || '置頂失敗'); }
-      });
-    });
-    box.querySelectorAll('[data-chat-delete]').forEach(button => {
-      button.addEventListener('click', async () => {
-        if (!state.chatRef || !state.uid) return;
-        try { await state.chatRef.child(button.dataset.chatDelete).remove(); toast('訊息已刪除'); }
-        catch (error) { console.error('刪除聊天室訊息失敗:', error); toast(error?.message || '刪除訊息失敗'); }
-      });
-    });
+
+    if (!list.length) {
+      $("chatMessages")
+        .innerHTML = `
+          <div
+            class="muted"
+            style="
+              padding:12px;
+            "
+          >
+            開始聊天吧 👋
+          </div>
+        `;
+
+      return;
+    }
+
+    $("chatMessages")
+      .innerHTML =
+      list
+        .map(
+          (message) => {
+            const isSticker =
+              message?.type === "sticker";
+
+            const body =
+              isSticker
+                ? `
+                  <div
+                    class="wt-sticker"
+                    aria-label="貼圖"
+                  >
+                    ${escapeHtml(
+                      message?.sticker ||
+                      "😊"
+                    )}
+                  </div>
+                `
+                : `
+                  <p>
+                    ${escapeHtml(
+                      message?.text ||
+                      ""
+                    )}
+                  </p>
+                `;
+
+            const isOwnMessage =
+              Boolean(
+                state.uid &&
+                message?.uid &&
+                String(message.uid) ===
+                  String(state.uid)
+              );
+
+            const deleteButton =
+              isOwnMessage
+                ? `
+                  <button
+                    type="button"
+                    class="wt-message-delete"
+                    data-chat-delete="${escapeHtml(
+                      message.id
+                    )}"
+                  >
+                    刪除訊息
+                  </button>
+                `
+                : "";
+
+            return `
+              <div
+                class="message wt-message${isOwnMessage ? " self" : ""}"
+              >
+                <div
+                  class="wt-message-top"
+                >
+                  <b
+                    class="wt-message-name"
+                  >
+                    ${escapeHtml(
+                      message?.name ||
+                      "玩家"
+                    )}
+                  </b>
+                  <span
+                    class="wt-message-time"
+                  >
+                    ${escapeHtml(
+                      message?.createdAt
+                        ? new Date(
+                            Number(message.createdAt)
+                          ).toLocaleTimeString(
+                            "zh-TW",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            }
+                          )
+                        : ""
+                    )}
+                  </span>
+                </div>
+
+                ${body}
+                ${deleteButton}
+              </div>
+            `;
+          }
+        )
+        .join("");
+
+    const box =
+      $("chatMessages");
+
+    box.scrollTop =
+      box.scrollHeight;
+
+    box
+      .querySelectorAll(
+        "[data-chat-delete]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              if (
+                !state.chatRef ||
+                !state.uid
+              ) {
+                return;
+              }
+
+              try {
+                await state.chatRef
+                  .child(
+                    button.dataset
+                      .chatDelete
+                  )
+                  .remove();
+
+                toast(
+                  "訊息已刪除"
+                );
+              } catch (error) {
+                console.error(
+                  "刪除聊天室訊息失敗:",
+                  error
+                );
+
+                toast(
+                  error?.message ||
+                  "刪除訊息失敗"
+                );
+              }
+            }
+          );
+        }
+      );
   }
 
 
@@ -12963,7 +12688,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     try {
       state.membersRef?.off();
       state.roomMutesRef?.off();
-      state.roomBansRef?.off();
       state.kickedRef?.off();
 
       state.chatRef?.off();
@@ -13043,11 +12767,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     state.playbackLocalControlUntil =
       0;
-
-    state.roomMutesRef = null;
-    state.roomMutes = {};
-    state.roomBansRef = null;
-    state.roomBans = {};
 
     state.membersListenerAttached =
       false;
@@ -14755,10 +14474,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     window.WT_CORE ||
     {};
 
-  window.WT_CORE.queueHistory = queueHistory;
-  window.WT_CORE.clearQueue = clearQueue;
-  window.WT_CORE.reorderQueueItem = reorderQueueItem;
-
   window.WT_CORE.createRoom =
     createRoom;
 
@@ -14792,9 +14507,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return name;
   };
   window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
-  window.WT_CORE.refreshYoutubeStreamIfNeeded = refreshYoutubeStreamIfNeeded;
-  window.WT_CORE.recoverPlaybackAfterPageResume = recoverPlaybackAfterPageResume;
-  window.WT_CORE.hardSyncPlaybackToTimeline = hardSyncPlaybackToTimeline;
   window.WT_CORE.state = state;
   window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
   window.WT_CORE.persistAuthenticatedAccount = persistAuthenticatedAccount;
