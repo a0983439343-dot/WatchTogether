@@ -148,7 +148,15 @@ function track(){
 }
 
 function init(){
-  if(document.documentElement.dataset.wtFeatureCenter)return;document.documentElement.dataset.wtFeatureCenter="1";injectCss();loadNotifications();ensureTopbar();setInterval(ensureRoomTools,1000);setInterval(track,5000);
+  if(document.documentElement.dataset.wtFeatureCenter)return;
+  document.documentElement.dataset.wtFeatureCenter="1";
+  injectCss();
+  loadNotifications();
+  ensureTopbar();
+  var p=prefs();
+  if($("sourceTypeInput")&&["youtube","vimeo","dailymotion","twitch"].includes(p.defaultPlatform))$("sourceTypeInput").value=p.defaultPlatform;
+  setInterval(ensureRoomTools,1000);
+  setInterval(track,5000);
 }
 wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
