@@ -7614,6 +7614,55 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     const isExistingMember =
       currentMemberSnapshot.exists();
 
+    let isRoomInvite = false;
+    const inviteId =
+      String(
+        new URLSearchParams(location.search).get("invite") ||
+        ""
+      ).trim();
+
+    if (
+      !isRoomOwner &&
+      !isExistingMember &&
+      inviteId &&
+      auth?.currentUser &&
+      !auth.currentUser.isAnonymous
+    ) {
+      try {
+        const inviteSnapshot =
+          await db
+            .ref(`roomInvites/${state.uid}/${inviteId}`)
+            .once("value");
+
+        const invite =
+          inviteSnapshot.val() || {};
+
+        isRoomInvite =
+          String(invite.roomId || "") ===
+            String(roomId || "") &&
+          String(invite.toUid || "") ===
+            String(state.uid || "") &&
+          ["pending", "accepted"].includes(
+            String(invite.status || "")
+          );
+
+        if (
+          isRoomInvite &&
+          String(invite.status || "") ===
+            "pending"
+        ) {
+          await db
+            .ref(`roomInvites/${state.uid}/${inviteId}/status`)
+            .set("accepted");
+        }
+      } catch (inviteError) {
+        console.warn(
+          "房間邀請驗證失敗:",
+          inviteError
+        );
+      }
+    }
+
     const isRoomOwner =
       actualOwnerUid ===
       String(
@@ -7634,7 +7683,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         memberName: state.memberName,
         isRoomOwner,
         isExistingMember,
-        isAdminJoin: false
+        isAdminJoin: false,
+        isInvited: isRoomInvite
       });
     }
 
