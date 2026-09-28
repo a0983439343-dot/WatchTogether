@@ -68,6 +68,7 @@
     <button class="nav-item" data-section="accounts">登入帳號</button>
     <button class="nav-item" data-section="rooms">🏠 房間監控</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
+    <button class="nav-item" data-section="access">⚙️ 2.0 控制中心</button>
      <button class="nav-item" data-section="reports">🐛 問題回報</button>
      <button class="nav-item" data-section="audit">📜 操作紀錄</button>
   </aside>
@@ -145,6 +146,78 @@
          </table>
        </div>
      </section>
+
+    <section id="section-access" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">ACCESS CONTROL 2.0</div><h2>權限與限制控制中心</h2></div><button id="accessRefreshBtn" class="btn primary">重新整理</button></div>
+      <div id="accessSummary" class="info-grid"></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>自訂角色</h3></div>
+        <div class="add-row">
+          <input id="accessRoleId" class="search" type="text" maxlength="80" placeholder="角色 ID，例如 moderator">
+          <input id="accessRoleName" class="search" type="text" maxlength="80" placeholder="角色名稱">
+          <input id="accessRolePermissions" class="search" type="text" maxlength="1200" placeholder="權限，以逗號分隔，例如 users.read,reports.read,chat.moderate">
+          <button id="accessRoleSaveBtn" class="btn primary" type="button">儲存角色</button>
+        </div>
+        <div id="accessRoleList" class="access-policy-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>指定使用者角色</h3></div>
+        <div class="add-row">
+          <input id="accessAssignUid" class="search" type="text" maxlength="128" placeholder="使用者 UID">
+          <select id="accessAssignRole" class="search" aria-label="使用者角色"></select>
+          <button id="accessAssignBtn" class="btn primary" type="button">套用角色</button>
+        </div>
+        <div id="accessAssignmentList" class="access-policy-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>個別使用者 Allow / Deny</h3></div>
+        <div class="add-row">
+          <input id="accessOverrideUid" class="search" type="text" maxlength="128" placeholder="使用者 UID">
+          <input id="accessOverridePermission" class="search" type="text" maxlength="80" list="accessPermissionCatalog" placeholder="權限，例如 chat.send">
+          <select id="accessOverrideEffect" class="search" aria-label="Allow 或 Deny"><option value="allow">Allow</option><option value="deny">Deny</option></select>
+          <button id="accessOverrideBtn" class="btn primary" type="button">套用</button>
+        </div>
+        <datalist id="accessPermissionCatalog"></datalist>
+        <div id="accessOverrideList" class="access-policy-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>指定功能限制</h3></div>
+        <div class="add-row">
+          <input id="accessRestrictionUid" class="search" type="text" maxlength="128" placeholder="使用者 UID">
+          <input id="accessRestrictionPermission" class="search" type="text" maxlength="80" list="accessPermissionCatalog" placeholder="限制哪個功能">
+          <select id="accessRestrictionDuration" class="search" aria-label="限制時間">
+            <option value="3600000">1 小時</option>
+            <option value="86400000">1 天</option>
+            <option value="604800000">7 天</option>
+            <option value="2592000000">30 天</option>
+            <option value="permanent">永久</option>
+          </select>
+          <input id="accessRestrictionReason" class="search" type="text" maxlength="500" placeholder="限制原因">
+          <button id="accessRestrictionBtn" class="btn danger" type="button">套用限制</button>
+        </div>
+        <div id="accessRestrictionList" class="access-policy-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Feature Flags</h3></div>
+        <div class="add-row">
+          <input id="accessFlagName" class="search" type="text" maxlength="80" list="accessPermissionCatalog" placeholder="功能名稱，例如 room.queue">
+          <select id="accessFlagEnabled" class="search" aria-label="Feature Flag 狀態"><option value="true">啟用</option><option value="false">關閉</option></select>
+          <input id="accessFlagReason" class="search" type="text" maxlength="500" placeholder="原因">
+          <button id="accessFlagBtn" class="btn primary" type="button">儲存 Feature Flag</button>
+        </div>
+        <div id="accessFeatureFlagList" class="access-policy-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>安全規則說明</h3></div>
+        <p class="muted" style="line-height:1.7;margin:0">控制資料由 Firebase Rules 驗證。前端的按鈕隱藏不是安全邊界；沒有後端權限時，直接呼叫 Firebase 寫入仍會被拒絕。限制到期後會由時間條件自動失效，不需要手動刪除。</p>
+      </div>
+    </section>
 
     <section id="section-audit" class="admin-section hidden">
        <div class="section-head"><div><div class="eyebrow">AUDIT LOG</div><h2>操作紀錄</h2></div><button id="auditRefreshBtn" class="btn primary">重新整理</button></div>
