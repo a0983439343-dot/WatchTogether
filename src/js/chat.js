@@ -25,6 +25,7 @@ var state = {
   built:false,
   friends:{},
   requests:{},
+  blocked:{},
   summaries:{},
   readAt:{},
   summaryRefs:{},
@@ -183,6 +184,105 @@ function ensureLogin() {
   if (user()) return true;
   wt.toast("Google 登入後才能使用聊天功能");
   return false;
+}
+
+async function fetchBlocked() {
+  var me = user();
+  if (!me) {
+    state.blocked = {};
+    return;
+  }
+  var snapshot = await wt.db.ref("blockedUsers/" + me.uid).once("value").catch(function(){ return null; });
+  state.blocked = snapshot && snapshot.val() || {};
+}
+
+async function toggleBlock(uid) {
+  if (!ensureLogin()) return;
+  var me = user();
+  uid = String(uid || "");
+  if (!uid || uid === me.uid) return;
+
+  var ref = wt.db.ref("blockedUsers/" + me.uid + "/" + uid);
+  var existing = state.blocked && state.blocked[uid];
+  if (existing) {
+    await ref.remove();
+    delete state.blocked[uid];
+    wt.toast("已解除封鎖");
+    return;
+  }
+
+  var profile = state.friends[uid] || {};
+  var name = String(profile.displayName || "這位好友").slice(0,30);
+  if (!window.confirm("確定封鎖「" + name + "」嗎？封鎖後會停止新的好友邀請與私訊。")) return;
+
+  await ref.set({
+    uid:uid,
+    name:name,
+    createdAt:firebase.database.ServerValue.TIMESTAMP
+  });
+
+  var updates = {};
+  updates["friendships/" + me.uid + "/" + uid] = null;
+  updates["friendships/" + uid + "/" + me.uid] = null;
+  updates["friendRequests/" + me.uid + "/" + uid] = null;
+  updates["friendRequests/" + uid + "/" + me.uid] = null;
+  await wt.db.ref().update(updates);
+
+  state.blocked[uid] = {uid:uid,name:name,createdAt:Date.now()};
+  delete state.friends[uid];
+  delete state.summaries[uid];
+
+  stopActiveListeners();
+  state.activeUid = "";
+  state.activeProfile = null;
+  state.replyTo = null;
+  state.editingId = "";
+
+  renderSidebar();
+  renderChatHeader();
+  renderMessages();
+  renderRequests();
+  wt.toast("已封鎖 " + name);
+}
+
+function openBlockedManager() {
+  var entries = Object.entries(state.blocked || {});
+  var body = document.createElement("div");
+  body.className = "wt-blocked-manager";
+  body.innerHTML =
+    '<div class="small muted">被封鎖的帳號不會再收到你的好友邀請，也無法建立新的私聊。</div>' +
+    '<div class="wt-feature-list">' +
+      (entries.length ? entries.map(function(pair) {
+        var uid = pair[0], item = pair[1] || {};
+        return '<div class="wt-feature-row"><div><strong>🚫 ' + esc(item.name || uid) + '</strong><div class="small muted">' + esc(uid) + '</div></div><button type="button" class="wt-chat-mini-close" data-chat-unblock="' + esc(uid) + '">解除封鎖</button></div>';
+      }).join("") : '<div class="wt-chat-empty-small">目前沒有封鎖帳號。</div>') +
+    '</div>';
+
+  var modal = document.createElement("div");
+  modal.id = "wtChatBlockedModal";
+  modal.className = "wt-modal";
+  modal.innerHTML =
+    '<div class="wt-modal-card wt-chat-modal-card" style="max-width:620px">' +
+      '<div class="wt-chat-topbar"><div><div class="wt-panel-title">封鎖管理</div></div><button id="wtBlockedClose" class="wt-close-btn" type="button">×</button></div>' +
+      '<div id="wtBlockedBody"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  modal.querySelector("#wtBlockedBody").appendChild(body);
+
+  var close = function(){ modal.remove(); };
+  modal.querySelector("#wtBlockedClose").addEventListener("click",close);
+  modal.addEventListener("click",function(event){ if(event.target === modal) close(); });
+  modal.querySelectorAll("[data-chat-unblock]").forEach(function(button){
+    button.addEventListener("click",async function(){
+      try {
+        await toggleBlock(button.dataset.chatUnblock);
+        close();
+        openBlockedManager();
+      } catch(error) {
+        wt.toast(error&&error.message || "解除封鎖失敗");
+      }
+    });
+  });
 }
 
 async function fetchFriends() {
@@ -1143,6 +1243,24 @@ function buildModal() {
   $("wtChatMessageSearch").addEventListener("input",function(event){ state.messageSearch=event.target.value||""; renderMessages(); });
   $("wtChatMessageSearchClear").addEventListener("click",function(){ state.messageSearch=""; $("wtChatMessageSearch").value=""; renderMessages(); });
   $("wtChatRemoveFriend").addEventListener("click",function(){ if(state.activeUid) removeFriendPlus(state.activeUid).catch(function(error){wt.toast(error&&error.message||"刪除好友失敗");}); });
+  var blockButton = document.createElement("button");
+  blockButton.id = "wtChatBlockFriend";
+  blockButton.className = "wt-chat-icon-btn danger";
+  blockButton.type = "button";
+  blockButton.textContent = "封鎖";
+  blockButton.disabled = true;
+  blockButton.addEventListener("click",function(){
+    if(!state.activeUid) return;
+    toggleBlock(state.activeUid).catch(function(error){wt.toast(error&&error.message||"封鎖操作失敗");});
+  });
+  $("wtChatRemoveFriend").insertAdjacentElement("afterend",blockButton);
+  var blockedButton = document.createElement("button");
+  blockedButton.id = "wtChatBlockedManager";
+  blockedButton.className = "wt-chat-icon-btn";
+  blockedButton.type = "button";
+  blockedButton.textContent = "封鎖管理";
+  blockedButton.addEventListener("click",openBlockedManager);
+  $("wtChatSearchToggle").insertAdjacentElement("afterend",blockedButton);
   $("wtChatImageBtn").addEventListener("click",function(){ $("wtChatImageInput").click(); });
   $("wtChatImageInput").addEventListener("change",function(event){ void handleImageFiles(event.target.files); event.target.value=""; });
   $("wtChatEmojiBtn").addEventListener("click",function(){ showPicker("wtChatEmojiPicker"); hidePicker("wtChatStickerPicker"); });
@@ -1206,6 +1324,7 @@ async function openChat() {
   wt.openModal("wtChatCenter");
   $("wtChatFriendCode").focus();
   try {
+    await fetchBlocked();
     await fetchFriends();
     listenRequests();
     renderRequests();
@@ -1221,6 +1340,9 @@ async function openChat() {
 wt.openFriends = openChat;
 wt.openChat = openChat;
 window.WT_CHAT = state;
+wt.fetchBlocked = fetchBlocked;
+wt.toggleBlock = toggleBlock;
+wt.openBlockedManager = openBlockedManager;
 
 if(document.readyState==="loading"){
   document.addEventListener("DOMContentLoaded",function(){ buildModal(); },{once:true});
