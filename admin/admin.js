@@ -558,8 +558,8 @@
   }
 
   async function deleteAuditLog(id) {
-    if (currentRole !== "master") {
-      toast("只有最高管理員可以刪除操作紀錄");
+    if (!currentCan("audit.delete")) {
+      toast("目前沒有 audit.delete 權限");
       return;
     }
     const key = String(id || "").trim();
@@ -578,14 +578,28 @@
     );
     if (!confirmed) return;
 
-    await db.ref("admin/auditLogs/" + key).remove();
-    await writeAuditLog(
-      "audit.delete",
-      String(item.targetUid || ""),
-      String(item.targetName || "操作紀錄"),
-      "刪除操作紀錄 " + key + "（原操作：" + label + "）"
-    );
-    toast("操作紀錄已刪除");
+    const auditRef = db.ref("admin/auditLogs").push();
+    const auditId = auditRef.key;
+    if (!auditId) throw new Error("無法建立刪除操作紀錄");
+
+    const auditEntry = {
+      action: "audit.delete",
+      actorUid: String(currentUser?.uid || ""),
+      actorEmail: String(currentUser?.email || "").slice(0,320),
+      actorRole: String(currentRole || "").slice(0,20),
+      targetUid: String(item.targetUid || "").slice(0,128),
+      targetName: String(item.targetName || "操作紀錄").slice(0,200),
+      details: "刪除操作紀錄 " + key + "（原操作：" + label + "）",
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    const updates = {};
+    updates["admin/auditLogs/" + key] = null;
+    updates["admin/auditLogs/" + auditId] = auditEntry;
+    await db.ref().update(updates);
+    delete auditLogs[key];
+    renderAuditLogs();
+    toast("操作紀錄已刪除，刪除動作已留下紀錄");
   }
 
   function renderAuditLogs() {
