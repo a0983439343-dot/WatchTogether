@@ -523,6 +523,46 @@ test("2.0 access control: viewer cannot modify policy and user cannot forge thei
   );
 });
 
+test("2.0 access control: Allow and Deny overrides affect admin user updates", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+
+  await assertSucceeds(master.ref("admin/access/roles/user-manager").set({
+    name: "User Manager",
+    permissions: {
+      "users__update": true
+    }
+  }));
+  await assertSucceeds(
+    master.ref("admin/access/roleByUid/" + USER_UID).set("user-manager")
+  );
+
+  await assertSucceeds(
+    db(USER_UID, userToken)
+      .ref("accounts/" + OTHER_UID + "/displayName")
+      .set("Updated By Role")
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + USER_UID + "/users__update").set("deny")
+  );
+
+  await assertFails(
+    db(USER_UID, userToken)
+      .ref("accounts/" + OTHER_UID + "/displayName")
+      .set("Should Fail")
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + USER_UID + "/users__update").set("allow")
+  );
+
+  await assertSucceeds(
+    db(USER_UID, userToken)
+      .ref("accounts/" + OTHER_UID + "/displayName")
+      .set("Updated By Override")
+  );
+});
+
 test("2.0 access control: Allow and Deny overrides affect Firebase writes", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
 
