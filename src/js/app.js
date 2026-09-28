@@ -4203,7 +4203,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     });
 
     let draggedQueueId = "";
-    container.querySelectorAll(".queue-item[draggable="true"]").forEach(itemEl => {
+    container.querySelectorAll('.queue-item[draggable="true"]').forEach(itemEl => {
       itemEl.addEventListener("dragstart", event => {
         draggedQueueId = itemEl.dataset.queueId || "";
         itemEl.classList.add("queue-dragging");
