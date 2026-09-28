@@ -13565,26 +13565,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 ?.value ||
               "youtube";
 
-            if (
-              platform ===
-              "youtube"
-            ) {
-              const video =
-                getSelectedModalYoutubeVideo();
-
-              if (
-                !video ||
-                !video.id
-              ) {
-                throw new Error(
-                  "請先點選搜尋結果中的影片"
-                );
+            if ([ "youtube", "vimeo", "dailymotion", "twitch" ].includes(platform)) {
+              const video = getSelectedModalYoutubeVideo();
+              if (!video || !video.id) {
+                throw new Error("請先點選搜尋結果中的影片");
               }
-
-              await changeVideo(
-                video
-              );
-
+              await changeVideo(video);
               return;
             }
 
