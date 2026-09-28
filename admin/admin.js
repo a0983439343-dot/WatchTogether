@@ -348,6 +348,21 @@
     });
   }
 
+  window.addEventListener("wt2-admin-permission-ready", () => {
+    if (!currentHasAdminAccess) return;
+    try {
+      renderAccounts();
+      renderWhitelist();
+      renderRooms();
+      renderReports();
+      renderAuditLogs();
+      renderAutonomousMaintenance();
+      updateStats();
+    } catch (error) {
+      console.warn("Admin 2.0 permission UI refresh failed:", error);
+    }
+  });
+
   function renderAccounts() {
     const query = String($("accountSearch")?.value || "").trim().toLowerCase();
     const rows = Object.values(accounts || {})
