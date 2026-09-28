@@ -21,6 +21,15 @@ const DEFAULT_ALLOWED_ORIGIN =
 const DEFAULT_FIREBASE_PROJECT_ID =
   "watchtogether-3f4f9";
 
+const DEFAULT_FIREBASE_DATABASE_URL =
+  "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+const MASTER_UID =
+  "35d45a23-b648-4caf-a6d5-a69112860551";
+
+const MASTER_EMAIL =
+  "a0983439343@gmail.com";
+
 const CACHE_TTL_SECONDS = 30;
 const RATE_WINDOW_MS = 60 * 1000;
 const IP_RATE_LIMIT = 20;
@@ -476,6 +485,123 @@ async function verifyFirebaseIdToken(
   return payload;
 }
 
+async function fetchFirebaseJson(
+  databaseUrl,
+  path,
+  idToken
+) {
+  const base = String(databaseUrl || "").replace(/\\/+$/, "");
+  const response = await fetch(
+    base + "/" + path.split("/").map(encodeURIComponent).join("/") +
+      ".json?auth=" + encodeURIComponent(idToken)
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(String(data?.error || "Firebase policy read failed").slice(0, 300));
+    error.httpStatus = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function activeRestriction(policy) {
+  if (!policy || typeof policy !== "object" || policy.enabled !== true) return false;
+  if (policy.permanent === true || Number(policy.until || 0) === 0) return true;
+  return Number(policy.until || 0) > Date.now();
+}
+
+async function authorizeSearchPolicy(
+  env,
+  firebaseUser,
+  idToken
+) {
+  const uid = String(firebaseUser?.sub || "");
+  const email = String(firebaseUser?.email || "").trim().toLowerCase();
+  const projectId = String(env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID).trim();
+  const databaseUrl = String(
+    env.FIREBASE_DATABASE_URL ||
+    DEFAULT_FIREBASE_DATABASE_URL
+  ).trim();
+
+  if (!uid) {
+    return {
+      ok: false,
+      status: 401,
+      error: "invalid_auth_token",
+      message: "登入驗證失敗"
+    };
+  }
+
+  if (uid === MASTER_UID || email === MASTER_EMAIL) {
+    return {ok:true};
+  }
+
+  try {
+    const [restriction, flag, assignedRole, whitelist] = await Promise.all([
+      fetchFirebaseJson(databaseUrl, "admin/access/restrictionsByUid/" + uid + "/youtube__search", idToken),
+      fetchFirebaseJson(databaseUrl, "admin/featureFlags/youtube__search", idToken),
+      fetchFirebaseJson(databaseUrl, "admin/access/roleByUid/" + uid, idToken),
+      fetchFirebaseJson(databaseUrl, "admin/whitelistByUid/" + uid, idToken)
+    ]);
+
+    if (activeRestriction(restriction)) {
+      return {
+        ok:false,
+        status:403,
+        error:"search_restricted",
+        message:String(restriction.reason || "你目前無法使用 YouTube 搜尋。").slice(0,500)
+      };
+    }
+
+    if (flag && flag.enabled === false) {
+      return {
+        ok:false,
+        status:403,
+        error:"search_feature_disabled",
+        message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)
+      };
+    }
+
+    const roleId = String(assignedRole || "").trim();
+    if (roleId) {
+      const definition = await fetchFirebaseJson(
+        databaseUrl,
+        "admin/access/roles/" + encodeURIComponent(roleId),
+        idToken
+      );
+      const permissions = definition && typeof definition.permissions === "object"
+        ? definition.permissions
+        : null;
+      if (!permissions || (permissions.__all__ !== true && permissions.youtube__search !== true)) {
+        return {
+          ok:false,
+          status:403,
+          error:"search_permission_denied",
+          message:"目前角色沒有 YouTube 搜尋權限。"
+        };
+      }
+    } else if (whitelist && whitelist.enabled === true && String(whitelist.role || "admin") === "viewer") {
+      return {
+        ok:false,
+        status:403,
+        error:"search_permission_denied",
+        message:"目前角色沒有 YouTube 搜尋權限。"
+      };
+    }
+
+    return {ok:true};
+  } catch (error) {
+    return {
+      ok:false,
+      status:503,
+      error:"search_policy_unavailable",
+      message:"目前無法驗證搜尋權限，請稍後再試。",
+      details: String(error?.message || error).slice(0,300),
+      projectId
+    };
+  }
+}
+
 function isRateLimited(
   bucketMap,
   key,
@@ -700,6 +826,27 @@ export default {
           }
         },
         401,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    const authorizationPolicy =
+      await authorizeSearchPolicy(
+        env,
+        firebaseUser,
+        firebaseIdToken
+      );
+
+    if (!authorizationPolicy.ok) {
+      return jsonResponse(
+        {
+          error: {
+            message: authorizationPolicy.message || "搜尋請求未授權",
+            code: authorizationPolicy.error
+          }
+        },
+        authorizationPolicy.status || 403,
         origin,
         allowedOrigin
       );
