@@ -4210,7 +4210,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       }
     }
 
-    const list = getSortedQueue();
+    const list = getSortedQueue().filter(function(item) {
+      return !isCurrentVideo(item);
+    });
     if (!list.length) {
       return false;
     }
@@ -4282,7 +4284,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         return;
       }
 
-      const list = getSortedQueue();
+      const list = getSortedQueue().filter(function(item) {
+        return !isCurrentVideo(item);
+      });
       if (!list.length) return;
 
       const next =
@@ -8077,6 +8081,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           videoId,
           shouldAutoplay
         );
+        try {
+          window.WT_ENHANCEMENTS?.rememberVideo?.(normalized);
+        } catch (_) {}
+        if (state.isOwner) {
+          await removeQueuedCopiesOfVideo(normalized);
+        }
         return;
       } catch (nativeError) {
         console.error(
@@ -8097,6 +8107,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       normalized
     );
     if (state.playerReady && state.player && state.playerType && state.playerReady && state.player) {
+      try {
+        window.WT_ENHANCEMENTS?.rememberVideo?.(normalized);
+      } catch (_) {}
+      if (state.isOwner) {
+        await removeQueuedCopiesOfVideo(normalized);
+      }
       await applyLatestRoomPlaybackState(true);
       startPlaybackSeekDetector();
     }
