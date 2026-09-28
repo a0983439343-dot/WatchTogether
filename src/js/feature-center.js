@@ -134,10 +134,28 @@ async function searchPublicUsers(query){
     return matches;
   }
   try{
-    var snap=await db.ref("publicUsers").orderByChild("searchName").startAt(q).endAt(q+"\\uf8ff").limitToFirst(30).once("value");
+    var end=q+String.fromCharCode(0xf8ff);
+    var snap=await db.ref("publicUsers").orderByChild("searchName").startAt(q).endAt(end).limitToFirst(30).once("value");
     snap.forEach(function(child){var p=child.val();if(p&&matches.length<30)matches.push([child.key,p]);});
   }catch(_){}
   return matches;
+}
+
+async function searchPublicRooms(query){
+  var q=String(query||"").trim().toLowerCase();
+  if(!q)return [];
+  var results=[];
+  if(/^[a-z0-9]{6}$/i.test(q)){
+    var exact=await db.ref("publicRooms/"+q.toUpperCase()).once("value").catch(function(){return null;});
+    if(exact?.exists())results.push([q.toUpperCase(),exact.val()||{}]);
+    return results;
+  }
+  try{
+    var end=q+String.fromCharCode(0xf8ff);
+    var snap=await db.ref("publicRooms").orderByChild("searchName").startAt(q).endAt(end).limitToFirst(30).once("value");
+    snap.forEach(function(child){var p=child.val();if(p&&p.id&&results.length<30)results.push([child.key,p]);});
+  }catch(_){}
+  return results;
 }
 
 function renderGlobalSearchResults(body,query){
@@ -145,11 +163,45 @@ function renderGlobalSearchResults(body,query){
   var recent=wt.readJson?wt.readJson("wt_recent_rooms_v2",[]):[];
   if(!Array.isArray(recent))recent=[];
   recent=recent.filter(function(x){return x&&String(x.id||"").toUpperCase().includes(q.toUpperCase())||String(x.name||"").toLowerCase().includes(q.toLowerCase());}).slice(0,10);
-  var roomHtml=recent.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">房間 '+esc(String(x.id||"").toUpperCase())+'</div></div><button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div>';}).join("");
-  return searchPublicUsers(q).then(function(users){
-    body.innerHTML='<div class="small muted">搜尋使用者、好友與最近房間。輸入 6 碼 ID 可直接查找。</div><div class="panel-title" style="margin-top:14px">使用者</div><div class="wt-feature-list">'+(users.length?users.map(function(x){var uid=x[0],p=x[1]||{};return '<div class="wt-feature-row"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:24px">'+esc(p.avatarEmoji||"🙂")+'</span><div><strong>'+esc(p.displayName||"玩家")+'</strong><div class="small muted">ID：'+esc(p.publicCode||"—")+'</div></div></div><button class="tiny-btn primary" data-global-add="'+esc(p.publicCode||"")+'">好友</button></div>';}).join(""):'<div class="wt-feature-empty">沒有找到使用者。</div>')+'</div><div class="panel-title" style="margin-top:16px">最近房間</div><div class="wt-feature-list">'+(roomHtml||'<div class="wt-feature-empty">沒有符合的最近房間。</div>')+'</div>';
-    body.querySelectorAll("[data-global-add]").forEach(function(btn){btn.onclick=async function(){try{if(!wt.openFriends)throw new Error("好友功能尚未準備完成");await wt.openFriends();setTimeout(function(){var input=document.getElementById("wtChatFriendCode");if(input){input.value=btn.dataset.globalAdd;input.dispatchEvent(new Event("input",{bubbles:true}));input.focus();}},100);toast("已帶入好友 ID");}catch(e){toast(e.message||"無法開啟好友功能");}};});
-    body.querySelectorAll("[data-global-room]").forEach(function(btn){btn.onclick=function(){location.href=location.pathname+"?room="+encodeURIComponent(btn.dataset.globalRoom);};});
+  var recentHtml=recent.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">最近房間｜'+esc(String(x.id||"").toUpperCase())+'</div></div><button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div>';}).join("");
+  return Promise.all([searchPublicUsers(q),searchPublicRooms(q)]).then(function(data){
+    var users=data[0],rooms=data[1];
+    body.innerHTML=
+      '<div class="small muted">搜尋使用者與公開房間。輸入 6 碼 ID／房間碼可直接查找。</div>'+
+      '<div class="panel-title" style="margin-top:14px">使用者</div>'+
+      '<div class="wt-feature-list">'+
+        (users.length?users.map(function(x){
+          var uid=x[0],p=x[1]||{};
+          return '<div class="wt-feature-row"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:24px">'+esc(p.avatarEmoji||"🙂")+'</span><div><strong>'+esc(p.displayName||"玩家")+'</strong><div class="small muted">ID：'+esc(p.publicCode||"—")+'</div></div></div><button class="tiny-btn primary" data-global-add="'+esc(p.publicCode||"")+'">好友</button></div>';
+        }).join(""):'<div class="wt-feature-empty">沒有找到使用者。</div>')+
+      '</div>'+
+      '<div class="panel-title" style="margin-top:16px">公開房間</div>'+
+      '<div class="wt-feature-list">'+
+        (rooms.length?rooms.map(function(x){
+          var p=x[1]||{};
+          return '<div class="wt-feature-row"><div><strong>'+esc(p.name||"一起看")+'</strong><div class="small muted">房間 '+esc(p.id||x[0])+'｜'+esc(p.sourceType||"youtube")+'</div></div><button class="tiny-btn primary" data-global-public-room="'+esc(p.id||x[0])+'">加入</button></div>';
+        }).join(""):'<div class="wt-feature-empty">沒有找到公開房間。</div>')+
+      '</div>'+
+      '<div class="panel-title" style="margin-top:16px">最近房間</div>'+
+      '<div class="wt-feature-list">'+
+        (recentHtml||'<div class="wt-feature-empty">沒有符合的最近房間。</div>')+
+      '</div>';
+    body.querySelectorAll("[data-global-add]").forEach(function(btn){
+      btn.onclick=async function(){
+        try{
+          if(!wt.openFriends)throw new Error("好友功能尚未準備完成");
+          await wt.openFriends();
+          setTimeout(function(){
+            var input=document.getElementById("wtChatFriendCode");
+            if(input){input.value=btn.dataset.globalAdd;input.dispatchEvent(new Event("input",{bubbles:true}));input.focus();}
+          },100);
+          toast("已帶入好友 ID");
+        }catch(e){toast(e.message||"無法開啟好友功能");}
+      };
+    });
+    body.querySelectorAll("[data-global-public-room],[data-global-room]").forEach(function(btn){
+      btn.onclick=function(){location.href=location.pathname+"?room="+encodeURIComponent(btn.dataset.globalPublicRoom||btn.dataset.globalRoom||"");};
+    });
   });
 }
 
