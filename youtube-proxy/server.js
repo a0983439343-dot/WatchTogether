@@ -2034,8 +2034,7 @@ async function handleSearch(req, res, url) {
 
   if (
     access.maintenance?.enabled === true &&
-    access.role !== "master" &&
-    !isAdminScopedPermission("maintenance.manage")
+    !resolveEffectivePermission(access, "maintenance.manage")
   ) {
     send(res, 503, JSON.stringify({
       error: {
