@@ -709,6 +709,54 @@ function aiAllowedOrigin(req) {
     origin === "http://127.0.0.1:3000";
 }
 
+function timingSafeEqualText(left, right) {
+  const a = Buffer.from(String(left || ""), "utf8");
+  const b = Buffer.from(String(right || ""), "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function getAutonomousRepairSecret() {
+  const account = getFirebaseServiceAccount();
+  if (!account.privateKey) throw new Error("firebase_service_account_not_configured");
+  return crypto.createHash("sha256").update(account.privateKey, "utf8").digest("hex");
+}
+
+function hasValidAutonomousRepairSecret(req) {
+  const supplied = String(req.headers["x-watchtogether-agent-secret"] || "").trim();
+  if (!supplied) return false;
+  try {
+    return timingSafeEqualText(supplied, getAutonomousRepairSecret());
+  } catch (_) {
+    return false;
+  }
+}
+
+async function getAiRequestContext(req, phase) {
+  if (phase === "repair" && hasValidAutonomousRepairSecret(req)) {
+    return {
+      internalAgent: true,
+      uid: "autonomous-repair",
+      email: "watchtogether-autorepair@github-actions",
+      role: "agent",
+      permissions: new Set(["ai.use","audit.write"])
+    };
+  }
+
+  const token = getBearerToken(req);
+  if (!token) throw new Error("missing_firebase_id_token");
+
+  const access = await resolveUserAccessPolicy(token);
+  if (!access.uid) throw new Error("invalid_firebase_identity");
+
+  if (phase === "admin_review" || phase === "manual_verify" || phase === "scanner" || phase === "repair") {
+    if (!resolveEffectivePermission(access, "ai.use")) {
+      throw new Error("ai_permission_denied");
+    }
+  }
+
+  return access;
+}
+
 async function readJsonBody(req, maxBytes = 32768) {
   return await new Promise((resolve, reject) => {
     let size = 0;
@@ -1410,7 +1458,21 @@ async function handleAiAnalyze(req, res) {
     current: body?.current || {}
   };
 
+  let requestContext;
+  try {
+    requestContext = await getAiRequestContext(req, input.phase);
+  } catch (error) {
+    const code = String(error?.message || "ai_auth_failed");
+    const status = code === "ai_permission_denied" ? 403 : 401;
+    send(res, status, JSON.stringify({
+      ok:false,
+      error:code
+    }));
+    return;
+  }
+
   const cacheKey = aiCacheKey(input);
+  void requestContext;
 
   if (input.phase !== "repair") {
     const cached = aiCache.get(cacheKey);
