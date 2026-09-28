@@ -2851,7 +2851,9 @@
     }
 
     if (name === "set_feature_flag") {
-      if (!isMasterOperator()) throw new Error("只有最高管理員可以修改 Feature Flag");
+      if (!currentCan("featureflags.manage") || !currentCan("audit.write")) {
+        throw new Error("需要 featureflags.manage 與 audit.write 權限");
+      }
       const flag = encodeAccessPermission(permission);
       if (!flag) throw new Error("缺少 Feature Flag 名稱");
       await writeAuditedUpdates({
