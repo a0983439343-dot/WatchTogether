@@ -3648,6 +3648,50 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     });
   }
 
+  function queueHistory() {
+    try {
+      const value = JSON.parse(localStorage.getItem("wt_queue_history_v1") || "[]");
+      return Array.isArray(value) ? value.slice(0, 50) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function rememberQueueHistory(video, playedByName) {
+    if (!video || !video.id) return;
+    const item = {
+      key: String(video.platform || "youtube") + ":" + String(video.id),
+      id: String(video.id),
+      platform: String(video.platform || "youtube"),
+      title: String(video.title || "未命名影片").slice(0, 200),
+      thumbnail: String(video.thumbnail || "").slice(0, 2000),
+      channel: String(video.channel || "").slice(0, 100),
+      playedAt: Date.now(),
+      playedByName: String(playedByName || state.memberName || "玩家").slice(0, 30)
+    };
+    const list = queueHistory().filter(entry => entry.key !== item.key);
+    list.unshift(item);
+    try {
+      localStorage.setItem("wt_queue_history_v1", JSON.stringify(list.slice(0, 50)));
+    } catch (_) {}
+  }
+
+  async function clearQueue() {
+    await requireQueuePermissions("youtube");
+    if (!state.queueRef) throw new Error("目前不在房間內");
+    if (!state.isOwner) throw new Error("只有房主可以清空待播放清單");
+    const entries = Object.keys(state.queue || {});
+    if (!entries.length) {
+      toast("待播放清單已經是空的");
+      return;
+    }
+    if (!window.confirm("確定清空目前待播放清單嗎？")) return;
+    await Promise.all(entries.map(id => state.queueRef.child(id).remove()));
+    state.queue = {};
+    renderQueue();
+    toast("已清空待播放清單");
+  }
+
   async function removeQueuedCopiesOfVideo(video) {
     if (!state.queueRef || !video) return;
 
@@ -3832,6 +3876,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     await changeVideo(
       video
     );
+
+    rememberQueueHistory(video, item.addedByName);
 
     if (
       state.queueRef &&
@@ -14523,6 +14569,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   window.WT_CORE =
     window.WT_CORE ||
     {};
+
+  window.WT_CORE.queueHistory = queueHistory;
+  window.WT_CORE.clearQueue = clearQueue;
 
   window.WT_CORE.createRoom =
     createRoom;
