@@ -92,8 +92,7 @@ function openSettings(){
   html+='<div class="wt-feature-actions" style="justify-content:flex-start"><button id="wtFeatureNotifPerm" class="tiny-btn">允許瀏覽器通知</button><button id="wtFeatureClearHistory" class="tiny-btn danger">清除觀看紀錄</button><button id="wtFeatureClearFav" class="tiny-btn danger">清除收藏</button></div><div class="wt-feature-actions"><button id="wtFeatureSave" class="primary-btn">儲存設定</button></div>';
   var body=modal("wtSettingsModal","帳號與設定",html);
   body.querySelector("#wtFeatureLang").onchange=function(e){try{window.WT_I18N&&window.WT_I18N.setLocale&&window.WT_I18N.setLocale(e.target.value);}catch(_){}};
-  body.querySelector("#wtFeatureNotifPerm").onclick=function(){if(!("Notification" in window)){toast("瀏覽器不支援通知");return;}Notification.requestPermission().then(function(x){if(x==="granted")toast("瀏覽器通知已允許");openSettings();});};
-  body.querySelector("#wtFeatureClearHistory").onclick=function(){localStorage.removeItem("wt_watch_history_v1");wt.renderHome&&wt.renderHome();toast("已清除觀看紀錄");};
+  body.querySelector("#wtFeatureNotifPerm").onclick=function(){if(!("Notification" in window)){toast("瀏覽器不支援通知");return;}Notification.requestPermission().then(function(x){if(x==="granted")toast("瀏覽器通知已允許");openSettings();});};  body.querySelector("#wtFeatureClearHistory").onclick=function(){localStorage.removeItem("wt_watch_history_v1");localStorage.removeItem("wt_watch_history_v2");wt.renderHome&&wt.renderHome();toast("已清除觀看紀錄");};
   body.querySelector("#wtFeatureClearFav").onclick=function(){localStorage.removeItem("wt_favorites_v1");toast("已清除收藏");};
   body.querySelector("#wtFeatureSave").onclick=function(){saveSettings().catch(function(e){toast(e.message||"設定儲存失敗");});};
 }
