@@ -232,51 +232,11 @@
               ▶ Dailymotion
             </option>
 
-            <option value="bilibili">
-              📺 Bilibili
-            </option>
-
             <option value="twitch">
               🎮 Twitch
             </option>
 
-            <option value="netflix">
-              🔴 Netflix
-            </option>
-
-            <option value="crunchyroll">
-              🟠 Crunchyroll
-            </option>
-
-            <option value="disneyplus">
-              🔵 Disney+
-            </option>
-
-            <option value="primevideo">
-              🟦 Prime Video
-            </option>
-
-            <option value="appletv">
-              🍎 Apple TV+
-            </option>
-
-            <option value="max">
-              🟣 Max
-            </option>
-
-            <option value="hulu">
-              🟢 Hulu
-            </option>
-
-            <option value="paramount">
-              🟦 Paramount+
-            </option>
-
-            <option value="peacock">
-              🦚 Peacock
-            </option>
-
-          </select>
+            </select>
 
 
           <!-- 平台搜尋 -->
@@ -579,17 +539,6 @@
 
           <button
             class="platform-card"
-            data-platform="bilibili"
-            type="button"
-          >
-            <span>📺</span>
-            <strong>Bilibili</strong>
-            <small>影片</small>
-          </button>
-
-
-          <button
-            class="platform-card"
             data-platform="twitch"
             type="button"
           >
@@ -599,105 +548,7 @@
           </button>
 
 
-          <button
-            class="platform-card"
-            data-platform="netflix"
-            type="button"
-          >
-            <span>🔴</span>
-            <strong>Netflix</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="crunchyroll"
-            type="button"
-          >
-            <span>🟠</span>
-            <strong>Crunchyroll</strong>
-            <small>動漫</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="disneyplus"
-            type="button"
-          >
-            <span>🔵</span>
-            <strong>Disney+</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="primevideo"
-            type="button"
-          >
-            <span>🟦</span>
-            <strong>Prime Video</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="appletv"
-            type="button"
-          >
-            <span>🍎</span>
-            <strong>Apple TV+</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="max"
-            type="button"
-          >
-            <span>🟣</span>
-            <strong>Max</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="hulu"
-            type="button"
-          >
-            <span>🟢</span>
-            <strong>Hulu</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="paramount"
-            type="button"
-          >
-            <span>🟦</span>
-            <strong>Paramount+</strong>
-            <small>串流</small>
-          </button>
-
-
-          <button
-            class="platform-card"
-            data-platform="peacock"
-            type="button"
-          >
-            <span>🦚</span>
-            <strong>Peacock</strong>
-            <small>串流</small>
-          </button>
-
-        </div>
+          </div>
 
 
         <div
@@ -815,17 +666,7 @@
             ></div>
 
 
-            <!-- Bilibili -->
-
-            <iframe
-              id="bilibiliPlayer"
-              class="external-player hidden"
-              title="Bilibili Player"
-              allow="autoplay; fullscreen; picture-in-picture"
-            ></iframe>
-
-            <div
-              id="twitchPlayer"
+            <div id="twitchPlayer"
               class="external-player hidden"
             ></div>
 
@@ -1163,51 +1004,11 @@
         ▶ Dailymotion
       </option>
 
-      <option value="bilibili">
-        📺 Bilibili
-      </option>
-
       <option value="twitch">
         🎮 Twitch
       </option>
 
-      <option value="netflix">
-        🔴 Netflix
-      </option>
-
-      <option value="crunchyroll">
-        🟠 Crunchyroll
-      </option>
-
-      <option value="disneyplus">
-        🔵 Disney+
-      </option>
-
-      <option value="primevideo">
-        🟦 Prime Video
-      </option>
-
-      <option value="appletv">
-        🍎 Apple TV+
-      </option>
-
-      <option value="max">
-        🟣 Max
-      </option>
-
-      <option value="hulu">
-        🟢 Hulu
-      </option>
-
-      <option value="paramount">
-        🟦 Paramount+
-      </option>
-
-      <option value="peacock">
-        🦚 Peacock
-      </option>
-
-    </select>
+      </select>
 
 
     <div
@@ -1427,70 +1228,10 @@ document.addEventListener("DOMContentLoaded", () => {
       text: "依官方播放器與嵌入能力處理。"
     },
 
-    bilibili: {
-      icon: "📺",
-      name: "Bilibili",
-      text: "可依平台提供的嵌入能力進行整合。"
-    },
-
     twitch: {
       icon: "🎮",
       name: "Twitch",
       text: "適合直播內容，使用官方播放器能力。"
-    },
-
-    netflix: {
-      icon: "🔴",
-      name: "Netflix",
-      text: "平台具有自己的受保護播放器，後續由平台能力決定能否站內同步。"
-    },
-
-    crunchyroll: {
-      icon: "🟠",
-      name: "Crunchyroll",
-      text: "動漫串流平台，實際播放器能力依官方整合方式而定。"
-    },
-
-    disneyplus: {
-      icon: "🔵",
-      name: "Disney+",
-      text: "使用平台自己的帳號與播放系統。"
-    },
-
-    primevideo: {
-      icon: "🟦",
-      name: "Prime Video",
-      text: "使用平台自己的帳號與播放系統。"
-    },
-
-    appletv: {
-      icon: "🍎",
-      name: "Apple TV+",
-      text: "使用平台自己的帳號與播放系統。"
-    },
-
-    max: {
-      icon: "🟣",
-      name: "Max",
-      text: "使用平台自己的帳號與播放系統。"
-    },
-
-    hulu: {
-      icon: "🟢",
-      name: "Hulu",
-      text: "使用平台自己的帳號與播放系統。"
-    },
-
-    paramount: {
-      icon: "🟦",
-      name: "Paramount+",
-      text: "使用平台自己的帳號與播放系統。"
-    },
-
-    peacock: {
-      icon: "🦚",
-      name: "Peacock",
-      text: "使用平台自己的帳號與播放系統。"
     }
 
   };
@@ -1537,10 +1278,7 @@ document.addEventListener("DOMContentLoaded", () => {
         platform ===
           "vimeo" ||
         platform ===
-          "dailymotion" ||
-        platform ===
-          "bilibili" ||
-        platform ===
+          "dailymotion" ||platform ===
           "twitch";
 
 
