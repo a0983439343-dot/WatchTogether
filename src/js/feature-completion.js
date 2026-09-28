@@ -137,6 +137,153 @@
     $("wtToolPlayer")?.addEventListener("click",call(openPlayerSettings,"播放器設定暫時不可用"));
   }
 
+  const SESSION_STORAGE_KEY = "wt_watchtogether_session_id_v1";
+  let sessionRef = null;
+  let sessionListenerAttached = false;
+
+  function getSessionId() {
+    let id = "";
+    try { id = String(localStorage.getItem(SESSION_STORAGE_KEY) || ""); } catch (_) {}
+    if (!/^[A-Za-z0-9_-]{20,64}$/.test(id)) {
+      id = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, "") : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      id = id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 48);
+      try { localStorage.setItem(SESSION_STORAGE_KEY, id); } catch (_) {}
+    }
+    return id;
+  }
+
+  function getSessionDeviceLabel() {
+    const ua = String(navigator.userAgent || "");
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    let browser = "瀏覽器";
+    if (/Edg\//i.test(ua)) browser = "Edge";
+    else if (/OPR\//i.test(ua)) browser = "Opera";
+    else if (/Chrome\//i.test(ua)) browser = "Chrome";
+    else if (/Firefox\//i.test(ua)) browser = "Firefox";
+    else if (/Safari\//i.test(ua)) browser = "Safari";
+    return (mobile ? "手機／平板" : "桌機") + " · " + browser;
+  }
+
+  async function ensureSessionTracking() {
+    const u = currentUser();
+    const database = db();
+    if (!u || u.isAnonymous || !database) return;
+    const sid = getSessionId();
+    const ref = database.ref("sessions/" + u.uid + "/" + sid);
+    sessionRef = ref;
+    try {
+      const snapshot = await ref.once("value");
+      const existing = snapshot.val() || {};
+      if (existing.revokedAt) {
+        await firebase.auth().signOut();
+        return;
+      }
+      await ref.update({
+        id: sid,
+        label: getSessionDeviceLabel(),
+        createdAt: Number(existing.createdAt || Date.now()),
+        lastSeen: firebase.database.ServerValue.TIMESTAMP,
+        revoked: false
+      });
+    } catch (error) {
+      console.warn("登入工作階段同步失敗:", error);
+      return;
+    }
+    if (sessionListenerAttached) return;
+    sessionListenerAttached = true;
+    ref.on("value", snapshot => {
+      const value = snapshot.val() || {};
+      if (!value.revokedAt) return;
+      sessionRef = null;
+      sessionListenerAttached = false;
+      try { ref.off(); } catch (_) {}
+      void firebase.auth().signOut();
+    });
+  }
+
+  async function heartbeatSession() {
+    const u = currentUser();
+    if (!u || u.isAnonymous || !sessionRef) return;
+    try {
+      const snapshot = await sessionRef.once("value");
+      const value = snapshot.val() || {};
+      if (value.revokedAt) {
+        await firebase.auth().signOut();
+        return;
+      }
+      await sessionRef.update({
+        lastSeen: firebase.database.ServerValue.TIMESTAMP,
+        label: getSessionDeviceLabel()
+      });
+    } catch (_) {}
+  }
+
+  async function openSessionManager() {
+    const u = currentUser();
+    const database = db();
+    if (!u || u.isAnonymous) return toast("訪客模式沒有跨裝置登入工作階段");
+    if (!database) return toast("Firebase 尚未準備完成");
+    await ensureSessionTracking();
+    const sid = getSessionId();
+    let data = {};
+    try {
+      data = (await database.ref("sessions/" + u.uid).limitToLast(30).once("value")).val() || {};
+    } catch (error) {
+      return toast(error?.message || "無法載入登入裝置");
+    }
+    const sessions = Object.entries(data).map(([id,value]) => Object.assign({id},value || {})).sort((a,b) => Number(b.lastSeen || 0) - Number(a.lastSeen || 0));
+    const body = modal("wtSessionManagerModal","登入裝置與工作階段",
+      '<div class="wt-completion-muted">撤銷後，該裝置的 WatchTogether 工作階段會自動登出。</div>' +
+      '<div class="wt-feature-list" style="margin-top:12px">' +
+      (sessions.length ? sessions.map(item => {
+        const current = String(item.id) === sid;
+        const revoked = Boolean(item.revokedAt);
+        const when = Number(item.lastSeen || item.createdAt || 0);
+        return '<div class="wt-feature-row"><div><strong>' + esc(current ? "目前裝置" : (item.label || "其他裝置")) + '</strong><div class="small muted">' + esc(item.label || "") + '｜最後活動 ' + esc(when ? new Date(when).toLocaleString() : "—") + '</div></div>' +
+          (revoked ? '<span class="small muted">已撤銷</span>' : '<button type="button" class="tiny-btn ' + (current ? 'danger' : '') + '" data-wt-session-revoke="' + esc(item.id) + '">' + (current ? "登出此裝置" : "撤銷") + '</button>') +
+          '</div>';
+      }).join("") : '<div class="wt-feature-empty">目前沒有登入工作階段。</div>') +
+      '</div><div class="wt-completion-actions"><button id="wtSessionRevokeOthers" class="secondary-btn" type="button">撤銷其他所有裝置</button><button id="wtSessionRefresh" class="primary-btn" type="button">重新整理</button></div>'
+    );
+    body.querySelectorAll("[data-wt-session-revoke]").forEach(button => {
+      button.addEventListener("click", async () => {
+        const target = String(button.dataset.wtSessionRevoke || "");
+        if (!target) return;
+        if (!window.confirm(target === sid ? "確定要登出這個目前裝置嗎？" : "確定撤銷這個登入裝置嗎？")) return;
+        try {
+          await database.ref("sessions/" + u.uid + "/" + target).update({revokedAt:firebase.database.ServerValue.TIMESTAMP,revokedBy:u.uid,revoked:true});
+          if (target === sid) {
+            await firebase.auth().signOut();
+            location.href = location.pathname;
+            return;
+          }
+          await openSessionManager();
+        } catch (error) {
+          toast(error?.message || "撤銷登入裝置失敗");
+        }
+      });
+    });
+    body.querySelector("#wtSessionRevokeOthers")?.addEventListener("click", async () => {
+      const targets = sessions.filter(item => item.id !== sid && !item.revokedAt);
+      if (!targets.length) return toast("沒有其他可撤銷的登入裝置");
+      if (!window.confirm("確定撤銷其他所有登入裝置嗎？")) return;
+      try {
+        const updates = {};
+        targets.forEach(item => {
+          updates[item.id + "/revokedAt"] = firebase.database.ServerValue.TIMESTAMP;
+          updates[item.id + "/revokedBy"] = u.uid;
+          updates[item.id + "/revoked"] = true;
+        });
+        await database.ref("sessions/" + u.uid).update(updates);
+        toast("其他登入裝置已撤銷");
+        await openSessionManager();
+      } catch (error) {
+        toast(error?.message || "撤銷其他裝置失敗");
+      }
+    });
+    body.querySelector("#wtSessionRefresh")?.addEventListener("click", () => { closeModal("wtSessionManagerModal"); void openSessionManager(); });
+  }
+
   function openAccountManager() {
     const u = currentUser();
     const anonymous = Boolean(u?.isAnonymous);
@@ -153,12 +300,14 @@
         (anonymous ? '<button id="wtLinkGoogleBtn" class="primary-btn" type="button">🔗 綁定 Google</button>' : '') +
         '<button id="wtLoginHistoryFromAccount" class="secondary-btn" type="button">🕘 登入紀錄</button>' +
         '<button id="wtExportAccountData" class="secondary-btn" type="button">📦 匯出資料</button>' +
+        (!anonymous ? '<button id="wtSessionManagerBtn" class="secondary-btn" type="button">🖥️ 登入裝置</button>' : '') +
       '</div>' +
       '<div class="wt-account-danger"><strong>帳號刪除</strong><div class="wt-completion-muted" style="margin-top:6px">這會刪除目前帳號的個人檔案節點並要求 Firebase 重新驗證後刪除登入帳號。</div><div class="wt-completion-actions"><button id="wtDeleteAccountBtn" class="tiny-btn danger" type="button">刪除帳號</button></div></div>'
     );
     $("wtLinkGoogleBtn")?.addEventListener("click",() => linkAnonymousToGoogle().catch(e => toast(e.message || "Google 綁定失敗")));
     $("wtLoginHistoryFromAccount")?.addEventListener("click",() => { closeModal("wtAccountManagerModal"); wt.openLoginHistory?.(); });
     $("wtExportAccountData")?.addEventListener("click",() => { wt.exportData?.(); });
+    $("wtSessionManagerBtn")?.addEventListener("click",() => { closeModal("wtAccountManagerModal"); void openSessionManager(); });
     $("wtDeleteAccountBtn")?.addEventListener("click",() => deleteAccount().catch(e => toast(e.message || "帳號刪除失敗")));
   }
 
@@ -197,7 +346,8 @@
       "userSettings/" + u.uid,
       "presence/" + u.uid,
       "notifications/" + u.uid,
-      "roomInvites/" + u.uid
+      "roomInvites/" + u.uid,
+      "sessions/" + u.uid
     ].forEach(path => { updates[path] = null; });
 
     const friendshipsSnapshot = await database.ref("friendships/" + u.uid).once("value").catch(() => null);
@@ -534,6 +684,8 @@
       interceptVolumePersistence();
     },1000);
     interceptVolumePersistence();
+    void ensureSessionTracking();
+    setInterval(() => { void heartbeatSession(); void ensureSessionTracking(); },30000);
   }
 
   wt.openAccountManager=openAccountManager;
@@ -543,6 +695,7 @@
   wt.clearQueue=clearQueue;
   wt.linkAnonymousToGoogle=linkAnonymousToGoogle;
   wt.deleteAccount=deleteAccount;
+  wt.openSessionManager=openSessionManager;
 
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init,{once:true}); else init();
 })();
