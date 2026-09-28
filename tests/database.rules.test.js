@@ -664,7 +664,8 @@ test("2.0 access control: management permissions cover maintenance, feature flag
       admin__read: true,
       maintenance__manage: true,
       featureflags__manage: true,
-      settings__manage: true
+      settings__manage: true,
+      audit__write: true
     }
   }));
   await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).set("ops-manager"));
