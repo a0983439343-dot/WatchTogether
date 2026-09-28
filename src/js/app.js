@@ -3916,8 +3916,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
-    if (!canManageQueueOrder()) {
-      throw new Error("只有房主或 Co-host 可以播放待播放清單");
+    if (!state.isOwner) {
+      throw new Error("只有房主可以播放待播放清單");
     }
 
     if (!state.uid || !state.roomId) {
@@ -4150,7 +4150,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 ` : ""}
 
                 ${
-                  canManageQueueOrder() || String(item.addedBy || "") === String(state.uid || "")
+                  state.isOwner || String(item.addedBy || "") === String(state.uid || "")
                     ? `<button
                         type="button"
                         class="tiny-btn"
