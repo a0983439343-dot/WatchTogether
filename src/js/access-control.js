@@ -20,6 +20,7 @@
       "reports.manage",
       "analytics.read",
       "ai.use",
+      "ai.agent",
       "audit.read",
       "audit.write",
       "audit.delete",
