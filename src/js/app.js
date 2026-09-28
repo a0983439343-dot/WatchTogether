@@ -234,6 +234,11 @@
     membersRef: null,
 
     roomMutesRef: null,
+    roomVolumeRef: null,
+    roomVolumeListenerAttached: false,
+    roomMetaSettingsRef: null,
+    roomMetaSettingsListenerAttached: false,
+    applyingRemoteVolume: false,
     roomMutes: {},
 
     kickedRef: null,
@@ -11390,6 +11395,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       db.ref(
         `chat/${state.roomId}`
       );
+    attachRoomVolumeSync();
 
     state.queueRef =
       db.ref(
@@ -12701,6 +12707,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.membersRef?.off();
       state.roomMutesRef?.off();
       state.kickedRef?.off();
+      state.roomVolumeRef?.off();
+      state.roomMetaSettingsRef?.off();
 
       state.chatRef?.off();
 
@@ -13419,6 +13427,63 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     /*
      * 舊同步按鈕直接隱藏。
      */
+    function roomVolumeSyncEnabled() {
+      const settings =
+        window.WT_ROOM_ACCESS?.state?.meta?.settings ||
+        state.room?.settings ||
+        {};
+      return settings.syncVolume === true;
+    }
+
+    function applyVolumeValue(value) {
+      const volume = Math.max(0, Math.min(100, Number(value)));
+      const input = $("volumeInput");
+      if (input) input.value = String(Math.round(volume));
+      try {
+        state.applyingRemoteVolume = true;
+        if (state.playerType === "youtube") {
+          state.player?.setVolume(volume);
+          if (volume > 0) state.player?.unMute();
+          else state.player?.mute();
+        }
+        if (state.playerType === "vimeo") state.player?.setVolume(volume / 100);
+        if (state.playerType === "twitch") state.player?.setVolume(volume / 100);
+        if (state.playerType === "dailymotion") state.player?.setVolume?.(volume / 100);
+      } catch (_) {
+      } finally {
+        setTimeout(() => { state.applyingRemoteVolume = false; }, 0);
+      }
+    }
+
+    function attachRoomVolumeSync() {
+      const roomId = String(state.roomId || "");
+      if (!roomId || !db) return;
+      if (!state.roomMetaSettingsRef) {
+        state.roomMetaSettingsRef = db.ref("roomMeta/" + roomId + "/settings");
+        state.roomMetaSettingsListenerAttached = true;
+        state.roomMetaSettingsRef.on("value", snapshot => {
+          const settings = snapshot.val() || {};
+          if (state.room) state.room.settings = Object.assign({}, state.room.settings || {}, settings);
+          if (settings.syncVolume !== true) {
+            try { state.roomVolumeRef?.off(); } catch (_) {}
+            state.roomVolumeRef = null;
+            state.roomVolumeListenerAttached = false;
+            return;
+          }
+          if (!state.roomVolumeRef) {
+            state.roomVolumeRef = db.ref("roomVolume/" + roomId);
+            state.roomVolumeRef.on("value", volumeSnapshot => {
+              const data = volumeSnapshot.val();
+              const value = Number(data?.volume);
+              if (!Number.isFinite(value)) return;
+              applyVolumeValue(value);
+            });
+            state.roomVolumeListenerAttached = true;
+          }
+        });
+      }
+    }
+
 /*
      * VOLUME
      */
@@ -13431,6 +13496,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             Number(
               event.target.value
             );
+
+          if (state.applyingRemoteVolume === true) {
+            return;
+          }
 
           try {
             if (
@@ -13475,6 +13544,21 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               state.player?.setVolume?.(
                 value / 100
               );
+            }
+
+            if (
+              roomVolumeSyncEnabled() &&
+              state.roomId &&
+              state.isOwner &&
+              state.databaseConnected === true
+            ) {
+              void db.ref("roomVolume/" + state.roomId).set({
+                volume: Math.max(0, Math.min(100, value)),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                updatedByUid: state.uid
+              }).catch(error => {
+                console.warn("同步音量失敗:", error);
+              });
             }
           } catch (_) {}
         }
