@@ -438,7 +438,17 @@
   }
 
   function hasAdminLikeAccess() {
-    return state.role === "master" || state.role === "admin" || state.role === "viewer";
+    if (state.role === "master" || state.role === "admin") return true;
+    if (state.roleSource !== "custom" || !state.roleDefinition) return false;
+    const permissions = state.roleDefinition.permissions;
+    if (Array.isArray(permissions)) {
+      return permissions.includes("*") || permissions.includes("admin.read");
+    }
+    return Boolean(
+      permissions &&
+      typeof permissions === "object" &&
+      (permissions.__all__ === true || permissions.admin__read === true)
+    );
   }
 
   async function refresh() {
