@@ -58,7 +58,7 @@
     featureFlags: {},
     maintenance: null,
     siteSettings: {
-      siteName: "WatchTogether",
+      siteName: "WatchTogether｜一起看",
       siteDescription: "WatchTogether - 和朋友一起同步看影片、聊天與加好友",
       announcementEnabled: false,
       announcementText: ""
@@ -302,7 +302,7 @@
     state.maintenance = maintenance?.val?.() || {enabled:false};
     const settings = siteSettings?.val?.() || {};
     state.siteSettings = {
-      siteName: String(settings.siteName || "WatchTogether").trim().slice(0,80) || "WatchTogether",
+      siteName: String(settings.siteName || "WatchTogether｜一起看").trim().slice(0,80) || "WatchTogether｜一起看",
       siteDescription: String(settings.siteDescription || "WatchTogether - 和朋友一起同步看影片、聊天與加好友").trim().slice(0,300),
       announcementEnabled: settings.announcementEnabled === true,
       announcementText: String(settings.announcementText || "").trim().slice(0,500)
@@ -425,7 +425,7 @@
     if (location.pathname.includes("/admin/")) return;
     if (!document.body) return;
     const settings = state.siteSettings || {};
-    const siteName = String(settings.siteName || "WatchTogether").trim() || "WatchTogether";
+    const siteName = String(settings.siteName || "WatchTogether｜一起看").trim() || "WatchTogether｜一起看";
     const siteDescription = String(settings.siteDescription || "WatchTogether - 和朋友一起同步看影片、聊天與加好友").trim();
     const announcementEnabled = settings.announcementEnabled === true;
     const announcementText = String(settings.announcementText || "").trim();
