@@ -11075,17 +11075,22 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       return;
     }
 
-    const nextOwnerUid =
-      candidates[0][0];
-
+    /*
+     * 不預先指定某一名成員，避免候選人先離開後，
+     * 舊房主斷線時把 owner 寫回已失效的 UID。
+     *
+     * 舊房主真正斷線後先清空 owner，
+     * 在線成員會透過 transaction 競爭接管，
+     * Firebase Rules 會再次確認接管者仍然在線。
+     */
     try {
       await roomRefAtSchedule
         .child("owner")
         .onDisconnect()
-        .set(nextOwnerUid);
+        .set(null);
     } catch (error) {
       console.warn(
-        "房主斷線轉移設定失敗:",
+        "房主斷線 owner 清空設定失敗:",
         error
       );
     }
@@ -11378,6 +11383,97 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  async function attemptRoomOwnerClaim() {
+    if (
+      state.adminJoinOverride ||
+      !state.roomId ||
+      !state.uid ||
+      !state.roomRef ||
+      !state.membersRef ||
+      state.leavingRoom
+    ) {
+      return false;
+    }
+
+    const roomIdAtClaim = String(state.roomId);
+    const roomRefAtClaim = state.roomRef;
+    const uidAtClaim = String(state.uid);
+
+    try {
+      const memberSnapshot = await state.membersRef
+        .child(uidAtClaim)
+        .once("value");
+
+      if (
+        String(state.roomId || "") !== roomIdAtClaim ||
+        state.roomRef !== roomRefAtClaim ||
+        String(state.uid || "") !== uidAtClaim ||
+        !isMemberPresenceLive(memberSnapshot.val()) ||
+        state.leavingRoom
+      ) {
+        return false;
+      }
+
+      const ownerSnapshot = await roomRefAtClaim
+        .child("owner")
+        .once("value");
+
+      const currentOwnerUid = String(ownerSnapshot.val() || "");
+      let ownerCanBeClaimed = !currentOwnerUid;
+
+      if (currentOwnerUid) {
+        const ownerMemberSnapshot = await state.membersRef
+          .child(currentOwnerUid)
+          .once("value");
+
+        ownerCanBeClaimed =
+          !isMemberPresenceLive(ownerMemberSnapshot.val());
+      }
+
+      if (!ownerCanBeClaimed) {
+        return false;
+      }
+
+      const result = await roomRefAtClaim
+        .child("owner")
+        .transaction(currentOwner => {
+          const current = String(currentOwner || "");
+
+          if (!current) {
+            return uidAtClaim;
+          }
+
+          if (current === currentOwnerUid) {
+            return uidAtClaim;
+          }
+
+          return;
+        });
+
+      if (
+        result.committed &&
+        String(result.snapshot.val() || "") === uidAtClaim &&
+        String(state.roomId || "") === roomIdAtClaim &&
+        state.roomRef === roomRefAtClaim &&
+        String(state.uid || "") === uidAtClaim &&
+        !state.leavingRoom
+      ) {
+        state.room = state.room || {};
+        state.room.owner = uidAtClaim;
+        state.isOwner = true;
+        updateRoomOwnerUI();
+        attachPlaybackControlRequestListener();
+        void syncRoomMetaOwner(uidAtClaim);
+        void reconcileRoomTimeline();
+        return true;
+      }
+    } catch (error) {
+      console.warn("空房房主接管失敗:", error);
+    }
+
+    return false;
+  }
+
   function attachRoomOwnerListener() {
     if (
       !state.roomRef ||
@@ -11409,16 +11505,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
           const nextIsOwner =
             state.adminJoinOverride ||
-            ownerUid ===
-            state.uid;
+            ownerUid === state.uid;
 
           if (
-            state.isOwner !==
-            nextIsOwner
+            state.isOwner !== nextIsOwner
           ) {
-            state.isOwner =
-              nextIsOwner;
-
+            state.isOwner = nextIsOwner;
             updateRoomOwnerUI();
 
             if (state.isOwner && !state.adminJoinOverride) {
@@ -11428,6 +11520,20 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             } else if (!state.isOwner) {
               detachPlaybackControlRequestListener();
             }
+          }
+
+          /*
+           * owner 被斷線清空或仍指向失效成員時，
+           * 每個在線成員都可以嘗試接管；transaction 只會
+           * 讓第一個符合 Rules 的成員成功。
+           */
+          if (
+            !state.adminJoinOverride &&
+            !state.isOwner &&
+            state.wasMemberInRoom &&
+            state.databaseConnected === true
+          ) {
+            void attemptRoomOwnerClaim();
           }
         }
       );
@@ -11537,77 +11643,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       }
 
 
-      try {
-        const currentOwnerUid =
-          String(
-            state.room.owner ||
-            ""
-          );
-
-        let ownerCanBeClaimed =
-          !currentOwnerUid;
-
-        if (
-          currentOwnerUid
-        ) {
-          const ownerMemberSnapshot =
-            await state.membersRef
-              .child(
-                currentOwnerUid
-              )
-              .once("value");
-
-          ownerCanBeClaimed =
-            !isMemberPresenceLive(
-              ownerMemberSnapshot.val()
-            );
-        }
-
-        if (
-          ownerCanBeClaimed
-        ) {
-          const result =
-            await state.roomRef
-              .child("owner")
-              .transaction(
-                currentValue => {
-                  if (
-                    currentValue === null ||
-                    String(
-                      currentValue ||
-                      ""
-                    ) ===
-                    currentOwnerUid
-                  ) {
-                    return state.uid;
-                  }
-
-                  return;
-                }
-              );
-
-          if (
-            result.committed &&
-            String(
-              result.snapshot.val() ||
-              ""
-            ) ===
-            String(
-              state.uid
-            )
-          ) {
-            state.room.owner =
-              state.uid;
-            state.isOwner =
-              true;
-          }
-        }
-      } catch (error) {
-        console.warn(
-          "空房房主接管失敗:",
-          error
-        );
-      }
+      await attemptRoomOwnerClaim();
     }
     if (
       state.isOwner &&
