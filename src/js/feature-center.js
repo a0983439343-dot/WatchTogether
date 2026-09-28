@@ -229,6 +229,14 @@ async function sendRoomInvite(){
 }
 
 
+function openQueueHistory(){
+  var list=core?.queueHistory?core.queueHistory():[];
+  var html='<div class="small muted">最近 50 次由待播放清單啟動的影片會保留在目前裝置。</div><div class="wt-feature-list">';
+  html+=list.length?list.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.title||"未命名影片")+'</strong><div class="small muted">'+esc(x.platform||"")+'｜'+esc(x.channel||"")+'</div><div class="small muted">'+esc(fmtDate(x.playedAt))+'｜'+esc(x.playedByName||"玩家")+'</div></div></div>';}).join(""):'<div class="wt-feature-empty">目前沒有佇列播放紀錄。</div>';
+  html+='</div>';
+  modal("wtQueueHistoryModal","佇列播放歷史",html);
+}
+
 function openQueueMode(){
   var s=st(),settings=s.room&&s.room.settings||window.WT_ROOM_ACCESS&&window.WT_ROOM_ACCESS.state&&window.WT_ROOM_ACCESS.state.meta&&window.WT_ROOM_ACCESS.state.meta.settings||{},current=String(settings.queueMode||"normal");
   var body=modal("wtQueueModeModal","佇列播放模式",'<label>播放模式<select id="wtQueueModeSelect"><option value="normal" '+(current==="normal"?"selected":"")+'>依序播放</option><option value="repeat_one" '+(current==="repeat_one"?"selected":"")+'>重播目前影片</option><option value="shuffle" '+(current==="shuffle"?"selected":"")+'>隨機播放下一部</option></select></label><div class="small muted" style="margin-top:10px">房間會同步這個設定。影片播完後由房主依此模式處理。</div><div class="wt-feature-actions"><button id="wtQueueModeSave" class="primary-btn">儲存</button></div>');
@@ -279,6 +287,8 @@ function ensureRoomTools(){
   if(!$("wtRoomReportBtn")){var c=document.createElement("button");c.id="wtRoomReportBtn";c.className="tiny-btn";c.type="button";c.textContent="回報";c.onclick=function(){openReport("room");};copy.insertAdjacentElement("afterend",c);}
   if(!$("wtRoomHostToolsBtn")){var h=document.createElement("button");h.id="wtRoomHostToolsBtn";h.className="tiny-btn";h.type="button";h.textContent="房主工具";h.onclick=openRoomTools;copy.insertAdjacentElement("afterend",h);}
   if(!$("wtQueueModeBtn")){var q=document.createElement("button");q.id="wtQueueModeBtn";q.className="tiny-btn";q.type="button";q.textContent="佇列模式";q.onclick=openQueueMode;$("playQueueNowBtn")?.insertAdjacentElement("afterend",q);}
+  if(!$("wtQueueClearBtn")){var qc=document.createElement("button");qc.id="wtQueueClearBtn";qc.className="tiny-btn danger";qc.type="button";qc.textContent="清空佇列";qc.onclick=async function(){try{await core?.clearQueue?.();}catch(e){toast(e.message||"清空佇列失敗");}};$("playQueueNowBtn")?.insertAdjacentElement("afterend",qc);}
+  if(!$("wtQueueHistoryBtn")){var qh=document.createElement("button");qh.id="wtQueueHistoryBtn";qh.className="tiny-btn";qh.type="button";qh.textContent="佇列歷史";qh.onclick=openQueueHistory;$("playQueueNowBtn")?.insertAdjacentElement("afterend",qh);}
 }
 
 
