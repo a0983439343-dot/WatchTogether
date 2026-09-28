@@ -458,6 +458,49 @@ test("2.0 access control: custom admin role can read and write its permitted adm
   }));
 });
 
+test("2.0 maintenance: normal users are blocked while admin users keep access", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const adminRoleRef = master.ref("admin/access/roles/maintenance-admin");
+
+  await assertSucceeds(adminRoleRef.set({
+    name: "Maintenance Admin",
+    permissions: {
+      "admin__read": true,
+      "room__queue": true
+    }
+  }));
+  await assertSucceeds(
+    master.ref("admin/access/roleByUid/" + USER_UID).set("maintenance-admin")
+  );
+  await assertSucceeds(
+    master.ref("site/maintenance").set({
+      enabled: true,
+      reason: "maintenance test",
+      restoreAt: Date.now() + 3600000,
+      updatedAt: Date.now(),
+      updatedByUid: MASTER_UID,
+      updatedByEmail: MASTER_EMAIL
+    })
+  );
+
+  const queueItem = {
+    id: "maintenance-test",
+    platform: "youtube",
+    title: "Maintenance Test",
+    thumbnail: "",
+    channel: "",
+    addedBy: USER_UID,
+    addedByName: "User",
+    addedAt: Date.now()
+  };
+
+  await assertSucceeds(
+    db(USER_UID, userToken)
+      .ref("queue/ABC123/maintenance-test")
+      .set(queueItem)
+  );
+});
+
 test("2.0 maintenance: direct client writes remain blocked even with maintenance.manage", async () => {
   await assertFails(
     db(ADMIN_UID, adminToken).ref("site/maintenance").set({
