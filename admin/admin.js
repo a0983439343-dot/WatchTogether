@@ -2822,23 +2822,29 @@
       const duration = String(data.durationMs || "3600000");
       const permanent = duration === "permanent";
       const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
-      await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set({
-        enabled:true, permanent, until, reason,
-        createdAt:firebase.database.ServerValue.TIMESTAMP,
-        createdByUid:currentUser.uid,
-        createdByEmail:currentUser.email || ""
-      });
+      await writeAuditedUpdates({
+        ["admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)]: {
+          enabled:true, permanent, until, reason,
+          createdAt:firebase.database.ServerValue.TIMESTAMP,
+          createdByUid:currentUser.uid,
+          createdByEmail:currentUser.email || ""
+        }
+      },"access.user.restriction",uid,permission,reason + " · " + (permanent ? "永久" : formatDate(until)));
       await loadAccessControl();
-      await writeAuditLog("access.user.restriction",uid,permission,reason + " · " + (permanent ? "永久" : formatDate(until)));
       return;
     }
 
     if (name === "clear_user_restriction") {
       if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
       if (!uid || !permission) throw new Error("缺少 UID 或功能");
-      await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).remove();
+      await writeAuditedUpdates(
+        {"admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission):null},
+        "access.user.restriction.clear",
+        uid,
+        permission,
+        "AI Agent 解除功能限制"
+      );
       await loadAccessControl();
-      await writeAuditLog("access.user.restriction.clear",uid,permission,"AI Agent 解除功能限制");
       return;
     }
 
@@ -2846,15 +2852,16 @@
       if (!isMasterOperator()) throw new Error("只有最高管理員可以修改 Feature Flag");
       const flag = encodeAccessPermission(permission);
       if (!flag) throw new Error("缺少 Feature Flag 名稱");
-      await db.ref("admin/featureFlags/" + flag).set({
-        enabled:data.enabled !== false,
-        reason,
-        updatedAt:firebase.database.ServerValue.TIMESTAMP,
-        updatedByUid:currentUser.uid,
-        updatedByEmail:currentUser.email || ""
-      });
+      await writeAuditedUpdates({
+        ["admin/featureFlags/" + flag]: {
+          enabled:data.enabled !== false,
+          reason,
+          updatedAt:firebase.database.ServerValue.TIMESTAMP,
+          updatedByUid:currentUser.uid,
+          updatedByEmail:currentUser.email || ""
+        }
+      },"feature.flag",currentUser.uid,flag,(data.enabled === false ? "關閉 " : "啟用 ") + flag + (reason ? " · " + reason : ""));
       await loadAccessControl();
-      await writeAuditLog("feature.flag",currentUser.uid,flag,(data.enabled === false ? "關閉 " : "啟用 ") + flag + (reason ? " · " + reason : ""));
       return;
     }
 
@@ -2863,9 +2870,14 @@
       if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
       const role = safeKey(data.role,80);
       if (!role || !accessRoles[role]) throw new Error("角色不存在");
-      await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(role);
+      await writeAuditedUpdates(
+        {"admin/access/roleByUid/" + safeKey(uid,128):role},
+        "access.role.assign",
+        uid,
+        role,
+        "AI Agent 指派自訂角色"
+      );
       await loadAccessControl();
-      await writeAuditLog("access.role.assign",uid,role,"AI Agent 指派自訂角色");
       return;
     }
 
@@ -2874,9 +2886,14 @@
       if (!uid || uid === MASTER_UID || !permission) throw new Error("無效或禁止的目標");
       const effect = String(data.effect || "").toLowerCase();
       if (effect !== "allow" && effect !== "deny") throw new Error("effect 必須是 allow 或 deny");
-      await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set(effect);
+      await writeAuditedUpdates(
+        {"admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission):effect},
+        "access.permission.override",
+        uid,
+        permission,
+        effect.toUpperCase() + " " + permission
+      );
       await loadAccessControl();
-      await writeAuditLog("access.permission.override",uid,permission,effect.toUpperCase() + " " + permission);
       return;
     }
 
@@ -2884,17 +2901,25 @@
       if (!isMasterOperator()) throw new Error("只有最高管理員可以管理白名單");
       if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
       const role = data.role === "viewer" ? "viewer" : "admin";
-      await db.ref("admin/whitelistByUid/" + safeKey(uid,128)).set({
-        uid,
-        email:String(data.email || "").slice(0,320),
-        role,
-        enabled:data.enabled !== false,
-        addedAt:firebase.database.ServerValue.TIMESTAMP,
-        updatedAt:firebase.database.ServerValue.TIMESTAMP,
-        updatedByUid:currentUser.uid
-      });
+      await writeAuditedUpdates({
+        ["admin/whitelistByUid/" + safeKey(uid,128)]: {
+          uid,
+          email:String(data.email || "").slice(0,320),
+          role,
+          enabled:data.enabled !== false,
+          addedAt:firebase.database.ServerValue.TIMESTAMP,
+          updatedAt:firebase.database.ServerValue.TIMESTAMP,
+          updatedByUid:currentUser.uid,
+          addedByUid:currentUser.uid,
+          addedByEmail:currentUser.email || ""
+        }
+      },
+      data.enabled === false ? "whitelist.toggle" : "whitelist.add",
+      uid,
+      role,
+      "AI Agent 更新白名單"
+      );
       await loadWhitelist();
-      await writeAuditLog(data.enabled === false ? "whitelist.toggle" : "whitelist.add",uid,role,"AI Agent 更新白名單");
       return;
     }
 
