@@ -2,6 +2,8 @@ const http = require("node:http");
 const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { Readable } = require("node:stream");
+const { getApps, initializeApp, cert } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -88,12 +90,31 @@ const BUILTIN_ADMIN_PERMISSIONS = new Set([
   "maintenance.manage"
 ]);
 
-function decodeJwtPayload(token) {
-  const parts = String(token || "").split(".");
-  if (parts.length !== 3) throw new Error("invalid_id_token");
-  const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-  const raw = encoded + "=".repeat((4 - (encoded.length % 4)) % 4);
-  return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+let firebaseAdminAuthInstance = null;
+
+function getFirebaseAdminAuth() {
+  if (firebaseAdminAuthInstance) return firebaseAdminAuthInstance;
+  const account = getFirebaseServiceAccount();
+  if (!account.clientEmail || !account.privateKey) {
+    throw new Error("firebase_service_account_not_configured");
+  }
+  const app = getApps().length
+    ? getApps()[0]
+    : initializeApp({
+        credential: cert({
+          projectId: String(process.env.FIREBASE_PROJECT_ID || "watchtogether-3f4f9"),
+          clientEmail: account.clientEmail,
+          privateKey: account.privateKey
+        })
+      });
+  firebaseAdminAuthInstance = getAuth(app);
+  return firebaseAdminAuthInstance;
+}
+
+async function verifyFirebaseIdToken(token) {
+  const value = String(token || "").trim();
+  if (!value) throw new Error("missing_firebase_id_token");
+  return await getFirebaseAdminAuth().verifyIdToken(value);
 }
 
 function getBearerToken(req) {
@@ -288,8 +309,8 @@ async function firebaseRestGet(pathname, token) {
 }
 
 async function resolveUserAccessPolicy(token) {
-  const payload = decodeJwtPayload(token);
-  const uid = String(payload?.user_id || payload?.sub || "").trim();
+  const payload = await verifyFirebaseIdToken(token);
+  const uid = String(payload?.user_id || payload?.uid || payload?.sub || "").trim();
   const email = String(payload?.email || "").trim().toLowerCase();
   if (!uid) throw new Error("missing_uid");
 
@@ -360,11 +381,7 @@ async function resolveUserAccessPolicy(token) {
 }
 
 async function resolveMaintenanceActor(token) {
-  const policy = await resolveUserAccessPolicy(token);
-  if (!policy.role || policy.role === "viewer") {
-    throw new Error("admin_permission_denied");
-  }
-  return policy;
+  return await resolveUserAccessPolicy(token);
 }
 
 function verifyMaintenancePassword(password) {
@@ -439,11 +456,11 @@ async function handleAdminMaintenance(req, res) {
     return;
   }
 
-  if (!resolveEffectivePermission(actor.permissions, actor.overrides, actor.restrictions, "maintenance.manage")) {
+  if (!resolveEffectivePermission(actor, "maintenance.manage")) {
     send(res, 403, JSON.stringify({ok:false,error:"maintenance_permission_denied"}));
     return;
   }
-  if (!resolveEffectivePermission(actor.permissions, actor.overrides, actor.restrictions, "audit.write")) {
+  if (!resolveEffectivePermission(actor, "audit.write")) {
     send(res, 403, JSON.stringify({ok:false,error:"audit_permission_required"}));
     return;
   }
