@@ -1657,7 +1657,81 @@ function runYoutubeSearch(query, maxResults, page) {
   return request;
 }
 
+async function fetchFirebaseJson(path, idToken) {
+  if (!idToken) return null;
+  const response = await fetch(
+    FIREBASE_DATABASE_URL + "/" + path + ".json?auth=" + encodeURIComponent(idToken),
+    {method:"GET",headers:{Accept:"application/json"}}
+  );
+  if (!response.ok) return null;
+  return response.json().catch(() => null);
+}
+
+function isActivePolicy(item) {
+  if (!item || item.enabled !== true) return false;
+  if (item.permanent === true) return true;
+  const until = Number(item.until || item.restrictedUntil || 0);
+  return Number.isFinite(until) && until > Date.now();
+}
+
+async function authorizeSearchRequest(req) {
+  const idToken = getBearerToken(req);
+  if (!idToken) return {ok:false,status:401,error:"missing_auth_token"};
+
+  let user;
+  try {
+    user = await lookupFirebaseIdToken(idToken);
+  } catch (_) {
+    return {ok:false,status:401,error:"invalid_auth_token"};
+  }
+  if (!user) return {ok:false,status:401,error:"invalid_auth_token"};
+
+  const uid = user.uid;
+  const restriction = await fetchFirebaseJson(
+    "admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/youtube__search",
+    idToken
+  );
+  if (isActivePolicy(restriction)) {
+    return {ok:false,status:403,error:"search_restricted",message:String(restriction.reason || "你目前無法使用 YouTube 搜尋。").slice(0,500)};
+  }
+
+  const flag = await fetchFirebaseJson("admin/featureFlags/youtube__search", idToken);
+  if (flag && flag.enabled === false) {
+    return {ok:false,status:403,error:"search_feature_disabled",message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)};
+  }
+
+  if (uid !== "35d45a23-b648-4caf-a6d5-a69112860551" && user.email !== "a0983439343@gmail.com") {
+    const assignedRole = String(
+      await fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid), idToken) || ""
+    ).trim();
+    if (assignedRole) {
+      const definition = await fetchFirebaseJson(
+        "admin/access/roles/" + encodeURIComponent(assignedRole),
+        idToken
+      );
+      const permissions = definition && definition.permissions && typeof definition.permissions === "object"
+        ? definition.permissions
+        : null;
+      if (permissions && assignedRole !== "viewer") {
+        const allowed = permissions.__all__ === true || permissions.youtube__search === true;
+        if (!allowed) {
+          return {ok:false,status:403,error:"search_permission_denied",message:"目前角色沒有 YouTube 搜尋權限。"};
+        }
+      }
+    }
+  }
+
+  return {ok:true,user};
+}
+
 async function handleSearch(req, res, url) {
+  const authorization = await authorizeSearchRequest(req);
+  if (!authorization.ok) {
+    send(res, authorization.status, JSON.stringify({
+      error:{message:authorization.message || "YouTube 搜尋請求未授權",code:authorization.error}
+    }));
+    return;
+  }
   const ip = getClientIp(req);
   if (!allowRate(ip, "search", SEARCH_LIMIT_PER_IP)) {
     send(res, 429, JSON.stringify({error:{message:"搜尋請求過於頻繁，請稍後再試"}}));
