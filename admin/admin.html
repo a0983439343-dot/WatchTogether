@@ -69,6 +69,7 @@
     <button class="nav-item" data-section="rooms">🏠 房間監控</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
     <button class="nav-item" data-section="access">⚙️ 2.0 控制中心</button>
+    <button class="nav-item" data-section="maintenance">🛠️ 系統維護</button>
      <button class="nav-item" data-section="reports">🐛 問題回報</button>
      <button class="nav-item" data-section="audit">📜 操作紀錄</button>
   </aside>
@@ -123,6 +124,42 @@
           <thead><tr><th>房間</th><th>房主</th><th>在線人數</th><th>目前影片</th><th>建立時間</th><th>操作</th></tr></thead>
           <tbody id="roomsBody"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="section-maintenance" class="admin-section hidden">
+      <div class="section-head">
+        <div><div class="eyebrow">SITE MAINTENANCE</div><h2>系統維護</h2></div>
+        <button id="maintenanceRefreshBtn" class="btn primary" type="button">重新整理</button>
+      </div>
+
+      <div class="panel maintenance-panel">
+        <div class="panel-head">
+          <div>
+            <h3 id="siteMaintenanceTitle">網站正常運作</h3>
+            <p id="siteMaintenanceSummary" class="maintenance-description">目前沒有啟用整站維護。</p>
+          </div>
+          <span id="siteMaintenanceBadge" class="status admin">正常</span>
+        </div>
+        <div id="siteMaintenanceMeta" class="info-grid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>關閉網站</h3></div>
+        <div class="add-row">
+          <input id="maintenanceReasonInput" class="search" type="text" maxlength="500" placeholder="維護原因，例如：正在部署新版功能">
+          <input id="maintenanceRestoreAtInput" class="search" type="datetime-local" aria-label="預計恢復時間">
+          <button id="maintenanceCloseBtn" class="btn danger" type="button">關閉網站</button>
+        </div>
+        <p class="muted" style="margin:10px 0 0;line-height:1.7">按下關閉後會先要求確認，再要求輸入後端維護密碼。密碼不會儲存在瀏覽器。</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>重新開站</h3></div>
+        <div class="add-row">
+          <button id="maintenanceOpenBtn" class="btn primary" type="button">重新開放網站</button>
+        </div>
+        <p id="maintenancePermissionHint" class="muted" style="margin:10px 0 0;line-height:1.7"></p>
       </div>
     </section>
 
