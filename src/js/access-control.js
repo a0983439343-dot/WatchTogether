@@ -143,6 +143,10 @@
     const user = options.user || state.user;
     if (!user) return false;
     if (isMaster(user)) return true;
+    if (user.isAnonymous) {
+      const flag = state.featureFlags[key];
+      return normalizeFlag(flag);
+    }
 
     const restriction = state.restrictions[key];
     if (isActiveRestriction(restriction)) return false;
@@ -305,6 +309,7 @@
       state.refs.restrictions = db.ref("admin/access/restrictionsByUid/" + user.uid);
       state.refs.restrictions.on("value", snapshot => {
         state.restrictions = snapshot.val() || {};
+        renderRestrictionNotice();
         emit();
       });
     } catch (_) {}
