@@ -384,6 +384,73 @@
     setHealth("","待命");
   }
 
+  function roomStickerList() {
+    return Array.isArray(wt.STICKERS) && wt.STICKERS.length
+      ? wt.STICKERS
+      : ["😀","😂","❤️","🔥","👏","🎉","🍿","🎬","👍","✨"];
+  }
+
+  async function sendRoomSticker(sticker) {
+    const s = core?.state;
+    if (!s?.roomId || !s?.chatRef || !s?.uid || s.leavingRoom) {
+      toast("請先進入房間");
+      return;
+    }
+    const value = String(sticker || "😀").slice(0,4);
+    try {
+      const access = window.WT_ACCESS_CONTROL;
+      if (access) {
+        await access.waitUntilReady?.(2500);
+        if (access.state?.ready && !access.hasPermission("chat.send")) {
+          throw new Error("你目前無法在聊天室發言");
+        }
+      }
+      await s.chatRef.push({
+        uid:s.uid,
+        name:String(s.memberName || wt.currentName?.() || "玩家").slice(0,30),
+        type:"sticker",
+        sticker:value,
+        createdAt:firebase.database.ServerValue.TIMESTAMP
+      });
+      document.querySelectorAll(".wt-room-sticker-picker").forEach(el => el.remove());
+    } catch (error) {
+      toast(error?.message || "貼圖送出失敗");
+    }
+  }
+
+  function ensureRoomChatExtras() {
+    if (!inRoom()) return;
+    const form = $("chatForm");
+    const input = $("chatInput");
+    if (!form || !input || $("wtRoomStickerBtn")) return;
+
+    const wrap = document.createElement("span");
+    wrap.style.cssText = "position:relative;display:inline-flex;align-items:center";
+    const button = document.createElement("button");
+    button.id = "wtRoomStickerBtn";
+    button.type = "button";
+    button.className = "tiny-btn";
+    button.textContent = "⭐";
+    button.title = "貼圖";
+    const picker = document.createElement("div");
+    picker.className = "wt-room-sticker-picker hidden";
+    picker.setAttribute("aria-label","房間貼圖");
+    picker.innerHTML = roomStickerList().map(item =>
+      '<button type="button" data-room-sticker="' + escapeHtml(item) + '">' + escapeHtml(item) + '</button>'
+    ).join("");
+    picker.querySelectorAll("[data-room-sticker]").forEach(item => {
+      item.addEventListener("click",() => void sendRoomSticker(item.dataset.roomSticker));
+    });
+    button.addEventListener("click",() => picker.classList.toggle("hidden"));
+    wrap.appendChild(button);
+    wrap.appendChild(picker);
+
+    form.insertBefore(wrap, input);
+    document.addEventListener("click",event => {
+      if (!wrap.contains(event.target)) picker.classList.add("hidden");
+    });
+  }
+
   function ensureRoomToolsButton() {
     if (!inRoom()) return;
     const anchor = $("copyRoomBtn");
@@ -483,6 +550,7 @@
     setInterval(() => {
       ensureRoomToolsButton();
       ensureShortcutsNotice();
+      ensureRoomChatExtras();
       installPlayerHealth();
     },1000);
     setInterval(track,5000);
