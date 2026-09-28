@@ -184,11 +184,17 @@
     const role = normalizeRole(options.role || state.role);
     if (state.role) {
       const permissions = rolePermissions(role, state.roleDefinition);
-      if (adminScoped && !(permissions.has("*") || permissions.has(key))) {
-        return false;
-      }
-      if (!adminScoped && role !== "viewer" && !permissions.has("*") && permissions.size > 0 && !permissions.has(key)) {
-        return false;
+      if (state.roleSource === "custom") {
+        if (!permissions.has("*") && !permissions.has(key)) {
+          return false;
+        }
+      } else {
+        if (adminScoped && !(permissions.has("*") || permissions.has(key))) {
+          return false;
+        }
+        if (!adminScoped && role !== "viewer" && !permissions.has("*") && permissions.size > 0 && !permissions.has(key)) {
+          return false;
+        }
       }
     } else if (adminScoped) {
       return false;
