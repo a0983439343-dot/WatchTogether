@@ -165,6 +165,7 @@
     const queueMode = ["normal", "repeat_one", "shuffle"].includes(queueModeValue)
       ? queueModeValue
       : "normal";
+    const syncVolume = document.getElementById("roomAccessSyncVolume")?.checked === true;
 
     await db.ref("roomMeta/" + id).update({
       name: roomName,
@@ -174,7 +175,8 @@
         joinPolicy,
         maxMembers,
         locked,
-        queueMode
+        queueMode,
+        syncVolume
       }
     });
     await db.ref("rooms/" + id + "/name").set(roomName);
@@ -199,7 +201,8 @@
         joinPolicy,
         maxMembers,
         locked,
-        queueMode
+        queueMode,
+        syncVolume
       });
     }
 
@@ -308,6 +311,7 @@
         '<label>最多成員<input id="roomAccessMaxMembers" type="number" min="2" max="10" value="2"></label>' +
         '<label>佇列模式<select id="roomAccessQueueMode"><option value="normal">依序播放</option><option value="repeat_one">重播目前影片</option><option value="shuffle">隨機播放下一部</option></select></label>' +
         '<label class="room-access-check"><input id="roomAccessLocked" type="checkbox"> 鎖定新成員加入</label>' +
+        '<label class="room-access-check"><input id="roomAccessSyncVolume" type="checkbox"> 同步房間音量（房主控制）</label>' +
       '</div>' +
       '<div id="roomAccessOwnerArea">' +
         '<div class="panel-title" style="margin-top:18px;">加入申請</div>' +
@@ -356,6 +360,7 @@
     const maxEl = document.getElementById("roomAccessMaxMembers");
     const lockedEl = document.getElementById("roomAccessLocked");
     const queueModeEl = document.getElementById("roomAccessQueueMode");
+    const syncVolumeEl = document.getElementById("roomAccessSyncVolume");
     const saveEl = document.getElementById("roomAccessSaveBtn");
 
     if (nameEl) nameEl.value = String(roomState.meta?.name || window.WT_CORE?.state?.room?.name || "一起看").slice(0, 40);
@@ -363,9 +368,10 @@
     if (joinPolicyEl) joinPolicyEl.value = settings.joinPolicy === "application" ? "application" : "open";
     if (maxEl) maxEl.value = String(Math.max(2, Math.min(10, Number(settings.maxMembers || 2))));
     if (queueModeEl) queueModeEl.value = ["normal", "repeat_one", "shuffle"].includes(String(settings.queueMode || "")) ? String(settings.queueMode) : "normal";
+    if (syncVolumeEl) syncVolumeEl.checked = settings.syncVolume === true;
     if (lockedEl) lockedEl.checked = settings.locked === true;
 
-    [nameEl, visibilityEl, joinPolicyEl, maxEl, queueModeEl, lockedEl, saveEl].forEach(el => { if (el) el.disabled = !owner; });
+    [nameEl, visibilityEl, joinPolicyEl, maxEl, queueModeEl, syncVolumeEl, lockedEl, saveEl].forEach(el => { if (el) el.disabled = !owner; });
 
     const ownerArea = document.getElementById("roomAccessOwnerArea");
     const cohostArea = document.getElementById("roomAccessCohostArea");
