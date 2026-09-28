@@ -2282,19 +2282,19 @@
     if (announcementEnabled) announcementEnabled.checked = current.announcementEnabled;
     if (announcementText) announcementText.value = current.announcementText;
 
-    const master = isMasterOperator();
+    const canManage = currentCan("settings.manage");
     [name,description,announcementEnabled,announcementText,$("systemSettingsSaveBtn")]
       .filter(Boolean)
-      .forEach(el => { el.disabled = !master; });
+      .forEach(el => { el.disabled = !canManage; });
 
     if (status) {
-      status.textContent = master ? "Master Admin" : "唯讀";
-      status.className = "status " + (master ? "admin" : "");
+      status.textContent = isMasterOperator() ? "Master Admin" : (canManage ? "可管理" : "唯讀");
+      status.className = "status " + (canManage ? "admin" : "");
     }
     if (hint) {
-      hint.textContent = master
-        ? "只有最高管理員可以修改系統設定；變更會寫入 Audit Log。"
-        : "你目前只有查看權限，系統設定由最高管理員管理。";
+      hint.textContent = canManage
+        ? "目前帳號具備 settings.manage，可修改系統設定；變更會寫入 Audit Log。"
+        : "你目前只有查看權限，系統設定不可修改。";
     }
 
     const summary = $("systemSettingsLiveSummary");
@@ -2391,12 +2391,15 @@
     renderMaintenanceControl();
     const master = isMasterOperator();
     const canRestrict = currentCan("users.restrict");
+    const canManageFlags = currentCan("featureflags.manage");
     [
       "accessRoleId","accessRoleName","accessRolePermissions","accessRoleSaveBtn",
       "accessAssignUid","accessAssignRole","accessAssignBtn",
-      "accessOverrideUid","accessOverridePermission","accessOverrideEffect","accessOverrideBtn",
-      "accessFlagName","accessFlagEnabled","accessFlagReason","accessFlagBtn"
+      "accessOverrideUid","accessOverridePermission","accessOverrideEffect","accessOverrideBtn"
     ].forEach(id => { const el = $(id); if (el) el.disabled = !master; });
+    [
+      "accessFlagName","accessFlagEnabled","accessFlagReason","accessFlagBtn"
+    ].forEach(id => { const el = $(id); if (el) el.disabled = !canManageFlags; });
     ["accessRestrictionUid","accessRestrictionPermission","accessRestrictionDuration","accessRestrictionReason","accessRestrictionBtn"]
       .forEach(id => { const el = $(id); if (el) el.disabled = !canRestrict; });
     const select = $("accessAssignRole");
@@ -2567,7 +2570,7 @@
   }
 
   async function saveAccessFeatureFlag() {
-    if (!isMasterOperator()) throw new Error("只有最高管理員可以管理 Feature Flag");
+    if (!currentCan("featureflags.manage")) throw new Error("目前管理員沒有 Feature Flag 管理權限");
     const name = encodeAccessPermission($("accessFlagName")?.value);
     const enabled = $("accessFlagEnabled")?.value !== "false";
     const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
