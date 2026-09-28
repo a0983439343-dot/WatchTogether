@@ -92,7 +92,12 @@
         const definition = roleSnapshot.val();
         if (definition && definition.permissions && typeof definition.permissions === "object") {
           currentRolePermissions = Object.fromEntries(
-            Object.entries(definition.permissions).filter(([, enabled]) => enabled === true)
+            Object.entries(definition.permissions)
+              .filter(([, enabled]) => enabled === true)
+              .map(([permission]) => [
+                permission === "__all__" ? "*" : permission.replace(/__/g, "."),
+                true
+              ])
           );
           if (currentRolePermissions["admin.read"] === true || currentRolePermissions["*"] === true) {
             return assignedRole;
