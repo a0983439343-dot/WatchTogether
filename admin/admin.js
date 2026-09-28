@@ -410,7 +410,10 @@
     "whitelist.role": "調整權限",
     "whitelist.toggle": "啟用 / 停用",
     "whitelist.remove": "移除白名單",
-    "audit.delete": "刪除操作紀錄"
+    "audit.delete": "刪除操作紀錄",
+    "maintenance.close": "關閉網站",
+    "maintenance.open": "重新開放網站",
+    "maintenance.toggle": "全自動維護"
   };
 
   function stopAuditLogsListener() {
@@ -666,7 +669,7 @@
         action:String(action || "other").slice(0,40),
         actorUid:String(currentUser?.uid || "").slice(0,128),
         actorEmail:String(currentUser?.email || "").slice(0,320),
-        actorRole:String(currentRole || "").slice(0,20),
+        actorRole:String(currentRole || "").slice(0,80),
         targetUid:String(targetUid || "").slice(0,128),
         targetName:String(targetName || "").slice(0,200),
         details:String(details || "").slice(0,1000),
@@ -2421,7 +2424,7 @@
     });
 
     $("refreshBtn")?.addEventListener("click", () => Promise.all([
-      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs()
+      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs(),loadSiteMaintenance()
     ]).then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("accountsRefreshBtn")?.addEventListener("click", () => Promise.all([
