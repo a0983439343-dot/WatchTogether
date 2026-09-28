@@ -1103,6 +1103,67 @@ function degradedAiResult(input, error) {
   };
 }
 
+async function authorizeAiRequest(req) {
+  const idToken = getBearerToken(req);
+  if (!idToken) return {ok:false,status:401,error:"missing_auth_token"};
+
+  let user;
+  try {
+    user = await lookupFirebaseIdToken(idToken);
+  } catch (_) {
+    return {ok:false,status:401,error:"invalid_auth_token"};
+  }
+  if (!user) return {ok:false,status:401,error:"invalid_auth_token"};
+
+  const uid = user.uid;
+  const email = String(user.email || "").trim().toLowerCase();
+  const isMaster =
+    uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
+    email === "a0983439343@gmail.com";
+
+  if (isMaster) return {ok:true,user};
+
+  const [restriction,flag,override,assignedRole,whitelist] = await Promise.all([
+    fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/ai__use",idToken),
+    fetchFirebaseJson("admin/featureFlags/ai__use",idToken),
+    fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/ai__use",idToken),
+    fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
+    fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
+  ]);
+
+  if (isActivePolicy(restriction)) {
+    return {ok:false,status:403,error:"ai_restricted",message:String(restriction.reason || "目前帳號無法使用 AI。").slice(0,500)};
+  }
+
+  if (flag && flag.enabled === false) {
+    return {ok:false,status:403,error:"ai_feature_disabled",message:String(flag.reason || "AI 功能目前暫停。").slice(0,500)};
+  }
+
+  if (override === "deny") {
+    return {ok:false,status:403,error:"ai_permission_denied",message:"目前帳號被禁止使用 AI。"};
+  }
+
+  if (override === "allow") return {ok:true,user};
+
+  const roleId = String(assignedRole || "").trim();
+  if (roleId) {
+    const definition = await fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId),idToken);
+    const permissions = definition && definition.permissions && typeof definition.permissions === "object"
+      ? definition.permissions
+      : null;
+    if (permissions && (permissions.__all__ === true || permissions.ai__use === true)) {
+      return {ok:true,user};
+    }
+    return {ok:false,status:403,error:"ai_permission_denied",message:"目前角色沒有 AI 權限。"};
+  }
+
+  if (whitelist && whitelist.enabled === true && String(whitelist.role || "admin") !== "viewer") {
+    return {ok:true,user};
+  }
+
+  return {ok:false,status:403,error:"ai_permission_denied",message:"只有具備 AI 權限的管理角色可以使用 AI。"};
+}
+
 async function handleAiAnalyze(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({
@@ -1116,6 +1177,16 @@ async function handleAiAnalyze(req, res) {
     send(res, 403, JSON.stringify({
       ok: false,
       error: "origin_not_allowed"
+    }));
+    return;
+  }
+
+  const authorization = await authorizeAiRequest(req);
+  if (!authorization.ok) {
+    send(res, authorization.status || 403, JSON.stringify({
+      ok: false,
+      error: authorization.error,
+      message: authorization.message || "AI 請求未授權"
     }));
     return;
   }
@@ -1687,38 +1758,78 @@ async function authorizeSearchRequest(req) {
   if (!user) return {ok:false,status:401,error:"invalid_auth_token"};
 
   const uid = user.uid;
-  const restriction = await fetchFirebaseJson(
-    "admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/youtube__search",
-    idToken
-  );
+  const restrictionPath =
+    "admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
+  const overridePath =
+    "admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
+  const [restriction, flag, override, assignedRole, whitelist] = await Promise.all([
+    fetchFirebaseJson(restrictionPath,idToken),
+    fetchFirebaseJson("admin/featureFlags/youtube__search",idToken),
+    fetchFirebaseJson(overridePath,idToken),
+    fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
+    fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
+  ]);
+
+  const isMaster =
+    uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
+    String(user.email || "").trim().toLowerCase() === "a0983439343@gmail.com";
+
+  if (isMaster) return {ok:true,user};
+
   if (isActivePolicy(restriction)) {
-    return {ok:false,status:403,error:"search_restricted",message:String(restriction.reason || "你目前無法使用 YouTube 搜尋。").slice(0,500)};
+    return {
+      ok:false,
+      status:403,
+      error:"search_restricted",
+      message:String(restriction.reason || "你目前無法使用 YouTube 搜尋。").slice(0,500)
+    };
   }
 
-  const flag = await fetchFirebaseJson("admin/featureFlags/youtube__search", idToken);
   if (flag && flag.enabled === false) {
-    return {ok:false,status:403,error:"search_feature_disabled",message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)};
+    return {
+      ok:false,
+      status:403,
+      error:"search_feature_disabled",
+      message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)
+    };
   }
 
-  if (uid !== "35d45a23-b648-4caf-a6d5-a69112860551" && user.email !== "a0983439343@gmail.com") {
-    const assignedRole = String(
-      await fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid), idToken) || ""
-    ).trim();
-    if (assignedRole) {
-      const definition = await fetchFirebaseJson(
-        "admin/access/roles/" + encodeURIComponent(assignedRole),
-        idToken
-      );
-      const permissions = definition && definition.permissions && typeof definition.permissions === "object"
-        ? definition.permissions
-        : null;
-      if (permissions && assignedRole !== "viewer") {
-        const allowed = permissions.__all__ === true || permissions.youtube__search === true;
-        if (!allowed) {
-          return {ok:false,status:403,error:"search_permission_denied",message:"目前角色沒有 YouTube 搜尋權限。"};
-        }
-      }
+  if (override === "deny") {
+    return {ok:false,status:403,error:"search_permission_denied",message:"目前帳號被禁止使用 YouTube 搜尋。"};
+  }
+
+  if (override === "allow") {
+    return {ok:true,user};
+  }
+
+  const roleId = String(assignedRole || "").trim();
+  if (roleId) {
+    const definition = await fetchFirebaseJson(
+      "admin/access/roles/" + encodeURIComponent(roleId),
+      idToken
+    );
+    const permissions = definition && definition.permissions && typeof definition.permissions === "object"
+      ? definition.permissions
+      : null;
+    const allowed = Boolean(permissions && (permissions.__all__ === true || permissions.youtube__search === true));
+    if (!allowed) {
+      return {
+        ok:false,
+        status:403,
+        error:"search_permission_denied",
+        message:"目前角色沒有 YouTube 搜尋權限。"
+      };
     }
+    return {ok:true,user};
+  }
+
+  if (whitelist && whitelist.enabled === true && String(whitelist.role || "admin") === "viewer") {
+    return {
+      ok:false,
+      status:403,
+      error:"search_permission_denied",
+      message:"目前角色沒有 YouTube 搜尋權限。"
+    };
   }
 
   return {ok:true,user};
