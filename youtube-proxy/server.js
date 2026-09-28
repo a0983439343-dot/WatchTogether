@@ -2384,13 +2384,13 @@ function parseTwitchDuration(value) {
   return Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
 }
 
-async function runPlatformSearch(platform, query, maxResults, page) {
+async function runPlatformSearch(platform, query, maxResults, page, twitchLiveOnly = false) {
   const key = platform + ":" + query.toLowerCase() + ":" + maxResults + ":" + page;
   if (platformSearchInflight.has(key)) return platformSearchInflight.get(key);
   let request;
   if (platform === "vimeo") request = runVimeoSearch(query, maxResults, page);
   else if (platform === "dailymotion") request = runDailymotionSearch(query, maxResults, page);
-  else if (platform === "twitch") request = runTwitchSearch(query, maxResults, arguments[4] === true);
+  else if (platform === "twitch") request = runTwitchSearch(query, maxResults, twitchLiveOnly === true);
   else request = runYoutubeSearch(query, maxResults, page);
   platformSearchInflight.set(key, request);
   request.finally(() => { if (platformSearchInflight.get(key) === request) platformSearchInflight.delete(key); }).catch(() => {});
