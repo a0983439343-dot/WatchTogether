@@ -2843,6 +2843,7 @@
 
   window.WT_ADMIN_CONTEXT = {
     isAuthorized: () => Boolean(currentHasAdminAccess),
+    isMaster: () => Boolean(isMasterOperator()),
     hasPermission: (permission) => currentCan(permission),
     snapshot: () => buildAgentSnapshot(),
     executeAction: (action,args) => executeAgentAction(action,args),
