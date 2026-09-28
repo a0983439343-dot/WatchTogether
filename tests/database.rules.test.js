@@ -516,13 +516,14 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertSucceeds(ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).remove());
   await assertSucceeds(ownerDb.ref("roomApplications/ABC123/" + OTHER_UID).remove());
   await assertSucceeds(ownerDb.ref("members/ABC123/" + OTHER_UID).remove());
-  await assertSucceeds(ownerDb.ref("roomMeta/ABC123").remove());
+  await assertSucceeds(db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true}).ref("roomMeta/ABC123").remove());
 });
 
 test("chat media messages: image and audio payloads pass validation", async () => {
-  const ref = db(USER_UID, userToken).ref("chat/ABC123/media-test");
+  const imageRef = db(USER_UID, userToken).ref("chat/ABC123/media-image-test");
+  const audioRef = db(USER_UID, userToken).ref("chat/ABC123/media-audio-test");
 
-  await assertSucceeds(ref.set({
+  await assertSucceeds(imageRef.set({
     uid: USER_UID,
     name: "User",
     type: "image",
@@ -533,7 +534,7 @@ test("chat media messages: image and audio payloads pass validation", async () =
     createdAt: Date.now()
   }));
 
-  await assertSucceeds(ref.set({
+  await assertSucceeds(audioRef.set({
     uid: USER_UID,
     name: "User",
     type: "audio",
@@ -903,7 +904,7 @@ test("2.0 access control: room.join restriction and feature flag block membershi
   }));
 
   await assertSucceeds(master.ref("admin/featureFlags/room__join").remove());
-  await assertSucceeds(roomRef.remove());
+  await assertSucceeds(master.ref("rooms/ZJOIN1").remove());
 });
 
 test("2.0 access control: chat.dm restriction and feature flag block private-chat writes", async () => {
