@@ -7387,7 +7387,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               2,
 
             controlMode:
-              "host"
+              "host",
+
+            visibility:
+              "public",
+
+            joinPolicy:
+              "open"
           },
 
           createdAt:
@@ -7803,6 +7809,23 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         state.uid ||
         ""
       );
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      !isExistingMember &&
+      typeof window.WT_ROOM_ACCESS?.authorizeJoin === "function"
+    ) {
+      await window.WT_ROOM_ACCESS.authorizeJoin({
+        roomId,
+        metaSettings,
+        uid: state.uid,
+        memberName: state.memberName,
+        isRoomOwner,
+        isExistingMember,
+        isAdminJoin: false
+      });
+    }
 
     const isAdminJoin =
       Boolean(state.adminJoinOverride);
