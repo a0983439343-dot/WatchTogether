@@ -2820,8 +2820,10 @@
       if (!permission) throw new Error("缺少限制功能");
       if (!reason) throw new Error("限制原因不可空白");
       const duration = String(data.durationMs || "3600000");
+      const allowedDurations = new Set(["3600000","86400000","604800000","2592000000","permanent"]);
+      if (!allowedDurations.has(duration)) throw new Error("不支援的限制時間");
       const permanent = duration === "permanent";
-      const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
+      const until = permanent ? 0 : Date.now() + Number(duration);
       await writeAuditedUpdates({
         ["admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)]: {
           enabled:true, permanent, until, reason,
@@ -2901,10 +2903,12 @@
       if (!isMasterOperator()) throw new Error("只有最高管理員可以管理白名單");
       if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
       const role = data.role === "viewer" ? "viewer" : "admin";
+      const whitelistEmail = String(data.email || accounts[uid]?.email || "").trim().toLowerCase().slice(0,320);
+      if (whitelistEmail.length < 4) throw new Error("找不到指定使用者 Email");
       await writeAuditedUpdates({
         ["admin/whitelistByUid/" + safeKey(uid,128)]: {
           uid,
-          email:String(data.email || "").slice(0,320),
+          email:whitelistEmail,
           role,
           enabled:data.enabled !== false,
           addedAt:firebase.database.ServerValue.TIMESTAMP,
