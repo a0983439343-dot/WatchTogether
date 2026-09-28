@@ -76,6 +76,7 @@ const BUILTIN_ADMIN_PERMISSIONS = new Set([
   "ai.use",
   "audit.read",
   "audit.write",
+  "audit.delete",
   "sync.control",
   "sync.manual",
   "room.create",
