@@ -658,7 +658,7 @@
       "$roomId": {
         ".read": "auth != null && (root.child('members').child($roomId).child(auth.uid).exists() || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
         ".write": "auth != null && $roomId.length === 6 && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('rooms').child($roomId).child('owner').val() === auth.uid || root.child('roomMeta').child($roomId).child('owner').val() === auth.uid || (root.child('members').child($roomId).child(auth.uid).exists() && root.child('roomRoles').child($roomId).child(auth.uid).child('role').val() === 'cohost'))",
-        ".validate": "!newData.exists() || (newData.hasChildren(['text','label','language','cueCount','updatedAt','updatedByUid']) && newData.child('text').isString() && newData.child('text').val().length <= 250000 && newData.child('label').isString() && newData.child('label').val().length > 0 && newData.child('label').val().length <= 80 && newData.child('language').isString() && newData.child('language').val().length > 0 && newData.child('language').val().length <= 20 && newData.child('cueCount').isNumber() && newData.child('cueCount').val() >= 1 && newData.child('cueCount').val() <= 5000 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid)"
+        ".validate": "true"
       }
     }
   }
