@@ -130,7 +130,6 @@ jobs:
           const featureV3 = fs.readFileSync('src/js/feature-complete-v3.js', 'utf8');
           if (/<input[^>]+id="videoSearchInput"|<button[^>]+id="videoSearchBtn"/.test(index)) throw new Error('Homepage video search UI regression detected.');
           if (!featureV2.includes('wt_platform_search_history_v2') || !featureV2.includes('wt_watch_history_v2')) throw new Error('Feature completion v2 history layer missing.');
-          const rules = fs.readFileSync('config/database.rules.json', 'utf8');
           if (!rules.includes('roomChatReplies') || !rules.includes('roomChatEdits') || !rules.includes('roomChatPins') || !rules.includes('roomChatReactions')) throw new Error('Room chat rich rules missing.');
           if (!sw.includes('./src/js/feature-completion-v2.js')) throw new Error('Feature completion v2 is not precached.');
           if (!sw.includes('./src/js/feature-complete-v3.js')) throw new Error('Feature completion v3 is not precached.');
