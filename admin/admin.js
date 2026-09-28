@@ -656,6 +656,40 @@
     renderAutonomousMaintenance();
     toast(next ? "已啟用全自動維護" : "已停用全自動維護");
   }
+  function buildAuditEntry(action, targetUid, targetName, details) {
+    return {
+      action:String(action || "other").slice(0,40),
+      actorUid:String(currentUser?.uid || "").slice(0,128),
+      actorEmail:String(currentUser?.email || "").slice(0,320),
+      actorRole:String(currentRole || "").slice(0,40),
+      targetUid:String(targetUid || "").slice(0,128),
+      targetName:String(targetName || "").slice(0,200),
+      details:String(details || "").slice(0,1000),
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    };
+  }
+
+  async function writeAuditedUpdates(updates, action, targetUid, targetName, details) {
+    const normalizedAction = String(action || "other").slice(0,40);
+    const canWrite = currentCan("audit.write") ||
+      (normalizedAction === "audit.delete" && currentCan("audit.delete"));
+    if (!currentUser || !canWrite) {
+      throw new Error("目前沒有足夠的 Audit 權限");
+    }
+    const auditRef = db.ref("admin/auditLogs").push();
+    const auditId = auditRef.key;
+    if (!auditId) throw new Error("無法建立 Audit Log ID");
+    const next = {...(updates || {})};
+    next["admin/auditLogs/" + auditId] = buildAuditEntry(
+      normalizedAction,
+      targetUid,
+      targetName,
+      details
+    );
+    await db.ref().update(next);
+    return auditId;
+  }
+
   async function writeAuditLog(action, targetUid, targetName, details) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
