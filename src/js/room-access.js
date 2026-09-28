@@ -436,6 +436,7 @@
       return;
     }
     try {
+      disconnect();
       await loadRoomAccess();
       ensureRoomButton();
     } catch (error) {
