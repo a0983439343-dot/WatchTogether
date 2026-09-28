@@ -947,6 +947,132 @@ test("2.0 access control: audit.delete is separate from audit.write", async () =
   );
 });
 
+test("2.0 access control: per-user deny overrides room, chat, queue and playback permissions", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const user = db(USER_UID, userToken);
+  const other = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  const roomRef = user.ref("rooms/ODNY01");
+  await assertSucceeds(roomRef.set({
+    owner: USER_UID,
+    name: "Override Guard",
+    sourceType: "youtube",
+    video: {
+      id: "override-video",
+      platform: "youtube",
+      title: "Override",
+      thumbnail: "",
+      channel: ""
+    }
+  }));
+
+  await assertSucceeds(other.ref("members/ODNY01/" + OTHER_UID).set({
+    name: "Other",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + OTHER_UID + "/room__join"
+  ).set("deny"));
+
+  await assertSucceeds(other.ref("members/ODNY01/" + OTHER_UID).remove());
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + OTHER_UID + "/room__join"
+  ).remove());
+
+  await assertSucceeds(other.ref("members/ODNY01/" + OTHER_UID).set({
+    name: "Other",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + OTHER_UID + "/chat__send"
+  ).set("deny"));
+
+  await assertFails(other.ref("chat/ODNY01/override-chat").set({
+    uid: OTHER_UID,
+    name: "Other",
+    type: "text",
+    text: "blocked by override",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + OTHER_UID + "/chat__send"
+  ).remove());
+
+  await assertSucceeds(other.ref("chat/ODNY01/override-chat-ok").set({
+    uid: OTHER_UID,
+    name: "Other",
+    type: "text",
+    text: "allowed after override removal",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + USER_UID + "/room__queue"
+  ).set("deny"));
+
+  await assertFails(user.ref("queue/ODNY01/override-queue").set({
+    id: "override-queue-video",
+    platform: "youtube",
+    title: "Override Queue",
+    thumbnail: "",
+    channel: "",
+    addedBy: USER_UID,
+    addedByName: "User",
+    addedAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + USER_UID + "/room__queue"
+  ).remove());
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + USER_UID + "/sync__control"
+  ).set("deny"));
+
+  await assertFails(user.ref("playback/ODNY01").set({
+    action: "pause",
+    position: 0,
+    videoId: "override-video",
+    platform: "youtube",
+    issuedAt: Date.now(),
+    updatedAt: Date.now(),
+    updatedBy: USER_UID,
+    eventId: "override-playback",
+    playing: false,
+    playbackRate: 1
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + USER_UID + "/sync__control"
+  ).remove());
+
+  await assertSucceeds(user.ref("playback/ODNY01").set({
+    action: "pause",
+    position: 0,
+    videoId: "override-video",
+    platform: "youtube",
+    issuedAt: Date.now(),
+    updatedAt: Date.now(),
+    updatedBy: USER_UID,
+    eventId: "override-playback-ok",
+    playing: false,
+    playbackRate: 1
+  }));
+
+  await assertSucceeds(master.ref("rooms/ODNY01").remove());
+  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/chat__send").remove());
+});
 test("2.0 access control: room.join restriction and feature flag block membership creation", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const target = db(OTHER_UID, {
