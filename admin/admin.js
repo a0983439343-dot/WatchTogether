@@ -1836,7 +1836,7 @@
         "reports.read","reports.manage","analytics.read","ai.use",
         "audit.read","audit.write","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
-        "chat.dm","youtube.search","youtube.queue","favorites.manage"
+        "chat.dm","youtube.search","youtube.queue","favorites.manage","maintenance.manage"
       ].includes(key);
     }
 
@@ -1869,8 +1869,8 @@
       ...ACCESS_PERMISSION_CATALOG,
       ...fromCore,
       ...Object.keys(accessFeatureFlags || {}).map(decodeAccessPermission),
-      ...Object.keys(accessOverrides || {}).flatMap(map => Object.keys(map || {}).map(decodeAccessPermission)),
-      ...Object.keys(accessRestrictions || {}).flatMap(map => Object.keys(map || {}).map(decodeAccessPermission))
+      ...Object.values(accessOverrides || {}).flatMap(map => Object.keys(map || {}).map(decodeAccessPermission)),
+      ...Object.values(accessRestrictions || {}).flatMap(map => Object.keys(map || {}).map(decodeAccessPermission))
     ].filter(Boolean))).sort();
   }
 
