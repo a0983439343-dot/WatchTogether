@@ -172,6 +172,208 @@
     }
   }
 
+  async function sendRoomImage(file) {
+    const s = st();
+    const uid = currentUid();
+    const room = roomId();
+    if (!db || !s.chatRef || !uid || !room || !s.wasMemberInRoom) {
+      toast("目前不在房間內");
+      return;
+    }
+    if (!file || String(file.type || "").indexOf("image/") !== 0) {
+      toast("請選擇圖片檔案");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast("圖片太大，單檔上限 8 MB");
+      return;
+    }
+
+    const mute = s.roomMutes?.[uid];
+    if (mute && (mute.permanent === true || Number(mute.until || 0) > Date.now())) {
+      toast("你目前被房間禁言");
+      return;
+    }
+
+    try {
+      const access = window.WT_ACCESS_CONTROL;
+      if (access) {
+        await access.waitUntilReady(2500).catch(() => {});
+        if (access.state?.ready && !access.hasPermission("chat.send")) {
+          toast("你目前無法在聊天室發言");
+          return;
+        }
+        if (access.state?.ready && !access.hasPermission("chat.media")) {
+          toast("你目前無法傳送圖片");
+          return;
+        }
+      }
+
+      let blob = file;
+      let contentType = String(file.type || "image/jpeg");
+      let safeName = String(file.name || "image").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+
+      if (contentType !== "image/gif") {
+        blob = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("圖片讀取失敗"));
+          reader.onload = () => {
+            const image = new Image();
+            image.onerror = () => reject(new Error("圖片格式無法讀取"));
+            image.onload = () => {
+              const scale = Math.min(1, 1600 / Math.max(image.width || 1, image.height || 1));
+              const width = Math.max(1, Math.round((image.width || 1) * scale));
+              const height = Math.max(1, Math.round((image.height || 1) * scale));
+              const canvas = document.createElement("canvas");
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                reject(new Error("圖片處理失敗"));
+                return;
+              }
+              ctx.drawImage(image, 0, 0, width, height);
+              canvas.toBlob(result => {
+                if (!result) {
+                  reject(new Error("圖片壓縮失敗"));
+                  return;
+                }
+                resolve(result);
+              }, "image/webp", 0.84);
+            };
+            image.src = String(reader.result || "");
+          };
+          reader.readAsDataURL(file);
+        });
+        contentType = "image/webp";
+        safeName = safeName.replace(/.[^.]+$/, "") + ".webp";
+      }
+
+      if (blob.size > 8 * 1024 * 1024) {
+        throw new Error("圖片壓縮後仍超過 8 MB");
+      }
+
+      if (!firebase.storage) {
+        throw new Error("Firebase Storage 尚未載入");
+      }
+
+      const fileId =
+        Date.now() + "_" +
+        (window.crypto?.randomUUID
+          ? window.crypto.randomUUID()
+          : Math.random().toString(36).slice(2));
+
+      const path =
+        "chatRoomMedia/" + room + "/" + uid + "/" + fileId + ".webp";
+
+      const storageRef = firebase.storage().ref(path);
+      await storageRef.put(blob, {
+        contentType,
+        customMetadata: {
+          ownerUid: uid,
+          roomId: room
+        }
+      });
+
+      const url = await storageRef.getDownloadURL();
+
+      await s.chatRef.push({
+        uid,
+        name: String(s.memberName || "玩家").slice(0, 30),
+        type: "image",
+        mediaUrl: String(url).slice(0, 1000000),
+        mediaPath: path.slice(0, 500),
+        mediaName: safeName.slice(0, 100),
+        mediaSize: Number(blob.size),
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+
+      toast("圖片已送出");
+    } catch (error) {
+      toast(error?.message || "圖片上傳失敗");
+    }
+  }
+
+  function openRoomImage(url) {
+    const safeUrl = String(url || "").trim();
+    if (!safeUrl) return;
+
+    document.getElementById("wtRoomImageLightbox")?.remove();
+
+    const box = document.createElement("div");
+    box.id = "wtRoomImageLightbox";
+    box.className = "wt-room-image-lightbox";
+    box.innerHTML =
+      '<div class="wt-room-image-lightbox-backdrop"></div>' +
+      '<button type="button" class="wt-room-image-lightbox-close" aria-label="關閉圖片">×</button>' +
+      '<img src="' + esc(safeUrl) + '" alt="聊天室圖片預覽">';
+
+    document.body.appendChild(box);
+
+    const close = () => box.remove();
+    box.querySelector(".wt-room-image-lightbox-backdrop")?.addEventListener("click", close);
+    box.querySelector(".wt-room-image-lightbox-close")?.addEventListener("click", close);
+  }
+
+  function ensureImageToolbar() {
+    const form = $("chatForm");
+    if (!form || $("wtRoomChatImageBtn") || $("wtRoomChatImageInput")) return;
+
+    const input = document.createElement("input");
+    input.id = "wtRoomChatImageInput";
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.hidden = true;
+
+    const button = document.createElement("button");
+    button.id = "wtRoomChatImageBtn";
+    button.type = "button";
+    button.className = "tiny-btn";
+    button.textContent = "🖼️ 圖片";
+    button.title = "傳送房間圖片";
+
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      input.click();
+    });
+
+    input.addEventListener("change", event => {
+      const files = Array.from(event.target.files || []).filter(file =>
+        String(file.type || "").indexOf("image/") === 0
+      ).slice(0, 6);
+      event.target.value = "";
+      files.forEach(file => void sendRoomImage(file));
+    });
+
+    form.insertBefore(button, form.firstChild);
+    form.appendChild(input);
+
+    const onPaste = event => {
+      const files = Array.from(event.clipboardData?.files || []).filter(file =>
+        String(file.type || "").indexOf("image/") === 0
+      );
+      if (!files.length) return;
+      event.preventDefault();
+      files.slice(0, 6).forEach(file => void sendRoomImage(file));
+    };
+
+    const onDrop = event => {
+      const files = Array.from(event.dataTransfer?.files || []).filter(file =>
+        String(file.type || "").indexOf("image/") === 0
+      );
+      if (!files.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      files.slice(0, 6).forEach(file => void sendRoomImage(file));
+    };
+
+    form.addEventListener("paste", onPaste);
+    form.addEventListener("dragover", event => event.preventDefault());
+    form.addEventListener("drop", onDrop);
+  }
+
   function ensureStickerToolbar() {
     const tools = $("wtRoomChatTools");
     const form = $("chatForm");
@@ -423,6 +625,15 @@
     const box = $("chatMessages");
     if (!box) return;
     box.querySelectorAll(".wt-message[data-chat-id]").forEach(decorateMessage);
+    box.querySelectorAll("[data-chat-image]").forEach(node => {
+      if (node.dataset.wtRoomImageBound === "1") return;
+      node.dataset.wtRoomImageBound = "1";
+      node.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openRoomImage(node.dataset.chatImage || node.querySelector("img")?.src || "");
+      });
+    });
   }
 
   function interceptLegacyPin() {
@@ -455,6 +666,7 @@
     lastRoomCheck = now;
     installObserver();
     ensureStickerToolbar();
+    ensureImageToolbar();
     if (!id) {
       closeRefs();
       observer?.disconnect();
@@ -477,7 +689,11 @@
       ".wt-room-chat-rich-actions .active{box-shadow:0 0 0 1px currentColor inset}",
       ".wt-room-chat-sticker-menu{position:absolute;z-index:1000;margin-top:6px;padding:7px;display:grid;grid-template-columns:repeat(8,1fr);gap:4px;background:#0f172a;border:1px solid rgba(148,163,184,.18);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.3)}",
       ".wt-room-chat-sticker-menu.hidden{display:none!important}",
-      ".wt-room-chat-sticker-item{border:0;background:transparent;border-radius:8px;padding:5px;font-size:19px;cursor:pointer}.wt-room-chat-sticker-item:hover{background:rgba(148,163,184,.12)}"
+      ".wt-room-chat-sticker-item{border:0;background:transparent;border-radius:8px;padding:5px;font-size:19px;cursor:pointer}.wt-room-chat-sticker-item:hover{background:rgba(148,163,184,.12)}",
+      ".wt-room-image-lightbox{position:fixed;inset:0;z-index:1900;display:grid;place-items:center;padding:20px}",
+      ".wt-room-image-lightbox-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(10px)}",
+      ".wt-room-image-lightbox img{position:relative;z-index:1;max-width:min(94vw,1200px);max-height:92dvh;border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.5)}",
+      ".wt-room-image-lightbox-close{position:absolute;right:16px;top:16px;z-index:2;width:42px;height:42px;border:1px solid rgba(255,255,255,.16);border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:24px}"
     ].join("");
     document.head.appendChild(style);
   }
