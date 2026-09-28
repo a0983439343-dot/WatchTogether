@@ -24,6 +24,11 @@ const adminToken = {
   email_verified: true
 };
 
+const masterToken = {
+  email: MASTER_EMAIL,
+  email_verified: true
+};
+
 const viewerToken = {
   email: "viewer@example.com",
   email_verified: true
@@ -87,19 +92,6 @@ async function seed() {
               "chat__send": "deny"
             }
           },
-          restrictionsByUid: {
-            [USER_UID]: {
-              "room__queue": {
-                enabled: true,
-                permanent: false,
-                until: Date.now() + 3600000,
-                reason: "queue restriction",
-                createdAt: Date.now(),
-                createdByUid: ADMIN_UID,
-                createdByEmail: "admin@example.com"
-              }
-            }
-          }
         },
         featureFlags: {
           "rooms__manage": {
@@ -109,30 +101,6 @@ async function seed() {
             updatedByUid: MASTER_UID
           }
         },
-        blocksByUid: {
-          [USER_UID]: {
-            uid: USER_UID,
-            email: "user@example.com",
-            displayName: "User",
-            permanent: true,
-            blockedUntil: 0,
-            blockedAt: 1,
-            blockedByUid: ADMIN_UID,
-            blockedByEmail: "admin@example.com",
-            blockedByRole: "admin"
-          },
-          [OTHER_UID]: {
-            uid: OTHER_UID,
-            email: "other@example.com",
-            displayName: "Other",
-            permanent: true,
-            blockedUntil: 0,
-            blockedAt: 1,
-            blockedByUid: VIEWER_UID,
-            blockedByEmail: "viewer@example.com",
-            blockedByRole: "viewer"
-          }
-        }
       },
       reports: {
         existing: {
@@ -483,7 +451,7 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertFails(
     applicant.ref("members/ABC123/" + OTHER_UID).set({
       name: "Applicant",
-      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      joinedAt: Date.now(),
       online: true,
       lastSeen: firebase.database.ServerValue.TIMESTAMP
     })
@@ -508,9 +476,9 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertSucceeds(
     ownerDb.ref("roomApplications/ABC123/" + OTHER_UID).update({
       status: "approved",
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedAt: Date.now(),
       reviewedByUid: USER_UID,
-      reviewedAt: firebase.database.ServerValue.TIMESTAMP
+      reviewedAt: Date.now()
     })
   );
 
@@ -630,6 +598,31 @@ test("2.0 access control: per-user deny overrides legacy admin and allow grants 
   );
 });
 
+test("2.0 access control: explicit users.restrict deny blocks legacy admin restriction writes", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const admin = db(ADMIN_UID, adminToken);
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/users__restrict").set("deny")
+  );
+
+  await assertFails(
+    admin.ref("admin/access/restrictionsByUid/" + USER_UID + "/chat__send").set({
+      enabled: true,
+      permanent: true,
+      until: 0,
+      reason: "should be blocked by explicit deny",
+      createdAt: Date.now(),
+      createdByUid: ADMIN_UID,
+      createdByEmail: "admin@example.com"
+    })
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/users__restrict").remove()
+  );
+});
+
 test("2.0 access control: ai.agent is independently assignable", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
   const other = db(OTHER_UID, {
@@ -656,6 +649,67 @@ test("2.0 access control: ai.agent is independently assignable", async () => {
   await assertSucceeds(
     master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/ai__agent").set("deny")
   );
+});
+
+test("2.0 access control: management permissions cover maintenance, feature flags and settings", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const operator = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(master.ref("admin/access/roles/ops-manager").set({
+    name: "Operations Manager",
+    permissions: {
+      admin__read: true,
+      maintenance__manage: true,
+      featureflags__manage: true,
+      settings__manage: true
+    }
+  }));
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).set("ops-manager"));
+
+  await assertSucceeds(operator.ref("site/maintenance").set({
+    enabled: false,
+    reason: "test",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(operator.ref("admin/featureFlags/test__flag").set({
+    enabled: true,
+    reason: "test",
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(operator.ref("site/settings").set({
+    siteName: "WatchTogether",
+    siteDescription: "Test",
+    announcementEnabled: false,
+    announcementText: "",
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").set("deny")
+  );
+  await assertFails(operator.ref("site/maintenance").set({
+    enabled: false,
+    reason: "blocked",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").remove()
+  );
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).remove());
+  await assertSucceeds(master.ref("admin/access/roles/ops-manager").remove());
+  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").remove());
 });
 
 test("2.0 access control: viewer cannot modify policy and user cannot forge their restriction", async () => {
@@ -839,6 +893,25 @@ test("2.0 access control: chat.dm restriction and feature flag block private-cha
 
   await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__dm").remove());
 
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send").set({
+    enabled: true,
+    permanent: true,
+    until: 0,
+    reason: "send restricted",
+    createdAt: Date.now(),
+    createdByUid: MASTER_UID,
+    createdByEmail: MASTER_EMAIL
+  }));
+
+  await assertFails(conversationRef.child("messages/message-send-1").set({
+    uid: OTHER_UID,
+    type: "text",
+    text: "blocked by chat.send",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send").remove());
+
   await assertSucceeds(conversationRef.set({
     userA: USER_UID,
     userB: OTHER_UID,
@@ -860,6 +933,38 @@ test("2.0 access control: chat.dm restriction and feature flag block private-cha
   }));
 
   await assertSucceeds(master.ref("admin/featureFlags/chat__dm").remove());
+});
+
+test("site settings: authenticated users can read, only master can write", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const user = db(USER_UID, userToken);
+  const viewer = db(VIEWER_UID, viewerToken);
+  const payload = {
+    siteName: "WatchTogether｜一起看",
+    siteDescription: "System settings test",
+    announcementEnabled: true,
+    announcementText: "Test announcement",
+    updatedAt: Date.now(),
+    updatedByUid: MASTER_UID
+  };
+
+  await assertSucceeds(master.ref("site/settings").set(payload));
+  await assertSucceeds(user.ref("site/settings").once("value"));
+  await assertSucceeds(viewer.ref("site/settings").once("value"));
+
+  await assertFails(user.ref("site/settings").set({
+    ...payload,
+    siteName: "forged",
+    updatedAt: Date.now(),
+    updatedByUid: USER_UID
+  }));
+
+  await assertFails(viewer.ref("site/settings").set({
+    ...payload,
+    siteName: "forged-viewer",
+    updatedAt: Date.now(),
+    updatedByUid: VIEWER_UID
+  }));
 });
 
 test("blocks: blocked user cannot mutate their own higher-role block", async () => {
