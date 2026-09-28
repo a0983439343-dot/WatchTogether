@@ -115,7 +115,12 @@ function pushNotification(title,body,kind){
   notifications.unshift(n);saveNotifications();
   if(p.browserNotifications&&"Notification" in window&&Notification.permission==="granted"&&document.visibilityState!=="visible"){try{new Notification(n.title,{body:n.body,tag:n.id});}catch(_){}}
   else if(document.visibilityState==="visible")toast(n.title+(n.body?"｜"+n.body:""));
+  var u=user();
+  if(u&&!u.isAnonymous&&db){
+    db.ref("notifications/"+u.uid).push({title:n.title.slice(0,120),body:n.body.slice(0,500),type:n.kind.slice(0,30),read:false,createdAt:firebase.database.ServerValue.TIMESTAMP}).catch(function(e){console.warn("通知雲端同步失敗",e);});
+  }
 }
+pushNotification.__wtCloudPersistent=true;
 function openNotifications(){
   var html='<div class="wt-feature-actions"><span class="small">最近 '+notifications.length+' 則</span><span><button id="wtNotifAll" class="tiny-btn">全部已讀</button> <button id="wtNotifClear" class="tiny-btn danger">清空</button></span></div><div class="wt-feature-list">';
   html+=notifications.length?notifications.map(function(n){return '<div class="wt-feature-row" style="'+(n.read?"":"background:rgba(59,130,246,.07);")+'"><div><strong>'+esc(n.title)+'</strong><div class="small">'+esc(n.body)+'</div><div class="small muted">'+esc(fmtDate(n.createdAt))+'</div></div>'+(n.read?'<span class="small muted">已讀</span>':'<button class="tiny-btn" data-read-notif="'+esc(n.id)+'">已讀</button>')+'</div>';}).join(""):'<div class="wt-feature-empty">目前沒有通知。</div>';
