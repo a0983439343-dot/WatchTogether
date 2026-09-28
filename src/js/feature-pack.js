@@ -279,8 +279,7 @@
     input?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); void doSearch(); } });
     $("wtExportData")?.addEventListener("click", exportData);
     $("wtClearLocalData")?.addEventListener("click", () => {
-      if (!window.confirm("確定清除本機觀看紀錄、收藏、最近房間、偏好與通知嗎？Firebase 帳號資料不會被刪除。")) return;
-      [HISTORY_KEY,FAV_KEY,ROOMS_KEY,STATS_KEY,PREFS_KEY,"wt_notifications_v1","wt_notifications_v2"].forEach(key => localStorage.removeItem(key));
+      if (!window.confirm("確定清除本機觀看紀錄、收藏、最近房間、偏好與通知嗎？Firebase 帳號資料不會被刪除。")) return;      [HISTORY_KEY,"wt_watch_history_v2",FAV_KEY,ROOMS_KEY,STATS_KEY,PREFS_KEY,"wt_notifications_v1","wt_notifications_v2"].forEach(key => localStorage.removeItem(key));
       toast("已清除本機活動資料");
       closeModal("wtExploreModal");
     });
