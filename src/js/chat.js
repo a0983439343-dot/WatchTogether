@@ -50,7 +50,8 @@ var state = {
   recording:null,
   recordingChunks:[],
   recordingStartedAt:0,
-  recordingTargetUid:""
+  recordingTargetUid:"",
+  notifiedMessages:{}
 };
 
 function user() {
@@ -210,7 +211,27 @@ function subscribeSummaries() {
     var read = wt.db.ref("conversations/" + id + "/reads/" + me.uid);
     state.summaryRefs[uid] = {last:last,read:read};
     last.on("value",function(snapshot){
-      state.summaries[uid] = snapshot.val() || null;
+      var value = snapshot.val() || null;
+      state.summaries[uid] = value;
+      if (
+        value &&
+        value.messageId &&
+        String(value.uid || "") !== String(me.uid || "") &&
+        !state.notifiedMessages[value.messageId]
+      ) {
+        state.notifiedMessages[value.messageId] = true;
+        try {
+          if (!chatIsOpen() || String(state.activeUid || "") !== String(uid || "")) {
+            if (typeof wt.pushNotification === "function") {
+              wt.pushNotification(
+                "新的私聊訊息",
+                String(value.name || "好友") + "：" + String(value.preview || ""),
+                "dm"
+              );
+            }
+          }
+        } catch (_) {}
+      }
       renderSidebar();
     },function(){
       state.summaries[uid] = null;
