@@ -427,7 +427,8 @@ async function openRoomTools(){
   if(!s.isOwner)return toast("只有房主可以使用房主工具");
   var snap=await db.ref("members/"+id).once("value").catch(function(){return null;}),members=snap?.val()||{};
   var entries=Object.entries(members).filter(function(x){return x[0]!==u.uid;});
-  var body=modal("wtRoomToolsModal","房主工具",'<div class="wt-feature-grid"><label class="full">房間名稱<input id="wtRoomRename" maxlength="40" value="'+esc(s.room&&s.room.name||"一起看")+'"></label><label class="full">轉移房主<select id="wtTransferOwner"><option value="">不轉移</option>'+entries.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1]?.name||x[0])+'｜'+esc(x[0])+'</option>';}).join("")+'</select></label></div><div class="wt-feature-actions"><button id="wtRoomRenameSave" class="secondary-btn">儲存房名</button><button id="wtTransferOwnerBtn" class="primary-btn">轉移房主</button></div>');
+  var settings=(s.room&&s.room.settings)||window.WT_ROOM_ACCESS?.state?.meta?.settings||{};
+  var body=modal("wtRoomToolsModal","房主工具",'<div class="wt-feature-grid"><label class="full">房間名稱<input id="wtRoomRename" maxlength="40" value="'+esc(s.room&&s.room.name||"一起看")+'"></label><label class="full">轉移房主<select id="wtTransferOwner"><option value="">不轉移</option>'+entries.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1]?.name||x[0])+'｜'+esc(x[0])+'</option>';}).join("")+'</select></label><label class="full wt-feature-switch"><input id="wtSyncVolume" type="checkbox" '+(settings.syncVolume===true?"checked":"")+'> 同步房主音量給所有成員</label></div><div class="wt-feature-actions"><button id="wtRoomRenameSave" class="secondary-btn">儲存房名</button><button id="wtSyncVolumeSave" class="secondary-btn">儲存音量同步</button><button id="wtTransferOwnerBtn" class="primary-btn">轉移房主</button></div>');
   body.querySelector("#wtRoomRenameSave").onclick=async function(){
     try{
       var name=String($("wtRoomRename").value||"").trim().slice(0,40);if(!name)throw new Error("房間名稱不能為空");
@@ -436,6 +437,14 @@ async function openRoomTools(){
       if($("roomTitle"))$("roomTitle").textContent=name;
       toast("房間名稱已更新");
     }catch(e){toast(e.message||"房間名稱更新失敗");}
+  };
+  body.querySelector("#wtSyncVolumeSave").onclick=async function(){
+    try{
+      var enabled=$("wtSyncVolume")?.checked===true;
+      await db.ref("roomMeta/"+id+"/settings/syncVolume").set(enabled);
+      if(s.room) s.room.settings=Object.assign({},s.room.settings||{},{syncVolume:enabled});
+      toast(enabled?"已開啟音量同步":"已關閉音量同步");
+    }catch(e){toast(e.message||"音量同步設定失敗");}
   };
   body.querySelector("#wtTransferOwnerBtn").onclick=async function(){
     var target=$("wtTransferOwner").value;if(!target)return toast("請先選擇新房主");
