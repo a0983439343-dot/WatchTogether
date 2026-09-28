@@ -839,6 +839,25 @@ test("2.0 access control: chat.dm restriction and feature flag block private-cha
 
   await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__dm").remove());
 
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send").set({
+    enabled: true,
+    permanent: true,
+    until: 0,
+    reason: "send restricted",
+    createdAt: Date.now(),
+    createdByUid: MASTER_UID,
+    createdByEmail: MASTER_EMAIL
+  }));
+
+  await assertFails(conversationRef.child("messages/message-send-1").set({
+    uid: OTHER_UID,
+    type: "text",
+    text: "blocked by chat.send",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send").remove());
+
   await assertSucceeds(conversationRef.set({
     userA: USER_UID,
     userB: OTHER_UID,
