@@ -157,6 +157,7 @@
            <option value="all">全部狀態</option>
            <option value="open">待處理</option>
            <option value="in_progress">處理中</option>
+           <option value="ai_completed">已完成 AI 診斷</option>
            <option value="resolved">已處理</option>
          </select>
          <span id="reportCount" class="muted">0 筆</span>
@@ -413,6 +414,11 @@
      <div class="report-auto-state"><span>自動驗證</span><strong id="reportVerificationState">—</strong></div>
      <div class="report-auto-state"><span>驗證摘要</span><strong id="reportVerificationSummary">—</strong></div>
      <div class="report-diagnosis-card">
+     <div class="report-ai-live-wrap">
+       <div class="report-ai-live-head"><span>OpenAI 即時串流</span><span id="reportAiLiveBadge" class="report-ai-live-badge">等待診斷</span></div>
+       <pre id="reportAiLive" class="report-ai-live">尚未收到 AI 串流內容。</pre>
+     </div>
+     
        <div class="report-diagnosis-head"><span>系統診斷</span><span id="reportDiagnosisBadge" class="report-diagnosis-badge">等待檢查</span></div>
        <div class="report-diagnosis-grid">
          <div><span>發現的 Bug</span><strong id="reportDetectedBug">—</strong></div>
@@ -436,6 +442,7 @@
        <label>處理狀態<select id="reportStatus" class="search">
          <option value="open">待處理</option>
          <option value="in_progress">處理中</option>
+         <option value="ai_completed">已完成 AI 診斷</option>
          <option value="resolved">已處理</option>
        </select></label>
        <div><span>最後處理者</span><strong id="reportHandledBy">—</strong></div>
@@ -468,7 +475,7 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260928-admin-v41"></script>
+<script src="admin.js?v=20260928-ai-v1"></script>
 <script src="admin-agent.js?v=20260928-agent-v1"></script>
 </body>
 </html>
