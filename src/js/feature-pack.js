@@ -185,7 +185,6 @@
       }
     }
 
-    const me = String(auth?.currentUser?.uid || db?.app?.options?.authDomain || "");
     if (db && auth?.currentUser && !auth.currentUser.isAnonymous) {
       try {
         const friendSnapshot = await db.ref("friendships/" + auth.currentUser.uid).once("value");
