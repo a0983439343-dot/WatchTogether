@@ -99,6 +99,8 @@ wt.toast = toast;
 function openModal(id) {
   var modal = $(id);
   if (!modal) return;
+  modal.hidden = false;
+  modal.style.removeProperty("display");
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden","false");
   document.body.classList.add("wt-modal-open");
@@ -108,16 +110,20 @@ function closeModal(id) {
   var modal = $(id);
   if (!modal) return;
   modal.classList.add("hidden");
+  modal.hidden = true;
   modal.setAttribute("aria-hidden","true");
+  modal.style.setProperty("display","none","important");
   if (!document.querySelector(".wt-modal:not(.hidden)")) {
     document.body.classList.remove("wt-modal-open");
   }
 }
 
 function closeAllModals() {
-  document.querySelectorAll(".wt-modal:not(.hidden)").forEach(function(modal) {
+  document.querySelectorAll(".wt-modal").forEach(function(modal) {
     modal.classList.add("hidden");
+    modal.hidden = true;
     modal.setAttribute("aria-hidden","true");
+    modal.style.setProperty("display","none","important");
   });
   document.body.classList.remove("wt-modal-open");
 }
