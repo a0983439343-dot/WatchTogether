@@ -210,7 +210,7 @@ function renderGlobalSearchResults(body,query){
   var recent=wt.readJson?wt.readJson("wt_recent_rooms_v2",[]):[];
   if(!Array.isArray(recent))recent=[];
   recent=recent.filter(function(x){return x&&String(x.id||"").toUpperCase().includes(q.toUpperCase())||String(x.name||"").toLowerCase().includes(q.toLowerCase());}).slice(0,10);
-  var recentHtml=recent.map(function(x){var fav=isRoomFavorite(x),star='<button type="button" class="tiny-btn" data-global-room-fav="'+esc(x.id||"")+'" title="'+(fav?"取消房間收藏":"收藏房間")+'">'+(fav?"★":"☆")+'</button>';return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">最近房間｜'+esc(String(x.id||"").toUpperCase())+'</div></div><div class="wt-feature-actions" style="margin-top:0">'+star+'<button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div></div>;}).join("");
+  var recentHtml=recent.map(function(x){var fav=isRoomFavorite(x),star='<button type="button" class="tiny-btn" data-global-room-fav="'+esc(x.id||"")+'" title="'+(fav?"取消房間收藏":"收藏房間")+'">'+(fav?"★":"☆")+'</button>';return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">最近房間｜'+esc(String(x.id||"").toUpperCase())+'</div></div><div class="wt-feature-actions" style="margin-top:0">'+star+'<button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div></div>';}).join("");
   return Promise.all([searchPublicUsers(q),searchPublicRooms(q)]).then(function(data){
     var users=data[0],rooms=data[1];
     body.innerHTML=
