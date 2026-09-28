@@ -68,7 +68,7 @@
   }
 
   function stats(){
-    const x=local(LOCAL_STATS_KEY,{watchSeconds:0,videosStarted:0,roomsJoined:0,messagesSent:0,platformStarts:{}});
+    const x=local(LOCAL_STATS,{watchSeconds:0,videosStarted:0,roomsJoined:0,messagesSent:0,platformStarts:{}});
     x.platformStarts=x.platformStarts&&typeof x.platformStarts==="object"?x.platformStarts:{};
     return x;
   }
@@ -217,7 +217,7 @@
   function track(){
     setInterval(()=>{
       const v=video(),x=stats();if(!v?.id)return;
-      if(st().isPlaying){x.watchSeconds=Number(x.watchSeconds||0)+5;x.lastAt=Date.now();saveLocal(LOCAL_STATS_KEY,x);void cloudHistory(false);void syncStats()}
+      if(st().isPlaying){x.watchSeconds=Number(x.watchSeconds||0)+5;x.lastAt=Date.now();saveLocal(LOCAL_STATS,x);void cloudHistory(false);void syncStats()}
     },5000);
   }
 
