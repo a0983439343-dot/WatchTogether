@@ -2333,7 +2333,7 @@
   }
 
   async function saveSystemSettings() {
-    if (!currentCan("settings.manage")) {
+    if (!currentCan("settings.manage") || !currentCan("audit.write")) {
       throw new Error("需要 settings.manage 與 audit.write 權限");
     }
     const siteName = String($("systemSiteName")?.value || "").trim().slice(0,80);
