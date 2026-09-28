@@ -1861,7 +1861,7 @@
         "admin.read","users.read","users.update","users.restrict",
         "rooms.read","rooms.manage","chat.read","chat.moderate",
         "reports.read","reports.manage","analytics.read","ai.use",
-        "audit.read","audit.write","sync.control","sync.manual",
+        "audit.read","audit.write","audit.delete","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
         "chat.dm","youtube.search","youtube.queue","favorites.manage","maintenance.manage"
       ].includes(key);
