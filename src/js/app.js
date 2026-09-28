@@ -3767,6 +3767,22 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return Boolean(state.room?.video && isSameVideo(state.room.video, video));
   }
 
+  function isRoomCohost() {
+    try {
+      return Boolean(
+        !state.isOwner &&
+        typeof window.WT_ROOM_ACCESS?.isCohost === "function" &&
+        window.WT_ROOM_ACCESS.isCohost(state.uid)
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isRoomManager() {
+    return state.isOwner || isRoomCohost();
+  }
+
   function isVideoInQueue(video) {
     return Object.values(state.queue || {}).some(function(item) {
       return isSameVideo(item, video);
@@ -3829,7 +3845,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       channel: video.channel || "YouTube",
       addedBy: state.uid,
       addedByName: state.memberName,
-      addedAt: firebase.database.ServerValue.TIMESTAMP
+      addedAt: firebase.database.ServerValue.TIMESTAMP,
+      order: getSortedQueue().length
     };
 
     if (video.url) item.url = String(video.url);
@@ -3852,16 +3869,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         throw new Error("你目前無法管理待播放清單");
       }
     }
-    if (
-      !state.queueRef ||
-      !queueId
-    ) {
+    if (!state.queueRef || !queueId) {
       return;
     }
 
-    await state.queueRef
-      .child(queueId)
-      .remove();
+    if (!isRoomManager()) {
+      const item = state.queue?.[queueId];
+      if (!item || String(item.addedBy || "") !== String(state.uid || "")) {
+        throw new Error("你沒有移除這部影片的權限");
+      }
+    }
+
+    await state.queueRef.child(queueId).remove();
 
     toast(
       "已從待播放清單移除"
@@ -3872,8 +3891,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
-    if (!state.isOwner) {
-      throw new Error("只有房主可以播放待播放清單");
+    if (!isRoomManager()) {
+      throw new Error("只有房主或 Co-host 可以播放待播放清單");
     }
 
     if (!state.uid || !state.roomId) {
@@ -3947,15 +3966,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             id
         })
       )
-      .sort(
-        (a, b) =>
-          Number(
-            a.addedAt || 0
-          ) -
-          Number(
-            b.addedAt || 0
-          )
-      );
+      .sort((a, b) => {
+        const aOrder = Number(a.order);
+        const bOrder = Number(b.order);
+        if (Number.isFinite(aOrder) && Number.isFinite(bOrder) && aOrder !== bOrder) return aOrder - bOrder;
+        if (Number.isFinite(aOrder) !== Number.isFinite(bOrder)) return Number.isFinite(aOrder) ? -1 : 1;
+        return Number(a.addedAt || 0) - Number(b.addedAt || 0);
+      });
   }
 
 
@@ -4089,7 +4106,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 "
               >
 
-                ${state.isOwner ? `
+                ${isRoomManager() ? `
                   <button
                     type="button"
                     class="tiny-btn"
@@ -4100,7 +4117,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 ` : ""}
 
                 ${
-                  state.isOwner || String(item.addedBy || "") === String(state.uid || "")
+                  isRoomManager() || String(item.addedBy || "") === String(state.uid || "")
                     ? `<button
                         type="button"
                         class="tiny-btn"
@@ -4176,6 +4193,21 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
   }
 
+
+  async function moveQueueItem(queueId, direction) {
+    if (!isRoomManager()) throw new Error("只有房主或 Co-host 可以調整待播放順序");
+    if (!state.queueRef || !queueId) return;
+    const list = getSortedQueue();
+    const index = list.findIndex(item => String(item.queueId) === String(queueId));
+    const targetIndex = index + (Number(direction) < 0 ? -1 : 1);
+    if (index < 0 || targetIndex < 0 || targetIndex >= list.length) return;
+    const updates = {};
+    list.forEach((item, i) => {
+      const order = i === index ? targetIndex : i === targetIndex ? index : i;
+      updates[String(item.queueId) + "/order"] = order;
+    });
+    await state.queueRef.update(updates);
+  }
 
   function cancelScheduledQueuePlayback() {
     clearTimeout(state.queueNextTimer);
