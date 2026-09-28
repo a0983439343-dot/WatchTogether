@@ -3797,14 +3797,21 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     renderQueue();
   }
 
-  async function addToQueue(video) {
+  async function requireQueuePermissions(platform) {
     const access = window.WT_ACCESS_CONTROL;
-    if (access) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("room.queue")) {
-        throw new Error("你目前無法使用待播放清單");
-      }
+    if (!access) return;
+    await access.waitUntilReady(2500);
+    if (access.state?.ready && !access.hasPermission("room.queue")) {
+      throw new Error("你目前無法使用待播放清單");
     }
+    if (String(platform || "").toLowerCase() === "youtube" &&
+        access.state?.ready && !access.hasPermission("youtube.queue")) {
+      throw new Error("你目前無法將 YouTube 加入待播放清單");
+    }
+  }
+
+  async function addToQueue(video) {
+    await requireQueuePermissions(video?.platform || "youtube");
     if (!state.queueRef || !state.uid) {
       throw new Error("目前不在房間內");
     }
@@ -3846,13 +3853,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function removeFromQueue(queueId) {
-    const access = window.WT_ACCESS_CONTROL;
-    if (access) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("room.queue")) {
-        throw new Error("你目前無法管理待播放清單");
-      }
-    }
+    const item = state.queue?.[queueId];
+    await requireQueuePermissions(item?.platform || "youtube");
     if (
       !state.queueRef ||
       !queueId
@@ -3878,13 +3880,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function moveQueueItem(queueId, direction) {
-    const access = window.WT_ACCESS_CONTROL;
-    if (access) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("room.queue")) {
-        throw new Error("你目前無法管理待播放順序");
-      }
-    }
+    const item = state.queue?.[queueId];
+    await requireQueuePermissions(item?.platform || "youtube");
     if (!canManageQueueOrder()) {
       throw new Error("只有房主或 Co-host 可以調整待播放順序");
     }
@@ -3912,13 +3909,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
 
-    const access = window.WT_ACCESS_CONTROL;
-    if (access) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("room.queue")) {
-        throw new Error("你目前無法使用待播放清單");
-      }
-    }
+    const item = state.queue?.[queueId];
+    await requireQueuePermissions(item?.platform || "youtube");
 
     if (!state.isOwner) {
       throw new Error("只有房主可以播放待播放清單");
