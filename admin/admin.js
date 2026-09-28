@@ -336,7 +336,7 @@
             '<td><span class="small">' + escapeHtml(platform) + ' · ' + escapeHtml(title) + '</span></td>' +
             '<td>' + escapeHtml(formatDate(meta.createdAt || item.createdAt)) + '</td>' +
             '<td><div class="room-actions"><a class="btn primary" href="' + href + '">🚪 進入房間</a>' +
-              (isAdminOperator() ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
+              (hasAdminPermission("rooms.manage") ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
               '</div></td>' +
           '</tr>';
         }).join("")
@@ -371,25 +371,29 @@
               ? '<span class="status off">已封鎖 · ' + escapeHtml(formatRemaining(block)) + '</span>'
               : '<span class="status">正常</span>';
 
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManageUser = hasAdminPermission("users.manage");
+          const canRestrictUser = hasAdminPermission("restrictions.manage");
+          const canBanUser = hasAdminPermission("users.ban");
           let actions = '<div class="row-actions">';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
-          } else if (!canManage) {
+          } else if (!canManageUser && !canRestrictUser && !canBanUser) {
             actions += '<span class="muted">僅可查看</span>';
           } else {
-            actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
-            actions += '<button class="btn" type="button" data-user-restrict="' + escapeHtml(uid) + '">🚫 功能限制</button>';
-            if (active) {
-              if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
-                actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
-              } else if (uid === currentUser?.uid) {
-                actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
+            if (canManageUser) actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
+            if (canRestrictUser) actions += '<button class="btn" type="button" data-user-restrict="' + escapeHtml(uid) + '">🚫 功能限制</button>';
+            if (canBanUser) {
+              if (active) {
+                if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
+                  actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
+                } else if (uid === currentUser?.uid) {
+                  actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
+                } else {
+                  actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
+                }
               } else {
-                actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
+                actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
               }
-            } else {
-              actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
             }
           }
           actions += '</div>';
@@ -1196,7 +1200,7 @@
           const details = String(item.details || "");
           const preview = details.length > 120 ? details.slice(0,120) + "…" : details;
           const room = String(item.roomId || "").trim();
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManage = hasAdminPermission("reports.handle");
           const actions = canManage
             ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
             : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
