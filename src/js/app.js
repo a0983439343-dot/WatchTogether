@@ -234,12 +234,14 @@
     membersRef: null,
 
     roomMutesRef: null,
+    roomBansRef: null,
     roomVolumeRef: null,
     roomVolumeListenerAttached: false,
     roomMetaSettingsRef: null,
     roomMetaSettingsListenerAttached: false,
     applyingRemoteVolume: false,
     roomMutes: {},
+    roomBans: {},
 
     kickedRef: null,
 
