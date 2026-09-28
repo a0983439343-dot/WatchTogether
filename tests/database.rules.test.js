@@ -1228,6 +1228,14 @@ serialTest("2.0 access control: per-user deny overrides room, chat, queue and pl
     "admin/access/permissionsByUid/" + OTHER_UID + "/room__join"
   ).remove());
 
+  const permissionProbe = await master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/room__join").once("value");
+  const permissionParentProbe = await master.ref("admin/access/permissionsByUid/" + OTHER_UID).once("value");
+  console.log("[DEBUG room__join after remove]", JSON.stringify({
+    exists: permissionProbe.exists(),
+    value: permissionProbe.val(),
+    parent: permissionParentProbe.val()
+  }));
+
   await assertSucceeds(other.ref("members/ODNY01/" + OTHER_UID).set({
     name: "Other",
     joinedAt: Date.now(),
