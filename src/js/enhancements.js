@@ -1336,6 +1336,16 @@ async function isFeatureBlocked(feature) {
   }
 }
 
+async function isGlobalFeatureEnabled(feature) {
+  if (!wt.db || !feature) return true;
+  try {
+    var snapshot = await wt.db.ref("system/featureFlags/" + feature).once("value");
+    return snapshot.val() !== false;
+  } catch (_) {
+    return true;
+  }
+}
+
 async function isLoggedUser() {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous) {
@@ -1353,6 +1363,7 @@ async function isFriend(uid) {
 }
 
 async function addFriendByCode(code) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var user = wt.auth.currentUser;
@@ -1390,6 +1401,7 @@ async function addFriendByCode(code) {
 }
 
 async function acceptFriend(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   var requestRef = wt.db.ref("friendRequests/" + user.uid + "/" + uid);
@@ -1407,6 +1419,7 @@ async function acceptFriend(uid) {
 }
 
 async function declineFriend(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   await wt.db.ref("friendRequests/" + user.uid + "/" + uid).remove();
@@ -1414,6 +1427,7 @@ async function declineFriend(uid) {
 }
 
 async function removeFriend(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   if (!window.confirm("確定要刪除這位好友嗎？")) return;
@@ -1818,6 +1832,7 @@ function formatDate(value) {
 }
 
 async function sendPrivateText(text) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
   if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
@@ -1830,6 +1845,7 @@ async function sendPrivateText(text) {
 }
 
 async function sendPrivateSticker(sticker) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
   if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
@@ -1840,25 +1856,24 @@ async function sendPrivateSticker(sticker) {
   $("wtPrivateStickerPicker").classList.add("hidden");
 }
 
-function openFriends() {
-  if (wt.auth.currentUser && !wt.auth.currentUser.isAnonymous) {
-    void isFeatureBlocked("friends").then(function(blocked){
-      if (blocked) { wt.toast("你的帳號目前無法使用好友功能"); return; }
-      buildFriendsModal();
-      if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
-      wt.openModal("wtFriendsModal");
-      void loadFriends();
-      listenRequests();
-      renderFriends();
-      renderRequests();
-      updatePrivateHeader();
-    });
+async function openFriends() {
+  buildFriendsModal();
+  var current=wt.auth.currentUser;
+  if (!current || current.isAnonymous) {
+    wt.toast("Google 登入後才能使用好友功能");
+    wt.openModal("wtFriendsModal");
     return;
   }
-  buildFriendsModal();
-  if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
+  if (!(await isGlobalFeatureEnabled("friends"))) {
+    wt.toast("目前暫停使用好友功能");
+    return;
+  }
+  if (await isFeatureBlocked("friends")) {
+    wt.toast("你的帳號目前無法使用好友功能");
+    return;
+  }
   wt.openModal("wtFriendsModal");
-  void loadFriends();
+  await loadFriends();
   listenRequests();
   renderFriends();
   renderRequests();
@@ -1948,6 +1963,7 @@ function formatDate(value) {
 
 async function sendRoomText(text) {
   var user = wt.auth.currentUser;
+  if (!(await isGlobalFeatureEnabled("chat"))) throw new Error("目前暫停使用聊天室");
   if (await isFeatureBlocked("chat")) throw new Error("你的帳號目前無法使用聊天室");
   var id = roomId();
   text = String(text || "").trim().slice(0,300);
@@ -1963,6 +1979,7 @@ async function sendRoomText(text) {
 
 async function sendRoomSticker(sticker) {
   var user = wt.auth.currentUser;
+  if (!(await isGlobalFeatureEnabled("chat"))) throw new Error("目前暫停使用聊天室");
   if (await isFeatureBlocked("chat")) throw new Error("你的帳號目前無法使用聊天室");
   var id = roomId();
   if (!user || !id) return;
