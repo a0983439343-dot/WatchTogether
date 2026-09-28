@@ -25,6 +25,8 @@
   let reportScanRunning = false;
   let autonomousMaintenanceEnabled = false;
   let autonomousMaintenanceRef = null;
+  let siteMaintenance = {enabled:false, reason:"", restoreAt:0, updatedAt:0, updatedByUid:"", updatedByEmail:""};
+  let siteMaintenanceRef = null;
   let accountsRef = null;
   let reportsRef = null;
   let auditLogsRef = null;
@@ -499,6 +501,162 @@
       next ? "啟用全自動維護" : "停用全自動維護"
     );
     toast(next ? "已啟用全自動維護" : "已停用全自動維護");
+  }
+
+  function stopSiteMaintenanceListener() {
+    if (!siteMaintenanceRef) return;
+    try { siteMaintenanceRef.off(); } catch (_) {}
+    siteMaintenanceRef = null;
+  }
+
+  function renderSiteMaintenance() {
+    const title = $("siteMaintenanceTitle");
+    const summary = $("siteMaintenanceSummary");
+    const badge = $("siteMaintenanceBadge");
+    const meta = $("siteMaintenanceMeta");
+    const closeBtn = $("maintenanceCloseBtn");
+    const openBtn = $("maintenanceOpenBtn");
+    const hint = $("maintenancePermissionHint");
+
+    const active = siteMaintenance?.enabled === true;
+    const canManage = currentCan("maintenance.manage");
+
+    if (title) title.textContent = active ? "網站維護中" : "網站正常運作";
+    if (summary) {
+      summary.textContent = active
+        ? String(siteMaintenance.reason || "目前正在維護。")
+        : "目前沒有啟用整站維護。";
+    }
+    if (badge) {
+      badge.textContent = active ? "維護中" : "正常";
+      badge.classList.toggle("off", active);
+      badge.classList.toggle("admin", !active);
+    }
+    if (meta) {
+      const restore = Number(siteMaintenance.restoreAt || 0);
+      meta.innerHTML = [
+        ["狀態", active ? "維護中" : "正常"],
+        ["原因", active ? String(siteMaintenance.reason || "—") : "—"],
+        ["預計恢復", active && restore > 0 ? formatDate(restore) : "未設定"],
+        ["最後更新", siteMaintenance.updatedAt ? formatDate(siteMaintenance.updatedAt) : "—"],
+        ["更新者 UID", siteMaintenance.updatedByUid || "—"]
+      ].map(([label,value]) =>
+        '<div class="info-item"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>'
+      ).join("");
+    }
+
+    if (closeBtn) closeBtn.disabled = !canManage || active;
+    if (openBtn) openBtn.disabled = !canManage || !active;
+    if (hint) {
+      hint.textContent = canManage
+        ? "具備 maintenance.manage 的管理員可以關閉或重新開放網站；每次操作都會寫入 Audit Log。"
+        : "目前帳號沒有 maintenance.manage 權限，因此不能修改整站維護狀態。";
+    }
+  }
+
+  async function loadSiteMaintenance() {
+    try {
+      const snapshot = await db.ref("site/maintenance").once("value");
+      siteMaintenance = snapshot.val() || {enabled:false};
+    } catch (error) {
+      console.warn("載入網站維護狀態失敗:", error);
+      siteMaintenance = {enabled:false};
+    }
+    renderSiteMaintenance();
+  }
+
+  function startSiteMaintenanceListener() {
+    stopSiteMaintenanceListener();
+    siteMaintenanceRef = db.ref("site/maintenance");
+    siteMaintenanceRef.on("value", snapshot => {
+      siteMaintenance = snapshot.val() || {enabled:false};
+      renderSiteMaintenance();
+    }, error => {
+      console.error("site maintenance listener failed", error);
+    });
+  }
+
+  function getAdminApiBase() {
+    return String(
+      config.adminApiUrl ||
+      config.youtubeStreamProxyUrl ||
+      ""
+    ).trim().replace(/\/+$/, "");
+  }
+
+  async function callMaintenanceApi(action, payload = {}) {
+    if (!currentCan("maintenance.manage")) {
+      throw new Error("目前管理員權限不足，不能修改整站維護狀態");
+    }
+    const base = getAdminApiBase();
+    if (!base) throw new Error("管理 API 尚未設定");
+    const user = auth?.currentUser || currentUser;
+    if (!user || user.isAnonymous) throw new Error("請先使用 Google 帳號登入");
+    const token = await user.getIdToken();
+    const response = await fetch(base + "/admin/maintenance", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify({
+        action,
+        ...payload
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok !== true) {
+      const error = new Error(
+        String(data?.error || "maintenance_request_failed")
+      );
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+    return data;
+  }
+
+  async function closeSiteMaintenance() {
+    if (!currentCan("maintenance.manage")) throw new Error("目前管理員權限不足");
+    if (siteMaintenance?.enabled === true) return;
+    const reason = String($("maintenanceReasonInput")?.value || "").trim();
+    if (!reason) throw new Error("請輸入維護原因");
+
+    const rawRestoreAt = String($("maintenanceRestoreAtInput")?.value || "").trim();
+    const restoreAt = rawRestoreAt ? new Date(rawRestoreAt).getTime() : 0;
+    if (rawRestoreAt && (!Number.isFinite(restoreAt) || restoreAt <= 0)) {
+      throw new Error("預計恢復時間格式無效");
+    }
+
+    if (!window.confirm(
+      "確定要關閉 WatchTogether 嗎？\n\n" +
+      "維護原因：" + reason + "\n" +
+      "預計恢復：" + (restoreAt ? formatDate(restoreAt) : "未設定")
+    )) return;
+
+    const password = window.prompt("請輸入後端維護密碼：");
+    if (password === null) return;
+    if (!String(password)) throw new Error("未輸入維護密碼");
+
+    await callMaintenanceApi("close", {
+      password,
+      reason,
+      restoreAt
+    });
+    await loadSiteMaintenance();
+    $("maintenanceReasonInput").value = "";
+    $("maintenanceRestoreAtInput").value = "";
+    toast("網站已進入維護模式");
+  }
+
+  async function openSiteMaintenance() {
+    if (!currentCan("maintenance.manage")) throw new Error("目前管理員權限不足");
+    if (siteMaintenance?.enabled !== true) return;
+
+    if (!window.confirm("確定要重新開放 WatchTogether 嗎？")) return;
+    await callMaintenanceApi("open");
+    await loadSiteMaintenance();
+    toast("網站已重新開放");
   }
 
   async function writeAuditLog(action, targetUid, targetName, details) {
@@ -2066,6 +2224,8 @@
   }
 
   function applyRoleUi() {
+    renderSiteMaintenance();
+
     const master = isMasterOperator();
     const addPanel = $("whitelistAddPanel");
     const help = $("whitelistHelp");
@@ -2117,6 +2277,8 @@
       reports = {};
       auditLogs = {};
       reportHistory = {};
+      siteMaintenance = {enabled:false};
+      stopSiteMaintenanceListener();
 
       hide("loadingScreen");
       hide("setupScreen");
@@ -2150,6 +2312,7 @@
           loadRooms(),
           loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
           loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error)),
+          loadSiteMaintenance(),
           loadAccessControl().catch(error => console.warn("載入 2.0 控制中心失敗:", error)),
           loadAutonomousMaintenance().catch(error => {
             console.warn("載入全自動維護設定失敗:", error);
@@ -2161,7 +2324,9 @@
         startReportsListener();
         startAuditLogsListener();
         startAutonomousMaintenanceListener();
+        startSiteMaintenanceListener();
         populateAccessPermissionCatalog();
+        renderSiteMaintenance();
         renderAccessSummary();
         renderAutonomousMaintenance();
         startReportAutomation();
@@ -2266,7 +2431,10 @@
     $("reportLaterBtn")?.addEventListener("click", () => {
       $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
     });
-    $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("maintenanceRefreshBtn")?.addEventListener("click", () => loadSiteMaintenance().then(() => toast("網站維護狀態已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("maintenanceCloseBtn")?.addEventListener("click", () => closeSiteMaintenance().catch(error => { console.error(error); toast(error?.message || "關閉網站失敗"); }));
+    $("maintenanceOpenBtn")?.addEventListener("click", () => openSiteMaintenance().catch(error => { console.error(error); toast(error?.message || "重新開站失敗"); }));
+        $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
     $("accessRoleSaveBtn")?.addEventListener("click", () => saveAccessRole().catch(error => { console.error(error); toast(error?.message || "儲存角色失敗"); }));
     $("accessAssignBtn")?.addEventListener("click", () => assignAccessRole().catch(error => { console.error(error); toast(error?.message || "指派角色失敗"); }));
     $("accessOverrideBtn")?.addEventListener("click", () => saveAccessOverride().catch(error => { console.error(error); toast(error?.message || "設定 Allow / Deny 失敗"); }));
