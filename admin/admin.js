@@ -1772,7 +1772,7 @@
           '<div class="access-policy-row">' +
             '<div><strong>' + escapeHtml(row.uid) + '</strong><span class="small">' + escapeHtml(row.permission.replace(/__/g, ".")) + '</span></div>' +
             '<span class="status ' + (row.effect === "deny" ? "off" : "admin") + '">' + escapeHtml(String(row.effect || "").toUpperCase()) + '</span>' +
-            '<button class="btn danger" type="button" data-access-override-delete="' + escapeHtml(row.uid) + '" data-access-override-permission="' + escapeHtml(row.permission) + '">移除</button>' +
+            '<button class="btn danger" type="button" data-access-override-delete="' + escapeHtml(row.uid) + '" data-access-override-permission="' + escapeHtml(row.permission.replace(/__/g, ".")) + '">移除</button>' +
           '</div>'
         ).join("")
       : '<div class="muted">目前沒有個人權限覆寫。</div>';
@@ -1822,7 +1822,7 @@
     box.innerHTML = entries.length
       ? entries.map(([name,item]) =>
           '<div class="access-policy-row">' +
-            '<div><strong>' + escapeHtml(name) + '</strong><span class="small">' + escapeHtml(item?.reason || "—") + '</span></div>' +
+            '<div><strong>' + escapeHtml(name.replace(/__/g, ".")) + '</strong><span class="small">' + escapeHtml(item?.reason || "—") + '</span></div>' +
             '<span class="status ' + (item?.enabled === false ? "off" : "admin") + '">' + (item?.enabled === false ? "關閉" : "啟用") + '</span>' +
             '<span class="small">' + escapeHtml(formatDate(item?.updatedAt)) + '</span>' +
             (isMasterOperator() ? '<button class="btn danger" type="button" data-access-flag-delete="' + escapeHtml(name) + '">刪除</button>' : '') +
@@ -1948,7 +1948,7 @@
   async function saveAccessOverride() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以設定個人 Allow / Deny");
     const uid = String($("accessOverrideUid")?.value || "").trim();
-    const permission = safeKey($("accessOverridePermission")?.value,80);
+    const permission = String($("accessOverridePermission")?.value || "").trim().slice(0,80);
     const effect = $("accessOverrideEffect")?.value === "deny" ? "deny" : "allow";
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!permission) throw new Error("請輸入權限名稱");
@@ -1975,7 +1975,7 @@
   async function saveAccessRestriction() {
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能設定功能限制");
     const uid = String($("accessRestrictionUid")?.value || "").trim();
-    const permission = safeKey($("accessRestrictionPermission")?.value,80);
+    const permission = String($("accessRestrictionPermission")?.value || "").trim().slice(0,80);
     const duration = String($("accessRestrictionDuration")?.value || "3600000");
     const reason = String($("accessRestrictionReason")?.value || "").trim().slice(0,500);
     if (!uid) throw new Error("請輸入使用者 UID");
