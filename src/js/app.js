@@ -11495,6 +11495,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             } else if (!state.isOwner) {
               detachPlaybackControlRequestListener();
             }
+
+            void window.WT_ROOM_ACCESS?.refresh?.();
           }
 
           /*
@@ -11664,6 +11666,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     updateRoomOwnerUI();
     attachRoomOwnerListener();
+    void window.WT_ROOM_ACCESS?.refresh?.();
 
     if ($("roomTitle")) {
       $("roomTitle").textContent =
