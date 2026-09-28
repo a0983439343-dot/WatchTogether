@@ -445,6 +445,57 @@ test("audit logs: viewer can read but cannot append", async () => {
   );
 });
 
+test("room 2.0: application lifecycle and cohost role are owner controlled", async () => {
+  const ownerDb = db(USER_UID, userToken);
+  const applicant = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(applicant.ref("roomApplications/ABC123/" + OTHER_UID).set({
+    uid: OTHER_UID,
+    name: "Applicant",
+    createdAt: Date.now(),
+    status: "pending"
+  }));
+
+  await assertFails(
+    applicant.ref("roomRoles/ABC123/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      role: "cohost",
+      updatedAt: Date.now(),
+      updatedByUid: OTHER_UID
+    })
+  );
+
+  await assertSucceeds(
+    ownerDb.ref("roomApplications/ABC123/" + OTHER_UID).update({
+      status: "approved",
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      reviewedByUid: USER_UID,
+      reviewedAt: firebase.database.ServerValue.TIMESTAMP
+    })
+  );
+
+  await assertSucceeds(
+    ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      role: "cohost",
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid: USER_UID
+    })
+  );
+
+  await assertSucceeds(
+    ownerDb.ref("members/ABC123/" + OTHER_UID).set({
+      name: "Applicant",
+      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      online: true,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
+    })
+  );
+});
+
 test("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
   const adminDb = db(ADMIN_UID, {
     email: "admin@example.com",
