@@ -654,6 +654,52 @@ test("2.0 access control: audit.delete is separate from audit.write", async () =
   );
 });
 
+test("2.0 access control: room.join restriction and feature flag block membership creation", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const target = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+  const memberRef = target.ref("members/ABC123/" + OTHER_UID);
+
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/room__join").set({
+    enabled: true,
+    permanent: true,
+    until: 0,
+    reason: "join restricted",
+    createdAt: Date.now(),
+    createdByUid: MASTER_UID,
+    createdByEmail: MASTER_EMAIL
+  }));
+
+  await assertFails(memberRef.set({
+    name: "Other",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  await assertSucceeds(
+    master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/room__join").remove()
+  );
+
+  await assertSucceeds(master.ref("admin/featureFlags/room__join").set({
+    enabled: false,
+    reason: "join disabled",
+    updatedAt: Date.now(),
+    updatedByUid: MASTER_UID
+  }));
+
+  await assertFails(memberRef.set({
+    name: "Other",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  await assertSucceeds(master.ref("admin/featureFlags/room__join").remove());
+});
+
 test("blocks: blocked user cannot mutate their own higher-role block", async () => {
   await assertFails(
     db(USER_UID, userToken).ref("admin/blocksByUid/" + USER_UID).remove()
