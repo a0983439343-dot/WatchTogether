@@ -457,9 +457,34 @@
 
   function readStat(id){return Number(($(id)?.textContent||"").replace(/[^\d.-]/g,""))||0}
   function renderAnalytics(){
-    const data=[readStat("statAccounts"),readStat("statWhitelist"),readStat("statBlocked"),readStat("statRooms")];
+    const now=Date.now();
+    const accountsValues=Object.values(window.__WT_ADMIN_ACCOUNTS__||{});
+    const accounts=accountsValues.length || Number(readStat("statAccounts")||0);
+    const whitelist=Number(readStat("statWhitelist")||0);
+    const blocked=Number(readStat("statBlocked")||0);
+    const rooms=Number(readStat("statRooms")||0);
+    const activeSince24h=now-86400000;
+    const activeSince7d=now-604800000;
+    const activeSince30d=now-2592000000;
+    const lastSeen=item=>Number(item?.lastLoginAt||item?.lastSeenAt||item?.updatedAt||0);
+    const dau=accountsValues.filter(item=>lastSeen(item)>=activeSince24h).length;
+    const wau=accountsValues.filter(item=>lastSeen(item)>=activeSince7d).length;
+    const mau=accountsValues.filter(item=>lastSeen(item)>=activeSince30d).length;
+    const data=[accounts,whitelist,blocked,rooms];
     const labels=["帳號","白名單","封鎖","房間"];
-    const list=$("ad2AnalyticsList");if(list)list.innerHTML=labels.map((x,i)=>'<div class="ad2-list-row"><strong>'+x+'</strong><span>'+data[i]+"</span></div>").join("");
+    const list=$("ad2AnalyticsList");
+    if(list){
+      const rows=[
+        ["帳號總數",accounts],
+        ["24 小時活躍帳號",dau],
+        ["7 天活躍帳號",wau],
+        ["30 天活躍帳號",mau],
+        ["白名單",whitelist],
+        ["封鎖",blocked],
+        ["房間",rooms]
+      ];
+      list.innerHTML=rows.map(([label,value])=>'<div class="ad2-list-row"><strong>'+label+'</strong><span>'+value+'</span></div>').join("");
+    }
     if(!window.Chart||!$("ad2StatsChart"))return;
     if(state.chart)state.chart.destroy();
     state.chart=new Chart($("ad2StatsChart").getContext("2d"),{type:"bar",data:{labels,datasets:[{label:"目前資料",data,borderWidth:1}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
