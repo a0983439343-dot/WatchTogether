@@ -713,11 +713,19 @@
   async function analyzeReportOnAdmin(id, report, verification, phase = "admin_review") {
     const endpoint = getBugAiEndpoint();
     if (!endpoint) return null;
+    let idToken = "";
+    try {
+      idToken = await currentUser.getIdToken();
+    } catch (_) {}
+    if (!idToken) throw new Error("管理員登入驗證尚未準備完成");
     const response = await fetch(endpoint,{
       method:"POST",
       cache:"no-store",
       credentials:"omit",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer " + idToken
+      },
       body:JSON.stringify({
         phase,
         report:{
