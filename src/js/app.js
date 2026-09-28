@@ -5593,13 +5593,19 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       "twitch-clip"
     ];
 
+    const twitchLive = (
+      state.playerType === "twitch" &&
+      state.twitchPlaybackKind !== "video"
+    );
+
     if (
-      unsupportedTypes.includes(
-        state.playerType
-      )
+      unsupportedTypes.includes(state.playerType) ||
+      twitchLive
     ) {
       readout.textContent =
-        "此平台不支援本站同步時間";
+        twitchLive
+          ? "Twitch 直播不支援時間軸同步"
+          : "此平台不支援本站同步時間";
       return;
     }
 
@@ -10314,10 +10320,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           : "目前尚未進入房間";
     }
 
+    const twitchSeekSupported = !(
+      state.playerType === "twitch" &&
+      state.twitchPlaybackKind !== "video"
+    );
+
     [
       "playPauseBtn",
-      "backBtn",
-      "forwardBtn",
       "manualSyncBtn"
     ].forEach((id) => {
       const button =
@@ -10349,6 +10358,37 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       } else {
         button.title =
           "";
+      }
+    });
+
+    [
+      "backBtn",
+      "forwardBtn"
+    ].forEach((id) => {
+      const button = $(id);
+      if (!button) return;
+
+      const canSeek =
+        Boolean(
+          state.roomId &&
+          state.uid &&
+          state.wasMemberInRoom &&
+          state.playerReady &&
+          state.player &&
+          playbackControlSupported &&
+          twitchSeekSupported
+        );
+
+      button.disabled = !canSeek;
+
+      if (!playbackControlSupported) {
+        button.title = "此平台目前不支援本站播放控制";
+      } else if (!twitchSeekSupported) {
+        button.title = "Twitch 直播沒有可用的影片時間軸";
+      } else if (!state.isOwner) {
+        button.title = "送出跳轉控制請求，由房主執行";
+      } else {
+        button.title = "";
       }
     });
 
