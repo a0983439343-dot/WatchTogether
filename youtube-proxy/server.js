@@ -318,6 +318,22 @@ async function resolveUserAccessPolicy(token) {
     uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
     email === "a0983439343@gmail.com";
 
+  const blockValue = await firebaseRestGet(
+    "admin/blocksByUid/" + encodeURIComponent(uid),
+    token
+  );
+  if (
+    blockValue &&
+    typeof blockValue === "object" &&
+    (
+      blockValue.permanent === true ||
+      Number(blockValue.blockedUntil || 0) === 0 ||
+      Number(blockValue.blockedUntil || 0) > Date.now()
+    )
+  ) {
+    throw new Error("user_blocked");
+  }
+
   if (master) {
     return {
       uid,
@@ -1998,9 +2014,12 @@ async function handleSearch(req, res, url) {
     access = await resolveUserAccessPolicy(token);
   } catch (error) {
     console.error("[search-auth]", error?.message || error);
-    send(res, 401, JSON.stringify({
+    const blocked = String(error?.message || "") === "user_blocked";
+    send(res, blocked ? 403 : 401, JSON.stringify({
       error: {
-        message: "YouTube 搜尋身分驗證失敗"
+        message: blocked
+          ? "目前帳號已被限制使用網站功能"
+          : "YouTube 搜尋身分驗證失敗"
       }
     }));
     return;
