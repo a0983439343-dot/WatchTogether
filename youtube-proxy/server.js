@@ -9,6 +9,9 @@ const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const cache = new Map();
 const streamInflight = new Map();
 const searchInflight = new Map();
+const platformSearchInflight = new Map();
+let twitchAppToken = "";
+let twitchAppTokenExpiresAt = 0;
 const aiCache = new Map();
 const aiLastGoodCache = new Map();
 const aiInflight = new Map();
@@ -2180,6 +2183,199 @@ function runYoutubeSearch(query, maxResults, page) {
   return request;
 }
 
+function searchResult(
+  id,
+  platform,
+  title,
+  description,
+  channel,
+  publishedAt,
+  thumbnail,
+  viewCount,
+  durationSeconds,
+  live,
+  url,
+  twitchType
+) {
+  return {
+    id: String(id || ""),
+    platform,
+    title: String(title || "未命名影片").slice(0, 300),
+    description: String(description || "").slice(0, 2000),
+    channel: String(channel || platform).slice(0, 200),
+    publishedAt: String(publishedAt || ""),
+    thumbnail: String(thumbnail || ""),
+    viewCount: Number.isFinite(Number(viewCount)) ? Number(viewCount) : 0,
+    likeCount: 0,
+    durationSeconds: Math.max(0, Number(durationSeconds) || 0),
+    live: live === true,
+    ...(url ? {url: String(url).slice(0, 2000)} : {}),
+    ...(twitchType ? {twitchType: String(twitchType)} : {})
+  };
+}
+
+async function fetchJsonWithTimeout(target, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(target, {...options, signal: controller.signal});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(String(data?.message || data?.error_description || data?.error || "upstream_request_failed").slice(0, 500));
+      error.httpStatus = response.status;
+      throw error;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runVimeoSearch(query, maxResults, page) {
+  const token = String(process.env.VIMEO_ACCESS_TOKEN || "").trim();
+  if (!token) throw new Error("Vimeo 搜尋尚未設定 VIMEO_ACCESS_TOKEN");
+  const params = new URLSearchParams({
+    query,
+    per_page: String(Math.min(25, maxResults)),
+    page: String(Math.max(1, page)),
+    fields: "uri,name,description,duration,link,created_time,pictures.sizes,user.name"
+  });
+  const data = await fetchJsonWithTimeout("https://api.vimeo.com/videos?" + params.toString(), {
+    headers: {Authorization: "Bearer " + token, Accept: "application/vnd.vimeo.*+json;version=3.4"}
+  });
+  const items = Array.isArray(data?.data) ? data.data : [];
+  const results = items.map(item => {
+    const uri = String(item?.uri || "");
+    const id = (uri.match(/\/videos\/(\d+)/) || [,""])[1];
+    const sizes = Array.isArray(item?.pictures?.sizes) ? item.pictures.sizes : [];
+    const thumbnail = sizes.length ? String(sizes[sizes.length - 1]?.link || sizes[0]?.link || "") : "";
+    return id ? searchResult(id, "vimeo", item?.name, item?.description, item?.user?.name || "Vimeo", item?.created_time, thumbnail, 0, item?.duration, false, item?.link || ("https://vimeo.com/" + id)) : null;
+  }).filter(Boolean);
+  return {items: results, nextPageToken: data?.paging?.next ? String(page + 1) : ""};
+}
+
+async function runDailymotionSearch(query, maxResults, page) {
+  const params = new URLSearchParams({
+    search: query,
+    sort: "relevance",
+    limit: String(Math.min(25, maxResults)),
+    page: String(Math.max(1, page)),
+    fields: "id,title,description,duration,url,thumbnail_720_url,owner.screenname,published_time,mode,onair,views_total"
+  });
+  const token = String(process.env.DAILYMOTION_ACCESS_TOKEN || "").trim();
+  const headers = {Accept: "application/json"};
+  if (token) headers.Authorization = "Bearer " + token;
+  const data = await fetchJsonWithTimeout("https://api.dailymotion.com/videos?" + params.toString(), {headers});
+  const items = Array.isArray(data?.list) ? data.list : (Array.isArray(data?.data) ? data.data : []);
+  const results = items.map(item => searchResult(
+    item?.id,
+    "dailymotion",
+    item?.title,
+    item?.description,
+    item?.["owner.screenname"] || item?.owner?.screenname || "Dailymotion",
+    item?.published_time ? new Date(Number(item.published_time) * 1000).toISOString() : "",
+    item?.thumbnail_720_url || item?.thumbnail_url || "",
+    item?.views_total,
+    item?.duration,
+    String(item?.mode || "").toLowerCase() === "live" || item?.onair === true,
+    item?.url || ("https://www.dailymotion.com/video/" + encodeURIComponent(String(item?.id || "")))
+  )).filter(item => item.id);
+  return {items: results, nextPageToken: data?.has_more && page < 10 ? String(page + 1) : ""};
+}
+
+async function getTwitchAppAccessToken() {
+  const clientId = String(process.env.TWITCH_CLIENT_ID || "").trim();
+  const clientSecret = String(process.env.TWITCH_CLIENT_SECRET || "").trim();
+  if (!clientId || !clientSecret) throw new Error("Twitch 搜尋尚未設定 TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET");
+  if (twitchAppToken && Date.now() + 60000 < twitchAppTokenExpiresAt) return {token: twitchAppToken, clientId};
+  const body = new URLSearchParams({client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials"});
+  const data = await fetchJsonWithTimeout("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: body.toString()
+  });
+  twitchAppToken = String(data?.access_token || "");
+  twitchAppTokenExpiresAt = Date.now() + Math.max(60000, Number(data?.expires_in || 3600) * 1000);
+  if (!twitchAppToken) throw new Error("Twitch access token 不可用");
+  return {token: twitchAppToken, clientId};
+}
+
+async function twitchApi(path, params) {
+  const auth = await getTwitchAppAccessToken();
+  const url = new URL("https://api.twitch.tv/helix/" + path);
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+  }
+  try {
+    return await fetchJsonWithTimeout(url.toString(), {
+      headers: {Authorization: "Bearer " + auth.token, "Client-Id": auth.clientId, Accept: "application/json"}
+    });
+  } catch (error) {
+    if (Number(error?.httpStatus) === 401) {
+      twitchAppToken = "";
+      twitchAppTokenExpiresAt = 0;
+    }
+    throw error;
+  }
+}
+
+async function runTwitchSearch(query, maxResults) {
+  const [channelData, categoryData] = await Promise.all([
+    twitchApi("search/channels", {query, first: 8, live_only: false}),
+    twitchApi("search/categories", {query, first: 5})
+  ]);
+  const channels = Array.isArray(channelData?.data) ? channelData.data : [];
+  const categories = Array.isArray(categoryData?.data) ? categoryData.data : [];
+  const channelIds = channels.slice(0, 6).map(item => String(item?.id || "")).filter(Boolean);
+  const gameIds = categories.slice(0, 4).map(item => String(item?.id || "")).filter(Boolean);
+  const videoResponses = await Promise.all([
+    ...channelIds.map(id => twitchApi("videos", {user_id: id, first: 8, type: "archive", sort: "time"})),
+    ...gameIds.map(id => twitchApi("videos", {game_id: id, first: 8, type: "archive", sort: "time"}))
+  ]);
+  const byId = new Map();
+  for (const response of videoResponses) {
+    for (const item of Array.isArray(response?.data) ? response.data : []) {
+      const id = String(item?.id || "");
+      if (!id || byId.has(id)) continue;
+      byId.set(id, searchResult(
+        id,
+        "twitch",
+        item?.title,
+        "",
+        item?.user_name || item?.user_login || "Twitch",
+        item?.created_at,
+        item?.thumbnail_url || "",
+        item?.view_count,
+        item?.duration ? parseTwitchDuration(item.duration) : 0,
+        false,
+        "https://www.twitch.tv/videos/" + id,
+        "video"
+      ));
+    }
+  }
+  const items = [...byId.values()].sort((a,b) => String(b.publishedAt).localeCompare(String(a.publishedAt))).slice(0, maxResults);
+  return {items, nextPageToken: ""};
+}
+
+function parseTwitchDuration(value) {
+  const match = String(value || "").match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
+  if (!match) return 0;
+  return Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
+}
+
+async function runPlatformSearch(platform, query, maxResults, page) {
+  const key = platform + ":" + query.toLowerCase() + ":" + maxResults + ":" + page;
+  if (platformSearchInflight.has(key)) return platformSearchInflight.get(key);
+  let request;
+  if (platform === "vimeo") request = runVimeoSearch(query, maxResults, page);
+  else if (platform === "dailymotion") request = runDailymotionSearch(query, maxResults, page);
+  else if (platform === "twitch") request = runTwitchSearch(query, maxResults);
+  else request = runYoutubeSearch(query, maxResults, page);
+  platformSearchInflight.set(key, request);
+  request.finally(() => { if (platformSearchInflight.get(key) === request) platformSearchInflight.delete(key); }).catch(() => {});
+  return request;
+}
+
 async function fetchFirebaseJson(path, idToken) {
   if (!idToken) return null;
   const response = await fetch(
@@ -2201,136 +2397,64 @@ function isActivePolicy(item) {
   return Number.isFinite(until) && until > Date.now();
 }
 
-async function authorizeSearchRequest(req) {
+async function authorizeSearchRequest(req, platform = "youtube") {
   const idToken = getBearerToken(req);
   if (!idToken) return {ok:false,status:401,error:"missing_auth_token"};
-
   let user;
-  try {
-    user = await lookupFirebaseIdToken(idToken);
-  } catch (_) {
-    return {ok:false,status:401,error:"invalid_auth_token"};
-  }
+  try { user = await lookupFirebaseIdToken(idToken); } catch (_) { return {ok:false,status:401,error:"invalid_auth_token"}; }
   if (!user) return {ok:false,status:401,error:"invalid_auth_token"};
 
-  const uid = user.uid;
-  const restrictionPath =
-    "admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
-  const overridePath =
-    "admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
-  let restriction;
-  let flag;
-  let override;
-  let assignedRole;
-  let whitelist;
-  let block;
+  const uid = String(user.uid || "");
+  const email = String(user.email || "").trim().toLowerCase();
+  const isMaster = uid === "35d45a23-b648-4caf-a6d5-a69112860551" || email === "a0983439343@gmail.com";
+  if (isMaster) return {ok:true,user};
+
+  let block = null;
+  try { block = await fetchFirebaseJson("admin/blocksByUid/" + encodeURIComponent(uid), idToken); } catch (_) {}
+  if (block && typeof block === "object" && (block.permanent === true || Number(block.blockedUntil || 0) === 0 || Number(block.blockedUntil || 0) > Date.now())) {
+    return {ok:false,status:403,error:"user_blocked",message:"目前帳號已被停用。"};
+  }
+
+  if (String(platform).toLowerCase() !== "youtube") return {ok:true,user};
+
+  const restrictionPath = "admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
+  const overridePath = "admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
+  let restriction, flag, override, assignedRole, whitelist;
   try {
-    [restriction, flag, override, assignedRole, whitelist, block] = await Promise.all([
+    [restriction, flag, override, assignedRole, whitelist] = await Promise.all([
       fetchFirebaseJson(restrictionPath,idToken),
       fetchFirebaseJson("admin/featureFlags/youtube__search",idToken),
       fetchFirebaseJson(overridePath,idToken),
       fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
-      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken),
-      fetchFirebaseJson("admin/blocksByUid/" + encodeURIComponent(uid),idToken)
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
     ]);
-  } catch (error) {
-    return {
-      ok:false,
-      status:503,
-      error:"search_policy_unavailable",
-      message:"目前無法驗證搜尋權限，請稍後再試。"
-    };
+  } catch (_) {
+    return {ok:false,status:503,error:"search_policy_unavailable",message:"目前無法驗證搜尋權限，請稍後再試。"};
   }
-
-  const isMaster =
-    uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
-    String(user.email || "").trim().toLowerCase() === "a0983439343@gmail.com";
-
-  if (isMaster) return {ok:true,user};
-
-  if (block && typeof block === "object" && (
-    block.permanent === true ||
-    Number(block.blockedUntil || 0) === 0 ||
-    Number(block.blockedUntil || 0) > Date.now()
-  )) {
-    return {
-      ok:false,
-      status:403,
-      error:"user_blocked",
-      message:"目前帳號已被停用。"
-    };
-  }
-
-  if (isActivePolicy(restriction)) {
-    return {
-      ok:false,
-      status:403,
-      error:"search_restricted",
-      message:String(restriction.reason || "你目前無法使用 YouTube 搜尋。").slice(0,500)
-    };
-  }
-
-  if (flag && flag.enabled === false) {
-    return {
-      ok:false,
-      status:403,
-      error:"search_feature_disabled",
-      message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)
-    };
-  }
-
-  if (override === "deny") {
-    return {ok:false,status:403,error:"search_permission_denied",message:"目前帳號被禁止使用 YouTube 搜尋。"};
-  }
-
-  if (override === "allow") {
-    return {ok:true,user};
-  }
-
+  if (isActivePolicy(restriction)) return {ok:false,status:403,error:"search_restricted",message:String(restriction.reason || "你目前無法使用 YouTube 搜尋。").slice(0,500)};
+  if (flag && flag.enabled === false) return {ok:false,status:403,error:"search_feature_disabled",message:String(flag.reason || "YouTube 搜尋目前暫停。").slice(0,500)};
+  if (override === "deny") return {ok:false,status:403,error:"search_permission_denied",message:"目前帳號被禁止使用 YouTube 搜尋。"};
+  if (override === "allow") return {ok:true,user};
   const roleId = String(assignedRole || "").trim();
   if (roleId) {
     let definition;
-    try {
-      definition = await fetchFirebaseJson(
-        "admin/access/roles/" + encodeURIComponent(roleId),
-        idToken
-      );
-    } catch (_) {
-      return {ok:false,status:503,error:"search_policy_unavailable",message:"目前無法驗證搜尋角色權限，請稍後再試。"};
-    }
-    const permissions = definition && definition.permissions && typeof definition.permissions === "object"
-      ? definition.permissions
-      : null;
-    const allowed = Boolean(permissions && (permissions.__all__ === true || permissions.youtube__search === true));
-    if (!allowed) {
-      return {
-        ok:false,
-        status:403,
-        error:"search_permission_denied",
-        message:"目前角色沒有 YouTube 搜尋權限。"
-      };
-    }
+    try { definition = await fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId),idToken); } catch (_) { return {ok:false,status:503,error:"search_policy_unavailable",message:"目前無法驗證搜尋角色權限，請稍後再試。"}; }
+    const permissions = definition && definition.permissions && typeof definition.permissions === "object" ? definition.permissions : null;
+    if (!permissions || !(permissions.__all__ === true || permissions.youtube__search === true)) return {ok:false,status:403,error:"search_permission_denied",message:"目前角色沒有 YouTube 搜尋權限。"};
     return {ok:true,user};
   }
-
-  if (whitelist && whitelist.enabled === true && String(whitelist.role || "admin") === "viewer") {
-    return {
-      ok:false,
-      status:403,
-      error:"search_permission_denied",
-      message:"目前角色沒有 YouTube 搜尋權限。"
-    };
-  }
-
+  if (whitelist && whitelist.enabled === true && String(whitelist.role || "admin") === "viewer") return {ok:false,status:403,error:"search_permission_denied",message:"目前角色沒有 YouTube 搜尋權限。"};
   return {ok:true,user};
 }
-
 async function handleSearch(req, res, url) {
-  const authorization = await authorizeSearchRequest(req);
+  const platform = String(url.searchParams.get("platform") || "youtube").trim().toLowerCase();
+  if (![ "youtube", "vimeo", "dailymotion", "twitch" ].includes(platform)) {
+    send(res, 400, JSON.stringify({error:{message:"不支援的搜尋平台"}}));
+    return;
+  }
+  const authorization = await authorizeSearchRequest(req, platform);
   if (!authorization.ok) {
-    send(res, authorization.status, JSON.stringify({
-      error:{message:authorization.message || "YouTube 搜尋請求未授權",code:authorization.error}
-    }));
+    send(res, authorization.status, JSON.stringify({error:{message:authorization.message || "搜尋請求未授權",code:authorization.error}}));
     return;
   }
   const ip = getClientIp(req);
@@ -2343,65 +2467,29 @@ async function handleSearch(req, res, url) {
     return;
   }
   activeSearches += 1;
-
-  const query = String(
-    url.searchParams.get("q") || ""
-  ).trim();
-
+  const query = String(url.searchParams.get("q") || "").trim();
   if (!query || query.length > 100) {
     activeSearches = Math.max(0, activeSearches - 1);
-    send(res, 400, JSON.stringify({
-      error: {
-        message: "搜尋關鍵字格式錯誤"
-      }
-    }));
+    send(res, 400, JSON.stringify({error:{message:"搜尋關鍵字格式錯誤"}}));
     return;
   }
-
-  const requested = Number(
-    url.searchParams.get("maxResults") || MAX_SEARCH_RESULTS
-  );
-
-  const maxResults = Number.isFinite(requested)
-    ? Math.min(
-        MAX_SEARCH_RESULTS,
-        Math.max(1, Math.floor(requested))
-      )
-    : MAX_SEARCH_RESULTS;
-
-  const page = parseSearchPage(
-    url.searchParams.get("pageToken")
-  );
-
+  const requested = Number(url.searchParams.get("maxResults") || MAX_SEARCH_RESULTS);
+  const maxResults = Number.isFinite(requested) ? Math.min(MAX_SEARCH_RESULTS, Math.max(1, Math.floor(requested))) : MAX_SEARCH_RESULTS;
+  const page = parseSearchPage(url.searchParams.get("pageToken"));
   try {
-    const result = await runYoutubeSearch(
-      query,
-      maxResults,
-      page
-    );
-
-    send(
-      res,
-      200,
-      JSON.stringify(result)
-    );
+    const result = await runPlatformSearch(platform, query, maxResults, page);
+    send(res, 200, JSON.stringify(result));
   } catch (error) {
-    console.error(
-      "[search]",
-      query,
-      error?.message || error
-    );
-
-    send(res, 502, JSON.stringify({
-      error: {
-        message: "YouTube 搜尋失敗"
-      }
+    console.error("[search:" + platform + "]", query, error?.message || error);
+    const status = Number(error?.httpStatus);
+    const configuredError = /尚未設定/.test(String(error?.message || ""));
+    send(res, configuredError ? 503 : (status >= 400 && status < 600 ? status : 502), JSON.stringify({
+      error:{message:String(error?.message || (platform + " 搜尋失敗")).slice(0,500)}
     }));
   } finally {
     activeSearches = Math.max(0, activeSearches - 1);
   }
 }
-
 function getUpstreamHeaders(req) {
   const headers = {
     "User-Agent": YT_STREAM_USER_AGENT,
