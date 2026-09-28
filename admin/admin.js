@@ -2275,7 +2275,8 @@
     if (uid === MASTER_UID || uid === currentUser?.uid) throw new Error("不能限制最高管理員或自己");
     const permanent = duration === "permanent";
     const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
-    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set({
+    const updates = {};
+    updates["admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)] = {
       enabled:true,
       permanent,
       until,
@@ -2283,9 +2284,15 @@
       createdAt:firebase.database.ServerValue.TIMESTAMP,
       createdByUid:currentUser.uid,
       createdByEmail:currentUser.email || ""
-    });
+    };
+    await applyMutationWithAudit(
+      updates,
+      "access.user.restriction",
+      uid,
+      permission,
+      reason + " · " + (permanent ? "永久" : formatDate(until))
+    );
     await loadAccessControl();
-    void writeAuditLog("access.user.restriction", uid, permission, reason + " · " + (permanent ? "永久" : formatDate(until)));
     $("accessRestrictionUid").value = "";
     $("accessRestrictionPermission").value = "";
     $("accessRestrictionReason").value = "";
@@ -2297,9 +2304,10 @@
     const u = safeKey(uid,128);
     const p = encodeAccessPermission(permission);
     if (!u || !p) return;
-    await db.ref("admin/access/restrictionsByUid/" + u + "/" + p).remove();
+    const updates = {};
+    updates["admin/access/restrictionsByUid/" + u + "/" + p] = null;
+    await applyMutationWithAudit(updates, "access.user.restriction.clear", u, p, "解除功能限制");
     await loadAccessControl();
-    void writeAuditLog("access.user.restriction.clear", u, p, "解除功能限制");
     toast("功能限制已解除");
   }
 
@@ -2309,15 +2317,22 @@
     const enabled = $("accessFlagEnabled")?.value !== "false";
     const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
     if (!name) throw new Error("請輸入功能名稱");
-    await db.ref("admin/featureFlags/" + name).set({
+    const updates = {};
+    updates["admin/featureFlags/" + name] = {
       enabled,
       reason,
       updatedAt:firebase.database.ServerValue.TIMESTAMP,
       updatedByUid:currentUser.uid,
       updatedByEmail:currentUser.email || ""
-    });
+    };
+    await applyMutationWithAudit(
+      updates,
+      "feature.flag",
+      currentUser.uid,
+      name,
+      (enabled ? "啟用 " : "關閉 ") + name + (reason ? " · " + reason : "")
+    );
     await loadAccessControl();
-    void writeAuditLog("feature.flag", currentUser.uid, name, (enabled ? "啟用 " : "關閉 ") + name + (reason ? " · " + reason : ""));
     $("accessFlagName").value = "";
     $("accessFlagReason").value = "";
     toast("Feature Flag 已更新");
