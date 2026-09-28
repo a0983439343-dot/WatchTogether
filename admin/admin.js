@@ -507,7 +507,7 @@
   }
 
   async function writeAuditLog(action, targetUid, targetName, details) {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!currentUser || !currentCan("audit.write")) return false;
     try {
       await db.ref("admin/auditLogs").push({
         action:String(action || "other").slice(0,40),
@@ -519,8 +519,10 @@
         details:String(details || "").slice(0,1000),
         createdAt:firebase.database.ServerValue.TIMESTAMP
       });
+      return true;
     } catch (error) {
       console.warn("寫入管理員操作紀錄失敗:", error);
+      return false;
     }
   }
 
