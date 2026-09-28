@@ -142,6 +142,17 @@
         }
       }
     },
+    "roomChatReactions": {
+      "$roomId": {
+        ".read": "auth != null && $roomId.length === 6 && root.child('members').child($roomId).child(auth.uid).exists()",
+        "$messageId": {
+          "$uid": {
+            ".write": "auth != null && $roomId.length === 6 && root.child('members').child($roomId).child(auth.uid).exists() && auth.uid === $uid",
+            ".validate": "!newData.exists() || (newData.hasChildren(['emoji','updatedAt']) && newData.child('emoji').isString() && newData.child('emoji').val().length > 0 && newData.child('emoji').val().length <= 4 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 60000)"
+          }
+        }
+      }
+    },
     "queue": {
       "$roomId": {
         ".read": "auth != null && root.child('members').child($roomId).child(auth.uid).exists()",
