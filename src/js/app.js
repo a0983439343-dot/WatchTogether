@@ -233,6 +233,9 @@
 
     membersRef: null,
 
+    roomMutesRef: null,
+    roomMutes: {},
+
     kickedRef: null,
 
     chatRef: null,
@@ -7321,6 +7324,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.roomId = null;
       state.roomRef = null;
       state.membersRef = null;
+      state.roomMutesRef = null;
+      state.roomMutes = {};
       state.kickedRef = null;
       state.chatRef = null;
       state.queueRef = null;
@@ -10471,6 +10476,94 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  function isActiveRoomMute(item) {
+    if (!item || typeof item !== "object") return false;
+    if (item.permanent === true) return true;
+    return Number(item.until || 0) > Date.now();
+  }
+
+  async function toggleRoomMute(
+    targetUid,
+    targetName
+  ) {
+    const isCohost = Boolean(
+      window.WT_ROOM_ACCESS?.isCohost?.(state.uid)
+    );
+
+    if (!state.isOwner && !isCohost) {
+      toast("只有房主或 Co-host 可以管理禁言");
+      return;
+    }
+
+    if (!targetUid || targetUid === state.uid) return;
+    if (!state.roomId) {
+      toast("目前不在房間內");
+      return;
+    }
+
+    const ref = db.ref(
+      "roomMutes/" +
+      state.roomId +
+      "/" +
+      targetUid
+    );
+
+    if (isActiveRoomMute(state.roomMutes?.[targetUid])) {
+      try {
+        await ref.remove();
+        toast("已解除 " + (targetName || "成員") + " 的禁言");
+      } catch (error) {
+        console.error("解除禁言失敗:", error);
+        toast(error?.message || "解除禁言失敗");
+      }
+      return;
+    }
+
+    const rawMinutes = window.prompt(
+      "輸入禁言分鐘數，輸入 0 代表永久禁言。",
+      "30"
+    );
+
+    if (rawMinutes === null) return;
+
+    const minutes = Number(rawMinutes);
+
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      toast("禁言時間無效");
+      return;
+    }
+
+    const safeMinutes = Math.min(43200, Math.floor(minutes));
+    const permanent = safeMinutes === 0;
+    const until = permanent
+      ? 0
+      : Date.now() + safeMinutes * 60000;
+
+    try {
+      await ref.set({
+        uid: targetUid,
+        until,
+        permanent,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid: state.uid
+      });
+
+      toast(
+        permanent
+          ? "已永久禁言 " + (targetName || "成員")
+          : "已禁言 " +
+            (targetName || "成員") +
+            " " +
+            safeMinutes +
+            " 分鐘"
+      );
+    } catch (error) {
+      console.error("禁言失敗:", error);
+      toast(error?.message || "禁言失敗，請檢查 Firebase Rules");
+    }
+  }
+
+
   /*
    * 房主踢人。
    *
@@ -11338,6 +11431,29 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     if (
+      !state.roomMutesRef &&
+      state.roomId
+    ) {
+      state.roomMutesRef = db.ref(
+        "roomMutes/" + state.roomId
+      );
+
+      state.roomMutesRef.on(
+        "value",
+        (snapshot) => {
+          state.roomMutes = snapshot.val() || {};
+          if (state.membersRef) {
+            state.membersRef.once("value").then((memberSnapshot) => {
+              renderMembers(
+                memberSnapshot.val() || {}
+              );
+            }).catch(() => {});
+          }
+        }
+      );
+    }
+
+    if (
       !state.membersListenerAttached
     ) {
       state.membersRef.on(
@@ -11521,6 +11637,38 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
              * 房主可以踢其他人，
              * 但不能踢自己。
              */
+            const canModerateMember =
+              (
+                state.isOwner ||
+                Boolean(
+                  window.WT_ROOM_ACCESS?.isCohost?.(
+                    state.uid
+                  )
+                )
+              ) &&
+              !owner &&
+              uid !== state.uid;
+
+            const muted =
+              isActiveRoomMute(
+                state.roomMutes?.[uid]
+              );
+
+            const muteButton =
+              canModerateMember
+                ? (
+                  '<button type="button" class="tiny-btn" data-member-mute="' +
+                  escapeHtml(uid) +
+                  '" data-member-name="' +
+                  escapeHtml(name) +
+                  '" style="margin-left:6px;color:' +
+                  (muted ? "#86efac" : "#facc15") +
+                  ';border-color:rgba(250,204,21,.2);">' +
+                  (muted ? "解除禁言" : "禁言") +
+                  "</button>"
+                )
+                : "";
+
             const kickButton =
               state.isOwner &&
               !owner &&
@@ -11605,6 +11753,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   "
                 ></span>
 
+                ${muteButton}
                 ${kickButton}
 
               </div>
@@ -11612,6 +11761,24 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           }
         )
         .join("");
+
+    $("memberList")
+      .querySelectorAll(
+        "[data-member-mute]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              await toggleRoomMute(
+                button.dataset.memberMute,
+                button.dataset.memberName
+              );
+            }
+          );
+        }
+      );
 
     $("memberList")
       .querySelectorAll(
@@ -12509,6 +12676,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     try {
       state.membersRef?.off();
+      state.roomMutesRef?.off();
       state.kickedRef?.off();
 
       state.chatRef?.off();
