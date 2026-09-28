@@ -347,7 +347,7 @@ function init(){
   if(auth)auth.onAuthStateChanged(function(){installFriendRequestWatcher();installRoomInviteWatcher();ensureTopbar();});
   setInterval(ensureRoomTools,1000);
   setInterval(track,5000);
-  setInterval(installFriendWatcher,5000);
+  setInterval(installFriendRequestWatcher,5000);
   setInterval(installRoomInviteWatcher,5000);
 }wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
