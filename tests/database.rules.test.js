@@ -591,16 +591,16 @@ test("2.0 access control: master can manage roles, permissions, restrictions and
 });
 
 test("2.0 access control: per-user deny overrides legacy admin and allow grants a single permission", async () => {
-  const adminDb = db(ADMIN_UID, adminToken);
+  const masterDb = db(MASTER_UID, masterToken);
   await assertSucceeds(
-    adminDb.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/reports__read").set("deny")
+    masterDb.ref("admin/access/permissionsByUid/" + ADMIN_UID + "/reports__read").set("deny")
   );
   await assertFails(
-    adminDb.ref("reports").once("value")
+    db(ADMIN_UID, adminToken).ref("reports").once("value")
   );
 
   await assertSucceeds(
-    adminDb.ref("admin/access/permissionsByUid/" + OTHER_UID + "/reports__read").set("allow")
+    masterDb.ref("admin/access/permissionsByUid/" + OTHER_UID + "/reports__read").set("allow")
   );
   await assertSucceeds(
     db(OTHER_UID, {
