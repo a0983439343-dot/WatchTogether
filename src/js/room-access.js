@@ -380,7 +380,9 @@
     saveRoomSettings,
     reviewApplication,
     cancelOwnApplication,
-    setCohost
+    setCohost,
+    isCohost,
+    getRole: uid => roomState.roles?.[String(uid || user()?.uid || "")]?.role || "member"
   };
 
   const start = () => {
