@@ -54,6 +54,7 @@ function ensureTopbar(){
   if(!$("wtFeatureInviteBtn")){var iv=document.createElement("button");iv.id="wtFeatureInviteBtn";iv.className="wt-nav-btn";iv.type="button";iv.textContent="✉ 邀請";iv.addEventListener("click",openInvites);r.insertBefore(iv,anchor||null);}
   if(!$("wtFeatureStatsBtn")){var sc=document.createElement("button");sc.id="wtFeatureStatsBtn";sc.className="wt-nav-btn";sc.type="button";sc.textContent="📊 統計";sc.addEventListener("click",openStats);r.insertBefore(sc,anchor||null);}
   if(!$("wtFeatureFavoritesBtn")){var b=document.createElement("button");b.id="wtFeatureFavoritesBtn";b.className="wt-nav-btn";b.type="button";b.textContent="☆ 收藏";b.addEventListener("click",openFavorites);r.insertBefore(b,anchor||null);}
+  if(!$("wtFeatureMyReportsBtn")){var mr=document.createElement("button");mr.id="wtFeatureMyReportsBtn";mr.className="wt-nav-btn";mr.type="button";mr.textContent="📋 我的回報";mr.addEventListener("click",openMyReports);r.insertBefore(mr,anchor||null);}
   if(!$("wtFeatureReportBtn")){var x=document.createElement("button");x.id="wtFeatureReportBtn";x.className="wt-nav-btn";x.type="button";x.textContent="🐛 回報";x.addEventListener("click",function(){openReport("other");});r.insertBefore(x,anchor||null);}
 }
 
@@ -291,12 +292,39 @@ async function openReport(category){
       };
       if(screenshot)payload.screenshotDataUrl=screenshot.slice(0,900000);
       await ref.set(payload);
+      try{var ids=JSON.parse(localStorage.getItem("wt_my_report_ids_v1")||"[]");if(!Array.isArray(ids))ids=[];ids=[ref.key].concat(ids.filter(function(x){return String(x)!==String(ref.key);})).slice(0,30);localStorage.setItem("wt_my_report_ids_v1",JSON.stringify(ids));}catch(_){}
       try{window.reportWatchTogetherBug&&window.reportWatchTogetherBug($("wtReportCat").value,details,context);}catch(_){}
       pushNotification("問題回報已送出","管理系統已收到你的回報。","report");
       toast("問題回報已送出");
       close("wtReportModal");
     }catch(e){toast(e.message||"回報送出失敗");}
   };
+}
+
+
+async function openMyReports(){
+  var u=user();
+  if(!u)return toast("請先完成登入");
+  var ids=[];
+  try{ids=JSON.parse(localStorage.getItem("wt_my_report_ids_v1")||"[]");}catch(_){ids=[];}
+  ids=Array.isArray(ids)?ids.filter(Boolean).slice(0,30):[];
+  var list=[];
+  for(var i=0;i<ids.length;i++){
+    try{
+      var snap=await db.ref("reports/"+ids[i]).once("value");
+      if(snap.exists())list.push(Object.assign({id:ids[i]},snap.val()||{}));
+    }catch(_){}
+  }
+  var labels={playback:"播放／同步",search:"搜尋",room:"房間",chat:"聊天室",account:"帳號",ui:"介面",other:"其他"};
+  var statuses={open:"待處理",in_progress:"處理中",resolved:"已處理"};
+  list.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0);});
+  var html='<div class="small muted">只顯示你自己送出的回報。</div><div class="wt-feature-list">';
+  html+=list.length?list.map(function(x){
+    return '<div class="wt-feature-row"><div><strong>'+esc(labels[x.category]||x.category||"其他")+'</strong><div class="small">'+esc(x.details||"")+'</div><div class="small muted">建立：'+esc(fmtDate(x.createdAt))+(x.handledAt?'｜處理：'+esc(fmtDate(x.handledAt)):"")+'</div></div><span class="small">'+esc(statuses[x.status]||x.status||"待處理")+'</span></div>';
+  }).join(""):'<div class="wt-feature-empty">目前沒有已記錄的回報。</div>';
+  html+='</div><div class="wt-feature-actions"><button id="wtMyReportsRefresh" class="primary-btn">重新整理</button></div>';
+  var body=modal("wtMyReportsModal","我的回報",html);
+  body.querySelector("#wtMyReportsRefresh").onclick=function(){openMyReports();};
 }
 
 function openInvite(){
@@ -526,6 +554,7 @@ function init(){
   setInterval(installFriendRequestWatcher,5000);
   setInterval(installFriendshipWatcher,5000);
   setInterval(installRoomInviteWatcher,5000);
-}wt.openGlobalSearch=openGlobalSearch;wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openStats=openStats;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
+}wt.openGlobalSearch=openGlobalSearch;wt.openSettings=openSettings
+wt.openMyReports=openMyReports;wt.openStatus=openStatus;wt.openStats=openStats;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
