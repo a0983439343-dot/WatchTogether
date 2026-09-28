@@ -213,6 +213,22 @@
         <div id="accessFeatureFlagList" class="access-policy-list"></div>
       </div>
 
+      <div class="panel" id="maintenanceControlPanel">
+        <div class="panel-head"><div><h3>🔐 網站維護模式</h3><p class="muted">關站／開站需要最高管理員登入、Render 後端密碼與後端鎖定驗證。密碼不會儲存在此頁。</p></div><span id="maintenanceControlStatus" class="status">讀取中</span></div>
+        <div class="form-grid">
+          <label class="span-2">維護原因<textarea id="maintenanceReason" class="search" maxlength="500" rows="3" placeholder="例如：系統更新與資料庫維護"></textarea></label>
+          <label>預計恢復時間<input id="maintenanceRestoreAt" class="search" type="datetime-local"></label>
+          <label>維護密碼<input id="maintenancePassword" class="search" type="password" maxlength="256" autocomplete="current-password" placeholder="由 Render 後端驗證"></label>
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <span id="maintenanceControlHint" class="modal-hint" style="margin:0;flex:1">目前狀態：—</span>
+          <div class="modal-actions-right">
+            <button id="maintenanceOpenBtn" class="btn danger" type="button">關閉網站</button>
+            <button id="maintenanceCloseBtn" class="btn primary" type="button">重新開站</button>
+          </div>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="panel-head"><h3>安全規則說明</h3></div>
         <p class="muted" style="line-height:1.7;margin:0">控制資料由 Firebase Rules 驗證。前端的按鈕隱藏不是安全邊界；沒有後端權限時，直接呼叫 Firebase 寫入仍會被拒絕。限制到期後會由時間條件自動失效，不需要手動刪除。</p>
