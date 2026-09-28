@@ -88,7 +88,7 @@
   }
 
   function isAdminOperator() {
-    return currentRole === "master" || currentRole === "admin";
+    return isMasterOperator() || currentCan("users.update");
   }
 
   const ROLE_LEVELS = {
@@ -1573,8 +1573,421 @@
     toast("房間已刪除");
   }
 
+  const ACCESS_PERMISSION_CATALOG = [
+    "admin.read",
+    "users.read",
+    "users.update",
+    "users.restrict",
+    "rooms.read",
+    "rooms.manage",
+    "chat.read",
+    "chat.moderate",
+    "reports.read",
+    "reports.manage",
+    "analytics.read",
+    "ai.use",
+    "audit.read",
+    "audit.write",
+    "audit.delete",
+    "sync.control",
+    "sync.manual",
+    "room.create",
+    "room.join",
+    "room.queue",
+    "chat.send",
+    "chat.media",
+    "chat.dm",
+    "youtube.search",
+    "youtube.queue",
+    "favorites.manage"
+  ];
+
+  let accessRoles = {};
+  let accessAssignments = {};
+  let accessOverrides = {};
+  let accessRestrictions = {};
+  let accessFeatureFlags = {};
+
+  function isMasterOperator() {
+    return currentRole === "master" || isMasterUser(currentUser);
+  }
+
+  function currentCan(permission) {
+    if (isMasterOperator()) return true;
+    try {
+      if (window.WT_ACCESS_CONTROL?.hasPermission?.(permission)) {
+        return true;
+      }
+    } catch (_) {}
+    if (permission === "admin.read") return Boolean(currentHasAdminAccess);
+    if (permission === "users.update" || permission === "users.restrict" || permission === "rooms.manage" || permission === "reports.manage" || permission === "audit.write") {
+      return currentRole === "admin";
+    }
+    return currentHasAdminAccess;
+  }
+
+  function safeKey(value, max = 80) {
+    return String(value || "")
+      .trim()
+      .slice(0, max)
+      .replace(/[.#$[\]/]/g, "_");
+  }
+
+  function accessPermissionList() {
+    const fromCore = (() => {
+      try {
+        return window.WT_ACCESS_CONTROL?.getPermissionCatalog?.() || [];
+      } catch (_) {
+        return [];
+      }
+    })();
+    return Array.from(new Set([
+      ...ACCESS_PERMISSION_CATALOG,
+      ...fromCore,
+      ...Object.keys(accessFeatureFlags || {}),
+      ...Object.keys(accessOverrides || {}),
+      ...Object.keys(accessRestrictions || {})
+    ].filter(Boolean))).sort();
+  }
+
+  function populateAccessPermissionCatalog() {
+    const list = $("accessPermissionCatalog");
+    if (list) {
+      list.innerHTML = accessPermissionList()
+        .map(permission => '<option value="' + escapeHtml(permission) + '"></option>')
+        .join("");
+    }
+  }
+
+  function renderAccessSummary() {
+    const el = $("accessSummary");
+    if (!el) return;
+    const roleCount = Object.keys(accessRoles || {}).length;
+    const assignmentCount = Object.keys(accessAssignments || {}).length;
+    const overrideCount = Object.values(accessOverrides || {}).reduce((n, item) => n + Object.keys(item || {}).length, 0);
+    const restrictionCount = Object.values(accessRestrictions || {}).reduce((n, item) => n + Object.keys(item || {}).length, 0);
+    const flagCount = Object.keys(accessFeatureFlags || {}).length;
+    el.innerHTML = [
+      ["目前角色", currentRole || "—"],
+      ["自訂角色", String(roleCount)],
+      ["自訂角色指派", String(assignmentCount)],
+      ["Allow / Deny", String(overrideCount)],
+      ["功能限制", String(restrictionCount)],
+      ["Feature Flags", String(flagCount)]
+    ].map(([label,value]) => '<div class="info-item"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>').join("");
+  }
+
+  function renderAccessRoles() {
+    const box = $("accessRoleList");
+    if (!box) return;
+    const entries = Object.entries(accessRoles || {}).sort((a,b) => a[0].localeCompare(b[0]));
+    box.innerHTML = entries.length
+      ? entries.map(([id,item]) => {
+          const permissions = item && item.permissions && typeof item.permissions === "object"
+            ? Object.keys(item.permissions).filter(key => item.permissions[key] === true).sort()
+            : [];
+          return '<div class="access-policy-row">' +
+            '<div><strong>' + escapeHtml(item?.name || id) + '</strong><span class="small">' + escapeHtml(id) + '</span></div>' +
+            '<div class="access-policy-details">' + escapeHtml(permissions.join(", ") || "沒有權限") + '</div>' +
+            (isMasterOperator() ? '<button class="btn danger" type="button" data-access-role-delete="' + escapeHtml(id) + '">刪除</button>' : '') +
+          '</div>';
+        }).join("")
+      : '<div class="muted">目前尚未建立自訂角色。</div>';
+
+    box.querySelectorAll("[data-access-role-delete]").forEach(button => {
+      button.addEventListener("click", () => deleteAccessRole(button.dataset.accessRoleDelete)
+        .catch(error => { console.error(error); toast(error?.message || "刪除角色失敗"); }));
+    });
+  }
+
+  function renderAccessAssignments() {
+    const box = $("accessAssignmentList");
+    if (!box) return;
+    const entries = Object.entries(accessAssignments || {}).sort((a,b) => a[0].localeCompare(b[0]));
+    box.innerHTML = entries.length
+      ? entries.map(([uid,role]) =>
+          '<div class="access-policy-row">' +
+            '<div><strong>' + escapeHtml(uid) + '</strong><span class="small">指派角色</span></div>' +
+            '<div class="access-policy-details">' + escapeHtml(String(role || "—")) + '</div>' +
+            (isMasterOperator() ? '<button class="btn danger" type="button" data-access-assignment-delete="' + escapeHtml(uid) + '">解除</button>' : '') +
+          '</div>'
+        ).join("")
+      : '<div class="muted">目前沒有自訂角色指派。</div>';
+    box.querySelectorAll("[data-access-assignment-delete]").forEach(button => {
+      button.addEventListener("click", () => removeAccessAssignment(button.dataset.accessAssignmentDelete)
+        .catch(error => { console.error(error); toast(error?.message || "解除角色失敗"); }));
+    });
+  }
+
+  function renderAccessOverrides() {
+    const box = $("accessOverrideList");
+    if (!box) return;
+    const rows = [];
+    Object.entries(accessOverrides || {}).forEach(([uid, map]) => {
+      Object.entries(map || {}).forEach(([permission,effect]) => rows.push({uid,permission,effect}));
+    });
+    rows.sort((a,b) => (a.uid + a.permission).localeCompare(b.uid + b.permission));
+    box.innerHTML = rows.length
+      ? rows.map(row =>
+          '<div class="access-policy-row">' +
+            '<div><strong>' + escapeHtml(row.uid) + '</strong><span class="small">' + escapeHtml(row.permission) + '</span></div>' +
+            '<span class="status ' + (row.effect === "deny" ? "off" : "admin") + '">' + escapeHtml(String(row.effect || "").toUpperCase()) + '</span>' +
+            '<button class="btn danger" type="button" data-access-override-delete="' + escapeHtml(row.uid) + '" data-access-override-permission="' + escapeHtml(row.permission) + '">移除</button>' +
+          '</div>'
+        ).join("")
+      : '<div class="muted">目前沒有個人權限覆寫。</div>';
+    box.querySelectorAll("[data-access-override-delete]").forEach(button => {
+      button.addEventListener("click", () => removeAccessOverride(button.dataset.accessOverrideDelete, button.dataset.accessOverridePermission)
+        .catch(error => { console.error(error); toast(error?.message || "移除覆寫失敗"); }));
+    });
+  }
+
+  function restrictionActive(item) {
+    if (!item || item.enabled !== true) return false;
+    if (item.permanent === true) return true;
+    const until = Number(item.until || 0);
+    return Number.isFinite(until) && until > Date.now();
+  }
+
+  function renderAccessRestrictions() {
+    const box = $("accessRestrictionList");
+    if (!box) return;
+    const rows = [];
+    Object.entries(accessRestrictions || {}).forEach(([uid,map]) => {
+      Object.entries(map || {}).forEach(([permission,item]) => rows.push({uid,permission,item}));
+    });
+    rows.sort((a,b) => Number(b.item?.createdAt || 0) - Number(a.item?.createdAt || 0));
+    box.innerHTML = rows.length
+      ? rows.map(row => {
+          const active = restrictionActive(row.item);
+          const until = row.item?.permanent === true || Number(row.item?.until || 0) === 0 ? "永久" : formatDate(row.item.until);
+          return '<div class="access-policy-row">' +
+            '<div><strong>' + escapeHtml(row.uid) + '</strong><span class="small">' + escapeHtml(row.permission) + '</span></div>' +
+            '<div class="access-policy-details">' + escapeHtml(row.item?.reason || "—") + '<br><span class="small">' + escapeHtml(until) + '</span></div>' +
+            '<span class="status ' + (active ? "off" : "") + '">' + (active ? "限制中" : "已到期") + '</span>' +
+            '<button class="btn" type="button" data-access-restriction-delete="' + escapeHtml(row.uid) + '" data-access-restriction-permission="' + escapeHtml(row.permission) + '">解除</button>' +
+          '</div>';
+        }).join("")
+      : '<div class="muted">目前沒有指定功能限制。</div>';
+    box.querySelectorAll("[data-access-restriction-delete]").forEach(button => {
+      button.addEventListener("click", () => removeAccessRestriction(button.dataset.accessRestrictionDelete, button.dataset.accessRestrictionPermission)
+        .catch(error => { console.error(error); toast(error?.message || "解除限制失敗"); }));
+    });
+  }
+
+  function renderAccessFeatureFlags() {
+    const box = $("accessFeatureFlagList");
+    if (!box) return;
+    const entries = Object.entries(accessFeatureFlags || {}).sort((a,b) => a[0].localeCompare(b[0]));
+    box.innerHTML = entries.length
+      ? entries.map(([name,item]) =>
+          '<div class="access-policy-row">' +
+            '<div><strong>' + escapeHtml(name) + '</strong><span class="small">' + escapeHtml(item?.reason || "—") + '</span></div>' +
+            '<span class="status ' + (item?.enabled === false ? "off" : "admin") + '">' + (item?.enabled === false ? "關閉" : "啟用") + '</span>' +
+            '<span class="small">' + escapeHtml(formatDate(item?.updatedAt)) + '</span>' +
+            (isMasterOperator() ? '<button class="btn danger" type="button" data-access-flag-delete="' + escapeHtml(name) + '">刪除</button>' : '') +
+          '</div>'
+        ).join("")
+      : '<div class="muted">目前沒有 Feature Flag。</div>';
+    box.querySelectorAll("[data-access-flag-delete]").forEach(button => {
+      button.addEventListener("click", () => deleteAccessFeatureFlag(button.dataset.accessFlagDelete)
+        .catch(error => { console.error(error); toast(error?.message || "刪除 Feature Flag 失敗"); }));
+    });
+  }
+
+  async function loadAccessControl() {
+    if (!currentHasAdminAccess) return;
+    const [rolesSnap, assignmentsSnap, overridesSnap, restrictionsSnap, flagsSnap] = await Promise.all([
+      db.ref("admin/access/roles").once("value"),
+      db.ref("admin/access/roleByUid").once("value"),
+      db.ref("admin/access/permissionsByUid").once("value"),
+      db.ref("admin/access/restrictionsByUid").once("value"),
+      db.ref("admin/featureFlags").once("value")
+    ]);
+    accessRoles = rolesSnap.val() || {};
+    accessAssignments = assignmentsSnap.val() || {};
+    accessOverrides = overridesSnap.val() || {};
+    accessRestrictions = restrictionsSnap.val() || {};
+    accessFeatureFlags = flagsSnap.val() || {};
+    populateAccessPermissionCatalog();
+    renderAccessSummary();
+    renderAccessRoles();
+    renderAccessAssignments();
+    renderAccessOverrides();
+    renderAccessRestrictions();
+    renderAccessFeatureFlags();
+    const select = $("accessAssignRole");
+    if (select) {
+      const options = Object.entries(accessRoles || {}).sort((a,b) => a[0].localeCompare(b[0]));
+      select.innerHTML = '<option value="">選擇自訂角色</option>' +
+        options.map(([id,item]) => '<option value="' + escapeHtml(id) + '">' + escapeHtml(item?.name || id) + ' (' + escapeHtml(id) + ')</option>').join("");
+    }
+  }
+
+  async function saveAccessRole() {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以建立自訂角色");
+    const id = safeKey($("accessRoleId")?.value, 80);
+    const name = String($("accessRoleName")?.value || "").trim().slice(0,80);
+    const permissions = String($("accessRolePermissions")?.value || "")
+      .split(",").map(item => item.trim()).filter(Boolean);
+    if (!id) throw new Error("請輸入角色 ID");
+    if (!name) throw new Error("請輸入角色名稱");
+    if (!permissions.length) throw new Error("至少需要一項權限");
+    const map = {};
+    permissions.forEach(permission => { map[safeKey(permission,80)] = true; });
+    await db.ref("admin/access/roles/" + id).set({
+      name,
+      permissions: map,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid: currentUser.uid,
+      updatedByEmail: currentUser.email || ""
+    });
+    await loadAccessControl();
+    void writeAuditLog("access.role.create", currentUser.uid, name, "建立自訂角色 " + id);
+    $("accessRoleId").value = "";
+    $("accessRoleName").value = "";
+    $("accessRolePermissions").value = "";
+    toast("自訂角色已儲存");
+  }
+
+  async function deleteAccessRole(id) {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以刪除自訂角色");
+    const key = safeKey(id);
+    if (!key || !accessRoles[key]) return;
+    if (Object.values(accessAssignments || {}).some(role => String(role) === key)) {
+      throw new Error("這個角色仍有使用者指派，請先解除指派");
+    }
+    if (!window.confirm("確定刪除自訂角色「" + (accessRoles[key]?.name || key) + "」？")) return;
+    await db.ref("admin/access/roles/" + key).remove();
+    await loadAccessControl();
+    void writeAuditLog("access.role.delete", "", accessRoles[key]?.name || key, "刪除自訂角色 " + key);
+    toast("自訂角色已刪除");
+  }
+
+  async function assignAccessRole() {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以指派自訂角色");
+    const uid = String($("accessAssignUid")?.value || "").trim();
+    const role = safeKey($("accessAssignRole")?.value, 80);
+    if (!uid) throw new Error("請輸入使用者 UID");
+    if (!role || !accessRoles[role]) throw new Error("請選擇有效的自訂角色");
+    if (uid === MASTER_UID) throw new Error("最高管理員不能被重新指派角色");
+    await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(role);
+    await loadAccessControl();
+    void writeAuditLog("access.role.assign", uid, role, "指派自訂角色 " + role);
+    $("accessAssignUid").value = "";
+    toast("角色已指派");
+  }
+
+  async function removeAccessAssignment(uid) {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以解除角色");
+    const key = safeKey(uid,128);
+    if (!key) return;
+    await db.ref("admin/access/roleByUid/" + key).remove();
+    await loadAccessControl();
+    void writeAuditLog("access.role.unassign", key, key, "解除自訂角色");
+    toast("角色指派已解除");
+  }
+
+  async function saveAccessOverride() {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以設定個人 Allow / Deny");
+    const uid = String($("accessOverrideUid")?.value || "").trim();
+    const permission = safeKey($("accessOverridePermission")?.value,80);
+    const effect = $("accessOverrideEffect")?.value === "deny" ? "deny" : "allow";
+    if (!uid) throw new Error("請輸入使用者 UID");
+    if (!permission) throw new Error("請輸入權限名稱");
+    if (uid === MASTER_UID) throw new Error("最高管理員不能被限制權限");
+    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + permission).set(effect);
+    await loadAccessControl();
+    void writeAuditLog("access.permission.override", uid, permission, effect.toUpperCase() + " " + permission);
+    $("accessOverrideUid").value = "";
+    $("accessOverridePermission").value = "";
+    toast("個人權限覆寫已套用");
+  }
+
+  async function removeAccessOverride(uid, permission) {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以移除個人權限覆寫");
+    const u = safeKey(uid,128);
+    const p = safeKey(permission,80);
+    if (!u || !p) return;
+    await db.ref("admin/access/permissionsByUid/" + u + "/" + p).remove();
+    await loadAccessControl();
+    void writeAuditLog("access.permission.clear", u, p, "移除個人權限覆寫");
+    toast("個人權限覆寫已移除");
+  }
+
+  async function saveAccessRestriction() {
+    if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能設定功能限制");
+    const uid = String($("accessRestrictionUid")?.value || "").trim();
+    const permission = safeKey($("accessRestrictionPermission")?.value,80);
+    const duration = String($("accessRestrictionDuration")?.value || "3600000");
+    const reason = String($("accessRestrictionReason")?.value || "").trim().slice(0,500);
+    if (!uid) throw new Error("請輸入使用者 UID");
+    if (!permission) throw new Error("請輸入要限制的功能");
+    if (!reason) throw new Error("請輸入限制原因");
+    if (uid === MASTER_UID || uid === currentUser?.uid) throw new Error("不能限制最高管理員或自己");
+    const permanent = duration === "permanent";
+    const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
+    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + permission).set({
+      enabled:true,
+      permanent,
+      until,
+      reason,
+      createdAt:firebase.database.ServerValue.TIMESTAMP,
+      createdByUid:currentUser.uid,
+      createdByEmail:currentUser.email || ""
+    });
+    await loadAccessControl();
+    void writeAuditLog("access.user.restriction", uid, permission, reason + " · " + (permanent ? "永久" : formatDate(until)));
+    $("accessRestrictionUid").value = "";
+    $("accessRestrictionPermission").value = "";
+    $("accessRestrictionReason").value = "";
+    toast("功能限制已套用");
+  }
+
+  async function removeAccessRestriction(uid, permission) {
+    if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能解除功能限制");
+    const u = safeKey(uid,128);
+    const p = safeKey(permission,80);
+    if (!u || !p) return;
+    await db.ref("admin/access/restrictionsByUid/" + u + "/" + p).remove();
+    await loadAccessControl();
+    void writeAuditLog("access.user.restriction.clear", u, p, "解除功能限制");
+    toast("功能限制已解除");
+  }
+
+  async function saveAccessFeatureFlag() {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以管理 Feature Flag");
+    const name = safeKey($("accessFlagName")?.value,80);
+    const enabled = $("accessFlagEnabled")?.value !== "false";
+    const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
+    if (!name) throw new Error("請輸入功能名稱");
+    await db.ref("admin/featureFlags/" + name).set({
+      enabled,
+      reason,
+      updatedAt:firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid:currentUser.uid,
+      updatedByEmail:currentUser.email || ""
+    });
+    await loadAccessControl();
+    void writeAuditLog("feature.flag", currentUser.uid, name, (enabled ? "啟用 " : "關閉 ") + name + (reason ? " · " + reason : ""));
+    $("accessFlagName").value = "";
+    $("accessFlagReason").value = "";
+    toast("Feature Flag 已更新");
+  }
+
+  async function deleteAccessFeatureFlag(name) {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以刪除 Feature Flag");
+    const key = safeKey(name);
+    if (!key) return;
+    if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
+    await db.ref("admin/featureFlags/" + key).remove();
+    await loadAccessControl();
+    void writeAuditLog("feature.flag.delete", currentUser.uid, key, "刪除 Feature Flag");
+    toast("Feature Flag 已刪除");
+  }
+
   function applyRoleUi() {
-    const master = currentRole === "master";
+    const master = isMasterOperator();
     const addPanel = $("whitelistAddPanel");
     const help = $("whitelistHelp");
     if (master) {
@@ -1657,6 +2070,7 @@
           loadRooms(),
           loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
           loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error)),
+          loadAccessControl().catch(error => console.warn("載入 2.0 控制中心失敗:", error)),
           loadAutonomousMaintenance().catch(error => {
             console.warn("載入全自動維護設定失敗:", error);
             autonomousMaintenanceEnabled = false;
@@ -1667,6 +2081,8 @@
         startReportsListener();
         startAuditLogsListener();
         startAutonomousMaintenanceListener();
+        populateAccessPermissionCatalog();
+        renderAccessSummary();
         renderAutonomousMaintenance();
         startReportAutomation();
       } catch (error) {
@@ -1770,6 +2186,22 @@
     $("reportLaterBtn")?.addEventListener("click", () => {
       $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
     });
+    $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("accessRoleSaveBtn")?.addEventListener("click", () => saveAccessRole().catch(error => { console.error(error); toast(error?.message || "儲存角色失敗"); }));
+    $("accessAssignBtn")?.addEventListener("click", () => assignAccessRole().catch(error => { console.error(error); toast(error?.message || "指派角色失敗"); }));
+    $("accessOverrideBtn")?.addEventListener("click", () => saveAccessOverride().catch(error => { console.error(error); toast(error?.message || "設定 Allow / Deny 失敗"); }));
+    $("accessRestrictionBtn")?.addEventListener("click", () => saveAccessRestriction().catch(error => { console.error(error); toast(error?.message || "設定功能限制失敗"); }));
+    $("accessFlagBtn")?.addEventListener("click", () => saveAccessFeatureFlag().catch(error => { console.error(error); toast(error?.message || "更新 Feature Flag 失敗"); }));
+    $("accessAssignUid")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") void assignAccessRole().catch(error => { console.error(error); toast(error?.message || "指派角色失敗"); });
+    });
+    $("accessOverrideUid")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") void saveAccessOverride().catch(error => { console.error(error); toast(error?.message || "設定 Allow / Deny 失敗"); });
+    });
+    $("accessRestrictionUid")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") void saveAccessRestriction().catch(error => { console.error(error); toast(error?.message || "設定功能限制失敗"); });
+    });
+
     $("auditSearch")?.addEventListener("input", renderAuditLogs);
     $("auditActionFilter")?.addEventListener("change", renderAuditLogs);
     $("auditRefreshBtn")?.addEventListener("click", () => loadAuditLogs().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
