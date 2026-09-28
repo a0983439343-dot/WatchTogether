@@ -173,7 +173,7 @@
     if (!user) return false;
     if (isMaster(user)) return true;
 
-    const adminScoped = /^(admin|users|audit)\\./.test(key) ||
+    const adminScoped = /^(admin|users|audit)\./.test(key) ||
       key === "reports.manage" ||
       key === "analytics.read" ||
       key === "ai.use" ||
