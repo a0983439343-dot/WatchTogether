@@ -103,16 +103,24 @@
     const permissionMap = {
       set_user_restriction:"users.restrict",
       clear_user_restriction:"users.restrict",
-      set_feature_flag:"settings.edit",
-      assign_role:"roles.manage",
-      set_override:"roles.manage",
-      set_whitelist:"whitelist.manage",
       delete_audit:"audit.delete"
     };
 
-    const permission = permissionMap[action];
-    if (!permission || !ctx.hasPermission?.(permission)) {
-      return "已攔截：目前管理員沒有執行 " + action + " 所需權限。";
+    const masterOnly = new Set([
+      "set_feature_flag",
+      "assign_role",
+      "set_override",
+      "set_whitelist"
+    ]);
+    if (masterOnly.has(action)) {
+      if (!ctx.isMaster?.()) {
+        return "已攔截：這個 AI 管理操作只有最高管理員可以執行。";
+      }
+    } else {
+      const permission = permissionMap[action];
+      if (!permission || !ctx.hasPermission?.(permission)) {
+        return "已攔截：目前管理員沒有執行 " + action + " 所需權限。";
+      }
     }
 
     if (needsConfirmation) {
