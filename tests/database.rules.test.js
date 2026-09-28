@@ -1559,3 +1559,79 @@ serialTest("unauthenticated users cannot access protected admin paths", async ()
     unauth.database().ref("admin/whitelistByUid").once("value")
   );
 });
+
+
+serialTest("room captions: owner/cohost can write and members can read, outsiders cannot write", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const owner = db(USER_UID, userToken);
+  const member = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(master.ref("rooms/CAP001").set({
+    owner: USER_UID,
+    name: "Caption Test",
+    sourceType: "youtube",
+    video: {
+      id: "caption-video",
+      platform: "youtube",
+      title: "Caption",
+      thumbnail: "",
+      channel: ""
+    }
+  }));
+
+  await assertSucceeds(master.ref("members/CAP001/" + USER_UID).set({
+    name: "Owner",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+  await assertSucceeds(master.ref("members/CAP001/" + OTHER_UID).set({
+    name: "Member",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+
+  const payload = {
+    text: "WEBVTT\\n\\n00:00:01.000 --> 00:00:03.000\\nHello",
+    label: "English",
+    language: "en",
+    cueCount: 1,
+    updatedAt: Date.now(),
+    updatedByUid: USER_UID
+  };
+
+  await assertSucceeds(owner.ref("roomCaptions/CAP001").set(payload));
+  await assertSucceeds(member.ref("roomCaptions/CAP001").once("value"));
+
+  await assertFails(member.ref("roomCaptions/CAP001").set({
+    ...payload,
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(master.ref("roomRoles/CAP001/" + OTHER_UID).set({
+    uid: OTHER_UID,
+    role: "cohost",
+    updatedAt: Date.now(),
+    updatedByUid: USER_UID
+  }));
+
+  await assertSucceeds(member.ref("roomCaptions/CAP001").set({
+    ...payload,
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertFails(db("outside-user", {
+    email: "outside@example.com",
+    email_verified: true
+  }).ref("roomCaptions/CAP001").set({
+    ...payload,
+    updatedByUid: "outside-user"
+  }));
+
+  await assertSucceeds(master.ref("rooms/CAP001").remove());
+});
