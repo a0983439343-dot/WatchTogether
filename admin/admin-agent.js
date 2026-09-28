@@ -115,6 +115,10 @@
       "set_override",
       "set_whitelist"
     ]);
+    if (action !== "none" && !ctx.hasPermission?.("audit.write") && !ctx.isMaster?.()) {
+      return "已攔截：AI 管理操作需要 audit.write，才能確保操作紀錄完整保存。";
+    }
+
     if (masterOnly.has(action)) {
       if (!ctx.isMaster?.()) {
         return "已攔截：這個 AI 管理操作只有最高管理員可以執行。";
