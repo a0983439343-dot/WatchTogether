@@ -67,8 +67,14 @@ async function seed() {
             custom: {
               name: "自訂測試角色",
               permissions: {
+                "admin.read": true,
                 "users.read": true,
-                "reports.read": true
+                "users.update": true,
+                "users.restrict": true,
+                "reports.read": true,
+                "reports.manage": true,
+                "audit.read": true,
+                "audit.write": true
               }
             }
           },
@@ -420,6 +426,31 @@ test("audit logs: viewer can read but cannot append", async () => {
       createdAt: Date.now()
     })
   );
+});
+
+test("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
+  const adminDb = db(ADMIN_UID, {
+    email: "admin@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(adminDb.ref("accounts/" + USER_UID).once("value"));
+  await assertSucceeds(adminDb.ref("profiles/" + USER_UID).once("value"));
+  await assertSucceeds(adminDb.ref("reports").once("value"));
+  await assertSucceeds(adminDb.ref("reportHistoryEvents/history-target").once("value"));
+  await assertSucceeds(adminDb.ref("admin/blocksByUid/" + USER_UID).once("value"));
+
+  const log = adminDb.ref("admin/auditLogs").push();
+  await assertSucceeds(log.set({
+    action: "custom.role.audit",
+    actorUid: ADMIN_UID,
+    actorEmail: "admin@example.com",
+    actorRole: "custom",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "custom role audit",
+    createdAt: Date.now()
+  }));
 });
 
 test("2.0 access control: master can manage roles, permissions, restrictions and feature flags", async () => {
