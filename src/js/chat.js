@@ -51,7 +51,9 @@ var state = {
   recordingChunks:[],
   recordingStartedAt:0,
   recordingTargetUid:"",
-  notifiedMessages:{}
+  notifiedMessages:{},
+  pinned:{},
+  pinnedRef:null
 };
 
 function user() {
@@ -156,10 +158,13 @@ function stopActiveListeners() {
   try { state.messageRef && state.messageRef.off(); } catch (_) {}
   try { state.readsRef && state.readsRef.off(); } catch (_) {}
   try { state.typingRef && state.typingRef.off(); } catch (_) {}
+  try { state.pinnedRef && state.pinnedRef.off(); } catch (_) {}
   state.messageRef = null;
   state.readsRef = null;
   state.typingRef = null;
+  state.pinnedRef = null;
   state.messages = {};
+  state.pinned = {};
   state.readAt = {};
   state.typingOtherUntil = 0;
 }
@@ -675,6 +680,36 @@ async function toggleReaction(messageId,emoji) {
   else await ref.set(emoji);
 }
 
+async function togglePin(messageId) {
+  var me = user();
+  if (!me || !state.activeUid) return;
+  var message = state.messages[messageId];
+  if (!message) return;
+  var conversationId = privateId(me.uid,state.activeUid);
+  var ref = wt.db.ref("conversations/" + conversationId + "/pinnedMessages/" + messageId);
+  if (state.pinned && state.pinned[messageId]) {
+    await ref.remove();
+    return;
+  }
+  await ref.set({
+    messageId:messageId,
+    uid:String(message.uid || ""),
+    name:String(message.name || "玩家").slice(0,30),
+    type:String(message.type || "text"),
+    text:String(message.text || "").slice(0,300),
+    sticker:String(message.sticker || "").slice(0,4),
+    mediaName:String(message.mediaName || "").slice(0,200),
+    createdAt:Number(message.createdAt || 0),
+    pinnedAt:firebase.database.ServerValue.TIMESTAMP,
+    pinnedBy:me.uid
+  });
+}
+
+function renderMessageText(value) {
+  var safe = esc(value || "");
+  return safe.replace(/@([A-Z0-9]{6})\b/g, '<span class="wt-chat-mention">@$1</span>');
+}
+
 function replyToMessage(id) {
   var message = state.messages[id];
   if (!message) return;
@@ -883,11 +918,12 @@ function renderMessages() {
     } else if(message.type==="audio" && message.mediaUrl) {
       body='<audio class="wt-chat-audio" controls preload="metadata" src="' + esc(message.mediaUrl) + '"></audio><span class="wt-chat-audio-meta">🎤 ' + Math.max(1,Number(message.duration||0)) + ' 秒</span>';
     } else {
-      body='<div class="wt-chat-text">' + esc(message.text || "") + '</div>';
+      body='<div class="wt-chat-text">' + renderMessageText(message.text || "") + '</div>';
     }
     var edited=message.editedAt ? '<span class="wt-chat-edited">已編輯</span>' : "";
     var seen=self && Number(state.readAt[active+"__friend"]||0)>=Number(message.createdAt||0) ? '<span class="wt-chat-seen">已讀</span>' : "";
-    var actions='<div class="wt-chat-message-actions"><button type="button" data-chat-reply="' + esc(message.id) + '">↩ 回覆</button><button type="button" data-chat-react="' + esc(message.id) + '" data-chat-reaction="❤️">❤️</button><button type="button" data-chat-copy="' + esc(message.id) + '">複製</button>';
+    var isPinned = Boolean(state.pinned && state.pinned[message.id]);
+    var actions='<div class="wt-chat-message-actions"><button type="button" data-chat-reply="' + esc(message.id) + '">↩ 回覆</button><button type="button" data-chat-react="' + esc(message.id) + '" data-chat-reaction="❤️">❤️</button><button type="button" data-chat-copy="' + esc(message.id) + '">複製</button><button type="button" data-chat-pin="' + esc(message.id) + '">' + (isPinned ? "取消置頂" : "置頂") + '</button>';
     if(self && message.type==="text") actions+='<button type="button" data-chat-edit="' + esc(message.id) + '">編輯</button>';
     if(self) actions+='<button type="button" class="danger" data-chat-delete="' + esc(message.id) + '">刪除</button>';
     actions+='</div>';
@@ -896,10 +932,21 @@ function renderMessages() {
       '<div class="wt-chat-message-stack"><div class="wt-chat-message-head"><strong>' + esc(message.name || "玩家") + '</strong><span>' + esc(formatTime(message.createdAt)) + '</span>' + edited + seen + '</div>' +
       replyHtml + body + (reactionHtml ? '<div class="wt-chat-reactions">' + reactionHtml + '</div>' : '') + actions + '</div></article>';
   });
+  var pinnedEntries = Object.entries(state.pinned || {}).map(function(pair){ return Object.assign({id:pair[0]},pair[1]||{}); }).sort(function(a,b){ return Number(a.pinnedAt||0)-Number(b.pinnedAt||0); });
+  if (pinnedEntries.length) {
+    html = '<div class="wt-chat-pinned-bar"><strong>📌 已置頂</strong><div class="wt-chat-pinned-list">' +
+      pinnedEntries.map(function(item){
+        var label = item.type === "text" ? String(item.text || "訊息") : (item.mediaName || item.sticker || item.type || "內容");
+        return '<button type="button" class="wt-chat-pinned-item" data-chat-pin-jump="' + esc(item.id) + '">📌 ' + esc(String(item.name || "玩家") + "：" + label).slice(0,220) + '</button>';
+      }).join("") +
+      '</div></div>' + html;
+  }
   box.innerHTML=html;
+  box.querySelectorAll("[data-chat-pin-jump]").forEach(function(btn){ btn.addEventListener("click",function(){ var target=$("wt-chat-message-"+btn.dataset.chatPinJump); if(target) target.scrollIntoView({behavior:"smooth",block:"center"}); }); });
   box.querySelectorAll("[data-chat-image]").forEach(function(btn){ btn.addEventListener("click",function(){ openLightbox(btn.dataset.chatImage); }); });
   box.querySelectorAll("[data-chat-reply]").forEach(function(btn){ btn.addEventListener("click",function(){ replyToMessage(btn.dataset.chatReply); }); });
   box.querySelectorAll("[data-chat-react]").forEach(function(btn){ btn.addEventListener("click",function(){ toggleReaction(btn.dataset.chatReact,btn.dataset.chatReaction || "❤️").catch(function(error){wt.toast(error&&error.message||"反應失敗");}); }); });
+  box.querySelectorAll("[data-chat-pin]").forEach(function(btn){ btn.addEventListener("click",function(){ togglePin(btn.dataset.chatPin).catch(function(error){wt.toast(error&&error.message||"置頂操作失敗");}); }); });
   box.querySelectorAll("[data-chat-copy]").forEach(function(btn){ btn.addEventListener("click",function(){ copyMessage(btn.dataset.chatCopy); }); });
   box.querySelectorAll("[data-chat-edit]").forEach(function(btn){ btn.addEventListener("click",function(){ editMessage(btn.dataset.chatEdit); }); });
   box.querySelectorAll("[data-chat-delete]").forEach(function(btn){ btn.addEventListener("click",function(){ deleteMessage(btn.dataset.chatDelete).catch(function(error){wt.toast(error&&error.message||"刪除失敗");}); }); });
@@ -937,10 +984,15 @@ function startActiveListeners(uid) {
   state.messageRef=wt.db.ref("conversations/"+id+"/messages").limitToLast(200);
   state.readsRef=wt.db.ref("conversations/"+id+"/reads");
   state.typingRef=wt.db.ref("conversations/"+id+"/typing");
+  state.pinnedRef=wt.db.ref("conversations/"+id+"/pinnedMessages");
   state.messageRef.on("value",function(snapshot){
     state.messages=snapshot.val()||{};
     renderMessages();
     void markRead();
+  });
+  state.pinnedRef.on("value",function(snapshot){
+    state.pinned=snapshot.val()||{};
+    renderMessages();
   });
   state.readsRef.on("value",function(snapshot){
     var values=snapshot.val()||{};
@@ -1168,6 +1220,7 @@ async function openChat() {
 
 wt.openFriends = openChat;
 wt.openChat = openChat;
+window.WT_CHAT = state;
 
 if(document.readyState==="loading"){
   document.addEventListener("DOMContentLoaded",function(){ buildModal(); },{once:true});
