@@ -2163,15 +2163,22 @@
         map[encodeAccessPermission(normalized)] = true;
       }
     });
-    await db.ref("admin/access/roles/" + id).set({
+    const updates = {};
+    updates["admin/access/roles/" + id] = {
       name,
       permissions: map,
       updatedAt: firebase.database.ServerValue.TIMESTAMP,
       updatedByUid: currentUser.uid,
       updatedByEmail: currentUser.email || ""
-    });
+    };
+    await applyMutationWithAudit(
+      updates,
+      "access.role.create",
+      currentUser.uid,
+      name,
+      "建立自訂角色 " + id
+    );
     await loadAccessControl();
-    void writeAuditLog("access.role.create", currentUser.uid, name, "建立自訂角色 " + id);
     $("accessRoleId").value = "";
     $("accessRoleName").value = "";
     $("accessRolePermissions").value = "";
@@ -2186,9 +2193,17 @@
       throw new Error("這個角色仍有使用者指派，請先解除指派");
     }
     if (!window.confirm("確定刪除自訂角色「" + (accessRoles[key]?.name || key) + "」？")) return;
-    await db.ref("admin/access/roles/" + key).remove();
+    const roleName = accessRoles[key]?.name || key;
+    const updates = {};
+    updates["admin/access/roles/" + key] = null;
+    await applyMutationWithAudit(
+      updates,
+      "access.role.delete",
+      "",
+      roleName,
+      "刪除自訂角色 " + key
+    );
     await loadAccessControl();
-    void writeAuditLog("access.role.delete", "", accessRoles[key]?.name || key, "刪除自訂角色 " + key);
     toast("自訂角色已刪除");
   }
 
@@ -2199,16 +2214,23 @@
     if (uid === MASTER_UID) throw new Error("最高管理員不需要被重新指派權限");
 
     const roleId = "full_admin";
-    await db.ref("admin/access/roles/" + roleId).set({
+    const updates = {};
+    updates["admin/access/roles/" + roleId] = {
       name: "完整管理員（與 Master 相同）",
       permissions: {__all__: true},
       updatedAt: firebase.database.ServerValue.TIMESTAMP,
       updatedByUid: currentUser.uid,
       updatedByEmail: currentUser.email || ""
-    });
-    await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(roleId);
+    };
+    updates["admin/access/roleByUid/" + safeKey(uid,128)] = roleId;
+    await applyMutationWithAudit(
+      updates,
+      "access.role.full_admin",
+      uid,
+      roleId,
+      "授予與最高管理員相同的完整管理權限"
+    );
     await loadAccessControl();
-    void writeAuditLog("access.role.full_admin", uid, roleId, "授予與最高管理員相同的完整管理權限");
     $("accessAssignUid").value = "";
     toast("已授予完整管理權限");
   }
@@ -2219,9 +2241,16 @@
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!role || !accessRoles[role]) throw new Error("請選擇有效的自訂角色");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被重新指派角色");
-    await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(role);
+    const updates = {};
+    updates["admin/access/roleByUid/" + safeKey(uid,128)] = role;
+    await applyMutationWithAudit(
+      updates,
+      "access.role.assign",
+      uid,
+      role,
+      "指派自訂角色 " + role
+    );
     await loadAccessControl();
-    void writeAuditLog("access.role.assign", uid, role, "指派自訂角色 " + role);
     $("accessAssignUid").value = "";
     toast("角色已指派");
   }
@@ -2230,9 +2259,16 @@
     if (!isMasterOperator()) throw new Error("只有最高管理員可以解除角色");
     const key = safeKey(uid,128);
     if (!key) return;
-    await db.ref("admin/access/roleByUid/" + key).remove();
+    const updates = {};
+    updates["admin/access/roleByUid/" + key] = null;
+    await applyMutationWithAudit(
+      updates,
+      "access.role.unassign",
+      key,
+      key,
+      "解除自訂角色"
+    );
     await loadAccessControl();
-    void writeAuditLog("access.role.unassign", key, key, "解除自訂角色");
     toast("角色指派已解除");
   }
 
