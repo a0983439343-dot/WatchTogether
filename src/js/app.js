@@ -11674,6 +11674,21 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     if (
+      !state.roomBansRef &&
+      state.roomId
+    ) {
+      state.roomBansRef = db.ref("roomBans/" + state.roomId);
+      state.roomBansRef.on("value", (snapshot) => {
+        state.roomBans = snapshot.val() || {};
+        if (state.membersRef) {
+          state.membersRef.once("value").then((memberSnapshot) => {
+            renderMembers(memberSnapshot.val() || {});
+          }).catch(() => {});
+        }
+      });
+    }
+
+    if (
       !state.membersListenerAttached
     ) {
       state.membersRef.on(
