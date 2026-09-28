@@ -400,7 +400,14 @@
   }
 
   function roomMentionCandidates() {
-    const members=state().members || {};
+    const members = {};
+    document.querySelectorAll("#memberList .member[data-member-uid]").forEach(el => {
+      const uid = String(el.getAttribute("data-member-uid") || "");
+      if (!uid) return;
+      const code = String(el.getAttribute("data-member-public-code") || uid.slice(0,6)).toUpperCase().slice(0,6);
+      const nameEl = el.querySelector(".member-name b");
+      members[uid] = {name:String(nameEl?.textContent || "玩家").trim(),publicCode:code};
+    });
     return Object.entries(members).map(([uid,m]) => ({
       uid,
       name:String(m?.name || "玩家"),
