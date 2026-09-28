@@ -33,7 +33,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
 <script src="../config/firebase-config.js?v=20260926-ai-v1"></script>
-<script src="../src/js/access-control.js?v=20260928-access-v1"></script>
+<script src="../src/js/access-control.js?v=20260928-access-v3"></script>
 </head>
 <body>
 <div id="loadingScreen" class="screen"><div><div class="loader"></div><div>正在驗證管理員身分…</div></div></div>
@@ -70,6 +70,7 @@
     <button class="nav-item" data-section="chat">💬 聊天管理</button>
     <button class="nav-item" data-section="whitelist">白名單</button>
     <button class="nav-item" data-section="access">⚙️ 2.0 控制中心</button>
+    <button class="nav-item" data-section="settings">🧩 系統設定</button>
      <button class="nav-item" data-section="reports">🐛 問題回報</button>
      <button class="nav-item" data-section="analytics">📊 Analytics</button>
      <button class="nav-item" data-section="ai">🤖 AI 管理</button>
@@ -294,6 +295,27 @@
       </div>
     </section>
 
+    <section id="section-settings" class="admin-section hidden">
+      <div class="section-head"><div><div class="eyebrow">SYSTEM SETTINGS</div><h2>系統設定</h2></div><button id="systemSettingsRefreshBtn" class="btn primary">重新整理</button></div>
+      <div class="panel">
+        <div class="panel-head"><div><h3>網站資訊</h3><p class="muted">這些設定會即時同步到前台；未設定時會使用原本的 WatchTogether 預設值。</p></div><span id="systemSettingsStatus" class="status">讀取中</span></div>
+        <div class="form-grid">
+          <label>網站名稱<input id="systemSiteName" class="search" type="text" maxlength="80" autocomplete="off" placeholder="WatchTogether"></label>
+          <label class="span-2">網站描述<input id="systemSiteDescription" class="search" type="text" maxlength="300" autocomplete="off" placeholder="WatchTogether - 和朋友一起同步看影片、聊天與加好友"></label>
+          <label class="checkbox-row"><input id="systemAnnouncementEnabled" type="checkbox"> 啟用首頁公告</label>
+          <label class="span-2">首頁公告<textarea id="systemAnnouncementText" class="search" maxlength="500" rows="4" placeholder="輸入要顯示給所有使用者的公告內容"></textarea></label>
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <span id="systemSettingsHint" class="modal-hint" style="margin:0;flex:1"></span>
+          <div class="modal-actions-right"><button id="systemSettingsSaveBtn" class="btn primary" type="button">儲存系統設定</button></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>目前套用狀態</h3></div>
+        <div id="systemSettingsLiveSummary" class="info-grid"></div>
+      </div>
+    </section>
+
     <section id="section-audit" class="admin-section hidden">
        <div class="section-head"><div><div class="eyebrow">AUDIT LOG</div><h2>操作紀錄</h2></div><button id="auditRefreshBtn" class="btn primary">重新整理</button></div>
        <div class="toolbar">
@@ -444,7 +466,7 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260928-admin-v34"></script>
+<script src="admin.js?v=20260928-admin-v36"></script>
 <script src="admin-agent.js?v=20260928-agent-v1"></script>
 </body>
 </html>
