@@ -449,6 +449,7 @@ async function syncAssetVersions(changed, original) {
     "src/css/styles.css",
     "src/js/bug-monitor.js",
     "src/js/chat.js",
+    "src/js/access-control.js",
     "sw.js"
   ].some(file => changed.has(file));
 
@@ -473,6 +474,10 @@ async function syncAssetVersions(changed, original) {
       );
       indexAfter = indexAfter.replace(
         /(src\/js\/enhancements\.js\?v=)[^"'&]+/,
+        "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/access-control\.js\?v=)[^"'&]+/,
         "$1" + version.formal
       );
       indexAfter = indexAfter.replace(
