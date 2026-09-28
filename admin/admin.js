@@ -32,6 +32,8 @@
   let aiStatus = null;
   let chatModerationRoomId = "";
   let chatModerationMessages = {};
+  let systemSettings = {};
+  let systemSettingsRef = null;
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -301,7 +303,9 @@
             '<td><div class="primary-text">' + escapeHtml(item.name || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || "") + '</span></td>' +
             '<td><span class="chat-type">' + escapeHtml(type) + '</span></td>' +
             '<td class="chat-moderation-content">' + escapeHtml(content) + '</td>' +
-            '<td><button class="btn danger" type="button" data-chat-delete="' + escapeHtml(id) + '">🗑️ 刪除</button></td>' +
+            '<td>' + (currentCan("chat.moderate")
+              ? '<button class="btn danger" type="button" data-chat-delete="' + escapeHtml(id) + '">🗑️ 刪除</button>'
+              : '<span class="muted">僅可查看</span>') + '</td>' +
           '</tr>';
         }).join("")
       : '<tr><td colspan="5" class="muted">目前沒有符合條件的聊天訊息。</td></tr>';
@@ -379,7 +383,7 @@
             '<td><span class="small">' + escapeHtml(platform) + ' · ' + escapeHtml(title) + '</span></td>' +
             '<td>' + escapeHtml(formatDate(meta.createdAt || item.createdAt)) + '</td>' +
             '<td><div class="room-actions"><a class="btn primary" href="' + href + '">🚪 進入房間</a>' +
-              (isAdminOperator() ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
+              (currentCan("rooms.manage") ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
               '</div></td>' +
           '</tr>';
         }).join("")
@@ -512,12 +516,51 @@
     "report.status": "處理回報",
     "report.delete": "刪除回報",
     "whitelist.add": "加入白名單",
-    "whitelist.role": "調整權限",
-    "whitelist.toggle": "啟用 / 停用",
+    "whitelist.role": "調整白名單角色",
+    "whitelist.toggle": "啟用 / 停用白名單",
     "whitelist.remove": "移除白名單",
-    "audit.delete": "刪除操作紀錄",
-    "ai.analyze": "AI 分析"
+    "access.role.create": "建立自訂角色",
+    "access.role.delete": "刪除自訂角色",
+    "access.role.assign": "指派自訂角色",
+    "access.role.unassign": "解除自訂角色",
+    "access.role.full_admin": "授予完整管理權限",
+    "access.permission.override": "設定個人 Allow / Deny",
+    "access.permission.clear": "移除個人權限覆寫",
+    "access.user.restriction": "設定使用者功能限制",
+    "access.user.restriction.clear": "解除使用者功能限制",
+    "feature.flag": "更新 Feature Flag",
+    "feature.flag.delete": "刪除 Feature Flag",
+    "maintenance.on": "進入網站維護模式",
+    "maintenance.off": "重新開站",
+    "maintenance.toggle": "切換全自動維護",
+    "system.settings.update": "更新系統設定",
+    "ai.analyze": "AI 分析",
+    "ai.agent": "AI Agent 操作",
+    "audit.delete": "刪除操作紀錄"
   };
+
+  function refreshAuditActionFilter() {
+    const select = $("auditActionFilter");
+    if (!select) return;
+    const current = String(select.value || "all");
+    const actions = new Set(Object.keys(AUDIT_ACTION_LABELS));
+    Object.values(auditLogs || {}).forEach(item => {
+      const action = String(item?.action || "").trim();
+      if (action) actions.add(action);
+    });
+    const optionKeys = ["all", ...Array.from(actions).filter(action => action !== "all").sort()];
+    const currentKeys = Array.from(select.options || []).map(option => String(option.value || ""));
+    if (currentKeys.length === optionKeys.length && currentKeys.every((key, index) => key === optionKeys[index])) {
+      return;
+    }
+    select.innerHTML = '<option value="all">全部操作</option>' +
+      optionKeys.slice(1).map(action =>
+        '<option value="' + escapeHtml(action) + '">' +
+        escapeHtml(AUDIT_ACTION_LABELS[action] || action) +
+        '</option>'
+      ).join("");
+    select.value = optionKeys.includes(current) ? current : "all";
+  }
 
   function stopAuditLogsListener() {
     if (!auditLogsRef) return;
@@ -639,6 +682,7 @@
     }
     const snapshot = await db.ref("admin/auditLogs").limitToLast(300).once("value");
     auditLogs = snapshot.val() || {};
+    refreshAuditActionFilter();
     renderAuditLogs();
   }
 
@@ -649,6 +693,7 @@
     auditLogsRef.on("value", snapshot => {
       if (!currentHasAdminAccess) return;
       auditLogs = snapshot.val() || {};
+      refreshAuditActionFilter();
       renderAuditLogs();
     }, error => {
       console.error("audit logs realtime listener failed", error);
@@ -701,6 +746,7 @@
   }
 
   function renderAuditLogs() {
+    refreshAuditActionFilter();
     const query = String($("auditSearch")?.value || "").trim().toLowerCase();
     const filter = String($("auditActionFilter")?.value || "all");
     const userFilter = String($("auditUserFilter")?.value || "").trim().toLowerCase();
@@ -1471,8 +1517,14 @@
     const accountsCount = Object.keys(accounts || {}).length;
     const roomsList = Object.entries(rooms || {});
     let onlineMembers = 0;
+    let onlineKnown = true;
     roomsList.forEach(([, room]) => {
-      onlineMembers += Number(room?.__onlineCount || room?.onlineCount || 0);
+      const count = Number(room?.__members);
+      if (!Number.isFinite(count)) {
+        onlineKnown = false;
+        return;
+      }
+      onlineMembers += count;
     });
 
     let openReports = 0;
@@ -1492,7 +1544,7 @@
     });
 
     if ($("analyticsAccounts")) $("analyticsAccounts").textContent = accountsCount;
-    if ($("analyticsOnlineMembers")) $("analyticsOnlineMembers").textContent = onlineMembers;
+    if ($("analyticsOnlineMembers")) $("analyticsOnlineMembers").textContent = onlineKnown ? onlineMembers : "—";
     if ($("analyticsRooms")) $("analyticsRooms").textContent = roomsList.length;
     if ($("analyticsOpenReports")) $("analyticsOpenReports").textContent = openReports;
     if ($("analyticsResolvedReports")) $("analyticsResolvedReports").textContent = resolvedReports;
@@ -1802,7 +1854,7 @@
     toast(permanent ? "已永久封鎖使用者" : "已封鎖使用者");
   }
 
-   async function unblockUser(uid) {
+   async function unblockUser(uid, options = {}) {
      if (!currentCan("users.restrict")) return;
      const item = accounts[uid];
      if (!item) return;
@@ -1810,7 +1862,6 @@
        toast("最高管理員不能解除或修改封鎖");
        return;
      }
-
 
      const block = blocks[uid];
      if (!block) {
@@ -1822,21 +1873,21 @@
        throw new Error("這個封鎖是由權限更高的管理員建立，你不能自行解除");
      }
 
-     if (!window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
+     if (options.skipConfirm !== true && !window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
      await db.ref("admin/blocksByUid/" + uid).remove();
      await loadBlocks();
-     void writeAuditLog("unblock", uid, item.displayName || item.email || uid, "解除封鎖");
+     void writeAuditLog("unblock", uid, item.displayName || item.email || uid, options.source === "ai" ? "AI Agent 解除封鎖" : "解除封鎖");
      toast("已解除封鎖");
    }
 
-  async function deleteRoom(roomId) {
+  async function deleteRoom(roomId, options = {}) {
     if (!currentCan("rooms.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
     const name = item.name || item.__meta?.name || "一起看";
 
-    if (!window.confirm("確定刪除房間「" + name + "」(" + key + ")？\n房間與播放、聊天、成員、待播放資料都會一起刪除。")) {
+    if (options.skipConfirm !== true && !window.confirm("確定刪除房間「" + name + "」(" + key + ")？\n房間與播放、聊天、成員、待播放資料都會一起刪除。")) {
       return;
     }
 
@@ -1849,7 +1900,7 @@
     delete rooms[key];
     renderRooms();
     updateStats();
-    void writeAuditLog("room.delete", key, name, "刪除房間");
+    void writeAuditLog("room.delete", key, name, options.source === "ai" ? "AI Agent 刪除房間" : "刪除房間");
     toast("房間已刪除");
   }
 
@@ -1884,7 +1935,10 @@
     "chat.dm",
     "youtube.search",
     "youtube.queue",
-    "favorites.manage"
+    "favorites.manage",
+    "maintenance.manage",
+    "featureflags.manage",
+    "settings.manage"
   ];
 
   let accessRoles = {};
@@ -1908,7 +1962,8 @@
         "reports.read","reports.manage","analytics.read","ai.use","ai.agent",
         "audit.read","audit.write","audit.delete","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
-        "chat.dm","youtube.search","youtube.queue","favorites.manage"
+        "chat.dm","youtube.search","youtube.queue","favorites.manage",
+        "maintenance.manage","featureflags.manage","settings.manage"
       ];
       return adminDefaults.includes(key);
     }
@@ -2107,12 +2162,13 @@
     hint.textContent = active
       ? "原因：" + String(item.reason || "未提供") + " · 預計恢復：" + (Number(item.restoreAt || 0) > 0 ? formatDate(item.restoreAt) : "未設定")
       : "目前沒有啟用網站維護模式。";
-    if (openBtn) openBtn.disabled = !isMasterOperator() || active;
-    if (closeBtn) closeBtn.disabled = !isMasterOperator() || !active;
+    const canManageMaintenance = currentCan("maintenance.manage");
+    if (openBtn) openBtn.disabled = !canManageMaintenance || active;
+    if (closeBtn) closeBtn.disabled = !canManageMaintenance || !active;
   }
 
   async function setSiteMaintenance(enabled) {
-    if (!isMasterOperator()) throw new Error("只有最高管理員可以控制網站維護模式");
+    if (!currentCan("maintenance.manage")) throw new Error("目前管理員沒有網站維護權限");
     const passwordEl = $("maintenancePassword");
     const reasonEl = $("maintenanceReason");
     const restoreEl = $("maintenanceRestoreAt");
@@ -2165,14 +2221,150 @@
           : data.error === "invalid_password"
             ? "維護密碼錯誤。剩餘嘗試次數：" + String(data.attemptsRemaining ?? "—")
             : data.error === "master_only"
-              ? "只有最高管理員可以操作。"
+              ? "目前管理員沒有網站維護權限。"
               : String(data.message || data.error || "維護模式操作失敗");
       throw new Error(message);
     }
     if (passwordEl) passwordEl.value = "";
     await window.WT_ACCESS_CONTROL?.refresh?.();
     renderMaintenanceControl();
+    const auditDetails = enabled
+      ? "關閉網站 · 原因：" + reason + " · 預計恢復：" + (restoreAt > 0 ? formatDate(restoreAt) : "未設定")
+      : "重新開站";
+    const auditOk = await writeAuditLog(
+      enabled ? "maintenance.on" : "maintenance.off",
+      currentUser.uid,
+      "網站維護模式",
+      auditDetails
+    );
+    if (!auditOk) {
+      toast(enabled ? "網站已進入維護模式，但 Audit Log 寫入失敗" : "網站已重新開站，但 Audit Log 寫入失敗");
+      return;
+    }
     toast(enabled ? "網站已進入維護模式" : "網站已重新開站");
+  }
+
+  const SYSTEM_SETTINGS_DEFAULTS = {
+    siteName: "WatchTogether｜一起看",
+    siteDescription: "WatchTogether - 和朋友一起同步看影片、聊天與加好友",
+    announcementEnabled: false,
+    announcementText: ""
+  };
+
+  function stopSystemSettingsListener() {
+    if (!systemSettingsRef) return;
+    try { systemSettingsRef.off(); } catch (_) {}
+    systemSettingsRef = null;
+  }
+
+  function normalizeSystemSettings(value) {
+    const item = value && typeof value === "object" ? value : {};
+    return {
+      siteName: String(item.siteName || SYSTEM_SETTINGS_DEFAULTS.siteName).trim().slice(0,80) || SYSTEM_SETTINGS_DEFAULTS.siteName,
+      siteDescription: String(item.siteDescription || SYSTEM_SETTINGS_DEFAULTS.siteDescription).trim().slice(0,300),
+      announcementEnabled: item.announcementEnabled === true,
+      announcementText: String(item.announcementText || "").trim().slice(0,500),
+      updatedAt: Number(item.updatedAt || 0),
+      updatedByUid: String(item.updatedByUid || "")
+    };
+  }
+
+  function renderSystemSettings() {
+    const current = normalizeSystemSettings(systemSettings);
+    const status = $("systemSettingsStatus");
+    const hint = $("systemSettingsHint");
+    const name = $("systemSiteName");
+    const description = $("systemSiteDescription");
+    const announcementEnabled = $("systemAnnouncementEnabled");
+    const announcementText = $("systemAnnouncementText");
+    if (name) name.value = current.siteName;
+    if (description) description.value = current.siteDescription;
+    if (announcementEnabled) announcementEnabled.checked = current.announcementEnabled;
+    if (announcementText) announcementText.value = current.announcementText;
+
+    const master = isMasterOperator();
+    [name,description,announcementEnabled,announcementText,$("systemSettingsSaveBtn")]
+      .filter(Boolean)
+      .forEach(el => { el.disabled = !master; });
+
+    if (status) {
+      status.textContent = master ? "Master Admin" : "唯讀";
+      status.className = "status " + (master ? "admin" : "");
+    }
+    if (hint) {
+      hint.textContent = master
+        ? "只有最高管理員可以修改系統設定；變更會寫入 Audit Log。"
+        : "你目前只有查看權限，系統設定由最高管理員管理。";
+    }
+
+    const summary = $("systemSettingsLiveSummary");
+    if (summary) {
+      summary.innerHTML = [
+        '<div><span>網站名稱</span><strong>' + escapeHtml(current.siteName) + '</strong></div>',
+        '<div><span>網站描述</span><strong>' + escapeHtml(current.siteDescription || "—") + '</strong></div>',
+        '<div><span>首頁公告</span><strong>' + (current.announcementEnabled && current.announcementText ? "已啟用" : "未啟用") + '</strong></div>',
+        '<div><span>最後更新</span><strong>' + escapeHtml(current.updatedAt ? formatDate(current.updatedAt) : "尚未設定") + '</strong></div>'
+      ].join("");
+    }
+  }
+
+  async function loadSystemSettings() {
+    if (!currentHasAdminAccess) {
+      systemSettings = {...SYSTEM_SETTINGS_DEFAULTS};
+      renderSystemSettings();
+      return;
+    }
+    const snapshot = await db.ref("site/settings").once("value");
+    systemSettings = normalizeSystemSettings(snapshot.val());
+    renderSystemSettings();
+  }
+
+  function startSystemSettingsListener() {
+    stopSystemSettingsListener();
+    if (!currentHasAdminAccess) return;
+    systemSettingsRef = db.ref("site/settings");
+    systemSettingsRef.on("value", snapshot => {
+      if (!currentHasAdminAccess) return;
+      systemSettings = normalizeSystemSettings(snapshot.val());
+      renderSystemSettings();
+    }, error => {
+      console.error("system settings realtime listener failed", error);
+    });
+  }
+
+  async function saveSystemSettings() {
+    if (!isMasterOperator()) {
+      throw new Error("只有最高管理員可以修改系統設定");
+    }
+    const siteName = String($("systemSiteName")?.value || "").trim().slice(0,80);
+    const siteDescription = String($("systemSiteDescription")?.value || "").trim().slice(0,300);
+    const announcementEnabled = $("systemAnnouncementEnabled")?.checked === true;
+    const announcementText = String($("systemAnnouncementText")?.value || "").trim().slice(0,500);
+    if (!siteName) throw new Error("網站名稱不能是空白");
+    if (!siteDescription) throw new Error("網站描述不能是空白");
+    if (announcementEnabled && !announcementText) throw new Error("啟用首頁公告時，公告內容不能是空白");
+
+    await db.ref("site/settings").set({
+      siteName,
+      siteDescription,
+      announcementEnabled,
+      announcementText,
+      updatedAt:firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid:currentUser.uid,
+      updatedByEmail:currentUser.email || ""
+    });
+    await loadSystemSettings();
+    const logged = await writeAuditLog(
+      "system.settings.update",
+      currentUser.uid,
+      "網站系統設定",
+      "網站名稱：" + siteName + " · 公告：" + (announcementEnabled ? "啟用" : "停用")
+    );
+    if (!logged) {
+      toast("系統設定已儲存，但 Audit Log 寫入失敗");
+      return;
+    }
+    toast("系統設定已儲存");
   }
 
   async function loadAccessControl() {
@@ -2255,10 +2447,11 @@
     if (Object.values(accessAssignments || {}).some(role => String(role) === key)) {
       throw new Error("這個角色仍有使用者指派，請先解除指派");
     }
-    if (!window.confirm("確定刪除自訂角色「" + (accessRoles[key]?.name || key) + "」？")) return;
+    const roleName = String(accessRoles[key]?.name || key);
+    if (!window.confirm("確定刪除自訂角色「" + roleName + "」？")) return;
     await db.ref("admin/access/roles/" + key).remove();
     await loadAccessControl();
-    void writeAuditLog("access.role.delete", "", accessRoles[key]?.name || key, "刪除自訂角色 " + key);
+    void writeAuditLog("access.role.delete", "", roleName, "刪除自訂角色 " + key);
     toast("自訂角色已刪除");
   }
 
@@ -2404,6 +2597,49 @@
     toast("Feature Flag 已刪除");
   }
 
+  function applyNavigationPermissions() {
+    const sectionPermissions = {
+      overview: "admin.read",
+      accounts: "users.read",
+      rooms: "rooms.read",
+      chat: "chat.read",
+      whitelist: "users.update",
+      access: "admin.read",
+      settings: "__master__",
+      reports: "reports.read",
+      analytics: "analytics.read",
+      ai: "ai.use",
+      audit: "audit.read"
+    };
+    let activeSection = "";
+    document.querySelectorAll(".nav-item").forEach(btn => {
+      const section = String(btn.dataset.section || "");
+      const required = sectionPermissions[section];
+      const allowed = required === "__master__"
+        ? isMasterOperator()
+        : currentCan(required || "admin.read");
+      btn.classList.toggle("hidden", !allowed);
+      btn.setAttribute("aria-hidden", allowed ? "false" : "true");
+      if (!allowed && btn.classList.contains("active")) {
+        activeSection = section;
+      }
+    });
+    if (activeSection) {
+      const fallback = document.querySelector('.nav-item[data-section="overview"]');
+      if (fallback && !fallback.classList.contains("hidden")) {
+        document.querySelectorAll(".nav-item").forEach(x => x.classList.remove("active"));
+        fallback.classList.add("active");
+        document.querySelectorAll(".admin-section").forEach(x => x.classList.add("hidden"));
+        show("section-overview");
+        try {
+          history.replaceState(null, "", "#overview");
+          localStorage.setItem("watchtogether-admin-section", "overview");
+          sessionStorage.setItem("watchtogether-admin-section", "overview");
+        } catch (_) {}
+      }
+    }
+  }
+
   function applyRoleUi() {
     const master = isMasterOperator();
     const addPanel = $("whitelistAddPanel");
@@ -2418,6 +2654,7 @@
       addPanel?.classList.add("hidden");
       if (help) help.textContent = "你目前是觀察型管理角色，僅可使用被授予的查看權限。";
     }
+    applyNavigationPermissions();
   }
 
   async function initialize() {
@@ -2485,8 +2722,8 @@
 
         $("adminAccount").textContent = user.email || "";
         show("app");
-        restoreAdminSection();
         applyRoleUi();
+        restoreAdminSection();
 
         await Promise.all([
           loadAccounts(),
@@ -2496,6 +2733,7 @@
           loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
           loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error)),
           loadAccessControl().catch(error => console.warn("載入 2.0 控制中心失敗:", error)),
+          loadSystemSettings().catch(error => console.warn("載入系統設定失敗:", error)),
           loadAiStatus().catch(error => console.warn("載入 AI 狀態失敗:", error)),
           loadAutonomousMaintenance().catch(error => {
             console.warn("載入全自動維護設定失敗:", error);
@@ -2507,6 +2745,7 @@
         startReportsListener();
         startAuditLogsListener();
         startAutonomousMaintenanceListener();
+        startSystemSettingsListener();
         window.addEventListener("wt-access-changed", renderMaintenanceControl);
         populateAccessPermissionCatalog();
         renderAccessSummary();
@@ -2569,6 +2808,34 @@
     const uid = String(data.uid || "").trim();
     const permission = String(data.permission || "").trim();
     const reason = String(data.reason || "").trim().slice(0,500);
+
+    if (name === "block_user") {
+      if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
+      if (!uid || uid === MASTER_UID || uid === currentUser?.uid) throw new Error("無效或禁止的 UID");
+      if (!accounts[uid]) throw new Error("找不到指定使用者");
+      const rawDuration = String(data.durationMs || "3600000");
+      const allowedDurations = new Set(["600000","3600000","86400000","604800000","2592000000","permanent"]);
+      if (!allowedDurations.has(rawDuration)) throw new Error("不支援的封鎖時間");
+      $("blockUserUid").value = uid;
+      $("blockDuration").value = rawDuration;
+      await confirmBlock();
+      return;
+    }
+
+    if (name === "unblock_user") {
+      if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
+      if (!uid || uid === MASTER_UID) throw new Error("無效或禁止的 UID");
+      await unblockUser(uid, {skipConfirm:true, source:"ai"});
+      return;
+    }
+
+    if (name === "delete_room") {
+      if (!currentCan("rooms.manage")) throw new Error("沒有 rooms.manage 權限");
+      const roomId = String(data.roomId || "").trim().toUpperCase();
+      if (!roomId) throw new Error("缺少房間 ID");
+      await deleteRoom(roomId, {skipConfirm:true, source:"ai"});
+      return;
+    }
 
     if (name === "set_user_restriction") {
       if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
@@ -2731,7 +2998,7 @@
     });
 
     $("refreshBtn")?.addEventListener("click", () => Promise.all([
-      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs()
+      loadAccounts(),loadWhitelist(),loadBlocks(),loadRooms(),loadReports(),loadAuditLogs(),loadSystemSettings()
     ]).then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
     $("accountsRefreshBtn")?.addEventListener("click", () => Promise.all([
@@ -2775,6 +3042,8 @@
       $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
     });
     $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("systemSettingsRefreshBtn")?.addEventListener("click", () => loadSystemSettings().then(() => toast("系統設定已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("systemSettingsSaveBtn")?.addEventListener("click", () => saveSystemSettings().catch(error => { console.error(error); toast(error?.message || "系統設定儲存失敗"); }));
     $("analyticsRefreshBtn")?.addEventListener("click", () => {
       renderAnalytics();
       toast("Analytics 已重新整理");
@@ -2843,6 +3112,7 @@
 
   window.WT_ADMIN_CONTEXT = {
     isAuthorized: () => Boolean(currentHasAdminAccess),
+    isMaster: () => Boolean(isMasterOperator()),
     hasPermission: (permission) => currentCan(permission),
     snapshot: () => buildAgentSnapshot(),
     executeAction: (action,args) => executeAgentAction(action,args),
