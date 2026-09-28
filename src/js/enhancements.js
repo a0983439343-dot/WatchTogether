@@ -2742,23 +2742,28 @@ var searchTimer = null;
 var searchController = null;
 var searchVersion = 0;
 
-function normalizeSearchItem(item) {
-  var id = item && item.id && item.id.videoId || item && item.id || "";
-  id = String(id || "").trim();
-  if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
-  var snippet = item && item.snippet || {};
+function normalizeSearchItem(item, platform) {
+  var source = item || {};
+  var sourceId = source.id && source.id.videoId || source.id || "";
+  var normalizedPlatform = String(platform || source.platform || "youtube").trim().toLowerCase();
+  var id = String(sourceId || "").trim();
+  if (!id) return null;
+  var snippet = source.snippet || source;
   return {
     id:id,
-    platform:"youtube",
-    title:String(snippet.title || "未命名影片"),
-    thumbnail:String(snippet.thumbnails && (snippet.thumbnails.medium && snippet.thumbnails.medium.url || snippet.thumbnails.high && snippet.thumbnails.high.url || snippet.thumbnails.default && snippet.thumbnails.default.url) || ""),
-    channel:String(snippet.channelTitle || "YouTube"),
-    publishedAt:String(snippet.publishedAt || ""),
-    viewCount:Number(item && item.viewCount || 0),
-    durationSeconds:Number(item && item.durationSeconds || 0)
+    platform:normalizedPlatform,
+    title:String(source.title || snippet.title || "未命名影片"),
+    description:String(source.description || snippet.description || ""),
+    thumbnail:String(source.thumbnail || (snippet.thumbnails && (snippet.thumbnails.medium && snippet.thumbnails.medium.url || snippet.thumbnails.high && snippet.thumbnails.high.url || snippet.thumbnails.default && snippet.thumbnails.default.url)) || ""),
+    channel:String(source.channel || snippet.channelTitle || "Vimeo"),
+    publishedAt:String(source.publishedAt || snippet.publishedAt || ""),
+    viewCount:Number(source.viewCount || 0),
+    durationSeconds:Number(source.durationSeconds || 0),
+    live:Boolean(source.live || false),
+    url:source.url ? String(source.url) : "",
+    twitchType:source.twitchType ? String(source.twitchType) : ""
   };
 }
-
 function formatDuration(seconds) {
   seconds = Math.max(0,Math.floor(Number(seconds)||0));
   var h = Math.floor(seconds/3600);
@@ -2810,16 +2815,16 @@ function renderHomeSearch(results) {
   });
 }
 
-async function searchHome(query) {
+async function searchHome(query, platform) {
   var config = window.WATCHTOGETHER_CONFIG || {};
-  var base = String(config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/search");
-  if (!base) throw new Error("YouTube 搜尋服務未設定");
-  if (searchController) {
-    try { searchController.abort(); } catch (_) {}
-  }
+  var base = String(config.searchProxyUrl || config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/search");
+  if (!base) throw new Error("影片搜尋服務未設定");
+  var normalizedPlatform = String(platform || "youtube").trim().toLowerCase();
+  if (!["youtube","vimeo","dailymotion","twitch"].includes(normalizedPlatform)) throw new Error("不支援的搜尋平台");
+  if (searchController) { try { searchController.abort(); } catch (_) {} }
   searchController = new AbortController();
   var version = ++searchVersion;
-  var url = base + "?q=" + encodeURIComponent(query) + "&maxResults=8&regionCode=TW&relevanceLanguage=zh-Hant&safeSearch=moderate";
+  var url = base + "?platform=" + encodeURIComponent(normalizedPlatform) + "&q=" + encodeURIComponent(query) + "&maxResults=8";
   var currentUser = wt.auth.currentUser;
   if (!currentUser) {
     for (var attempt = 0; attempt < 30 && !currentUser; attempt++) {
@@ -2830,22 +2835,22 @@ async function searchHome(query) {
   if (!currentUser) throw new Error("登入狀態尚未準備完成");
   var token = await currentUser.getIdToken();
   var response = await fetch(url,{method:"GET",headers:{Accept:"application/json",Authorization:"Bearer " + token},credentials:"omit",cache:"no-store",signal:searchController.signal});
-  if (!response.ok) throw new Error("YouTube 搜尋失敗");
-  var data = await response.json();
+  var data = await response.json().catch(function(){ return {}; });
+  if (!response.ok) throw new Error(data && data.error && data.error.message || "影片搜尋失敗");
   if (version !== searchVersion) return;
-  var results = Array.isArray(data.items) ? data.items.map(normalizeSearchItem).filter(Boolean) : [];
+  var results = Array.isArray(data.items) ? data.items.map(function(item){ return normalizeSearchItem(item,normalizedPlatform); }).filter(Boolean) : [];
   renderHomeSearch(results);
 }
-
 function bindHomeSearch() {
   var input = $("videoSearchInput");
   var button = $("searchVideoBtn");
   var hint = $("searchHint");
+  var platformSelect = $("sourceTypeInput");
   if (!input || !button || input.dataset.wtFastSearch) return;
 
   function renderHistory() {
     if (!hint) return;
-    hint.textContent = "進入房間後按「更換影片」，可以使用最近搜尋。";
+    hint.textContent = "目前平台：「" + String(platformSelect && platformSelect.value || "youtube") + "」。按「搜尋」或 Enter 開始搜尋。";
   }
 
 
@@ -2861,7 +2866,7 @@ function bindHomeSearch() {
     var access = window.WT_ACCESS_CONTROL;
     if (access) {
       await access.waitUntilReady(2500);
-      if (access.state && access.state.ready && !access.hasPermission("youtube.search")) {
+      if (access.state && access.state.ready && !access.hasPermission("youtube.search") && String(platformSelect && platformSelect.value || "youtube") === "youtube") {
         renderHomeSearchMessage("你目前無法使用影片搜尋功能。");
         return;
       }
@@ -2873,7 +2878,7 @@ function bindHomeSearch() {
     renderHomeSearchMessage("正在搜尋…");
 
     try {
-      await searchHome(query);
+      await searchHome(query,String(platformSelect && platformSelect.value || "youtube"));
       if (serial === runSerial) {}
     } catch (error) {
       if (error && error.name === "AbortError") return;
@@ -2911,6 +2916,7 @@ function bindHomeSearch() {
   });
   input.addEventListener("focus",renderHistory);
   renderHistory();
+  if (platformSelect) platformSelect.addEventListener("change",function(){ wt.state.createVideo = null; if ($("selectedVideoCard")) $("selectedVideoCard").classList.add("hidden"); if ($("videoSearchResults")) $("videoSearchResults").innerHTML = ""; renderHistory(); });
   input.dataset.wtFastSearch = "1";
 
   var config = window.WATCHTOGETHER_CONFIG || {};
