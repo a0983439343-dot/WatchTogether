@@ -117,7 +117,14 @@ function pushNotification(title,body,kind){
   else if(document.visibilityState==="visible")toast(n.title+(n.body?"｜"+n.body:""));
   var u=user();
   if(u&&!u.isAnonymous&&db){
-    db.ref("notifications/"+u.uid).push({title:n.title.slice(0,120),body:n.body.slice(0,500),type:n.kind.slice(0,30),read:false,createdAt:firebase.database.ServerValue.TIMESTAMP}).catch(function(e){console.warn("通知雲端同步失敗",e);});
+    db.ref("notifications/"+u.uid+"/"+n.id).set({
+      id:n.id,
+      title:n.title.slice(0,120),
+      body:n.body.slice(0,500),
+      type:n.kind.slice(0,30),
+      read:false,
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    }).catch(function(e){console.warn("通知雲端同步失敗",e);});
   }
 }
 pushNotification.__wtCloudPersistent=true;
