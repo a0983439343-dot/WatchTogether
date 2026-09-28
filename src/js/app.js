@@ -3783,6 +3783,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function addToQueue(video) {
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("room.queue")) {
+        throw new Error("你目前無法使用待播放清單");
+      }
+    }
     if (!state.queueRef || !state.uid) {
       throw new Error("目前不在房間內");
     }
@@ -3823,6 +3830,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function removeFromQueue(queueId) {
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("room.queue")) {
+        throw new Error("你目前無法管理待播放清單");
+      }
+    }
     if (
       !state.queueRef ||
       !queueId
@@ -7149,6 +7163,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
    */
 
   async function createRoom(initialVideo = null) {
+    try {
+      const access = window.WT_ACCESS_CONTROL;
+      if (access) {
+        await access.waitUntilReady(2500);
+        if (access.state?.ready && !access.hasPermission("room.create")) {
+          throw new Error("你目前無法建立房間");
+        }
+      }
+    } catch (error) {
+      if (error?.message === "你目前無法建立房間") throw error;
+    }
+
     setError(
       $("homeError"),
       ""
@@ -11750,6 +11776,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function sendChat(
     text
   ) {
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("chat.send")) {
+        throw new Error("你目前無法在聊天室發言");
+      }
+    }
+
     text =
       String(
         text || ""
