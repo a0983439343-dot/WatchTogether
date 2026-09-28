@@ -651,6 +651,67 @@ test("2.0 access control: ai.agent is independently assignable", async () => {
   );
 });
 
+test("2.0 access control: management permissions cover maintenance, feature flags and settings", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const operator = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(master.ref("admin/access/roles/ops-manager").set({
+    name: "Operations Manager",
+    permissions: {
+      admin__read: true,
+      maintenance__manage: true,
+      featureflags__manage: true,
+      settings__manage: true
+    }
+  }));
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).set("ops-manager"));
+
+  await assertSucceeds(operator.ref("site/maintenance").set({
+    enabled: false,
+    reason: "test",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(operator.ref("admin/featureFlags/test__flag").set({
+    enabled: true,
+    reason: "test",
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(operator.ref("site/settings").set({
+    siteName: "WatchTogether",
+    siteDescription: "Test",
+    announcementEnabled: false,
+    announcementText: "",
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").set("deny")
+  );
+  await assertFails(operator.ref("site/maintenance").set({
+    enabled: false,
+    reason: "blocked",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: OTHER_UID
+  }));
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").remove()
+  );
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).remove());
+  await assertSucceeds(master.ref("admin/access/roles/ops-manager").remove());
+  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + OTHER_UID + "/maintenance__manage").remove());
+});
+
 test("2.0 access control: viewer cannot modify policy and user cannot forge their restriction", async () => {
   await assertFails(
     db(VIEWER_UID, viewerToken).ref("admin/access/roleByUid/" + USER_UID).set("admin")
