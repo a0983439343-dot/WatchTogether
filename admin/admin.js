@@ -1556,7 +1556,7 @@
   }
 
   function openBlockUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!currentCan("users.restrict")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1574,7 +1574,7 @@
   }
 
   async function confirmBlock() {
-    if (!isAdminOperator()) return;
+    if (!currentCan("users.restrict")) return;
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1606,7 +1606,7 @@
   }
 
    async function unblockUser(uid) {
-     if (!isAdminOperator()) return;
+     if (!currentCan("users.restrict")) return;
      const item = accounts[uid];
      if (!item) return;
      if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1633,7 +1633,7 @@
    }
 
   async function deleteRoom(roomId) {
-    if (!isAdminOperator()) return;
+    if (!currentCan("rooms.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
