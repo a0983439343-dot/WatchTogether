@@ -2201,7 +2201,10 @@
         currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
           show("deniedScreen");
-          $("deniedMessage").textContent = "目前登入的 Google 帳號沒有管理員權限。";
+          const title = document.querySelector("#deniedScreen h1");
+          if (title) title.textContent = "404";
+          $("deniedMessage").textContent = "找不到這個頁面。";
+          hide("switchAccountBtn");
           return;
         }
 
