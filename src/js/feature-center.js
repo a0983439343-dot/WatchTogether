@@ -230,6 +230,7 @@ function renderGlobalSearchResults(body,query){
       '<div class="wt-feature-list">'+
         (recentHtml||'<div class="wt-feature-empty">沒有符合的最近房間。</div>')+
       '</div>';
+    body.querySelectorAll("[data-global-room-fav]").forEach(function(btn){btn.onclick=function(e){e.preventDefault();e.stopPropagation();var id=String(btn.dataset.globalRoomFav||"").toUpperCase(),room=rooms.find(function(x){return String(x[1]?.id||x[0]).toUpperCase()===id;}),recentRoom=recent.find(function(x){return String(x.id||"").toUpperCase()===id;}),data=room?.[1]||recentRoom||{id:id};toggleRoomFavorite({id:id,name:data.name||data.roomName||"一起看",sourceType:data.sourceType||"youtube",owner:data.owner||""});renderGlobalSearchResults(body,q);};});
     body.querySelectorAll("[data-global-add]").forEach(function(btn){
       btn.onclick=async function(){
         try{
