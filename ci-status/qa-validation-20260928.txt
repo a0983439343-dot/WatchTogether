@@ -2,3 +2,4 @@ Temporary validation marker for WatchTogether 2.0 rules and regression checks.
 Rules parser fix applied: 2026-09-28T02:51:50.867Z
 Main Rules fix: 834eb28b88396c15b5cc7a8553090ec43d2240e1
 Queue Rules fix: e68aa28e5a2a2da08257c9becf651db878666ee2
+User restriction Rules fix: 0cec2b69e1a035e5357ecc70e62bca84d6263dcb
