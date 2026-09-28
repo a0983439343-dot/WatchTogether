@@ -443,6 +443,19 @@ test("audit logs: viewer can read but cannot append", async () => {
 
 test("room 2.0: application lifecycle and cohost role are owner controlled", async () => {
   const ownerDb = db(USER_UID, userToken);
+  await assertSucceeds(ownerDb.ref("roomMeta/ABC123").set({
+    owner: USER_UID,
+    name: "Test Room",
+    settings: {
+      locked: false,
+      maxMembers: 10,
+      controlMode: "host",
+      visibility: "private",
+      joinPolicy: "application"
+    },
+    createdAt: Date.now()
+  }));
+
   const applicant = db(OTHER_UID, {
     email: "other@example.com",
     email_verified: true
@@ -499,6 +512,11 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
       lastSeen: Date.now()
     })
   );
+
+  await assertSucceeds(ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).remove());
+  await assertSucceeds(ownerDb.ref("roomApplications/ABC123/" + OTHER_UID).remove());
+  await assertSucceeds(ownerDb.ref("members/ABC123/" + OTHER_UID).remove());
+  await assertSucceeds(ownerDb.ref("roomMeta/ABC123").remove());
 });
 
 test("chat media messages: image and audio payloads pass validation", async () => {
@@ -576,6 +594,12 @@ test("2.0 access control: master can manage roles, permissions, restrictions and
     updatedAt: Date.now(),
     updatedByUid: MASTER_UID
   }));
+
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + USER_UID).remove());
+  await assertSucceeds(master.ref("admin/access/roles/custom2").remove());
+  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + USER_UID + "/rooms__manage").remove());
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + USER_UID + "/chat__send").remove());
+  await assertSucceeds(master.ref("admin/featureFlags/chat__send").remove());
 });
 
 test("2.0 access control: per-user deny overrides legacy admin and allow grants a single permission", async () => {
@@ -827,7 +851,20 @@ test("2.0 access control: room.join restriction and feature flag block membershi
     email: "other@example.com",
     email_verified: true
   });
-  const memberRef = target.ref("members/ABC123/" + OTHER_UID);
+  const roomRef = master.ref("rooms/ZJOIN1");
+  await assertSucceeds(roomRef.set({
+    owner: USER_UID,
+    name: "Join Guard",
+    sourceType: "youtube",
+    video: {
+      id: "join-guard",
+      platform: "youtube",
+      title: "Join Guard",
+      thumbnail: "",
+      channel: ""
+    }
+  }));
+  const memberRef = target.ref("members/ZJOIN1/" + OTHER_UID);
 
   await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/room__join").set({
     enabled: true,
@@ -865,6 +902,7 @@ test("2.0 access control: room.join restriction and feature flag block membershi
   }));
 
   await assertSucceeds(master.ref("admin/featureFlags/room__join").remove());
+  await assertSucceeds(roomRef.remove());
 });
 
 test("2.0 access control: chat.dm restriction and feature flag block private-chat writes", async () => {
