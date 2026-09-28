@@ -442,7 +442,7 @@ serialTest("room chat reactions: members may change their own reaction only", as
     online: true,
     lastSeen: Date.now()
   }));
-  await assertSucceeds(master.ref("chat/RICH02/reaction-message").set({
+  await assertSucceeds(user.ref("chat/RICH02/reaction-message").set({
     uid: USER_UID,
     name: "User",
     type: "text",
@@ -774,6 +774,13 @@ serialTest("2.0 access control: user restriction and block writes require audit.
 
 serialTest("room 2.0: application lifecycle and cohost role are owner controlled", async () => {
   const ownerDb = db(USER_UID, userToken);
+  const master = db(MASTER_UID, masterToken);
+  await assertSucceeds(master.ref("rooms/ABC123").set({
+    owner: USER_UID,
+    name: "Test Room",
+    sourceType: "youtube",
+    video: {id:"application-video",platform:"youtube",title:"Application Test",thumbnail:"",channel:""}
+  }));
   await assertSucceeds(ownerDb.ref("roomMeta/ABC123").set({
     owner: USER_UID,
     name: "Test Room",
@@ -847,7 +854,8 @@ serialTest("room 2.0: application lifecycle and cohost role are owner controlled
   await assertSucceeds(ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).remove());
   await assertSucceeds(ownerDb.ref("roomApplications/ABC123/" + OTHER_UID).remove());
   await assertSucceeds(ownerDb.ref("members/ABC123/" + OTHER_UID).remove());
-  await assertSucceeds(db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true}).ref("roomMeta/ABC123").remove());
+  await assertSucceeds(master.ref("rooms/ABC123").remove());
+  await assertSucceeds(master.ref("roomMeta/ABC123").remove());
 });
 
 serialTest("chat media messages: image and audio payloads pass validation", async () => {
