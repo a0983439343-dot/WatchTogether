@@ -392,6 +392,7 @@
        <div><span>回報時間</span><strong id="reportCreatedAt">—</strong></div>
        <div><span>來源</span><strong id="reportSource">—</strong></div>
        <div><span>問題類型</span><strong id="reportCategoryLabel">—</strong></div>
+       <div><span>優先程度</span><strong id="reportPriority">—</strong></div>
        <div><span>發生次數</span><strong id="reportOccurrences">—</strong></div>
        <div><span>首次發生</span><strong id="reportFirstSeenAt">—</strong></div>
        <div><span>最後發生</span><strong id="reportLastSeenAt">—</strong></div>
@@ -407,6 +408,7 @@
        <div class="span-2"><span>AI 建議</span><strong id="reportAiSuggestion">—</strong></div>
      </div>
      <label>問題描述<textarea id="reportDetails" class="search report-details" readonly></textarea></label>
+     <div class="report-auto-state hidden" id="reportScreenshotWrap"><span>使用者截圖</span><img id="reportScreenshot" alt="回報截圖" style="display:block;max-width:100%;max-height:420px;margin-top:8px;border-radius:12px;border:1px solid rgba(148,163,184,.18)"></div>
      <div class="report-auto-state"><span>自動處理</span><strong id="reportAutoResolve">—</strong></div>
      <div class="report-auto-state"><span>自動驗證</span><strong id="reportVerificationState">—</strong></div>
      <div class="report-auto-state"><span>驗證摘要</span><strong id="reportVerificationSummary">—</strong></div>
