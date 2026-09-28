@@ -438,7 +438,7 @@
     if (!panel || !toggle || !status || !hint) return;
     const enabled = autonomousMaintenanceEnabled === true;
     toggle.checked = enabled;
-    toggle.disabled = currentRole !== "master";
+    toggle.disabled = !isMasterOperator();
     panel.classList.toggle("is-enabled", enabled);
     panel.classList.toggle("is-disabled", !enabled);
     status.textContent = enabled ? "已啟用 · 全自動維護中" : "未啟用";
@@ -483,12 +483,11 @@
   }
 
   async function setAutonomousMaintenance(enabled) {
-    if (!currentCan("audit.delete")) {
+    if (!isMasterOperator()) {
       renderAutonomousMaintenance();
-      return;
+      throw new Error("只有最高管理員可以切換全自動維護");
     }
     const next = enabled === true;
-    const actionText = next ? "啟用" : "停用";
     const warningText = next
       ? "啟用全自動維護後，符合條件的 Bug 會自動分析、修改、部署、驗證，無需人工確認。\n\n確定要啟用全自動維護嗎？"
       : "停用全自動維護後，系統將恢復需要人工確認才能開始修復的模式。\n\n確定要停用全自動維護嗎？";
