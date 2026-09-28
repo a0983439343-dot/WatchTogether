@@ -40,7 +40,7 @@
     ).trim();
 
   const YOUTUBE_SEARCH_PAGE_SIZE = 25;
-  const YOUTUBE_MAX_SEARCH_PAGES = 4;
+  const YOUTUBE_MAX_SEARCH_PAGES = 2;
   const YOUTUBE_SEARCH_COOLDOWN_MS = 650;
   const MEMBER_HEARTBEAT_INTERVAL_MS = 15000;
   const MEMBER_PRESENCE_TIMEOUT_MS = 45000;
@@ -6683,7 +6683,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   async function buildDailymotionPlayer(video) {
     await destroyCurrentPlayer();
-    await loadDailymotionSdk();
     hidePlayers();
     showPlayerElement("dailymotionPlayer");
 
@@ -6693,10 +6692,41 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     const playerId = DAILYMOTION_PLAYER_ID || String(window.DAILYMOTION_PLAYER_ID || "").trim();
+
     if (!playerId) {
-      throw new Error("尚未設定 DAILYMOTION_PLAYER_ID");
+      container.innerHTML = "";
+      const iframe = document.createElement("iframe");
+      const id = String(video.id || "").trim();
+      if (!id) {
+        throw new Error("Dailymotion 影片 ID 無效");
+      }
+      iframe.title = video.title || "Dailymotion Player";
+      iframe.src = "https://www.dailymotion.com/embed/video/" + encodeURIComponent(id) + "?autoplay=0&mute=0";
+      iframe.allow = "autoplay; fullscreen; picture-in-picture; web-share";
+      iframe.allowFullscreen = true;
+      iframe.frameBorder = "0";
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      Object.assign(iframe.style, {
+        width: "100%",
+        height: "100%",
+        display: "block",
+        border: "0",
+        minHeight: "300px"
+      });
+      container.appendChild(iframe);
+
+      state.player = iframe;
+      state.currentVideoId = id;
+      state.currentVideoUrl = iframe.src;
+      state.playerType = "dailymotion-iframe";
+      state.playerReady = false;
+      state.twitchPlaybackKind = null;
+      updateRoomOwnerUI();
+      void updateTimeUI();
+      return;
     }
 
+    await loadDailymotionSdk();
     container.innerHTML = "";
 
     const targetId = "dm_" + Math.random().toString(36).slice(2);
@@ -12681,7 +12711,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     try {
       const value = JSON.parse(localStorage.getItem("wt_search_history_v1") || "[]");
       if (!Array.isArray(value)) return [];
-      return value.map((item) => String(item || "").trim()).filter((item) => item.length >= 2).slice(0, 8);
+      return value.map((item) => String(item || "").trim()).filter((item) => item.length > 0).slice(0, 8);
     } catch (_) {
       return [];
     }
@@ -12689,7 +12719,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   function saveYoutubeSearchHistory(query) {
     const normalized = String(query || "").trim();
-    if (normalized.length < 2) return;
+    if (!normalized) return;
     const list = getYoutubeSearchHistory().filter((item) => item !== normalized);
     list.unshift(normalized);
     try {
@@ -12699,7 +12729,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
   function deleteYoutubeSearchHistory(query) {
     const normalized = String(query || "").trim();
-    if (normalized.length < 2) return;
+    if (!normalized) return;
     const list = getYoutubeSearchHistory().filter((item) => item !== normalized);
     try {
       localStorage.setItem("wt_search_history_v1", JSON.stringify(list));
