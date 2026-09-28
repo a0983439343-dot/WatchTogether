@@ -1352,6 +1352,50 @@
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
 
+    let publicProfile = null;
+    try {
+      const profileSnapshot = await db.ref("profiles/" + user.uid).once("value");
+      publicProfile = profileSnapshot.val() || null;
+    } catch (_) {}
+
+    if (!publicProfile) {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const candidate = randomRoomCode();
+        const reservation = await db.ref("profileCodes/" + candidate).transaction(current => {
+          return current === null || String(current) === String(user.uid)
+            ? String(user.uid)
+            : current;
+        }).catch(() => null);
+
+        if (reservation?.committed && String(reservation.snapshot?.val() || "") === String(user.uid)) {
+          publicProfile = {
+            displayName: String(user.displayName || "玩家").trim().slice(0, 30) || "玩家",
+            publicCode: candidate,
+            avatarEmoji: "🙂",
+            theme: "aurora",
+            notifications: true,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+          };
+          try {
+            await db.ref("profiles/" + user.uid).set(publicProfile);
+          } catch (_) {}
+          break;
+        }
+      }
+    }
+
+    if (publicProfile) {
+      const publicUsersRef = db.ref("publicUsers/" + user.uid);
+      await publicUsersRef.set({
+        displayName: String(publicProfile.displayName || user.displayName || "玩家").trim().slice(0, 30) || "玩家",
+        publicCode: String(publicProfile.publicCode || "").trim().toUpperCase().slice(0, 6),
+        avatarEmoji: String(publicProfile.avatarEmoji || "🙂").slice(0, 4),
+        searchName: String(publicProfile.displayName || user.displayName || "玩家").trim().toLowerCase().slice(0, 30) || "玩家",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      }).catch(() => {});
+    }
+
     return true;
   }
 
