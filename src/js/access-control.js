@@ -158,10 +158,23 @@
       return normalizeFlag(flag);
     }
 
+    const adminScoped = /^(admin|users|audit)\./.test(key) ||
+      key === "reports.manage" ||
+      key === "analytics.read" ||
+      key === "ai.use";
+
     const role = normalizeRole(options.role || state.role);
-    const permissions = rolePermissions(role, state.roleDefinition);
-    const allowed = permissions.has("*") || permissions.has(key);
-    if (!allowed) return false;
+    if (state.role) {
+      const permissions = rolePermissions(role, state.roleDefinition);
+      if (adminScoped && !(permissions.has("*") || permissions.has(key))) {
+        return false;
+      }
+      if (!adminScoped && role !== "viewer" && !permissions.has("*") && permissions.size > 0 && !permissions.has(key)) {
+        return false;
+      }
+    } else if (adminScoped) {
+      return false;
+    }
 
     const flag = state.featureFlags[key];
     return normalizeFlag(flag);
