@@ -94,7 +94,7 @@
           currentRolePermissions = Object.fromEntries(
             Object.entries(definition.permissions).filter(([, enabled]) => enabled === true)
           );
-          if (currentRolePermissions["admin.read"] === true || currentRolePermissions["*"] === true) {
+          if (currentRolePermissions[encodeAccessPermission("admin.read")] === true || currentRolePermissions.__all__ === true) {
             return assignedRole;
           }
         }
@@ -502,7 +502,7 @@
   }
 
   async function writeAuditLog(action, targetUid, targetName, details) {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!currentCan("audit.write")) return;
     try {
       await db.ref("admin/auditLogs").push({
         action:String(action || "other").slice(0,40),
@@ -544,8 +544,12 @@
   }
 
   async function deleteAuditLog(id) {
-    if (currentRole !== "master") {
-      toast("只有最高管理員可以刪除操作紀錄");
+    if (!currentCan("audit.delete")) {
+      toast("目前管理員權限不足，不能刪除操作紀錄");
+      return;
+    }
+    if (!currentCan("audit.write")) {
+      toast("刪除操作紀錄前必須具備 Audit 寫入權限");
       return;
     }
     const key = String(id || "").trim();
@@ -564,13 +568,21 @@
     );
     if (!confirmed) return;
 
-    await db.ref("admin/auditLogs/" + key).remove();
-    await writeAuditLog(
-      "audit.delete",
-      String(item.targetUid || ""),
-      String(item.targetName || "操作紀錄"),
-      "刪除操作紀錄 " + key + "（原操作：" + label + "）"
-    );
+    const auditRef = db.ref("admin/auditLogs").push();
+    const updates = {};
+    updates["admin/auditLogs/" + key] = null;
+    updates["admin/auditLogs/" + auditRef.key] = {
+      action:"audit.delete",
+      actorUid:String(currentUser?.uid || "").slice(0,128),
+      actorEmail:String(currentUser?.email || "").slice(0,320),
+      actorRole:String(currentRole || "").slice(0,20),
+      targetUid:String(item.targetUid || "").slice(0,128),
+      targetName:String(item.targetName || "操作紀錄").slice(0,200),
+      details:"刪除操作紀錄 " + key + "（原操作：" + label + "）".slice(0,1000),
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    };
+    await db.ref().update(updates);
+    await loadAuditLogs();
     toast("操作紀錄已刪除");
   }
 
@@ -1639,31 +1651,40 @@
   }
 
   function currentCan(permission) {
-    if (isMasterOperator()) return true;
     const key = String(permission || "").trim();
-    if (currentRolePermissions[key] === true) return true;
+    if (!key) return false;
+    if (isMasterOperator()) return true;
+    try {
+      const access = window.WT_ACCESS_CONTROL;
+      if (access?.state?.ready === true) {
+        return access.hasPermission(key) === true;
+      }
+    } catch (_) {}
+
+    const encoded = encodeAccessPermission(key);
+    if (currentRolePermissions.__all__ === true || currentRolePermissions[encoded] === true) {
+      return true;
+    }
+
     if (currentRole === "admin") {
-      const adminDefaults = [
+      return [
         "admin.read","users.read","users.update","users.restrict",
         "rooms.read","rooms.manage","chat.read","chat.moderate",
         "reports.read","reports.manage","analytics.read","ai.use",
         "audit.read","audit.write","sync.control","sync.manual",
         "room.create","room.join","room.queue","chat.send","chat.media",
         "chat.dm","youtube.search","youtube.queue","favorites.manage"
-      ];
-      return adminDefaults.includes(key);
+      ].includes(key);
     }
+
     if (currentRole === "viewer") {
       return [
         "admin.read","users.read","rooms.read","chat.read",
         "reports.read","analytics.read","audit.read"
       ].includes(key);
     }
-    try {
-      return window.WT_ACCESS_CONTROL?.hasPermission?.(key) === true;
-    } catch (_) {
-      return false;
-    }
+
+    return false;
   }
 
   function safeKey(value, max = 80) {
