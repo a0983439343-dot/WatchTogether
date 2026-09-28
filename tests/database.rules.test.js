@@ -24,6 +24,11 @@ const adminToken = {
   email_verified: true
 };
 
+const masterToken = {
+  email: MASTER_EMAIL,
+  email_verified: true
+};
+
 const viewerToken = {
   email: "viewer@example.com",
   email_verified: true
@@ -87,19 +92,6 @@ async function seed() {
               "chat__send": "deny"
             }
           },
-          restrictionsByUid: {
-            [USER_UID]: {
-              "room__queue": {
-                enabled: true,
-                permanent: false,
-                until: Date.now() + 3600000,
-                reason: "queue restriction",
-                createdAt: Date.now(),
-                createdByUid: ADMIN_UID,
-                createdByEmail: "admin@example.com"
-              }
-            }
-          }
         },
         featureFlags: {
           "rooms__manage": {
@@ -109,30 +101,6 @@ async function seed() {
             updatedByUid: MASTER_UID
           }
         },
-        blocksByUid: {
-          [USER_UID]: {
-            uid: USER_UID,
-            email: "user@example.com",
-            displayName: "User",
-            permanent: true,
-            blockedUntil: 0,
-            blockedAt: 1,
-            blockedByUid: ADMIN_UID,
-            blockedByEmail: "admin@example.com",
-            blockedByRole: "admin"
-          },
-          [OTHER_UID]: {
-            uid: OTHER_UID,
-            email: "other@example.com",
-            displayName: "Other",
-            permanent: true,
-            blockedUntil: 0,
-            blockedAt: 1,
-            blockedByUid: VIEWER_UID,
-            blockedByEmail: "viewer@example.com",
-            blockedByRole: "viewer"
-          }
-        }
       },
       reports: {
         existing: {
@@ -483,7 +451,7 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertFails(
     applicant.ref("members/ABC123/" + OTHER_UID).set({
       name: "Applicant",
-      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      joinedAt: Date.now(),
       online: true,
       lastSeen: firebase.database.ServerValue.TIMESTAMP
     })
@@ -508,9 +476,9 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertSucceeds(
     ownerDb.ref("roomApplications/ABC123/" + OTHER_UID).update({
       status: "approved",
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedAt: Date.now(),
       reviewedByUid: USER_UID,
-      reviewedAt: firebase.database.ServerValue.TIMESTAMP
+      reviewedAt: Date.now()
     })
   );
 
