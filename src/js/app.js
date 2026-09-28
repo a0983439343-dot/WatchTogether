@@ -11889,6 +11889,24 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 state.roomMutes?.[uid]
               );
 
+            const banned =
+              isActiveRoomBan(
+                state.roomBans?.[uid]
+              );
+
+            const banButton =
+              canModerateMember
+                ? (
+                  '<button type="button" class="tiny-btn" data-member-ban="' +
+                  escapeHtml(uid) +
+                  '" data-member-name="' +
+                  escapeHtml(name) +
+                  '">' +
+                  (banned ? "解除封鎖" : "封鎖") +
+                  "</button>"
+                )
+                : "";
+
             const muteButton =
               canModerateMember
                 ? (
@@ -11989,6 +12007,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 ></span>
 
                 ${muteButton}
+                ${banButton}
                 ${kickButton}
 
               </div>
@@ -12015,6 +12034,28 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         }
       );
 
+    $("memberList")
+      .querySelectorAll(
+        "[data-member-ban]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              try {
+                await toggleRoomBan(
+                  button.dataset.memberBan,
+                  button.dataset.memberName
+                );
+              } catch (error) {
+                console.error("房間封鎖失敗:", error);
+                toast(error?.message || "房間封鎖失敗");
+              }
+            }
+          );
+        }
+      );
     $("memberList")
       .querySelectorAll(
         "[data-member-kick]"
