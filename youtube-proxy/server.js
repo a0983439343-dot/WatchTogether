@@ -894,13 +894,6 @@ async function authorizeMaintenanceRequest(req) {
 
   user.auditRole = roleId || "admin";
   return {ok:true,user};
-
-  return {
-    ok:false,
-    status:403,
-    error:"maintenance_permission_denied",
-    message:"目前角色沒有 maintenance.manage 權限。"
-  };
 }
 
 async function handleMaintenanceControl(req, res) {
@@ -1474,7 +1467,7 @@ async function authorizeAiRequest(req) {
     return {ok:false,status:403,error:"ai_admin_required",message:"AI 只能由具備管理員權限的帳號使用。"};
   }
 
-  return {ok:false,status:403,error:"ai_permission_denied",message:"只有具備 AI 權限的管理角色可以使用 AI。"};;
+  return {ok:false,status:403,error:"ai_permission_denied",message:"只有具備 AI 權限的管理角色可以使用 AI。"}
 }
 
 async function handleAdminAgent(req, res) {
