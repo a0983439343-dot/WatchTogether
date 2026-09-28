@@ -239,6 +239,7 @@
        <div class="section-head"><div><div class="eyebrow">AUDIT LOG</div><h2>操作紀錄</h2></div><button id="auditRefreshBtn" class="btn primary">重新整理</button></div>
        <div class="toolbar">
          <input id="auditSearch" class="search" type="search" placeholder="搜尋管理員、UID、目標或操作內容">
+         <input id="auditUserFilter" class="search" type="search" placeholder="指定使用者 UID / Email">
          <select id="auditActionFilter" class="search report-filter" aria-label="操作類型">
            <option value="all">全部操作</option>
            <option value="block">封鎖</option>
@@ -253,6 +254,8 @@
            <option value="whitelist.remove">移除白名單</option>
            <option value="audit.delete">刪除操作紀錄</option>
          </select>
+         <input id="auditFrom" class="search" type="datetime-local" aria-label="開始時間">
+         <input id="auditTo" class="search" type="datetime-local" aria-label="結束時間">
          <span id="auditCount" class="muted">0 筆</span>
        </div>
        <div class="panel table-wrap">
@@ -382,6 +385,6 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260928-admin-v31"></script>
+<script src="admin.js?v=20260928-admin-v32"></script>
 </body>
 </html>
