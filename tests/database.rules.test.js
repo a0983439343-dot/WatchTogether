@@ -496,20 +496,20 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   );
 
   await assertSucceeds(
-    ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).set({
-      uid: OTHER_UID,
-      role: "cohost",
-      updatedAt: Date.now(),
-      updatedByUid: USER_UID
-    })
-  );
-
-  await assertSucceeds(
     ownerDb.ref("members/ABC123/" + OTHER_UID).set({
       name: "Applicant",
       joinedAt: Date.now(),
       online: true,
       lastSeen: Date.now()
+    })
+  );
+
+  await assertSucceeds(
+    ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      role: "cohost",
+      updatedAt: Date.now(),
+      updatedByUid: USER_UID
     })
   );
 
@@ -851,7 +851,8 @@ test("2.0 access control: room.join restriction and feature flag block membershi
     email: "other@example.com",
     email_verified: true
   });
-  const roomRef = master.ref("rooms/ZJOIN1");
+  const ownerDb = db(USER_UID, userToken);
+  const roomRef = ownerDb.ref("rooms/ZJOIN1");
   await assertSucceeds(roomRef.set({
     owner: USER_UID,
     name: "Join Guard",
