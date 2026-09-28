@@ -541,7 +541,7 @@ test("2.0 access control: server-side restriction and feature flag block room wr
   );
 });
 
-test("2.0 access control: audit.delete is master-only", async () => {
+test("2.0 access control: audit.delete is separate from audit.write", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs").push();
   await assertSucceeds(ref.set({
     action: "delete-test",
@@ -553,12 +553,53 @@ test("2.0 access control: audit.delete is master-only", async () => {
     details: "delete test",
     createdAt: Date.now()
   }));
-  await assertFails(
+
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + ref.key).remove()
   );
+
+  const customDeleteRef = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true}).ref("admin/auditLogs").push();
+  await assertSucceeds(customDeleteRef.set({
+    action: "delete-permission-test",
+    actorUid: MASTER_UID,
+    actorEmail: MASTER_EMAIL,
+    actorRole: "master",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "master seed",
+    createdAt: Date.now()
+  }));
   await assertSucceeds(
     db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
-      .ref("admin/auditLogs/" + ref.key).remove()
+      .ref("admin/auditLogs/" + customDeleteRef.key).remove()
+  );
+
+  const writeOnlyRole = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  await assertSucceeds(writeOnlyRole.ref("admin/access/roles/write-only").set({
+    name: "Write Only",
+    permissions: {audit__write: true}
+  }));
+  await assertSucceeds(writeOnlyRole.ref("admin/access/roleByUid/" + OTHER_UID).set("write-only"));
+
+  const otherRef = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  }).ref("admin/auditLogs").push();
+  await assertSucceeds(otherRef.set({
+    action: "write-only",
+    actorUid: OTHER_UID,
+    actorEmail: "other@example.com",
+    actorRole: "write-only",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "write only",
+    createdAt: Date.now()
+  }));
+  await assertFails(
+    db(OTHER_UID, {
+      email: "other@example.com",
+      email_verified: true
+    }).ref("admin/auditLogs/" + otherRef.key).remove()
   );
 });
 
