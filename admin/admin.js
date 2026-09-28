@@ -2064,6 +2064,26 @@
     toast("自訂角色已刪除");
   }
 
+  async function assignFullAdminRole() {
+    if (!isMasterOperator()) throw new Error("只有最高管理員可以授予完整管理權限");
+    const uid = String($("accessAssignUid")?.value || "").trim();
+    if (!uid) throw new Error("請先輸入使用者 UID");
+    if (uid === MASTER_UID) throw new Error("最高管理員不需要被重新指派權限");
+
+    const roleId = "full_admin";
+    await db.ref("admin/access/roles/" + roleId).set({
+      name: "完整管理員（與 Master 相同）",
+      permissions: {__all__: true},
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedByUid: currentUser.uid,
+      updatedByEmail: currentUser.email || ""
+    });
+    await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(roleId);
+    await loadAccessControl();
+    void writeAuditLog("access.role.full_admin", uid, roleId, "授予與最高管理員相同的完整管理權限");
+    $("accessAssignUid").value = "";
+    toast("已授予完整管理權限");
+  }
   async function assignAccessRole() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以指派自訂角色");
     const uid = String($("accessAssignUid")?.value || "").trim();
@@ -2398,6 +2418,7 @@
 
     $("accessRoleSaveBtn")?.addEventListener("click", () => saveAccessRole().catch(error => { console.error(error); toast(error?.message || "儲存角色失敗"); }));
     $("accessAssignBtn")?.addEventListener("click", () => assignAccessRole().catch(error => { console.error(error); toast(error?.message || "指派角色失敗"); }));
+    $("accessFullAdminBtn")?.addEventListener("click", () => assignFullAdminRole().catch(error => { console.error(error); toast(error?.message || "授予完整管理權限失敗"); }));
     $("accessOverrideBtn")?.addEventListener("click", () => saveAccessOverride().catch(error => { console.error(error); toast(error?.message || "設定 Allow / Deny 失敗"); }));
     $("accessRestrictionBtn")?.addEventListener("click", () => saveAccessRestriction().catch(error => { console.error(error); toast(error?.message || "設定功能限制失敗"); }));
     $("accessFlagBtn")?.addEventListener("click", () => saveAccessFeatureFlag().catch(error => { console.error(error); toast(error?.message || "更新 Feature Flag 失敗"); }));
