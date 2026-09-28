@@ -968,12 +968,29 @@
     const user=auth?.currentUser;
     if(!user || user.isAnonymous || !db) return false;
     const MASTER_UID="35d45a23-b648-4caf-a6d5-a69112860551";
-    if(String(user.uid||"")===MASTER_UID) return true;
+    const MASTER_EMAIL="a0983439343@gmail.com";
+    if(String(user.uid||"")===MASTER_UID || String(user.email||"").trim().toLowerCase()===MASTER_EMAIL) return true;
     try{
-      const snapshot=await db.ref("admin/whitelistByUid/"+user.uid).once("value");
-      const value=snapshot.val();
-      return Boolean(value?.enabled===true && ["admin","master"].includes(String(value.role||"admin")));
-    }catch(_){ return false; }
+      const whitelistSnap=await db.ref("admin/whitelistByUid/"+user.uid).once("value");
+      const whitelist=whitelistSnap.val()||{};
+      if(whitelist.enabled!==true || !["admin","master"].includes(String(whitelist.role||"admin"))) return false;
+
+      const roleSnap=await db.ref("admin/userRoles/"+user.uid).once("value");
+      const roleId=String(roleSnap.val()?.roleId||"").trim();
+      let permitted=true;
+      if(roleId){
+        const roleSnap2=await db.ref("admin/roles/"+roleId).once("value");
+        const role=roleSnap2.val()||{};
+        permitted=role.permissions?.maintenance__manage===true;
+      }
+      const overrideSnap=await db.ref("admin/userPermissionOverrides/"+user.uid).once("value");
+      const override=overrideSnap.val()||{};
+      if(override.deny?.maintenance__manage===true) return false;
+      if(override.allow?.maintenance__manage===true) return true;
+      return permitted;
+    }catch(_){
+      return false;
+    }
   }
 
   function initMaintenanceListener(){
