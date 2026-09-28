@@ -1539,7 +1539,7 @@
     if (!id || !item) { toast("找不到這筆回報"); return; }
     if (!window.confirm("確定刪除這筆問題回報？刪除後無法復原。")) return;
     const historySnapshot = await db.ref("reportHistoryEvents/" + id).once("value");
-    const updates = {"reports/" + id:null};
+    const updates = {["reports/" + id]:null};
     historySnapshot.forEach(child => {
       updates["reportHistoryEvents/" + id + "/" + child.key] = null;
     });
@@ -1738,7 +1738,7 @@
     if (!item) return;
     if (!window.confirm("確定刪除 " + (item.email || "這個帳號") + " 的管理員資格？")) return;
     await writeAuditedUpdates(
-      {"admin/whitelistByUid/" + uid:null},
+      {["admin/whitelistByUid/" + uid]:null},
       "whitelist.remove",
       uid,
       item.email || uid,
@@ -1901,7 +1901,7 @@
     }
     if (options.skipConfirm !== true && !window.confirm("確定解除「" + (item.displayName || item.email || uid) + "」的封鎖？")) return;
     await writeAuditedUpdates(
-      {"admin/blocksByUid/" + uid:null},
+      {["admin/blocksByUid/" + uid]:null},
       "unblock",
       uid,
       item.displayName || item.email || uid,
@@ -2447,7 +2447,7 @@
     if (Object.values(accessAssignments || {}).some(role => String(role) === key)) throw new Error("這個角色仍有使用者指派，請先解除指派");
     const roleName = String(accessRoles[key]?.name || key);
     if (!window.confirm("確定刪除自訂角色「" + roleName + "」？")) return;
-    await writeAuditedUpdates({"admin/access/roles/" + key:null},"access.role.delete","",roleName,"刪除自訂角色 " + key);
+    await writeAuditedUpdates({["admin/access/roles/" + key]:null},"access.role.delete","",roleName,"刪除自訂角色 " + key);
     await loadAccessControl();
     toast("自訂角色已刪除");
   }
@@ -2478,7 +2478,7 @@
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!role || !accessRoles[role]) throw new Error("請選擇有效的自訂角色");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被重新指派角色");
-    await writeAuditedUpdates({"admin/access/roleByUid/" + safeKey(uid,128):role},"access.role.assign",uid,role,"指派自訂角色 " + role);
+    await writeAuditedUpdates({["admin/access/roleByUid/" + safeKey(uid,128)]:role},"access.role.assign",uid,role,"指派自訂角色 " + role);
     await loadAccessControl();
     $("accessAssignUid").value = "";
     toast("角色已指派");
@@ -2487,7 +2487,7 @@
     if (!isMasterOperator()) throw new Error("只有最高管理員可以解除角色");
     const key = safeKey(uid,128);
     if (!key) return;
-    await writeAuditedUpdates({"admin/access/roleByUid/" + key:null},"access.role.unassign",key,key,"解除自訂角色");
+    await writeAuditedUpdates({["admin/access/roleByUid/" + key]:null},"access.role.unassign",key,key,"解除自訂角色");
     await loadAccessControl();
     toast("角色指派已解除");
   }
@@ -2511,7 +2511,7 @@
     if (!isMasterOperator()) throw new Error("只有最高管理員可以移除個人權限覆寫");
     const u = safeKey(uid,128), p = encodeAccessPermission(permission);
     if (!u || !p) return;
-    await writeAuditedUpdates({"admin/access/permissionsByUid/" + u + "/" + p:null},"access.permission.clear",u,p.replace(/__/g,"."),"移除個人權限覆寫");
+    await writeAuditedUpdates({["admin/access/permissionsByUid/" + u + "/" + p]:null},"access.permission.clear",u,p.replace(/__/g,"."),"移除個人權限覆寫");
     await loadAccessControl();
     toast("個人權限覆寫已移除");
   }
@@ -2547,7 +2547,7 @@
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能解除功能限制");
     const u = safeKey(uid,128), p = encodeAccessPermission(permission);
     if (!u || !p) return;
-    await writeAuditedUpdates({"admin/access/restrictionsByUid/" + u + "/" + p:null},"access.user.restriction.clear",u,p,"解除功能限制");
+    await writeAuditedUpdates({["admin/access/restrictionsByUid/" + u + "/" + p]:null},"access.user.restriction.clear",u,p,"解除功能限制");
     await loadAccessControl();
     toast("功能限制已解除");
   }
@@ -2570,7 +2570,7 @@
     const key = encodeAccessPermission(name);
     if (!key) return;
     if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
-    await writeAuditedUpdates({"admin/featureFlags/" + key:null},"feature.flag.delete",currentUser.uid,key,"刪除 Feature Flag");
+    await writeAuditedUpdates({["admin/featureFlags/" + key]:null},"feature.flag.delete",currentUser.uid,key,"刪除 Feature Flag");
     await loadAccessControl();
     toast("Feature Flag 已刪除");
   }
@@ -2838,7 +2838,7 @@
       if (!currentCan("users.restrict")) throw new Error("沒有 users.restrict 權限");
       if (!uid || !permission) throw new Error("缺少 UID 或功能");
       await writeAuditedUpdates(
-        {"admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission):null},
+        {["admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)]:null},
         "access.user.restriction.clear",
         uid,
         permission,
@@ -2871,7 +2871,7 @@
       const role = safeKey(data.role,80);
       if (!role || !accessRoles[role]) throw new Error("角色不存在");
       await writeAuditedUpdates(
-        {"admin/access/roleByUid/" + safeKey(uid,128):role},
+        {["admin/access/roleByUid/" + safeKey(uid,128)]:role},
         "access.role.assign",
         uid,
         role,
@@ -2887,7 +2887,7 @@
       const effect = String(data.effect || "").toLowerCase();
       if (effect !== "allow" && effect !== "deny") throw new Error("effect 必須是 allow 或 deny");
       await writeAuditedUpdates(
-        {"admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission):effect},
+        {["admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)]:effect},
         "access.permission.override",
         uid,
         permission,
