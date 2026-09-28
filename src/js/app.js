@@ -4236,46 +4236,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
   }
 
-  function scheduleQueueAdvanceAfterEnded(
-    playerAtEnd,
-    videoIdAtEnd
-  ) {
-    if (
-      !state.isOwner ||
-      state.playbackApplyingRemote ||
-      state.leavingRoom
-    ) {
-      return;
-    }
-
-    cancelScheduledQueuePlayback();
-
-    const roomIdAtEnd =
-      String(state.roomId || "");
-
-    state.queueNextTimer =
-      setTimeout(
-        async () => {
-          state.queueNextTimer = null;
-
-          if (
-            String(state.roomId || "") !== roomIdAtEnd ||
-            state.player !== playerAtEnd ||
-            String(state.currentVideoId || "") !==
-              String(videoIdAtEnd || "") ||
-            !state.isOwner ||
-            state.leavingRoom
-          ) {
-            return;
-          }
-
-          await playNextQueueItem();
-        },
-        300
-      );
-  }
-
-
   function getQueuePlaybackMode() {
     const settings =
       state.room?.settings ||
@@ -5063,6 +5023,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         state.playbackTransientStateUntil = 0;
         state.isPlaying = false;
         state.playbackLastPlayerState = "ended";
+        try {
+          if (Number.isFinite(videoElement.duration) && videoElement.duration >= 0) {
+            videoElement.currentTime = videoElement.duration;
+          }
+        } catch (_) {}
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
 
