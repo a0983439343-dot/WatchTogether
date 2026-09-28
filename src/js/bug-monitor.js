@@ -27,6 +27,8 @@
   let monitorStarted = false;
   let lastErrorAt = 0;
   let originalConsoleError = null;
+  let originalConsoleWarn = null;
+  const pendingErrors = [];
 
   function getAiEndpoint() {
     try {
@@ -70,122 +72,286 @@
     return checks;
   }
 
+  const AI_STREAM_TIMEOUT_MS = 25000;
+  const AI_STREAM_MAX_CHARS = 12000;
+  const AI_STREAM_FLUSH_MS = 150;
+  const AI_EXTENSION_SOURCE = "SSE_STREAM_EXTENSION";
+  const AI_EXTENSION_BRIDGE_SOURCE = "SSE_STREAM_EXTENSION_BRIDGE";
+  const AI_EXTENSION_API_ORIGIN = "https://api.openai.com";
+  const AI_EXTENSION_MODEL = "gpt-4o-mini";
+
+  function makeAiRequestId() {
+    return "wt-ai-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function cleanAiStack(value, max = 5000) {
+    return String(value == null ? "" : value)
+      .replace(/https?:\/\/[^\s)]+/gi, "[url]")
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+      .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "[uid]")
+      .replace(/\b[A-Z0-9]{6}\b/g, "[code]")
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+      .slice(0, max);
+  }
+
+  function parseAiDiagnosis(text) {
+    const source = String(text || "").trim();
+    const pick = (label, fallback = "") => {
+      const re = new RegExp("【" + label + "】\\s*([\\s\\S]*?)(?=\\n?【[^】]+】|$)");
+      const match = source.match(re);
+      return cleanText(match?.[1] || fallback, 900);
+    };
+    const statusRaw = pick("狀態", "無法判定").trim();
+    const statusMap = {
+      "確認為問題":"confirmed",
+      "仍存在":"still_present",
+      "已修復候選":"resolved_candidate",
+      "無法判定":"inconclusive"
+    };
+    const confidenceText = pick("信心", "");
+    const percent = confidenceText.match(/([0-9]{1,3})\s*%/);
+    const numeric = Number(confidenceText);
+    const confidence = percent
+      ? Math.max(0, Math.min(1, Number(percent[1]) / 100))
+      : Number.isFinite(numeric)
+        ? Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric))
+        : 0;
+    return {
+      status: statusMap[statusRaw] || (["confirmed","still_present","resolved_candidate","inconclusive"].includes(statusRaw) ? statusRaw : "inconclusive"),
+      confidence,
+      title: pick("問題", source.slice(0,220)),
+      summary: pick("證據", source.slice(0,900)),
+      rootCause: pick("根因", "未能從目前證據可靠判定根因。"),
+      suggestion: pick("修復建議", "先檢查錯誤堆疊、觸發路徑與最近部署差異，再進行最小範圍修正。")
+    };
+  }
+
+  function buildAiMessages(report, evidence, current) {
+    const details = cleanAiStack(report?.details || "", 5000);
+    const evidenceText = cleanAiStack(JSON.stringify(evidence || {}, null, 2), 5500);
+    const currentText = cleanAiStack(JSON.stringify(current || {}, null, 2), 3500);
+    return [
+      {
+        role:"system",
+        content:[
+          "你是 WatchTogether 的即時 Bug 診斷器。",
+          "你的任務是根據瀏覽器錯誤、Stack、Firebase/播放器上下文與驗證結果，判斷最可能的問題與修復方向。",
+          "不要杜撰不存在的檔案、函式或證據；不確定時明確寫出無法判定。",
+          "只診斷，不直接修改程式碼，不提供秘密或憑證。",
+          "請用繁體中文回答，而且必須嚴格使用以下六個標記，每個標記各自一行：",
+          "【狀態】確認為問題 | 仍存在 | 已修復候選 | 無法判定",
+          "【信心】0-100%",
+          "【問題】一句話描述主要 Bug",
+          "【證據】列出最關鍵的觀察與因果關聯",
+          "【根因】最可能的技術根因；若只能推測就標明推測",
+          "【修復建議】最小風險、可驗證的修正方向",
+          "不要使用 Markdown 表格；避免超長重複 Stack。"
+        ].join("\n")
+      },
+      {
+        role:"user",
+        content:[
+          "以下是 WatchTogether 的即時錯誤回報。",
+          "回報資料：",
+          details,
+          "",
+          "驗證證據：",
+          evidenceText,
+          "",
+          "目前頁面上下文：",
+          currentText
+        ].join("\n")
+      }
+    ];
+  }
+
+  function writeAiStreamToReport(reportId, text, final = false, patch = {}) {
+    if (!reportId) return Promise.resolve(false);
+    const data = {
+      aiProvider:"openai",
+      aiModel:AI_EXTENSION_MODEL,
+      aiRealtime:true,
+      aiStreamText:String(text || "").slice(0, AI_STREAM_MAX_CHARS),
+      aiStreamUpdatedAt:firebase.database.ServerValue.TIMESTAMP,
+      ...patch
+    };
+    return wt.db.ref("reports/" + reportId).update(data).then(() => true).catch(error => {
+      try { console.warn("AI 即時診斷串流寫入失敗:", error); } catch (_) {}
+      return false;
+    });
+  }
+
   async function analyzeWithAI(reportId, phase, state, evidence) {
-    const endpoint = getAiEndpoint();
-    if (!endpoint || !reportId) return null;
-    const access = window.WT_ACCESS_CONTROL;
-    if (access) {
-      await access.waitUntilReady(2500);
-      if (access.state?.ready && !access.hasPermission("ai.use")) return null;
-    }
-    const currentUser = wt.auth.currentUser;
-    if (!currentUser || currentUser.isAnonymous) return null;
-    let idToken = "";
-    try {
-      idToken = await currentUser.getIdToken();
-    } catch (_) {
-      return null;
-    }
-    if (!idToken) return null;
-    const localState = state && typeof state === "object" ? state : {};
+    const user = wt.auth.currentUser;
+    if (!user || user.isAnonymous || !reportId) return null;
+
+    const reportSnapshot = await wt.db.ref("reports/" + reportId).once("value").catch(() => null);
+    if (!reportSnapshot?.exists()) return null;
+    const report = reportSnapshot.val() || {};
+    const current = {
+      page:reportLocation(),
+      roomId:typeof wt.roomIdFromUrl === "function" ? String(wt.roomIdFromUrl() || "").slice(0,20) : "",
+      buildVersion:BUILD_VERSION,
+      phase:String(phase || "detect").slice(0,40),
+      health:collectHealthEvidence(),
+      verification:evidence?.verification || evidence || {}
+    };
+
     const now = Date.now();
-    const lastAiAt = Number(localState.lastAiAt || 0);
+    const lastAiAt = Number(state?.lastAiAt || 0);
     if (phase === "recheck" && lastAiAt && now - lastAiAt < AI_RECHECK_INTERVAL_MS) return null;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    const requestId = makeAiRequestId();
+    const messages = buildAiMessages(report, evidence, current);
+    const payload = {
+      requestId,
+      messages,
+      model:AI_EXTENSION_MODEL,
+      provider:"openai",
+      apiOrigin:AI_EXTENSION_API_ORIGIN,
+      reportId,
+      phase:String(phase || "detect").slice(0,40)
+    };
 
-    try {
-      const reportSnapshot = await wt.db.ref("reports/" + reportId).once("value");
-      if (!reportSnapshot.exists()) return null;
+    await writeAiStreamToReport(reportId, "", false, {
+      aiDiagnosisState:"streaming",
+      aiStatus:"diagnosing",
+      aiError:null,
+      aiStartedAt:firebase.database.ServerValue.TIMESTAMP
+    });
 
-      const report = reportSnapshot.val() || {};
-      const body = {
-        phase,
-        report: {
-          category:String(report.category || "other").slice(0,40),
-          details:cleanText(report.details || "",1800),
-          fingerprint:String(report.fingerprint || "").slice(0,80),
-          buildVersion:String(report.buildVersion || "").slice(0,120),
-          occurrences:Number(report.occurrences || 1) || 1,
-          firstSeenAt:Number(report.firstSeenAt || report.createdAt || 0),
-          lastSeenAt:Number(report.lastSeenAt || report.createdAt || 0)
-        },
-        evidence:evidence || {},
-        current:{
-          page:reportLocation(),
-          roomId:typeof wt.roomIdFromUrl === "function" ? String(wt.roomIdFromUrl() || "").slice(0,20) : "",
-          buildVersion:BUILD_VERSION,
-          recentSameFingerprintSeen:Boolean(localState.lastEventAt && now - Number(localState.lastEventAt) < AUTO_RESOLVE_AFTER_MS),
-          health:collectHealthEvidence()
+    return await new Promise(resolve => {
+      let settled = false;
+      let started = false;
+      let accumulated = "";
+      let flushTimer = null;
+      let timeout = null;
+
+      const cleanup = () => {
+        window.removeEventListener("message", onMessage);
+        if (flushTimer) clearTimeout(flushTimer);
+        if (timeout) clearTimeout(timeout);
+      };
+
+      const finish = async (analysis, errorMessage = "") => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+
+        const patch = analysis ? {
+          aiStatus:analysis.status,
+          aiConfidence:Number(analysis.confidence || 0),
+          aiTitle:cleanText(analysis.title || "",220),
+          aiSummary:cleanText(analysis.summary || "",900),
+          aiRootCause:cleanText(analysis.rootCause || "",900),
+          aiSuggestion:cleanText(analysis.suggestion || "",900),
+          aiModel:AI_EXTENSION_MODEL,
+          aiProvider:"openai",
+          aiDiagnosisState:"completed",
+          aiCompletedAt:firebase.database.ServerValue.TIMESTAMP,
+          aiError:null,
+          aiResolvedCandidate:analysis.status === "resolved_candidate",
+          status:report.status === "resolved" ? "resolved" : "ai_completed"
+        } : {
+          aiStatus:"unavailable",
+          aiDiagnosisState:"error",
+          aiError:cleanText(errorMessage || "AI 擴充功能串流失敗",500)
+        };
+
+        await writeAiStreamToReport(reportId, accumulated, true, patch);
+
+        try {
+          await writeHistory(
+            reportId,
+            analysis ? "ai_stream_completed" : "ai_stream_error",
+            analysis
+              ? "OpenAI 即時串流診斷完成：" + String(analysis.status || "inconclusive")
+              : "OpenAI 即時串流診斷失敗：" + String(errorMessage || "unknown")
+          );
+        } catch (_) {}
+
+        if (state && typeof state === "object") {
+          state.lastAiAt = now;
+          state.aiStatus = analysis?.status || "unavailable";
+          state.aiConfidence = Number(analysis?.confidence || 0);
+          state.aiTitle = cleanText(analysis?.title || "",220);
+          state.aiSummary = cleanText(analysis?.summary || "",900);
+          state.aiRootCause = cleanText(analysis?.rootCause || "",900);
+          state.aiSuggestion = cleanText(analysis?.suggestion || "",900);
+          state.aiModel = AI_EXTENSION_MODEL;
+          saveState();
+        }
+
+        resolve(analysis || null);
+      };
+
+      const scheduleFlush = () => {
+        if (flushTimer || settled) return;
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          void writeAiStreamToReport(reportId, accumulated, false, {
+            aiDiagnosisState:"streaming",
+            aiStatus:"diagnosing"
+          });
+        }, AI_STREAM_FLUSH_MS);
+      };
+
+      const onMessage = event => {
+        if (event.source !== window || event.origin !== location.origin) return;
+        const data = event.data;
+        if (!data || data.source !== AI_EXTENSION_BRIDGE_SOURCE || String(data.requestId || "") !== requestId) return;
+
+        const type = String(data.type || "");
+        if (type === "EXTENSION_READY") return;
+
+        if (type === "STREAM_STARTED") {
+          started = true;
+          void writeAiStreamToReport(reportId, accumulated, false, {
+            aiDiagnosisState:"streaming",
+            aiStatus:"diagnosing",
+            aiModel:String(data.model || AI_EXTENSION_MODEL).slice(0,100),
+            aiProvider:"openai"
+          });
+          return;
+        }
+
+        if (type === "STREAM_EVENT") {
+          const chunk = String(data.content || "");
+          if (!chunk) return;
+          accumulated = (accumulated + chunk).slice(0, AI_STREAM_MAX_CHARS);
+          scheduleFlush();
+          return;
+        }
+
+        if (type === "STREAM_END") {
+          void finish(parseAiDiagnosis(accumulated));
+          return;
+        }
+
+        if (type === "STREAM_ERROR") {
+          void finish(null, String(data.error || "OpenAI 串流錯誤").slice(0,500));
         }
       };
 
-      const response = await fetch(endpoint,{
-        method:"POST",
-        cache:"no-store",
-        credentials:"omit",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":"Bearer " + idToken
-        },
-        signal:controller.signal,
-        body:JSON.stringify(body)
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result || result.ok !== true || !result.analysis || result.degraded === true) {
-        throw new Error(String(result?.error || result?.analysis?.summary || "AI 分析目前不可用"));
-      }
-
-      const analysis = result.analysis;
-      localState.lastAiAt = now;
-      localState.aiStatus = String(analysis.status || "inconclusive");
-      localState.aiConfidence = Number(analysis.confidence || 0);
-      localState.aiTitle = cleanText(analysis.title || "",220);
-      localState.aiSummary = cleanText(analysis.summary || "",900);
-      localState.aiRootCause = cleanText(analysis.rootCause || "",900);
-      localState.aiSuggestion = cleanText(analysis.suggestion || "",900);
-      localState.aiModel = String(result.model || "").slice(0,100);
-      saveState();
-
-      await wt.db.ref("reports/" + reportId).update({
-        aiStatus:localState.aiStatus,
-        aiConfidence:localState.aiConfidence,
-        aiTitle:localState.aiTitle,
-        aiSummary:localState.aiSummary,
-        aiRootCause:localState.aiRootCause,
-        aiSuggestion:localState.aiSuggestion,
-        aiModel:localState.aiModel,
-        aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
-        aiResolvedCandidate:localState.aiStatus === "resolved_candidate"
-      });
-
-      try {
-        await writeHistory(
-          reportId,
-          "ai_check",
-          phase === "recheck"
-            ? "AI 重新檢測：" + (localState.aiStatus === "resolved_candidate" ? "判定可視為已修復候選" : "判定仍需確認")
-            : "AI 分析：" + (localState.aiTitle || localState.aiStatus)
+      window.addEventListener("message", onMessage);
+      timeout = setTimeout(() => {
+        void finish(null, started
+          ? "AI 串流超時"
+          : "Chrome 擴充功能未在期限內回應；請確認擴充功能已載入 WatchTogether 頁面。"
         );
-      } catch (_) {}
+      }, AI_STREAM_TIMEOUT_MS);
 
-      return analysis;
-    } catch (error) {
-      localState.lastAiAt = now;
-      localState.aiStatus = "unavailable";
-      saveState();
       try {
-        await wt.db.ref("reports/" + reportId).update({
-          aiStatus:"unavailable",
-          aiCheckedAt:firebase.database.ServerValue.TIMESTAMP,
-          aiError:cleanText(error?.message || "AI 分析無法使用",500)
-        });
-      } catch (_) {}
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
+        window.postMessage({
+          source:AI_EXTENSION_SOURCE,
+          type:"START_STREAM",
+          requestId,
+          payload
+        }, location.origin);
+      } catch (error) {
+        void finish(null, error?.message || "無法發送 AI 擴充功能請求");
+      }
+    });
   }
 
   function loadState() {
@@ -336,38 +502,44 @@
 
     const reportRef = wt.db.ref("reports").push();
     const reportId = reportRef.key;
-    const now = Date.now();
     const payload = {
-      uid: user.uid,
+      uid:user.uid,
       category,
-      details: cleanText(details, 2000),
-      roomId: typeof wt.roomIdFromUrl === "function" ? wt.roomIdFromUrl() : "",
-      page: reportLocation(),
-      userAgent: cleanText(navigator.userAgent, 500),
-      status: "open",
-      source: "auto",
-      autoDetected: true,
-      autoVerifyEnabled: true,
+      details:cleanText("[系統自動攔截 - AI 診斷中]\n" + String(details || ""),2000),
+      roomId:typeof wt.roomIdFromUrl === "function" ? wt.roomIdFromUrl() : "",
+      page:reportLocation(),
+      userAgent:cleanText(navigator.userAgent,500),
+      status:"open",
+      source:"auto",
+      autoDetected:true,
+      autoVerifyEnabled:true,
+      aiRealtime:true,
+      aiProvider:"openai",
+      aiModel:AI_EXTENSION_MODEL,
+      aiDiagnosisState:"streaming",
+      aiStatus:"diagnosing",
+      aiStreamText:"",
       fingerprint,
-      buildVersion: BUILD_VERSION,
-      firstSeenAt: firebase.database.ServerValue.TIMESTAMP,
-      lastSeenAt: firebase.database.ServerValue.TIMESTAMP,
-      occurrences: 1,
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      verificationState: "monitoring",
-      verificationStableChecks: 0
+      buildVersion:BUILD_VERSION,
+      firstSeenAt:firebase.database.ServerValue.TIMESTAMP,
+      lastSeenAt:firebase.database.ServerValue.TIMESTAMP,
+      occurrences:1,
+      createdAt:firebase.database.ServerValue.TIMESTAMP,
+      verificationState:"monitoring",
+      verificationStableChecks:0
     };
     await reportRef.set(payload);
+
+    try {
+      await writeHistory(reportId,"created","系統自動攔截；已送出 OpenAI 即時診斷");
+    } catch (_) {}
+
     void analyzeWithAI(reportId,"detect",null,{
       trigger:source,
       liveErrorPresent:true
     }).catch(() => {});
-    try {
-      await writeHistory(reportId, "created", source + " 自動偵測到新的錯誤");
-    } catch (historyError) {
-      try { console.warn("WatchTogether 自動回報建立紀錄失敗:", historyError); } catch (_) {}
-    }
-    return { reportId, now };
+
+    return {reportId,now:Date.now()};
   }
 
   async function updateAutoReport(reportId, state, category, details, source) {
@@ -436,7 +608,10 @@
 
   async function recordError(source, error, extra = "") {
     const user = wt.auth.currentUser;
-    if (!user) return;
+    if (!user) {
+      if (pendingErrors.length < 20) pendingErrors.push({source, error});
+      return;
+    }
     const now = Date.now();
     if (now - lastErrorAt < 1000) return;
     lastErrorAt = now;
@@ -787,13 +962,43 @@
     document.querySelectorAll("video").forEach(video => {
       if (video.dataset.wtBugMonitorAttached === "1") return;
       video.dataset.wtBugMonitorAttached = "1";
+
+      let waitTimer = null;
+      const clearWait = () => {
+        if (waitTimer) clearTimeout(waitTimer);
+        waitTimer = null;
+      };
+
       video.addEventListener("error", () => {
+        clearWait();
         const mediaError = video.error;
         const message = mediaError
           ? "HTMLVideoElement error code " + mediaError.code + (mediaError.message ? ": " + mediaError.message : "")
           : "HTMLVideoElement error";
         void recordError("video", new Error(message));
       });
+
+      video.addEventListener("stalled", () => {
+        clearWait();
+        waitTimer = setTimeout(() => {
+          if (video.readyState < 3) {
+            void recordError("player-sync", new Error("HTMLVideoElement stalled 超過 8 秒，readyState=" + String(video.readyState)));
+          }
+        }, 8000);
+      });
+
+      video.addEventListener("waiting", () => {
+        clearWait();
+        waitTimer = setTimeout(() => {
+          if (!video.ended && video.readyState < 3) {
+            void recordError("player-sync", new Error("HTMLVideoElement waiting 超過 8 秒，可能發生播放器或串流同步異常"));
+          }
+        }, 8000);
+      });
+
+      video.addEventListener("playing", clearWait);
+      video.addEventListener("canplay", clearWait);
+      video.addEventListener("pause", clearWait);
     });
   }
 
@@ -801,49 +1006,100 @@
     if (monitorStarted) return;
     monitorStarted = true;
 
-    window.addEventListener("error", event => {
-      const message = event?.message || "Uncaught error";
-      const stack = event?.error?.stack || "";
-      void recordError("window-error", new Error(message + (stack ? "\n" + stack : "")));
-    });
+    const previousOnError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+      const text = String(message || "Uncaught error");
+      const stack = String(error?.stack || "");
+      void recordError("window-error", new Error(text + (stack ? "\n" + stack : "")));
+      if (typeof previousOnError === "function") {
+        return previousOnError.apply(this, arguments);
+      }
+      return false;
+    };
 
-    window.addEventListener("unhandledrejection", event => {
-      const reason = event?.reason;
-      const parts = getErrorParts(reason);
+    const previousOnUnhandledRejection = window.onunhandledrejection;
+    window.onunhandledrejection = function(event) {
+      const parts = getErrorParts(event?.reason);
       void recordError("unhandled-rejection", new Error(parts.message + (parts.stack ? "\n" + parts.stack : "")));
-    });
+      if (typeof previousOnUnhandledRejection === "function") {
+        return previousOnUnhandledRejection.apply(this, arguments);
+      }
+      return false;
+    };
 
-    originalConsoleError = console.error.bind(console);
-    console.error = function(...args) {
-      try {
-        const joined = args.map(arg => getErrorParts(arg).message).filter(Boolean).join(" | ");
-        const stack = args.map(arg => getErrorParts(arg).stack).filter(Boolean).join("\n");
-        const text = joined + (stack ? " | " + stack : "");
-        if (/error|failed|exception|permission_denied|not defined|firebase|network|abort|cors|quota|403|404|500/i.test(text)) {
-          void recordError("console-error", new Error(text));
+    originalConsoleError=console.error.bind(console);
+    console.error=function(...args){
+      try{
+        const joined=args.map(arg=>getErrorParts(arg).message).filter(Boolean).join(" | ");
+        const stack=args.map(arg=>getErrorParts(arg).stack).filter(Boolean).join("\n");
+        const text=joined+(stack?" | "+stack:"");
+        if(/error|failed|exception|permission_denied|not defined|firebase|network|abort|cors|quota|403|404|500|sync/i.test(text)){
+          void recordError("console-error",new Error(text));
         }
-      } catch (_) {}
+      }catch(_){}
       return originalConsoleError(...args);
     };
 
-    const early = Array.isArray(window.__WT_EARLY_ERRORS__) ? window.__WT_EARLY_ERRORS__.slice() : [];
-    window.__WT_EARLY_ERRORS__ = [];
-    early.forEach(item => {
-      const message = item?.message || "Early runtime error";
-      const stack = item?.stack || "";
-      void recordError(item?.source || "early-error", new Error(message + (stack ? "\n" + stack : "")));
+    originalConsoleWarn=console.warn.bind(console);
+    console.warn=function(...args){
+      try{
+        const joined=args.map(arg=>getErrorParts(arg).message).filter(Boolean).join(" | ");
+        const stack=args.map(arg=>getErrorParts(arg).stack).filter(Boolean).join("\n");
+        const text=joined+(stack?" | "+stack:"");
+        if(/同步.*失敗|sync.*fail|firebase.*(error|fail|denied)|permission_denied|network|abort|cors|quota|mediaerror|player.*(error|fail)/i.test(text)){
+          void recordError("console-warning",new Error(text));
+        }
+      }catch(_){}
+      return originalConsoleWarn(...args);
+    };
+
+    const early=Array.isArray(window.__WT_EARLY_ERRORS__)?window.__WT_EARLY_ERRORS__.slice():[];
+    window.__WT_EARLY_ERRORS__=[];
+    early.forEach(item=>{
+      pendingErrors.push({
+        source:item?.source||"early-error",
+        error:new Error(String(item?.message||"Early runtime error")+(item?.stack?"\n"+String(item.stack):""))
+      });
+    });
+
+    const connectedRef=wt.db.ref(".info/connected");
+    let previousConnected=null;
+    connectedRef.on("value",snapshot=>{
+      const connected=snapshot.val()===true;
+      if(previousConnected===true&&connected===false){
+        void recordError("firebase-connection",new Error("Firebase Realtime Database 連線中斷"));
+      }else if(previousConnected===false&&connected===true){
+        try{console.info("[WatchTogether] Firebase Realtime Database 已重新連線");}catch(_){}
+      }
+      previousConnected=connected;
+    },error=>{
+      void recordError("firebase-connection",error||new Error("Firebase .info/connected 監聽失敗"));
     });
 
     attachVideoWatchers();
 
-    const observer = new MutationObserver(() => attachVideoWatchers());
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    const observer=new MutationObserver(()=>{
+      attachVideoWatchers();
+      const syncStatus=document.getElementById("syncStatus");
+      if(syncStatus&&/失敗|錯誤|error|failed|denied|timeout|逾時|不同步/i.test(syncStatus.textContent||"")){
+        void recordError("player-sync",new Error("同步狀態顯示異常："+String(syncStatus.textContent||"").slice(0,500)));
+      }
+    });
+    observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
 
-    window.addEventListener("load", () => void stableCheck(), { once: true });
-    setInterval(() => void stableCheck(), 60000);
-    setInterval(() => {
-      if (document.visibilityState !== "hidden") attachVideoWatchers();
-    }, 10000);
+    window.addEventListener("load",()=>void stableCheck(),{once:true});
+    setInterval(()=>void stableCheck(),60000);
+    setInterval(()=>{
+      if(document.visibilityState!=="hidden") attachVideoWatchers();
+    },10000);
+
+    if(wt.auth?.onAuthStateChanged){
+      wt.auth.onAuthStateChanged(user=>{
+        if(!user||user.isAnonymous||!pendingErrors.length) return;
+        const queue=pendingErrors.splice(0,12);
+        queue.forEach(item=>void recordError(item.source,item.error));
+      });
+    }
   }
 
   expose();
