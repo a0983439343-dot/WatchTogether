@@ -453,7 +453,21 @@ function init(){
   var p=prefs();
   if($("sourceTypeInput")&&["youtube","vimeo","dailymotion","twitch"].includes(p.defaultPlatform))$("sourceTypeInput").value=p.defaultPlatform;
   installRoomInviteWatcher();
-  if(auth)auth.onAuthStateChanged(function(){installFriendRequestWatcher();installFriendshipWatcher();installRoomInviteWatcher();ensureTopbar();});
+  if(auth)auth.onAuthStateChanged(function(current){
+    if (!current) {
+      try { window.__WT_FRIENDSHIP_WATCHER_REF?.off(); } catch (_) {}
+      try { window.__WT_ROOM_INVITE_WATCHER_REF?.off(); } catch (_) {}
+      window.__WT_FRIENDSHIP_WATCHER_REF = null;
+      window.__WT_ROOM_INVITE_WATCHER_REF = null;
+      window.__WT_FRIENDSHIP_WATCHER_UID = "";
+      window.__WT_ROOM_INVITE_WATCHER_UID = "";
+    } else {
+      installFriendRequestWatcher();
+      installFriendshipWatcher();
+      installRoomInviteWatcher();
+      ensureTopbar();
+    }
+  });
   setInterval(ensureRoomTools,1000);
   setInterval(track,5000);
   installFeatureKeyboard();
