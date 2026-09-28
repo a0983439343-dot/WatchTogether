@@ -385,3 +385,7 @@ tbody tr:last-child td{border-bottom:0}
 
 /* Hidden state must always win over component display rules. */
 .hidden{display:none!important}
+
+
+/* Hidden state must always win for admin overlays. */
+.admin-modal.hidden{display:none!important}
