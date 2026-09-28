@@ -512,12 +512,50 @@
     "report.status": "處理回報",
     "report.delete": "刪除回報",
     "whitelist.add": "加入白名單",
-    "whitelist.role": "調整權限",
-    "whitelist.toggle": "啟用 / 停用",
+    "whitelist.role": "調整白名單角色",
+    "whitelist.toggle": "啟用 / 停用白名單",
     "whitelist.remove": "移除白名單",
-    "audit.delete": "刪除操作紀錄",
-    "ai.analyze": "AI 分析"
+    "access.role.create": "建立自訂角色",
+    "access.role.delete": "刪除自訂角色",
+    "access.role.assign": "指派自訂角色",
+    "access.role.unassign": "解除自訂角色",
+    "access.role.full_admin": "授予完整管理權限",
+    "access.permission.override": "設定個人 Allow / Deny",
+    "access.permission.clear": "移除個人權限覆寫",
+    "access.user.restriction": "設定使用者功能限制",
+    "access.user.restriction.clear": "解除使用者功能限制",
+    "feature.flag": "更新 Feature Flag",
+    "feature.flag.delete": "刪除 Feature Flag",
+    "maintenance.on": "進入網站維護模式",
+    "maintenance.off": "重新開站",
+    "maintenance.toggle": "切換全自動維護",
+    "ai.analyze": "AI 分析",
+    "ai.agent": "AI Agent 操作",
+    "audit.delete": "刪除操作紀錄"
   };
+
+  function refreshAuditActionFilter() {
+    const select = $("auditActionFilter");
+    if (!select) return;
+    const current = String(select.value || "all");
+    const actions = new Set(Object.keys(AUDIT_ACTION_LABELS));
+    Object.values(auditLogs || {}).forEach(item => {
+      const action = String(item?.action || "").trim();
+      if (action) actions.add(action);
+    });
+    const optionKeys = ["all", ...Array.from(actions).filter(action => action !== "all").sort()];
+    const currentKeys = Array.from(select.options || []).map(option => String(option.value || ""));
+    if (currentKeys.length === optionKeys.length && currentKeys.every((key, index) => key === optionKeys[index])) {
+      return;
+    }
+    select.innerHTML = '<option value="all">全部操作</option>' +
+      optionKeys.slice(1).map(action =>
+        '<option value="' + escapeHtml(action) + '">' +
+        escapeHtml(AUDIT_ACTION_LABELS[action] || action) +
+        '</option>'
+      ).join("");
+    select.value = optionKeys.includes(current) ? current : "all";
+  }
 
   function stopAuditLogsListener() {
     if (!auditLogsRef) return;
@@ -639,6 +677,7 @@
     }
     const snapshot = await db.ref("admin/auditLogs").limitToLast(300).once("value");
     auditLogs = snapshot.val() || {};
+    refreshAuditActionFilter();
     renderAuditLogs();
   }
 
@@ -649,6 +688,7 @@
     auditLogsRef.on("value", snapshot => {
       if (!currentHasAdminAccess) return;
       auditLogs = snapshot.val() || {};
+      refreshAuditActionFilter();
       renderAuditLogs();
     }, error => {
       console.error("audit logs realtime listener failed", error);
@@ -701,6 +741,7 @@
   }
 
   function renderAuditLogs() {
+    refreshAuditActionFilter();
     const query = String($("auditSearch")?.value || "").trim().toLowerCase();
     const filter = String($("auditActionFilter")?.value || "all");
     const userFilter = String($("auditUserFilter")?.value || "").trim().toLowerCase();
@@ -2255,10 +2296,11 @@
     if (Object.values(accessAssignments || {}).some(role => String(role) === key)) {
       throw new Error("這個角色仍有使用者指派，請先解除指派");
     }
-    if (!window.confirm("確定刪除自訂角色「" + (accessRoles[key]?.name || key) + "」？")) return;
+    const roleName = String(accessRoles[key]?.name || key);
+    if (!window.confirm("確定刪除自訂角色「" + roleName + "」？")) return;
     await db.ref("admin/access/roles/" + key).remove();
     await loadAccessControl();
-    void writeAuditLog("access.role.delete", "", accessRoles[key]?.name || key, "刪除自訂角色 " + key);
+    void writeAuditLog("access.role.delete", "", roleName, "刪除自訂角色 " + key);
     toast("自訂角色已刪除");
   }
 
