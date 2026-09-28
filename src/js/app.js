@@ -11811,6 +11811,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function sendChat(
     text
   ) {
+    const activeMute = state.roomMutes?.[state.uid];
+    if (
+      activeMute &&
+      (
+        activeMute.permanent === true ||
+        Number(activeMute.until || 0) > Date.now()
+      )
+    ) {
+      throw new Error("你目前被房間禁言，暫時無法發言");
+    }
+
     const access = window.WT_ACCESS_CONTROL;
     if (access) {
       await access.waitUntilReady(2500);
