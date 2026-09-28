@@ -408,6 +408,35 @@ function installFriendshipWatcher(){
   }).catch(function(){});
 }
 
+function installFeatureKeyboard(){
+  if(document.documentElement.dataset.wtFeatureKeyboard)return;
+  document.documentElement.dataset.wtFeatureKeyboard="1";
+  document.addEventListener("keydown",function(e){
+    var tag=String(e.target&&e.target.tagName||"").toLowerCase();
+    if(["input","textarea","select","button"].includes(tag)||e.isComposing)return;
+    var s=st();
+    if(!s.roomId||!s.player)return;
+    try{
+      if(e.code==="Space"){
+        e.preventDefault();
+        $("playPauseBtn")&&$("playPauseBtn").click();
+      }else if(e.key==="ArrowLeft"){
+        e.preventDefault();
+        $("backBtn")&&$("backBtn").click();
+      }else if(e.key==="ArrowRight"){
+        e.preventDefault();
+        $("forwardBtn")&&$("forwardBtn").click();
+      }else if(e.key.toLowerCase()==="f"){
+        e.preventDefault();
+        $("fullscreenBtn")&&$("fullscreenBtn").click();
+      }else if(e.key.toLowerCase()==="m"){
+        e.preventDefault();
+        $("volumeInput")&&$("volumeInput").click();
+      }
+    }catch(_){}
+  });
+}
+
 function track(){
   var s=st(),key=String(s.room&&s.room.sourceType||"")+":"+String(s.currentVideoId||"");
   if(s.isPlaying){var x=stats();saveStats({watchSeconds:Number(x.watchSeconds||0)+5,lastAt:Date.now()});}
@@ -427,6 +456,7 @@ function init(){
   if(auth)auth.onAuthStateChanged(function(){installFriendRequestWatcher();installFriendshipWatcher();installRoomInviteWatcher();ensureTopbar();});
   setInterval(ensureRoomTools,1000);
   setInterval(track,5000);
+  installFeatureKeyboard();
   setInterval(installFriendRequestWatcher,5000);
   setInterval(installFriendshipWatcher,5000);
   setInterval(installRoomInviteWatcher,5000);
