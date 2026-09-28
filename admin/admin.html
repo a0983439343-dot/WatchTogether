@@ -272,6 +272,24 @@
         <div id="accessFeatureFlagList" class="access-policy-list"></div>
       </div>
 
+      <div class="panel" id="aiAgentPanel">
+        <div class="panel-head">
+          <div>
+            <h3>🤖 Admin AI Agent</h3>
+            <p class="muted">AI 只負責分析與提出操作；真正寫入前仍要經過權限、Firebase Rules 與人工確認。</p>
+          </div>
+          <span id="aiAgentStatus" class="status">未使用</span>
+        </div>
+        <div id="aiAgentMessages" class="ai-agent-messages">
+          <div class="muted">輸入例如「幫我整理目前待處理的問題回報」或「找出最近的限制紀錄」。</div>
+        </div>
+        <div class="add-row">
+          <input id="aiAgentInput" class="search" type="text" maxlength="5000" placeholder="輸入管理問題或操作要求">
+          <button id="aiAgentSendBtn" class="btn primary" type="button">送出</button>
+        </div>
+        <div id="aiAgentAction" class="ai-agent-action hidden"></div>
+      </div>
+
       <div class="panel" id="maintenanceControlPanel">
         <div class="panel-head"><div><h3>🔐 網站維護模式</h3><p class="muted">關站／開站需要最高管理員登入、Render 後端密碼與後端鎖定驗證。密碼不會儲存在此頁。</p></div><span id="maintenanceControlStatus" class="status">讀取中</span></div>
         <div class="form-grid">
