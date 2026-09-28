@@ -26,6 +26,29 @@ function fmtDur(v){var n=Math.max(0,Math.floor(Number(v)||0)),h=Math.floor(n/360
 function stats(){var x={watchSeconds:0,videosStarted:0,roomsJoined:0,messagesSent:0,lastAt:0};try{Object.assign(x,JSON.parse(localStorage.getItem(STATS_KEY)||"{}")||{});}catch(_){}return x;}
 function saveStats(x){var s=stats();Object.assign(s,x);try{localStorage.setItem(STATS_KEY,JSON.stringify(s));}catch(_){}}
 
+const ROOM_FAV_KEY = "wt_room_favorites_v1";
+function roomFavorites(){try{var x=JSON.parse(localStorage.getItem(ROOM_FAV_KEY)||"{}");return x&&typeof x==="object"?x:{};}catch(_){return {};}}
+function saveRoomFavorites(x){try{localStorage.setItem(ROOM_FAV_KEY,JSON.stringify(x||{}));}catch(_){}}
+function roomFavoriteKey(x){return String(x&& (x.id||x.roomId) || "").trim().toUpperCase();}
+function isRoomFavorite(x){var k=roomFavoriteKey(x);return Boolean(k&&roomFavorites()[k]);}
+function toggleRoomFavorite(x){
+  var k=roomFavoriteKey(x);if(!k)return false;
+  var map=roomFavorites();
+  if(map[k]){delete map[k];saveRoomFavorites(map);toast("已取消房間收藏");return false;}
+  map[k]={id:k,name:String(x?.name||x?.roomName||"一起看").slice(0,40),sourceType:String(x?.sourceType||"youtube").slice(0,30),owner:String(x?.owner||"").slice(0,128),savedAt:Date.now()};
+  saveRoomFavorites(map);toast("已收藏房間");return true;
+}
+function renderRoomFavoriteButton(button,x){
+  if(!button)return;
+  var active=isRoomFavorite(x);
+  button.textContent=active?"★":"☆";
+  button.title=active?"取消房間收藏":"收藏房間";
+  button.setAttribute("aria-label",button.title);
+  button.dataset.roomFavorite=roomFavoriteKey(x);
+}
+function removeRoomFavorite(roomIdValue){var k=String(roomIdValue||"").trim().toUpperCase();if(!k)return;var map=roomFavorites();delete map[k];saveRoomFavorites(map);}
+
+
 function modal(id,title,bodyHtml){
   var m=$(id);
   if(!m){
@@ -111,13 +134,30 @@ async function saveSettings(){
 
 function openFavorites(){
   var map=wt.readJson?wt.readJson("wt_favorites_v1",{}):{},list=Object.values(map||{}).filter(Boolean);
-  var html='<div class="small muted">收藏保留在目前裝置。</div><div class="wt-feature-list">';
-  html+=list.length?list.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.title||"未命名影片")+'</strong><div class="small muted">'+esc(x.platform||"")+'｜'+esc(x.channel||"")+'</div></div><div class="wt-feature-actions" style="margin-top:0"><button class="tiny-btn primary" data-fav-room="'+esc(x.key||"")+'">建立房間</button><button class="tiny-btn danger" data-fav-delete="'+esc(x.key||"")+'">刪除</button></div></div>';}).join(""):'<div class="wt-feature-empty">目前沒有收藏。</div>';
-  html+='</div><div class="wt-feature-actions"><button id="wtFavClear" class="tiny-btn danger">清空收藏</button></div>';
-  var body=modal("wtFavoritesModal","收藏",html);
-  body.querySelector("#wtFavClear").onclick=function(){localStorage.removeItem("wt_favorites_v1");openFavorites();};
-  body.querySelectorAll("[data-fav-delete]").forEach(function(b){b.onclick=function(){var m=wt.readJson("wt_favorites_v1",{})||{};delete m[b.dataset.favDelete];wt.writeJson("wt_favorites_v1",m);openFavorites();};});
-  body.querySelectorAll("[data-fav-room]").forEach(function(b){b.onclick=async function(){var item=list.find(function(x){return String(x.key||"")===String(b.dataset.favRoom||"");});if(!item||!core||!core.createRoomWithVideo)return;try{await core.createRoomWithVideo(item);close("wtFavoritesModal");}catch(e){toast(e.message||"建立房間失敗");}};});
+  var rooms=Object.values(roomFavorites()).filter(Boolean).sort(function(a,b){return Number(b.savedAt||0)-Number(a.savedAt||0);});
+  var body=modal("wtFavoritesModal","收藏",'<div class="wt-feature-actions" style="justify-content:flex-start"><button id="wtFavTabVideos" class="tiny-btn primary">影片</button><button id="wtFavTabRooms" class="tiny-btn">房間</button></div><div id="wtFavContent"></div>');
+  var content=body.querySelector("#wtFavContent");
+  function render(tab){
+    body.querySelector("#wtFavTabVideos").classList.toggle("primary",tab==="videos");
+    body.querySelector("#wtFavTabRooms").classList.toggle("primary",tab==="rooms");
+    if(tab==="rooms"){
+      content.innerHTML='<div class="small muted">房間收藏保留在目前裝置。</div><div class="wt-feature-list">'+
+        (rooms.length?rooms.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">'+esc(x.id||"")+'｜'+esc(x.sourceType||"youtube")+'</div></div><div class="wt-feature-actions" style="margin-top:0"><button class="tiny-btn primary" data-room-fav-join="'+esc(x.id||"")+'">加入</button><button class="tiny-btn danger" data-room-fav-delete="'+esc(x.id||"")+'">刪除</button></div></div>';}).join(""):'<div class="wt-feature-empty">目前沒有房間收藏。</div>')+
+      '</div>';
+      content.querySelectorAll("[data-room-fav-join]").forEach(function(b){b.onclick=function(){location.href=location.pathname+"?room="+encodeURIComponent(String(b.dataset.roomFavJoin||"").toUpperCase());};});
+      content.querySelectorAll("[data-room-fav-delete]").forEach(function(b){b.onclick=function(){removeRoomFavorite(b.dataset.roomFavDelete);openFavorites();setTimeout(function(){body.querySelector("#wtFavTabRooms")?.click();},0);};});
+      return;
+    }
+    content.innerHTML='<div class="small muted">影片收藏保留在目前裝置。</div><div class="wt-feature-list">'+
+      (list.length?list.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.title||"未命名影片")+'</strong><div class="small muted">'+esc(x.platform||"")+'｜'+esc(x.channel||"")+'</div></div><div class="wt-feature-actions" style="margin-top:0"><button class="tiny-btn primary" data-fav-room="'+esc(x.key||"")+'">建立房間</button><button class="tiny-btn danger" data-fav-delete="'+esc(x.key||"")+'">刪除</button></div></div>';}).join(""):'<div class="wt-feature-empty">目前沒有影片收藏。</div>')+
+      '</div><div class="wt-feature-actions"><button id="wtFavClear" class="tiny-btn danger">清空影片收藏</button></div>';
+    content.querySelector("#wtFavClear").onclick=function(){localStorage.removeItem("wt_favorites_v1");openFavorites();};
+    content.querySelectorAll("[data-fav-delete]").forEach(function(b){b.onclick=function(){var m=wt.readJson("wt_favorites_v1",{})||{};delete m[b.dataset.favDelete];wt.writeJson("wt_favorites_v1",m);openFavorites();};});
+    content.querySelectorAll("[data-fav-room]").forEach(function(b){b.onclick=async function(){var item=list.find(function(x){return String(x.key||"")===String(b.dataset.favRoom||"");});if(!item||!core||!core.createRoomWithVideo)return;try{await core.createRoomWithVideo(item);close("wtFavoritesModal");}catch(e){toast(e.message||"建立房間失敗");}};});
+  }
+  body.querySelector("#wtFavTabVideos").onclick=function(){render("videos");};
+  body.querySelector("#wtFavTabRooms").onclick=function(){render("rooms");};
+  render("videos");
 }function openStats(){
   var s=stats(),fav=wt.readJson?wt.readJson("wt_favorites_v1",{}):{},lang=window.WT_I18N&&window.WT_I18N.getLocale&&window.WT_I18N.getLocale()||"zh-TW";
   var html='<div class="wt-feature-stat-grid"><div class="wt-feature-stat"><span class="small muted">觀看時間</span><strong>'+esc(fmtDur(s.watchSeconds))+'</strong></div><div class="wt-feature-stat"><span class="small muted">播放影片</span><strong>'+esc(s.videosStarted||0)+' 部</strong></div><div class="wt-feature-stat"><span class="small muted">加入房間</span><strong>'+esc(s.roomsJoined||0)+' 次</strong></div></div>';
@@ -170,7 +210,7 @@ function renderGlobalSearchResults(body,query){
   var recent=wt.readJson?wt.readJson("wt_recent_rooms_v2",[]):[];
   if(!Array.isArray(recent))recent=[];
   recent=recent.filter(function(x){return x&&String(x.id||"").toUpperCase().includes(q.toUpperCase())||String(x.name||"").toLowerCase().includes(q.toLowerCase());}).slice(0,10);
-  var recentHtml=recent.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">最近房間｜'+esc(String(x.id||"").toUpperCase())+'</div></div><button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div>';}).join("");
+  var recentHtml=recent.map(function(x){var fav=isRoomFavorite(x),star='<button type="button" class="tiny-btn" data-global-room-fav="'+esc(x.id||"")+'" title="'+(fav?"取消房間收藏":"收藏房間")+'">'+(fav?"★":"☆")+'</button>';return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">最近房間｜'+esc(String(x.id||"").toUpperCase())+'</div></div><div class="wt-feature-actions" style="margin-top:0">'+star+'<button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div></div>;}).join("");
   return Promise.all([searchPublicUsers(q),searchPublicRooms(q)]).then(function(data){
     var users=data[0],rooms=data[1];
     body.innerHTML=
@@ -184,10 +224,7 @@ function renderGlobalSearchResults(body,query){
       '</div>'+
       '<div class="panel-title" style="margin-top:16px">公開房間</div>'+
       '<div class="wt-feature-list">'+
-        (rooms.length?rooms.map(function(x){
-          var p=x[1]||{};
-          return '<div class="wt-feature-row"><div><strong>'+esc(p.name||"一起看")+'</strong><div class="small muted">房間 '+esc(p.id||x[0])+'｜'+esc(p.sourceType||"youtube")+'</div></div><button class="tiny-btn primary" data-global-public-room="'+esc(p.id||x[0])+'">加入</button></div>';
-        }).join(""):'<div class="wt-feature-empty">沒有找到公開房間。</div>')+
+        (rooms.length?rooms.map(function(x){var p=x[1]||{};return var fav=isRoomFavorite(p),star='<button type="button" class="tiny-btn" data-global-room-fav="'+esc(p.id||x[0])+'" title="'+(fav?"取消房間收藏":"收藏房間")+'">'+(fav?"★":"☆")+'</button>';return '<div class="wt-feature-row"><div><strong>'+esc(p.name||"一起看")+'</strong><div class="small muted">房間 '+esc(p.id||x[0])+'｜'+esc(p.sourceType||"youtube")+'</div></div><div class="wt-feature-actions" style="margin-top:0">'+star+'<button class="tiny-btn primary" data-global-public-room="'+esc(p.id||x[0])+'">加入</button></div></div>;}).join(""):'<div class="wt-feature-empty">沒有找到公開房間。</div>')+
       '</div>'+
       '<div class="panel-title" style="margin-top:16px">最近房間</div>'+
       '<div class="wt-feature-list">'+
