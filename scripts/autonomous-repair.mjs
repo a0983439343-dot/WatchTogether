@@ -136,9 +136,6 @@ function allowedPaths(category) {
     base.add("config/database.rules.json");
   }
 
-  if (category === "account" || category === "room" || category === "chat" || category === "search" || category === "ui") {
-    base.add("src/js/access-control.js");
-  }
 
   if (category === "playback" || category === "search") {
     base.add("youtube-proxy/server.js");
@@ -153,38 +150,43 @@ function allowedPaths(category) {
 
 function repairContextPaths(category) {
   const maps = {
-    playback: [
+        playback: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
       "youtube-proxy/server.js"
     ],
-    search: [
+        search: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
       "youtube-proxy/server.js",
       "workers/youtube-search.js"
     ],
-    room: [
+        room: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/chat.js",
       "src/js/bug-monitor.js",
       "config/database.rules.json"
     ],
-    chat: [
+        chat: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/chat.js",
       "src/js/bug-monitor.js",
       "config/database.rules.json"
     ],
-    account: [
+        account: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
@@ -193,8 +195,9 @@ function repairContextPaths(category) {
       "admin/admin.css",
       "config/database.rules.json"
     ],
-    ui: [
+        ui: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
@@ -202,8 +205,9 @@ function repairContextPaths(category) {
       "admin/admin.html",
       "admin/admin.css"
     ],
-    other: [
+        other: [
       "index.html",
+      "src/js/access-control.js",
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
