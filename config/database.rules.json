@@ -431,7 +431,7 @@
     },
     "roomApplications": {
       "$roomId": {
-        ".read": "auth != null && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || auth.uid === $uid || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
+        ".read": "auth != null && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
         "$uid": {
           ".read": "auth != null && (auth.uid === $uid || auth.uid === root.child('rooms').child($roomId).child('owner').val() || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
           ".write": "auth != null && (((auth.uid === root.child('rooms').child($roomId).child('owner').val()) && data.exists()) || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') && data.exists()) || (auth.uid === $uid && !data.exists() && newData.exists()) || (auth.uid === $uid && data.exists() && data.child('status').val() === 'pending' && newData.child('status').val() === 'cancelled'))",
