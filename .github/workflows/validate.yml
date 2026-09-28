@@ -26,6 +26,9 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Check database Rules test syntax
+        run: node --check tests/database.rules.test.js
+
       - name: Check access control core syntax
         run: node --check src/js/access-control.js
 
