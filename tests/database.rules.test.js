@@ -62,6 +62,46 @@ async function seed() {
             addedByEmail: MASTER_EMAIL
           }
         },
+        access: {
+          roles: {
+            custom: {
+              name: "自訂測試角色",
+              permissions: {
+                "users.read": true,
+                "reports.read": true
+              }
+            }
+          },
+          roleByUid: {
+            [ADMIN_UID]: "custom"
+          },
+          permissionsByUid: {
+            [USER_UID]: {
+              "chat.send": "deny"
+            }
+          },
+          restrictionsByUid: {
+            [USER_UID]: {
+              "room.queue": {
+                enabled: true,
+                permanent: false,
+                until: Date.now() + 3600000,
+                reason: "queue restriction",
+                createdAt: Date.now(),
+                createdByUid: ADMIN_UID,
+                createdByEmail: "admin@example.com"
+              }
+            }
+          }
+        },
+        featureFlags: {
+          "rooms.manage": {
+            enabled: true,
+            reason: "",
+            updatedAt: Date.now(),
+            updatedByUid: MASTER_UID
+          }
+        },
         blocksByUid: {
           [USER_UID]: {
             uid: USER_UID,
@@ -379,6 +419,98 @@ test("audit logs: viewer can read but cannot append", async () => {
       details: "invalid",
       createdAt: Date.now()
     })
+  );
+});
+
+test("2.0 access control: master can manage roles, permissions, restrictions and feature flags", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  await assertSucceeds(master.ref("admin/access/roles/custom2").set({
+    name: "Custom 2",
+    permissions: {"rooms.read": true}
+  }));
+  await assertSucceeds(master.ref("admin/access/roleByUid/" + USER_UID).set("custom2"));
+  await assertSucceeds(master.ref("admin/access/permissionsByUid/" + USER_UID + "/rooms.manage").set("deny"));
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + USER_UID + "/chat.send").set({
+    enabled: true,
+    permanent: true,
+    until: 0,
+    reason: "test restriction",
+    createdAt: Date.now(),
+    createdByUid: MASTER_UID,
+    createdByEmail: MASTER_EMAIL
+  }));
+  await assertSucceeds(master.ref("admin/featureFlags/chat.send").set({
+    enabled: false,
+    reason: "test flag",
+    updatedAt: Date.now(),
+    updatedByUid: MASTER_UID
+  }));
+});
+
+test("2.0 access control: viewer cannot modify policy and user cannot forge their restriction", async () => {
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/access/roleByUid/" + USER_UID).set("admin")
+  );
+  await assertFails(
+    db(USER_UID, userToken).ref("admin/access/restrictionsByUid/" + USER_UID + "/chat.send").set({
+      enabled: false,
+      permanent: false,
+      until: 0,
+      reason: "forged",
+      createdAt: Date.now(),
+      createdByUid: USER_UID,
+      createdByEmail: "user@example.com"
+    })
+  );
+});
+
+test("2.0 access control: server-side restriction and feature flag block room writes", async () => {
+  const ref = db(USER_UID, userToken).ref("rooms/ZXY789");
+  await assertSucceeds(ref.set({
+    owner: USER_UID,
+    name: "Guard Test",
+    sourceType: "youtube",
+    video: {
+      id: "video-guard",
+      platform: "youtube",
+      title: "Guard",
+      thumbnail: "",
+      channel: ""
+    }
+  }));
+  await assertSucceeds(
+    db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
+      .ref("admin/featureFlags/rooms.manage")
+      .update({
+        enabled: false,
+        reason: "disabled",
+        updatedAt: Date.now(),
+        updatedByUid: MASTER_UID
+      })
+  );
+  await assertFails(
+    db(USER_UID, userToken).ref("rooms/ZXY789").remove()
+  );
+});
+
+test("2.0 access control: audit.delete is master-only", async () => {
+  const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs").push();
+  await assertSucceeds(ref.set({
+    action: "delete-test",
+    actorUid: ADMIN_UID,
+    actorEmail: "admin@example.com",
+    actorRole: "admin",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "delete test",
+    createdAt: Date.now()
+  }));
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + ref.key).remove()
+  );
+  await assertSucceeds(
+    db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
+      .ref("admin/auditLogs/" + ref.key).remove()
   );
 });
 
