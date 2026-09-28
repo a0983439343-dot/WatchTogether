@@ -354,6 +354,15 @@
   }
 
   async function ask(prompt, options={}){
+    const globalDb=window.firebase?.database?.();
+    if(globalDb){
+      try{
+        const globalSnap=await globalDb.ref("system/featureFlags/ai").once("value");
+        if(globalSnap.val()===false) throw new Error("目前暫停使用 AI");
+      }catch(error){
+        if(error?.message==="目前暫停使用 AI") throw error;
+      }
+    }
     const text=String(prompt || "").trim().slice(0,2000);
     if(!text) throw new Error("請先輸入內容");
     if(await isFeatureBlocked("ai")) throw new Error("你的帳號目前無法使用 AI");
