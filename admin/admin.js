@@ -2334,8 +2334,9 @@
         currentRole = await resolveAdminRole(user);
         currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
+          document.title = "404 - WatchTogether";
           show("deniedScreen");
-          $("deniedMessage").textContent = "目前登入的 Google 帳號沒有管理員權限。";
+          $("deniedMessage").textContent = "找不到這個頁面。";
           return;
         }
 
