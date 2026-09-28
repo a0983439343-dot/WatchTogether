@@ -6,7 +6,7 @@
   const db=wt.db||(window.firebase?.apps?.length?firebase.database():null);
   const SET_KEY="wt_v3_settings_v1", LOCAL_NOTIF="wt_notifications_v2", LOCAL_HIST="wt_watch_history_v2", LOCAL_STATS="wt_stats_v1";
   const PLATFORMS=new Set(["youtube","vimeo","dailymotion","twitch"]);
-  let notifRef=null,presenceRef=null,cloudNotifs={},cloudHistory={};
+  let notifRef=null,presenceRef=null,cloudNotifs={},cloudHistoryData={};
   let notifReady=false,lastHistKey="",lastHistAt=0,statsAt=0;
 
   const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
@@ -33,7 +33,7 @@
     return 0;
   }
 
-  async function cloudHistory(force=false){
+  async function recordCloudHistory(force=false){
     const u=user(),v=video(),cfg=settings();
     if(!u||!db||!cfg.cloudHistory||!v?.id||!PLATFORMS.has(String(v.platform||"youtube").toLowerCase()))return;
     const k=key(v),now=Date.now();
@@ -54,8 +54,8 @@
 
   async function loadHistory(){
     const u=user();
-    if(!u||!db||!settings().cloudHistory){cloudHistory={};return}
-    try{cloudHistory=(await db.ref("watchHistory/"+u.uid).limitToLast(100).once("value")).val()||{}}
+    if(!u||!db||!settings().cloudHistory){cloudHistoryData={};return}
+    try{cloudHistoryData=(await db.ref("watchHistory/"+u.uid).limitToLast(100).once("value")).val()||{}}
     catch(_){cloudHistory={}}
   }
 
@@ -63,7 +63,7 @@
     const arr=Array.isArray(local(LOCAL_HIST,[]))?local(LOCAL_HIST,[]):[];
     const map=new Map();
     arr.forEach(x=>{const k=key(x);if(k)map.set(k,x)});
-    Object.values(cloudHistory||{}).forEach(x=>{const k=key(x);if(k)map.set(k,Object.assign({},map.get(k)||{},x))});
+    Object.values(cloudHistoryData||{}).forEach(x=>{const k=key(x);if(k)map.set(k,Object.assign({},map.get(k)||{},x))});
     return [...map.values()].sort((a,b)=>Number(b.lastWatchedAt||0)-Number(a.lastWatchedAt||0)).slice(0,100);
   }
 
@@ -217,7 +217,7 @@
   function track(){
     setInterval(()=>{
       const v=video(),x=stats();if(!v?.id)return;
-      if(st().isPlaying){x.watchSeconds=Number(x.watchSeconds||0)+5;x.lastAt=Date.now();saveLocal(LOCAL_STATS,x);void cloudHistory(false);void syncStats()}
+      if(st().isPlaying){x.watchSeconds=Number(x.watchSeconds||0)+5;x.lastAt=Date.now();saveLocal(LOCAL_STATS,x);void recordCloudHistory(false);void syncStats()}
     },5000);
   }
 
@@ -238,8 +238,8 @@
     add("wtV3SettingsBtn","⚙️ 完整設定",()=>void openSettings());
   }
 
-  wt.openCloudHistory=openCloudHistory;wt.openFriendPresence=openPresence;wt.openCompleteSettings=openSettings;wt.openSyncedNotifications=openNotifications;wt.persistNotification=persistNotification;
-  window.WT_FEATURE_COMPLETE_V3={openCloudHistory,openFriendPresence:openPresence,openCompleteSettings:openSettings,openSyncedNotifications:openNotifications,persistNotification,cloudHistory};
+  wt.openCloudHistory=openCloudHistory;wt.openFriendPresence=openPresence;wt.openCompleteSettings=openSettings;wt.openSyncedNotifications=openNotifications;wt.persistNotification=persistNotification;wt.recordCloudHistory=recordCloudHistory;
+  window.WT_FEATURE_COMPLETE_V3={openCloudHistory,openFriendPresence:openPresence,openCompleteSettings:openSettings,openSyncedNotifications:openNotifications,persistNotification,recordCloudHistory};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
