@@ -3,7 +3,7 @@
     "rooms": {
       "$roomId": {
         ".read": "auth != null && $roomId.length === 6 && (data.child('owner').val() === auth.uid || root.child('members').child($roomId).child(auth.uid).exists())",
-        ".write": "auth != null && ($roomId.length === 6 && (( !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.hasChildren(['owner','name','sourceType']) ) || (data.exists() && !newData.exists() && data.child('owner').val() === auth.uid)) || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))))",
+        ".write": "(auth != null && ($roomId.length === 6 && (( !data.exists() && newData.exists() && newData.child('owner').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.hasChildren(['owner','name','sourceType']) ) || (data.exists() && !newData.exists() && data.child('owner').val() === auth.uid)) || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))))) && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (!(root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms.manage').child('enabled').val() === true && (root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms.manage').child('permanent').val() === true || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms.manage').child('until').val() === 0 || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('rooms.manage').child('until').val() > now)) && root.child('admin').child('featureFlags').child('rooms.manage').child('enabled').val() !== false))",
         "owner": {
           ".read": "auth != null && $roomId.length === 6",
           ".write": "auth != null && $roomId.length === 6 && newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && data.val() === auth.uid && (newData.val() === data.val() || root.child('members').child($roomId).child(newData.val()).exists())) || (data.exists() && (!root.child('members').child($roomId).child(data.val()).exists() || root.child('members').child($roomId).child(data.val()).child('online').val() !== true || root.child('members').child($roomId).child(data.val()).child('lastSeen').val() < now - 45000) && root.child('members').child($roomId).child(auth.uid).exists() && newData.val() === auth.uid))",
@@ -91,7 +91,7 @@
             ".validate": true
           }
         },
-        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))"
+        ".write": "(auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))) && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (!(root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('chat.send').child('enabled').val() === true && (root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('chat.send').child('permanent').val() === true || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('chat.send').child('until').val() === 0 || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('chat.send').child('until').val() > now)) && root.child('admin').child('featureFlags').child('chat.send').child('enabled').val() !== false))"
       }
     },
     "queue": {
@@ -134,13 +134,13 @@
             ".validate": true
           }
         },
-        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))"
+        ".write": "(auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))) && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (!(root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('room.queue').child('enabled').val() === true && (root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('room.queue').child('permanent').val() === true || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('room.queue').child('until').val() === 0 || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('room.queue').child('until').val() > now)) && root.child('admin').child('featureFlags').child('room.queue').child('enabled').val() !== false))"
       }
     },
     "playback": {
       "$roomId": {
         ".read": "auth != null && $roomId.length === 6 && root.child('members').child($roomId).child(auth.uid).exists()",
-        ".write": "auth != null && ($roomId.length === 6 && auth.uid === root.child('rooms').child($roomId).child('owner').val() || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))))",
+        ".write": "(auth != null && ($roomId.length === 6 && auth.uid === root.child('rooms').child($roomId).child('owner').val() || (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))))) && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (!(root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('sync.control').child('enabled').val() === true && (root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('sync.control').child('permanent').val() === true || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('sync.control').child('until').val() === 0 || root.child('admin').child('access').child('restrictionsByUid').child(auth.uid).child('sync.control').child('until').val() > now)) && root.child('admin').child('featureFlags').child('sync.control').child('enabled').val() !== false))",
         ".validate": "!newData.exists() || (newData.hasChildren(['action','position','videoId','platform','issuedAt','updatedAt','updatedBy','eventId','playing','playbackRate']) && newData.child('action').isString() && (newData.child('action').val() === 'play' || newData.child('action').val() === 'pause' || newData.child('action').val() === 'seek') && newData.child('position').isNumber() && newData.child('position').val() >= 0 && newData.child('position').val() <= 86400 && newData.child('videoId').isString() && newData.child('videoId').val().length > 0 && newData.child('videoId').val().length <= 200 && newData.child('videoId').val() === root.child('rooms').child($roomId).child('video').child('id').val() && newData.child('platform').isString() && newData.child('platform').val() === root.child('rooms').child($roomId).child('video').child('platform').val() && (newData.child('platform').val() === 'youtube' || newData.child('platform').val() === 'vimeo' || newData.child('platform').val() === 'dailymotion' || newData.child('platform').val() === 'twitch') && newData.child('issuedAt').isNumber() && newData.child('issuedAt').val() >= now - 60000 && newData.child('issuedAt').val() <= now + 30000 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() >= now - 120000 && newData.child('updatedAt').val() <= now + 30000 && newData.child('updatedBy').isString() && newData.child('updatedBy').val() === auth.uid && newData.child('eventId').isString() && newData.child('eventId').val().length > 0 && newData.child('eventId').val().length <= 200 && newData.child('playing').isBoolean() && (!newData.child('ended').exists() || newData.child('ended').isBoolean()) && newData.child('playbackRate').isNumber() && newData.child('playbackRate').val() > 0 && newData.child('playbackRate').val() <= 2 && (!newData.child('effectiveAt').exists() || (newData.child('effectiveAt').isNumber() && newData.child('effectiveAt').val() >= now - 60000 && newData.child('effectiveAt').val() <= now + 60000)))"
       }
     },
@@ -198,8 +198,70 @@
       "auditLogs": {
         ".read": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
         "$logId": {
-          ".write": "auth != null && (((!data.exists() && newData.exists()) && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))) ) || (!newData.exists() && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com' || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))))))",
+          ".write": "auth != null && (((!data.exists() && newData.exists()) && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))) || (!newData.exists() && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')))",
           ".validate": "!newData.exists() || (newData.hasChildren(['action','actorUid','actorEmail','actorRole','targetUid','targetName','details','createdAt']) && newData.child('action').isString() && newData.child('action').val().length > 0 && newData.child('action').val().length <= 40 && newData.child('actorUid').isString() && newData.child('actorUid').val().length > 0 && newData.child('actorUid').val().length <= 128 && newData.child('actorEmail').isString() && newData.child('actorEmail').val().length <= 320 && newData.child('actorEmail').val() === auth.token.email && newData.child('actorRole').isString() && ((newData.child('actorRole').val() === 'master' && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')) || (newData.child('actorRole').val() === 'admin' && root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))) && newData.child('targetUid').isString() && newData.child('targetUid').val().length <= 128 && newData.child('targetName').isString() && newData.child('targetName').val().length <= 200 && newData.child('details').isString() && newData.child('details').val().length <= 1000 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 60000)"
+        }
+      },
+      "access": {
+        ".read": false,
+        ".write": false,
+        "roles": {
+          ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          "$roleId": {
+            ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+            ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+            ".validate": "!newData.exists() || (newData.hasChildren(['name','permissions']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 80 && newData.child('permissions').hasChildren())",
+            "permissions": {
+              "$permission": {
+                ".validate": "!newData.exists() || newData.isBoolean()"
+              }
+            }
+          }
+        },
+        "roleByUid": {
+          ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
+            ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length > 0 && newData.val().length <= 80)"
+          }
+        },
+        "permissionsByUid": {
+          ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
+            ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+            "$permission": {
+              ".read": "auth != null && (auth.uid === $uid || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
+              ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+              ".validate": "!newData.exists() || (newData.isString() && (newData.val() === 'allow' || newData.val() === 'deny'))"
+            }
+          }
+        },
+        "restrictionsByUid": {
+          ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin')))",
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
+            ".write": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))) && $uid !== '35d45a23-b648-4caf-a6d5-a69112860551' && $uid !== auth.uid",
+            "$permission": {
+              ".read": "auth != null && (auth.uid === $uid || ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true))",
+              ".write": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || (root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true && (!root.child('admin').child('whitelistByUid').child(auth.uid).child('role').exists() || root.child('admin').child('whitelistByUid').child(auth.uid).child('role').val() === 'admin'))) && $uid !== '35d45a23-b648-4caf-a6d5-a69112860551' && $uid !== auth.uid",
+              ".validate": "!newData.exists() || (newData.hasChildren(['enabled','permanent','until','reason','createdAt','createdByUid']) && newData.child('enabled').isBoolean() && newData.child('permanent').isBoolean() && newData.child('until').isNumber() && newData.child('until').val() >= 0 && newData.child('until').val() <= now + 315360000000 && newData.child('reason').isString() && newData.child('reason').val().length > 0 && newData.child('reason').val().length <= 500 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 120000 && newData.child('createdByUid').isString() && newData.child('createdByUid').val() === auth.uid && (!newData.child('createdByEmail').exists() || (newData.child('createdByEmail').isString() && newData.child('createdByEmail').val().length <= 320)))"
+            }
+          }
+        }
+      },
+      "featureFlags": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+        "$flag": {
+          ".read": "auth != null",
+          ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['enabled','updatedAt','updatedByUid','reason']) && newData.child('enabled').isBoolean() && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid && newData.child('reason').isString() && newData.child('reason').val().length <= 500)"
         }
       }
     },
@@ -359,6 +421,13 @@
         ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
       },
       ".read": "auth != null && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('admin').child('whitelistByUid').child(auth.uid).child('enabled').val() === true)"
+    },
+    "site": {
+      "maintenance": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+        ".validate": "!newData.exists() || (newData.hasChildren(['enabled','reason','restoreAt','updatedAt','updatedByUid']) && newData.child('enabled').isBoolean() && newData.child('reason').isString() && newData.child('reason').val().length <= 500 && newData.child('restoreAt').isNumber() && newData.child('restoreAt').val() >= 0 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid)"
+      }
     }
   }
 }
