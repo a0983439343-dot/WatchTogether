@@ -1123,13 +1123,22 @@ async function authorizeAiRequest(req) {
 
   if (isMaster) return {ok:true,user};
 
-  const [restriction,flag,override,assignedRole,whitelist] = await Promise.all([
-    fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/ai__use",idToken),
-    fetchFirebaseJson("admin/featureFlags/ai__use",idToken),
-    fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/ai__use",idToken),
-    fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
-    fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
-  ]);
+  let restriction;
+  let flag;
+  let override;
+  let assignedRole;
+  let whitelist;
+  try {
+    [restriction,flag,override,assignedRole,whitelist] = await Promise.all([
+      fetchFirebaseJson("admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/ai__use",idToken),
+      fetchFirebaseJson("admin/featureFlags/ai__use",idToken),
+      fetchFirebaseJson("admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/ai__use",idToken),
+      fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
+    ]);
+  } catch (_) {
+    return {ok:false,status:503,error:"ai_policy_unavailable",message:"目前無法驗證 AI 權限，請稍後再試。"};
+  }
 
   if (isActivePolicy(restriction)) {
     return {ok:false,status:403,error:"ai_restricted",message:String(restriction.reason || "目前帳號無法使用 AI。").slice(0,500)};
@@ -1147,7 +1156,12 @@ async function authorizeAiRequest(req) {
 
   const roleId = String(assignedRole || "").trim();
   if (roleId) {
-    const definition = await fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId),idToken);
+    let definition;
+    try {
+      definition = await fetchFirebaseJson("admin/access/roles/" + encodeURIComponent(roleId),idToken);
+    } catch (_) {
+      return {ok:false,status:503,error:"ai_policy_unavailable",message:"目前無法驗證 AI 角色權限，請稍後再試。"};
+    }
     const permissions = definition && definition.permissions && typeof definition.permissions === "object"
       ? definition.permissions
       : null;
@@ -1734,7 +1748,11 @@ async function fetchFirebaseJson(path, idToken) {
     FIREBASE_DATABASE_URL + "/" + path + ".json?auth=" + encodeURIComponent(idToken),
     {method:"GET",headers:{Accept:"application/json"}}
   );
-  if (!response.ok) return null;
+  if (!response.ok) {
+    const error = new Error(String((await response.text().catch(() => "")) || "Firebase policy read failed").slice(0,300));
+    error.httpStatus = response.status;
+    throw error;
+  }
   return response.json().catch(() => null);
 }
 
@@ -1762,13 +1780,27 @@ async function authorizeSearchRequest(req) {
     "admin/access/restrictionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
   const overridePath =
     "admin/access/permissionsByUid/" + encodeURIComponent(uid) + "/youtube__search";
-  const [restriction, flag, override, assignedRole, whitelist] = await Promise.all([
-    fetchFirebaseJson(restrictionPath,idToken),
-    fetchFirebaseJson("admin/featureFlags/youtube__search",idToken),
-    fetchFirebaseJson(overridePath,idToken),
-    fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
-    fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
-  ]);
+  let restriction;
+  let flag;
+  let override;
+  let assignedRole;
+  let whitelist;
+  try {
+    [restriction, flag, override, assignedRole, whitelist] = await Promise.all([
+      fetchFirebaseJson(restrictionPath,idToken),
+      fetchFirebaseJson("admin/featureFlags/youtube__search",idToken),
+      fetchFirebaseJson(overridePath,idToken),
+      fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
+    ]);
+  } catch (error) {
+    return {
+      ok:false,
+      status:503,
+      error:"search_policy_unavailable",
+      message:"目前無法驗證搜尋權限，請稍後再試。"
+    };
+  }
 
   const isMaster =
     uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
@@ -1804,10 +1836,15 @@ async function authorizeSearchRequest(req) {
 
   const roleId = String(assignedRole || "").trim();
   if (roleId) {
-    const definition = await fetchFirebaseJson(
-      "admin/access/roles/" + encodeURIComponent(roleId),
-      idToken
-    );
+    let definition;
+    try {
+      definition = await fetchFirebaseJson(
+        "admin/access/roles/" + encodeURIComponent(roleId),
+        idToken
+      );
+    } catch (_) {
+      return {ok:false,status:503,error:"search_policy_unavailable",message:"目前無法驗證搜尋角色權限，請稍後再試。"};
+    }
     const permissions = definition && definition.permissions && typeof definition.permissions === "object"
       ? definition.permissions
       : null;
