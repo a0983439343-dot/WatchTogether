@@ -235,7 +235,7 @@
     add("wtV3NotifBtn","🔔 雲端通知",openNotifications);
     add("wtV3PresenceBtn","🟢 好友在線",()=>void openPresence());
     add("wtV3HistoryBtn","☁️ 雲端紀錄",()=>void openCloudHistory());
-    add("wtV3SettingsBtn","⚙️ 完整設定",()=>void openSettings);
+    add("wtV3SettingsBtn","⚙️ 完整設定",()=>void openSettings());
   }
 
   wt.openCloudHistory=openCloudHistory;wt.openFriendPresence=openPresence;wt.openCompleteSettings=openSettings;wt.openSyncedNotifications=openNotifications;wt.persistNotification=persistNotification;
