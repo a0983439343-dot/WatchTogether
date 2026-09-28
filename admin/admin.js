@@ -1427,7 +1427,7 @@
     $("reportRepairPlan").textContent =
       String(item.aiSuggestion || "") ||
       "先閱讀回報與驗證結果，再決定是否開始處理。";
-    const canManageReport = currentRole === "master" || currentRole === "admin";
+    const canManageReport = currentCan("reports.manage");
     const fullAuto = autonomousMaintenanceEnabled === true;
     $("reportRepairBtn").classList.toggle("hidden", !canManageReport || fullAuto || normalizeReportStatus(item.status) === "resolved");
     $("reportRepairBtn").textContent = normalizeReportStatus(item.status) === "in_progress" ? "處理中" : "開始處理";
