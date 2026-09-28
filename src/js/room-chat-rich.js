@@ -142,6 +142,73 @@
     return String(reactions?.[messageId]?.[currentUid()]?.emoji || "");
   }
 
+  async function sendSticker(emoji) {
+    const s = st();
+    const uid = currentUid();
+    if (!db || !s.chatRef || !uid) return;
+    const mute = s.roomMutes?.[uid];
+    if (mute && (mute.permanent === true || Number(mute.until || 0) > Date.now())) {
+      toast("你目前被房間禁言");
+      return;
+    }
+    try {
+      const access = window.WT_ACCESS_CONTROL;
+      if (access) {
+        await access.waitUntilReady(2500).catch(() => {});
+        if (access.state?.ready && !access.hasPermission("chat.send")) {
+          toast("你目前無法在聊天室發言");
+          return;
+        }
+      }
+      await s.chatRef.push({
+        uid,
+        name:String(s.memberName || "玩家").slice(0,30),
+        type:"sticker",
+        sticker:String(emoji || "😊").slice(0,4),
+        createdAt:firebase.database.ServerValue.TIMESTAMP
+      });
+    } catch (error) {
+      toast(error?.message || "貼圖送出失敗");
+    }
+  }
+
+  function ensureStickerToolbar() {
+    const tools = $("wtRoomChatTools");
+    const form = $("chatForm");
+    if ((!tools && !form) || $("wtRoomChatStickerBtn")) return;
+    const host = tools || form;
+    const button = document.createElement("button");
+    button.id = "wtRoomChatStickerBtn";
+    button.type = "button";
+    button.className = "tiny-btn";
+    button.textContent = "😊 貼圖";
+    const menu = document.createElement("div");
+    menu.id = "wtRoomChatStickerMenu";
+    menu.className = "wt-room-chat-sticker-menu hidden";
+    ["😊","😂","👍","❤️","🔥","🎉","😍","😎","🤔","🥳","😢","😮","👏","🙏","🍿","🎬"].forEach(emoji => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "wt-room-chat-sticker-item";
+      item.textContent = emoji;
+      item.title = "送出 " + emoji;
+      item.addEventListener("click", () => {
+        void sendSticker(emoji);
+        menu.classList.add("hidden");
+      });
+      menu.appendChild(item);
+    });
+    button.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      menu.classList.toggle("hidden");
+    });
+    host.appendChild(button);
+    host.appendChild(menu);
+    document.addEventListener("click", e => {
+      if (!host.contains(e.target)) menu.classList.add("hidden");
+    });
+  }
+
   async function writeReply(message) {
     if (!db || !activeRoom || !currentUid()) return;
     const text = String(prompt("回覆這則訊息：", "") || "").trim().slice(0,300);
@@ -387,6 +454,7 @@
     if (now - lastRoomCheck < 900) return;
     lastRoomCheck = now;
     installObserver();
+    ensureStickerToolbar();
     if (!id) {
       closeRefs();
       observer?.disconnect();
@@ -406,7 +474,10 @@
       ".wt-room-reply-preview strong{font-size:12px;font-weight:600;line-height:1.45;white-space:pre-wrap;word-break:break-word}",
       ".wt-room-chat-edited{font-size:10px;opacity:.55;margin-left:6px}",
       ".wt-room-message-pinned{outline:1px solid rgba(250,204,21,.25)}",
-      ".wt-room-chat-rich-actions .active{box-shadow:0 0 0 1px currentColor inset}"
+      ".wt-room-chat-rich-actions .active{box-shadow:0 0 0 1px currentColor inset}",
+      ".wt-room-chat-sticker-menu{position:absolute;z-index:1000;margin-top:6px;padding:7px;display:grid;grid-template-columns:repeat(8,1fr);gap:4px;background:#0f172a;border:1px solid rgba(148,163,184,.18);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.3)}",
+      ".wt-room-chat-sticker-menu.hidden{display:none!important}",
+      ".wt-room-chat-sticker-item{border:0;background:transparent;border-radius:8px;padding:5px;font-size:19px;cursor:pointer}.wt-room-chat-sticker-item:hover{background:rgba(148,163,184,.12)}"
     ].join("");
     document.head.appendChild(style);
   }
