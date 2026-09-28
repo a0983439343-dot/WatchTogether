@@ -74,7 +74,8 @@ async function seed() {
                 reports__read: true,
                 reports__manage: true,
                 audit__read: true,
-                audit__write: true
+                audit__write: true,
+                audit__delete: true
               }
             }
           },
@@ -360,7 +361,7 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
   );
 });
 
-test("audit logs: admin can append but cannot modify or delete", async () => {
+test("audit logs: admin can append, cannot modify, and audit.delete controls deletion", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs");
 
   await assertSucceeds(ref.push({
@@ -404,8 +405,24 @@ test("audit logs: admin can append but cannot modify or delete", async () => {
     })
   );
 
-  await assertFails(
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + existing).remove()
+  );
+
+  const viewerRef = db(ADMIN_UID, adminToken).ref("admin/auditLogs").push();
+  await assertSucceeds(viewerRef.set({
+    action: "viewer-delete-test",
+    actorUid: ADMIN_UID,
+    actorEmail: "admin@example.com",
+    actorRole: "admin",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "viewer delete must fail",
+    createdAt: Date.now()
+  }));
+
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/auditLogs/" + viewerRef.key).remove()
   );
 });
 
