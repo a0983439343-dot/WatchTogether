@@ -97,7 +97,30 @@
     if (definition && Array.isArray(definition.permissions)) {
       return new Set(definition.permissions.map(String));
     }
+    if (definition && definition.permissions && typeof definition.permissions === "object") {
+      return new Set(Object.entries(definition.permissions).filter(([, value]) => value === true).map(([key]) => key));
+    }
     return new Set(BUILTIN_ROLES[role] || []);
+  }
+
+  function getPermissionCatalog() {
+    return Array.from(new Set(
+      Object.values(BUILTIN_ROLES)
+        .flat()
+        .filter(permission => permission !== "*")
+        .concat(
+          Object.values(state.roleDefinition || {}).flatMap(value => {
+            if (Array.isArray(value)) return value.map(String);
+            if (value && typeof value === "object") {
+              return Object.entries(value).filter(([, enabled]) => enabled === true).map(([key]) => String(key));
+            }
+            return [];
+          }),
+          Object.keys(state.userOverrides || {}),
+          Object.keys(state.restrictions || {}),
+          Object.keys(state.featureFlags || {})
+        )
+    )).sort();
   }
 
   function overrideEffect(permission) {
@@ -405,7 +428,9 @@
     isMaster,
     getRole: () => state.role,
     getRoleSource: () => state.roleSource,
-    getFeatureFlags: () => ({...state.featureFlags})
+    getFeatureFlags: () => ({...state.featureFlags}),
+    getPermissionCatalog
+
   };
 
   if (!window.WT_ACCESS_CONTROL_READY) {
