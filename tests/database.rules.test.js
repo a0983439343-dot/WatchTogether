@@ -974,6 +974,10 @@ test("2.0 access control: server-side restriction and feature flag block room wr
   await assertFails(
     db(USER_UID, userToken).ref("rooms/ZXY789").remove()
   );
+  await assertSucceeds(
+    db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
+      .ref("admin/featureFlags/rooms__manage").remove()
+  );
 });
 
 test("2.0 access control: audit.delete is separate from audit.write", async () => {
