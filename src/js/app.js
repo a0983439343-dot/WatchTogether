@@ -2816,6 +2816,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     url.searchParams.set("platform", platform);
     url.searchParams.set("q", query);
     url.searchParams.set("maxResults", String(YOUTUBE_SEARCH_PAGE_SIZE));
+    if (platform === "twitch" && window.__WT_TWITCH_LIVE_ONLY__ === true) url.searchParams.set("liveOnly", "1");
     if (append && state.searchNextPageToken) url.searchParams.set("pageToken", state.searchNextPageToken);
     let idToken = "";
     try {
@@ -14998,6 +14999,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   window.WT_CORE.state = state;
   window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
   window.WT_CORE.persistAuthenticatedAccount = persistAuthenticatedAccount;
+  window.WT_CORE.changeVideo = changeVideo;
+  window.WT_CORE.refreshYoutubeStreamIfNeeded = refreshYoutubeStreamIfNeeded;
+  window.WT_CORE.applyPlayerPosition = applyPlayerPosition;
 
   window.addEventListener(
     "beforeunload",
