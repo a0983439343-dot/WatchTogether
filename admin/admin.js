@@ -312,7 +312,7 @@
               ? '<span class="status off">已封鎖 · ' + escapeHtml(formatRemaining(block)) + '</span>'
               : '<span class="status">正常</span>';
 
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManage = currentCan("users.update");
           let actions = '<div class="row-actions">';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
@@ -1112,7 +1112,7 @@
           const details = String(item.details || "");
           const preview = details.length > 120 ? details.slice(0,120) + "…" : details;
           const room = String(item.roomId || "").trim();
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManage = currentCan("users.update");
           const actions = canManage
             ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
             : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
@@ -1242,7 +1242,7 @@
     $("reportRepairPlan").textContent =
       String(item.aiSuggestion || "") ||
       "先閱讀回報與驗證結果，再決定是否開始處理。";
-    const canManageReport = currentRole === "master" || currentRole === "admin";
+    const canManageReport = currentCan("reports.manage");
     const fullAuto = autonomousMaintenanceEnabled === true;
     $("reportRepairBtn").classList.toggle("hidden", !canManageReport || fullAuto || normalizeReportStatus(item.status) === "resolved");
     $("reportRepairBtn").textContent = normalizeReportStatus(item.status) === "in_progress" ? "處理中" : "開始處理";
@@ -1251,8 +1251,8 @@
       repairQuestion.classList.toggle("hidden", fullAuto || normalizeReportStatus(item.status) === "resolved");
     }
     $("reportHint").textContent = account.email ? "回報帳號：" + account.email + " · 來源：" + reportSourceLabel(item) : "來源：" + reportSourceLabel(item);
-    $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
-    $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
+    $("reportDelete").classList.toggle("hidden", !currentCan("reports.manage"));
+    $("reportSave").classList.toggle("hidden", !currentCan("reports.manage"));
     show("reportModal");
     await loadReportHistory(String(id || ""));
   }
@@ -1262,7 +1262,7 @@
   }
 
   async function saveReportStatus() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!currentCan("reports.manage")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1293,7 +1293,7 @@
   }
 
   async function deleteReport() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!currentCan("reports.manage")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
