@@ -128,6 +128,7 @@
 
   function buildAiMessages(report, evidence, current) {
     const details = cleanAiStack(report?.details || "", 5000);
+    const stack = cleanAiStack(report?.errorStack || "", 5000);
     const evidenceText = cleanAiStack(JSON.stringify(evidence || {}, null, 2), 5500);
     const currentText = cleanAiStack(JSON.stringify(current || {}, null, 2), 3500);
     return [
@@ -154,6 +155,7 @@
           "以下是 WatchTogether 的即時錯誤回報。",
           "回報資料：",
           details,
+          stack ? "\n原始錯誤 Stack：\n" + stack : "",
           "",
           "驗證證據：",
           evidenceText,
@@ -496,7 +498,7 @@
     });
   }
 
-  async function createAutoReport(fingerprint, category, details, source) {
+  async function createAutoReport(fingerprint, category, details, source, errorStack = "") {
     const user = wt.auth.currentUser;
     if (!user) return null;
 
@@ -506,6 +508,7 @@
       uid:user.uid,
       category,
       details:cleanText("[系統自動攔截 - AI 診斷中]\n" + String(details || ""),2000),
+      errorStack:cleanAiStack(errorStack,5000),
       roomId:typeof wt.roomIdFromUrl === "function" ? wt.roomIdFromUrl() : "",
       page:reportLocation(),
       userAgent:cleanText(navigator.userAgent,500),
@@ -636,7 +639,7 @@
 
     try {
       if (!current?.reportId) {
-        const created = await createAutoReport(fingerprint, category, details, source);
+        const created = await createAutoReport(fingerprint, category, details, source, parts.stack);
         if (!created) return;
         states[fingerprint] = {
           reportId: created.reportId,
