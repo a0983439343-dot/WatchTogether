@@ -490,7 +490,7 @@ async function fetchFirebaseJson(
   path,
   idToken
 ) {
-  const base = String(databaseUrl || "").replace(/\\/+$/, "");
+  const base = String(databaseUrl || "").replace(/\/+$/, "");
   const response = await fetch(
     base + "/" + path.split("/").map(encodeURIComponent).join("/") +
       ".json?auth=" + encodeURIComponent(idToken)
