@@ -117,7 +117,7 @@
 
   function patchPush(){
     const original=wt.pushNotification;
-    if(typeof original!=="function"||original.__wtV3)return;
+    if(typeof original!=="function"||original.__wtV3||original.__wtCloudPersistent)return;
     const wrapped=function(title,body,type){
       let r;try{r=original.apply(this,arguments)}catch(_){}
       void persistNotification(title,body,type);return r;
