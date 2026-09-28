@@ -1755,6 +1755,7 @@
 
       try {
         currentRole = await resolveAdminRole(user);
+        window.__WT_ADMIN_ACCOUNTS__ = accounts;
         currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
           redirectAdmin404();
