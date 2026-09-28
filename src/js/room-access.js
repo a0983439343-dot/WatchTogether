@@ -73,6 +73,7 @@
     roomState.roleListener = roleRef;
     roleRef.on("value", snapshot => {
       roomState.roles = snapshot.val() || {};
+      try { window.dispatchEvent(new CustomEvent("wt-room-role-changed")); } catch (_) {}
       renderManageModal();
     });
 
