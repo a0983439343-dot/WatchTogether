@@ -273,6 +273,14 @@ function isFavorite(video) {
   return Boolean(favoritesMap()[videoKey(video)]);
 }
 
+function renderFavorites() {
+  var count = Object.keys(favoritesMap()).length;
+  var button = document.getElementById("wtFeatureFavoritesBtn");
+  if (button) {
+    button.textContent = count ? "☆ 收藏 (" + count + ")" : "☆ 收藏";
+  }
+}
+
 function rememberVideo(video) {
   if (!video || !video.id) return;
   var item = {
@@ -691,6 +699,7 @@ wt.isCurrentAuthUser =
   isCurrentAuthUser;
 
 wt.rememberVideo = rememberVideo;
+wt.renderFavorites = renderFavorites;
 
 applyTheme(currentTheme());
 
