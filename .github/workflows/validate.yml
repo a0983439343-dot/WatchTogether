@@ -11,7 +11,7 @@ on:
       - main
 
 concurrency:
-  group: watchtogether-validate
+  group: watchtogether-qa-validation
   cancel-in-progress: true
 
 jobs:
