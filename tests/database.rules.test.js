@@ -179,6 +179,9 @@ test.before(async () => {
       rules: RULES
     }
   });
+});
+
+test.beforeEach(async () => {
   await seed();
 });
 
@@ -517,6 +520,63 @@ test("2.0 access control: viewer cannot modify policy and user cannot forge thei
       createdByUid: USER_UID,
       createdByEmail: "user@example.com"
     })
+  );
+});
+
+test("2.0 access control: Allow and Deny overrides affect Firebase writes", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+
+  await assertSucceeds(master.ref("admin/access/roles/queue-manager").set({
+    name: "Queue Manager",
+    permissions: {
+      "room__queue": true
+    }
+  }));
+  await assertSucceeds(
+    master.ref("admin/access/roleByUid/" + USER_UID).set("queue-manager")
+  );
+
+  const queueItem = {
+    id: "override-test",
+    platform: "youtube",
+    title: "Override Test",
+    thumbnail: "",
+    channel: "",
+    addedBy: USER_UID,
+    addedByName: "User",
+    addedAt: Date.now()
+  };
+
+  await assertSucceeds(
+    db(USER_UID, userToken)
+      .ref("queue/ABC123/override-test")
+      .set(queueItem)
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + USER_UID + "/room__queue").set("deny")
+  );
+
+  await assertFails(
+    db(USER_UID, userToken)
+      .ref("queue/ABC123/override-test-deny")
+      .set({
+        ...queueItem,
+        id: "override-test-deny"
+      })
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/permissionsByUid/" + USER_UID + "/room__queue").set("allow")
+  );
+
+  await assertSucceeds(
+    db(USER_UID, userToken)
+      .ref("queue/ABC123/override-test-allow")
+      .set({
+        ...queueItem,
+        id: "override-test-allow"
+      })
   );
 });
 
