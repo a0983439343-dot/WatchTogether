@@ -568,13 +568,21 @@
     );
     if (!confirmed) return;
 
-    await db.ref("admin/auditLogs/" + key).remove();
-    await writeAuditLog(
-      "audit.delete",
-      String(item.targetUid || ""),
-      String(item.targetName || "操作紀錄"),
-      "刪除操作紀錄 " + key + "（原操作：" + label + "）"
-    );
+    const auditRef = db.ref("admin/auditLogs").push();
+    const updates = {};
+    updates["admin/auditLogs/" + key] = null;
+    updates["admin/auditLogs/" + auditRef.key] = {
+      action:"audit.delete",
+      actorUid:String(currentUser?.uid || "").slice(0,128),
+      actorEmail:String(currentUser?.email || "").slice(0,320),
+      actorRole:String(currentRole || "").slice(0,20),
+      targetUid:String(item.targetUid || "").slice(0,128),
+      targetName:String(item.targetName || "操作紀錄").slice(0,200),
+      details:"刪除操作紀錄 " + key + "（原操作：" + label + "）".slice(0,1000),
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    };
+    await db.ref().update(updates);
+    await loadAuditLogs();
     toast("操作紀錄已刪除");
   }
 
