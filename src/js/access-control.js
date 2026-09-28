@@ -57,6 +57,12 @@
     restrictions: {},
     featureFlags: {},
     maintenance: null,
+    siteSettings: {
+      siteName: "WatchTogether",
+      siteDescription: "WatchTogether - 和朋友一起同步看影片、聊天與加好友",
+      announcementEnabled: false,
+      announcementText: ""
+    },
     loading: false,
     error: "",
     refs: {
@@ -64,7 +70,8 @@
       overrides: null,
       restrictions: null,
       featureFlags: null,
-      maintenance: null
+      maintenance: null,
+      siteSettings: null
     }
   };
 
@@ -286,12 +293,21 @@
   }
 
   async function loadGlobalPolicies() {
-    const [flags, maintenance] = await Promise.all([
+    const [flags, maintenance, siteSettings] = await Promise.all([
       db.ref("admin/featureFlags").once("value").catch(() => null),
-      db.ref("site/maintenance").once("value").catch(() => null)
+      db.ref("site/maintenance").once("value").catch(() => null),
+      db.ref("site/settings").once("value").catch(() => null)
     ]);
     state.featureFlags = normalizePolicyMap(flags?.val?.());
     state.maintenance = maintenance?.val?.() || {enabled:false};
+    const settings = siteSettings?.val?.() || {};
+    state.siteSettings = {
+      siteName: String(settings.siteName || "WatchTogether").trim().slice(0,80) || "WatchTogether",
+      siteDescription: String(settings.siteDescription || "WatchTogether - 和朋友一起同步看影片、聊天與加好友").trim().slice(0,300),
+      announcementEnabled: settings.announcementEnabled === true,
+      announcementText: String(settings.announcementText || "").trim().slice(0,500)
+    };
+    renderSystemSettings();
   }
 
   function attachGlobalListeners() {
@@ -301,6 +317,21 @@
         state.featureFlags = normalizePolicyMap(snapshot.val());
         renderMaintenance();
         renderRestrictionNotice();
+        emit();
+      });
+    } catch (_) {}
+
+    try {
+      state.refs.siteSettings = db.ref("site/settings");
+      state.refs.siteSettings.on("value", snapshot => {
+        const settings = snapshot.val() || {};
+        state.siteSettings = {
+          siteName: String(settings.siteName || "WatchTogether").trim().slice(0,80) || "WatchTogether",
+          siteDescription: String(settings.siteDescription || "WatchTogether - 和朋友一起同步看影片、聊天與加好友").trim().slice(0,300),
+          announcementEnabled: settings.announcementEnabled === true,
+          announcementText: String(settings.announcementText || "").trim().slice(0,500)
+        };
+        renderSystemSettings();
         emit();
       });
     } catch (_) {}
@@ -390,6 +421,65 @@
     notice.style.display = rows.length ? "block" : "none";
   }
 
+  function renderSystemSettings() {
+    if (location.pathname.includes("/admin/")) return;
+    if (!document.body) return;
+    const settings = state.siteSettings || {};
+    const siteName = String(settings.siteName || "WatchTogether").trim() || "WatchTogether";
+    const siteDescription = String(settings.siteDescription || "WatchTogether - 和朋友一起同步看影片、聊天與加好友").trim();
+    const announcementEnabled = settings.announcementEnabled === true;
+    const announcementText = String(settings.announcementText || "").trim();
+
+    if (document.title !== siteName) {
+      document.title = siteName;
+    }
+
+    let description = document.querySelector('meta[name="description"]');
+    if (!description) {
+      description = document.createElement("meta");
+      description.name = "description";
+      document.head?.appendChild(description);
+    }
+    description.setAttribute("content", siteDescription);
+
+    let ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute("content", siteName);
+    let ogDescription = document.querySelector('meta[property="og:description"]');
+    if (ogDescription) ogDescription.setAttribute("content", siteDescription);
+
+    let notice = document.getElementById("wtSystemAnnouncement");
+    if (!announcementEnabled || !announcementText) {
+      if (notice) notice.remove();
+      return;
+    }
+
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "wtSystemAnnouncement";
+      notice.setAttribute("role", "status");
+      notice.setAttribute("aria-live", "polite");
+      notice.style.cssText = [
+        "position:fixed",
+        "top:max(12px,env(safe-area-inset-top))",
+        "left:50%",
+        "transform:translateX(-50%)",
+        "z-index:2147482000",
+        "width:min(760px,calc(100vw - 24px))",
+        "padding:12px 16px",
+        "border:1px solid rgba(148,163,184,.28)",
+        "border-radius:16px",
+        "background:rgba(15,23,42,.96)",
+        "color:#fff",
+        "box-shadow:0 16px 48px rgba(0,0,0,.32)",
+        "backdrop-filter:blur(14px)",
+        "font-size:14px",
+        "line-height:1.55"
+      ].join(";");
+      document.body.appendChild(notice);
+    }
+    notice.textContent = "📢 " + announcementText;
+  }
+
   function createMaintenanceScreen() {
     if (document.getElementById("wtMaintenanceScreen")) return;
     const screen = document.createElement("div");
@@ -464,6 +554,7 @@
       attachUserListeners(state.user);
       state.ready = true;
       state.loading = false;
+      renderSystemSettings();
       renderMaintenance();
       renderRestrictionNotice();
       emit();
@@ -521,12 +612,14 @@
     getRole: () => state.role,
     getRoleSource: () => state.roleSource,
     getFeatureFlags: () => ({...state.featureFlags}),
+    getSiteSettings: () => ({...state.siteSettings}),
     getPermissionCatalog
 
   };
 
   const restrictionRefreshTimer = window.setInterval(() => {
     try {
+      renderSystemSettings();
       renderRestrictionNotice();
       renderMaintenance();
     } catch (_) {}
