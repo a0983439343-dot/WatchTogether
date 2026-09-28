@@ -6922,25 +6922,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       window.WT_ENHANCEMENTS?.state?.createVideo ||
       null;
 
-    if (
-      !selectedVideo &&
-      ["vimeo", "dailymotion", "twitch"].includes(selectedSourceType)
-    ) {
-      const raw = $("platformManualInput")?.value?.trim() || "";
-      if (!raw) {
-        throw new Error("請輸入影片網址或 ID");
-      }
-
-      selectedVideo = createVideoObject(
-        selectedSourceType,
-        raw
-      );
-
-      if (!selectedVideo) {
-        throw new Error("無法辨識目前平台的影片網址或 ID");
-      }
-    }
-
     const sourceType =
       selectedVideo?.id &&
       PLATFORMS[
