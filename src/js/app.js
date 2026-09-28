@@ -4205,6 +4205,69 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  function getQueuePlaybackMode() {
+    const settings =
+      state.room?.settings ||
+      window.WT_ROOM_ACCESS?.state?.meta?.settings ||
+      {};
+    const mode = String(settings.queueMode || "normal");
+    return ["normal", "repeat_one", "shuffle"].includes(mode)
+      ? mode
+      : "normal";
+  }
+
+  function scheduleQueueAdvanceAfterEnded(playerAtEnd, videoIdAtEnd) {
+    cancelScheduledQueuePlayback();
+
+    const roomIdAtEnd = String(state.roomId || "");
+    const originalPlayer = playerAtEnd || state.player;
+    const originalVideoId = String(
+      videoIdAtEnd == null
+        ? state.currentVideoId || ""
+        : videoIdAtEnd
+    );
+
+    state.queueNextTimer = setTimeout(async () => {
+      state.queueNextTimer = null;
+
+      if (
+        String(state.roomId || "") !== roomIdAtEnd ||
+        state.player !== originalPlayer ||
+        String(state.currentVideoId || "") !== originalVideoId ||
+        !state.isOwner ||
+        state.leavingRoom
+      ) {
+        return;
+      }
+
+      const mode = getQueuePlaybackMode();
+
+      if (mode === "repeat_one") {
+        try {
+          await replayVideo();
+        } catch (error) {
+          console.error("重播目前影片失敗:", error);
+        }
+        return;
+      }
+
+      const list = getSortedQueue();
+      if (!list.length) return;
+
+      const next =
+        mode === "shuffle"
+          ? list[Math.floor(Math.random() * list.length)]
+          : list[0];
+
+      try {
+        await playQueueItem(next.queueId);
+      } catch (error) {
+        console.error("佇列自動播放下一部失敗:", error);
+      }
+    }, 300);
+  }
+
+
   /*
    * =========================================================
    * PLAYER VISIBILITY
@@ -4927,6 +4990,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
         state.playbackIsBuffering = false;
         state.playbackTransientStateUntil = 0;
+        state.isPlaying = false;
         state.playbackLastPlayerState = "ended";
         state.playbackLastObservedPosition =
           Number(videoElement.currentTime) || 0;
@@ -4939,32 +5003,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         ) {
           cancelScheduledQueuePlayback();
 
-          const roomIdAtEnd =
-            String(state.roomId || "");
-          const playerAtEnd =
-            state.player;
-          const videoIdAtEnd =
-            String(state.currentVideoId || "");
-
-          state.queueNextTimer =
-            setTimeout(
-              async () => {
-                state.queueNextTimer = null;
-
-                if (
-                  String(state.roomId || "") !== roomIdAtEnd ||
-                  state.player !== playerAtEnd ||
-                  String(state.currentVideoId || "") !== videoIdAtEnd ||
-                  !state.isOwner ||
-                  state.leavingRoom
-                ) {
-                  return;
-                }
-
-                await playNextQueueItem();
-              },
-              300
-            );
+          scheduleQueueAdvanceAfterEnded(
+            state.player,
+            String(state.currentVideoId || "")
+          );
         }
       },
 
@@ -6562,6 +6604,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       if (state.player !== player) return;
       state.playbackLastPlayerState = "ended";
       state.playbackLastPlaying = false;
+      state.isPlaying = false;
       if (!state.isOwner || state.playbackApplyingRemote) return;
       const position = await asyncCurrentPosition().catch(() => 0);
       const issuedAt = playbackClockNow();
@@ -6681,6 +6724,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     player.on(dailymotion.events.VIDEO_END, async () => {
       if (state.player !== player) return;
       state.playbackLastPlayerState = "ended";
+      state.isPlaying = false;
       if (!state.isOwner || state.playbackApplyingRemote) return;
       const playerState = await player.getState().catch(() => null);
       const position = Number(playerState?.videoTime) || await asyncCurrentPosition().catch(() => 0);
