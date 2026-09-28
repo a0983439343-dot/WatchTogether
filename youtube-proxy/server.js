@@ -327,7 +327,6 @@ async function resolveUserAccessPolicy(token) {
     typeof blockValue === "object" &&
     (
       blockValue.permanent === true ||
-      Number(blockValue.blockedUntil || 0) === 0 ||
       Number(blockValue.blockedUntil || 0) > Date.now()
     )
   ) {
