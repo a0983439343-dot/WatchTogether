@@ -125,6 +125,7 @@ function allowedPaths(category) {
     "src/js/enhancements.js",
     "src/js/bug-monitor.js",
     "src/js/chat.js",
+    "src/js/access-control.js",
     "sw.js",
     "admin/admin.js",
     "admin/admin.html",
@@ -133,6 +134,10 @@ function allowedPaths(category) {
 
   if (category === "room" || category === "account" || category === "chat") {
     base.add("config/database.rules.json");
+  }
+
+  if (category === "account" || category === "room" || category === "chat" || category === "search" || category === "ui") {
+    base.add("src/js/access-control.js");
   }
 
   if (category === "playback" || category === "search") {
