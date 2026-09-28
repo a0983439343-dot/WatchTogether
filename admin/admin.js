@@ -119,7 +119,17 @@
       console.warn("custom admin role resolve failed:", error);
     }
 
-    const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
+    const [snapshot, blockSnapshot] = await Promise.all([
+      db.ref("admin/whitelistByUid/" + user.uid).once("value"),
+      db.ref("admin/blocksByUid/" + user.uid).once("value")
+    ]);
+    const block = blockSnapshot.val();
+    if (block && (
+      block.permanent === true ||
+      Number(block.blockedUntil || 0) > Date.now()
+    )) {
+      return null;
+    }
     const item = snapshot.val();
     if (!item || item.uid !== user.uid || item.enabled !== true) return null;
     currentRoleSource = "whitelist";
