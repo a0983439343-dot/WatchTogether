@@ -1717,10 +1717,8 @@
       redirectAdmin404();
       return;
     }
-    if (adminEmail !== MASTER_EMAIL) {
-      redirectAdmin404();
-      return;
-    }
+    // adminEmail is configuration metadata only; actual authorization is resolved
+    // from the signed-in Firebase account + whitelist/role rules below.
     if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
     auth = firebase.auth();
     db = firebase.database();
