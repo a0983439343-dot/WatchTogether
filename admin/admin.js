@@ -537,6 +537,29 @@
     }
   }
 
+  async function applyMutationWithAudit(updates, action, targetUid, targetName, details) {
+    if (!currentUser || !currentCan("audit.write")) {
+      throw new Error("目前沒有 audit.write 權限");
+    }
+    const auditRef = db.ref("admin/auditLogs").push();
+    const auditId = auditRef.key;
+    if (!auditId) throw new Error("無法建立操作紀錄");
+    const entry = {
+      action:String(action || "other").slice(0,40),
+      actorUid:String(currentUser.uid || "").slice(0,128),
+      actorEmail:String(currentUser.email || "").slice(0,320),
+      actorRole:String(currentRole || "").slice(0,20),
+      targetUid:String(targetUid || "").slice(0,128),
+      targetName:String(targetName || "").slice(0,200),
+      details:String(details || "").slice(0,1000),
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    };
+    const payload = {...(updates || {})};
+    payload["admin/auditLogs/" + auditId] = entry;
+    await db.ref().update(payload);
+    return auditId;
+  }
+
   async function loadAuditLogs() {
     if (!currentHasAdminAccess) {
       auditLogs = {};
@@ -1511,7 +1534,8 @@
 
     const email = String(match.email || "").trim().toLowerCase();
     const role = $("whitelistRole")?.value === "viewer" ? "viewer" : "admin";
-    await db.ref("admin/whitelistByUid/" + uid).set({
+    const updates = {};
+    updates["admin/whitelistByUid/" + uid] = {
       uid,
       email,
       role,
@@ -1519,10 +1543,10 @@
       addedAt:firebase.database.ServerValue.TIMESTAMP,
       addedByUid:currentUser.uid,
       addedByEmail:currentUser.email || ""
-    });
+    };
+    await applyMutationWithAudit(updates, "whitelist.add", uid, email, "新增 " + role + " 權限");
     input.value = "";
     await loadWhitelist();
-    void writeAuditLog("whitelist.add", uid, email, "新增 " + role + " 權限");
     toast("已加入白名單管理員");
   }
 
@@ -1532,13 +1556,12 @@
     if (!item) return;
     if (uid === MASTER_UID) { toast("最高管理員的權限不可修改"); return; }
     const role = $("whitelistBody")?.querySelector('[data-role-select="' + uid.replace(/"/g, '\"') + '"]')?.value === "viewer" ? "viewer" : "admin";
-    await db.ref("admin/whitelistByUid/" + uid).update({
-      role,
-      updatedAt:firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid:currentUser.uid
-    });
+    const updates = {};
+    updates["admin/whitelistByUid/" + uid + "/role"] = role;
+    updates["admin/whitelistByUid/" + uid + "/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
+    updates["admin/whitelistByUid/" + uid + "/updatedByUid"] = currentUser.uid;
+    await applyMutationWithAudit(updates, "whitelist.role", uid, item.email || uid, "調整為 " + role);
     await loadWhitelist();
-    void writeAuditLog("whitelist.role", uid, item.email || uid, "調整為 " + role);
     toast(role === "viewer" ? "已設為觀察員" : "已設為管理員");
   }
 
@@ -1546,13 +1569,13 @@
     if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
     const item = whitelist[uid];
     if (!item) return;
-    await db.ref("admin/whitelistByUid/" + uid).update({
-      enabled:item.enabled !== true,
-      updatedAt:firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid:currentUser.uid
-    });
+    const nextEnabled = item.enabled !== true;
+    const updates = {};
+    updates["admin/whitelistByUid/" + uid + "/enabled"] = nextEnabled;
+    updates["admin/whitelistByUid/" + uid + "/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
+    updates["admin/whitelistByUid/" + uid + "/updatedByUid"] = currentUser.uid;
+    await applyMutationWithAudit(updates, "whitelist.toggle", uid, item.email || uid, nextEnabled ? "啟用管理員資格" : "停用管理員資格");
     await loadWhitelist();
-    void writeAuditLog("whitelist.toggle", uid, item.email || uid, item.enabled === true ? "停用管理員資格" : "啟用管理員資格");
     toast(item.enabled === true ? "已停用" : "已啟用");
   }
 
@@ -1561,9 +1584,10 @@
     const item = whitelist[uid];
     if (!item) return;
     if (!window.confirm("確定刪除 " + (item.email || "這個帳號") + " 的管理員資格？")) return;
-    await db.ref("admin/whitelistByUid/" + uid).remove();
+    const updates = {};
+    updates["admin/whitelistByUid/" + uid] = null;
+    await applyMutationWithAudit(updates, "whitelist.remove", uid, item.email || uid, "移除管理員資格");
     await loadWhitelist();
-    void writeAuditLog("whitelist.remove", uid, item.email || uid, "移除管理員資格");
     toast("已刪除白名單管理員");
   }
 
