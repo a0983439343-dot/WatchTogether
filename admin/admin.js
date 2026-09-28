@@ -29,6 +29,7 @@
   let accountsRef = null;
   let reportsRef = null;
   let auditLogsRef = null;
+  let aiStatus = null;
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
@@ -1369,6 +1370,104 @@
     toast("問題回報已刪除");
   }
 
+  function renderAnalytics() {
+    const accountsCount = Object.keys(accounts || {}).length;
+    const roomsList = Object.entries(rooms || {});
+    let onlineMembers = 0;
+    roomsList.forEach(([, room]) => {
+      onlineMembers += Number(room?.__onlineCount || room?.onlineCount || 0);
+    });
+
+    let openReports = 0;
+    let resolvedReports = 0;
+    Object.values(reports || {}).forEach(item => {
+      const status = normalizeReportStatus(item?.status);
+      if (status === "resolved") resolvedReports += 1;
+      else openReports += 1;
+    });
+
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const actionCounts = {};
+    Object.values(auditLogs || {}).forEach(item => {
+      if (!item || Number(item.createdAt || 0) < since) return;
+      const action = String(item.action || "other");
+      actionCounts[action] = (actionCounts[action] || 0) + 1;
+    });
+
+    if ($("analyticsAccounts")) $("analyticsAccounts").textContent = accountsCount;
+    if ($("analyticsOnlineMembers")) $("analyticsOnlineMembers").textContent = onlineMembers;
+    if ($("analyticsRooms")) $("analyticsRooms").textContent = roomsList.length;
+    if ($("analyticsOpenReports")) $("analyticsOpenReports").textContent = openReports;
+    if ($("analyticsResolvedReports")) $("analyticsResolvedReports").textContent = resolvedReports;
+    if ($("analyticsAudit24h")) $("analyticsAudit24h").textContent = Object.values(actionCounts).reduce((sum, value) => sum + value, 0);
+
+    const container = $("analyticsAuditActions");
+    if (!container) return;
+    const rows = Object.entries(actionCounts).sort((a,b) => b[1] - a[1]);
+    container.innerHTML = rows.length
+      ? rows.map(([action,count]) =>
+          '<div class="access-policy-row"><div><strong>' +
+          escapeHtml(AUDIT_ACTION_LABELS[action] || action) +
+          '</strong><span class="small">' + escapeHtml(action) +
+          '</span></div><strong>' + count + '</strong></div>'
+        ).join("")
+      : '<div class="muted">最近 24 小時沒有 Audit 操作。</div>';
+  }
+
+  async function loadAiStatus() {
+    const grid = $("aiStatusGrid");
+    const hint = $("aiStatusHint");
+    const permission = $("aiPermissionSummary");
+    if (!grid || !hint || !permission) return;
+    if (!currentCan("ai.use")) {
+      grid.innerHTML = '<div class="info-item"><span>權限</span><strong>禁止使用 AI</strong></div>';
+      hint.textContent = "目前帳號沒有 ai.use 權限。";
+      permission.textContent = "需要 ai.use 才能呼叫 AI 分析服務。";
+      aiStatus = null;
+      return;
+    }
+
+    const endpoint = getBugServiceBase();
+    if (!endpoint) {
+      grid.innerHTML = '<div class="info-item"><span>AI 服務</span><strong>未設定</strong></div>';
+      hint.textContent = "尚未設定 AI 服務端點。";
+      permission.textContent = "ai.use 已授權，但服務端點尚未設定。";
+      aiStatus = null;
+      return;
+    }
+
+    try {
+      const response = await fetch(endpoint + "/ai/health", {
+        method:"GET",
+        cache:"no-store",
+        credentials:"omit"
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error("AI Health HTTP " + response.status);
+      aiStatus = result;
+      grid.innerHTML = [
+        ["服務", result.ok === true ? "正常" : "不可用"],
+        ["Provider", result.provider || "—"],
+        ["一般模型", result.model || "—"],
+        ["修復模型", result.repairModel || "—"],
+        ["已設定 API Key", Number(result.configuredKeys || 0)],
+        ["目前角色", currentRole || "—"]
+      ].map(([label,value]) =>
+        '<div class="info-item"><span>' + escapeHtml(label) +
+        '</span><strong>' + escapeHtml(value) + '</strong></div>'
+      ).join("");
+      hint.textContent = result.ok === true
+        ? "AI 服務目前可用；個人限制與 Feature Flag 仍會在後端再次驗證。"
+        : "AI 服務目前沒有可用的 Gemini Key。";
+      permission.textContent = "目前帳號具備 ai.use；管理員 AI 分析會留下操作紀錄。";
+    } catch (error) {
+      aiStatus = null;
+      grid.innerHTML = '<div class="info-item"><span>服務</span><strong>無法連線</strong></div>';
+      hint.textContent = String(error?.message || "AI 狀態檢查失敗");
+      permission.textContent = "後端目前無法回應 AI 健康檢查。";
+    }
+  }
+
   function updateStats() {
     const list = Object.values(accounts || {});
     const wl = Object.values(whitelist || {});
@@ -1379,6 +1478,7 @@
     $("statBlocked").textContent = blocked.length;
     $("statCurrent").textContent = currentUser ? 1 : 0;
     if ($("statRooms")) $("statRooms").textContent = Object.keys(rooms || {}).length;
+    renderAnalytics();
 
     const u = currentUser || {};
     const roleLabel = currentRole === "master" ? "最高管理員" : currentRole === "admin" ? "管理員" : currentRole === "viewer" ? "觀察員" : "—";
@@ -2296,6 +2396,7 @@
           loadReports().catch(error => console.warn("載入問題回報失敗:", error)),
           loadAuditLogs().catch(error => console.warn("載入操作紀錄失敗:", error)),
           loadAccessControl().catch(error => console.warn("載入 2.0 控制中心失敗:", error)),
+          loadAiStatus().catch(error => console.warn("載入 AI 狀態失敗:", error)),
           loadAutonomousMaintenance().catch(error => {
             console.warn("載入全自動維護設定失敗:", error);
             autonomousMaintenanceEnabled = false;
@@ -2413,6 +2514,13 @@
       $("reportHint").textContent = "已保留這筆回報，狀態維持待處理。";
     });
     $("accessRefreshBtn")?.addEventListener("click", () => loadAccessControl().then(() => toast("2.0 控制中心已重新整理")).catch(error => { console.error(error); toast(error?.message || "重新整理失敗"); }));
+    $("analyticsRefreshBtn")?.addEventListener("click", () => {
+      renderAnalytics();
+      toast("Analytics 已重新整理");
+    });
+    $("aiStatusRefreshBtn")?.addEventListener("click", () => {
+      loadAiStatus().then(() => toast("AI 狀態已更新")).catch(error => toast(error?.message || "AI 狀態檢查失敗"));
+    });
     $("maintenanceOpenBtn")?.addEventListener("click", () => setSiteMaintenance(true).catch(error => { console.error(error); toast(error?.message || "關站失敗"); }));
     $("maintenanceCloseBtn")?.addEventListener("click", () => setSiteMaintenance(false).catch(error => { console.error(error); toast(error?.message || "重新開站失敗"); }));
 
