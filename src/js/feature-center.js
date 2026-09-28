@@ -124,9 +124,19 @@ async function openReport(category){
   body.querySelector("#wtReportSend").onclick=async function(){try{var details=String($("wtReportDetails").value||"").trim();if(details.length<8)throw new Error("請至少描述 8 個字的問題");var s=st(),ref=db.ref("reports").push();await ref.set({uid:u.uid,category:$("wtReportCat").value,details:details,createdAt:firebase.database.ServerValue.TIMESTAMP,status:"open",source:"manual",autoDetected:false,autoVerifyEnabled:true,buildVersion:String(window.__WATCHTOGETHER_BUILD__||"").slice(0,100),firstSeenAt:firebase.database.ServerValue.TIMESTAMP,lastSeenAt:firebase.database.ServerValue.TIMESTAMP,occurrences:1,page:location.href.slice(0,2000),roomId:String(s.roomId||"").slice(0,6),userAgent:navigator.userAgent.slice(0,1000)});try{window.reportWatchTogetherBug&&window.reportWatchTogetherBug($("wtReportCat").value,details,s);}catch(_){}pushNotification("問題回報已送出","管理系統已收到你的回報。","report");toast("問題回報已送出");close("wtReportModal");}catch(e){toast(e.message||"回報送出失敗");}};
 }
 
+function openInvite(){
+  var id=roomId();if(!id)return toast("目前不在房間內");
+  var link=wt.roomLink?wt.roomLink(id):location.origin+location.pathname+"?room="+encodeURIComponent(id);
+  var m=$("wtInviteFeatureModal");
+  if(!m){m=document.createElement("div");m.id="wtInviteFeatureModal";m.className="modal hidden wt-feature-modal";m.setAttribute("aria-hidden","true");m.innerHTML='<div class="modal-card wt-feature-card"><div class="wt-feature-head"><div class="panel-title">房間邀請</div><button type="button" class="tiny-btn" id="wtInviteClose">關閉</button></div><div class="wt-feature-link" id="wtInviteLink"></div><div class="wt-feature-actions" style="justify-content:flex-start"><button id="wtInviteCopy" class="primary-btn">複製連結</button><button id="wtInviteCode" class="secondary-btn">複製房間碼</button></div><div id="wtInviteQr" style="display:grid;place-items:center;padding:16px;background:#fff;border-radius:16px;margin-top:14px;min-height:220px"></div></div>';document.body.appendChild(m);m.addEventListener("click",function(e){if(e.target===m)close("wtInviteFeatureModal");});$("wtInviteClose").onclick=function(){close("wtInviteFeatureModal");};$("wtInviteCopy").onclick=async function(){try{await navigator.clipboard.writeText(link);toast("已複製邀請連結");}catch(_){toast(link);}};$("wtInviteCode").onclick=async function(){try{await navigator.clipboard.writeText(id);toast("已複製房間碼");}catch(_){toast(id);}};}
+  $("wtInviteLink").textContent=link;
+  var q=$("wtInviteQr");q.innerHTML="";
+  try{if(typeof window.qrcode==="function"){var qr=window.qrcode(0,"M");qr.addData(link);qr.make();var img=document.createElement("img");img.alt="房間邀請 QR Code";img.src=qr.createDataURL(5,0);img.style.maxWidth="100%";q.appendChild(img);}else{q.textContent="QR Code 元件尚未載入";}}catch(_){q.textContent="QR Code 產生失敗";}
+  openModal("wtInviteFeatureModal");
+}
 function ensureRoomTools(){
   var id=roomId(),copy=$("copyRoomBtn");if(!id||!copy)return;
-  if(!$("wtRoomInviteBtn")){var b=document.createElement("button");b.id="wtRoomInviteBtn";b.className="tiny-btn";b.type="button";b.textContent="邀請";b.onclick=function(){var link=wt.roomLink?wt.roomLink(id):location.origin+location.pathname+"?room="+encodeURIComponent(id);try{navigator.clipboard.writeText(link);toast("已複製邀請連結");}catch(_){toast(link);}};copy.insertAdjacentElement("afterend",b);}
+  if(!$("wtRoomInviteBtn")){var b=document.createElement("button");b.id="wtRoomInviteBtn";b.className="tiny-btn";b.type="button";b.textContent="邀請";b.onclick=openInvite;copy.insertAdjacentElement("afterend",b);}
   if(!$("wtRoomReportBtn")){var c=document.createElement("button");c.id="wtRoomReportBtn";c.className="tiny-btn";c.type="button";c.textContent="回報";c.onclick=function(){openReport("room");};copy.insertAdjacentElement("afterend",c);}
 }
 
@@ -140,6 +150,6 @@ function track(){
 function init(){
   if(document.documentElement.dataset.wtFeatureCenter)return;document.documentElement.dataset.wtFeatureCenter="1";injectCss();loadNotifications();ensureTopbar();setInterval(ensureRoomTools,1000);setInterval(track,5000);
 }
-wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=function(){ensureRoomTools();$("wtRoomInviteBtn")&&$("wtRoomInviteBtn").click();};wt.pushNotification=pushNotification;
+wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.renderFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
