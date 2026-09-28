@@ -260,6 +260,9 @@
        <div class="section-head"><div><div class="eyebrow">AUDIT LOG</div><h2>操作紀錄</h2></div><button id="auditRefreshBtn" class="btn primary">重新整理</button></div>
        <div class="toolbar">
          <input id="auditSearch" class="search" type="search" placeholder="搜尋管理員、UID、目標或操作內容">
+         <input id="auditUserFilter" class="search" type="search" placeholder="操作者 UID / Email" aria-label="操作者">
+         <input id="auditStartFilter" class="search" type="datetime-local" aria-label="開始時間">
+         <input id="auditEndFilter" class="search" type="datetime-local" aria-label="結束時間">
          <select id="auditActionFilter" class="search report-filter" aria-label="操作類型">
            <option value="all">全部操作</option>
            <option value="block">封鎖</option>
