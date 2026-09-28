@@ -175,6 +175,7 @@
     }
 
     if (user.isAnonymous) {
+      if (isAdminScopedPermission(key)) return false;
       const flag = state.featureFlags[key];
       return normalizeFlag(flag);
     }
