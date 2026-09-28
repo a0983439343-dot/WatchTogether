@@ -1406,6 +1406,8 @@
     $("reportSource").textContent = auto ? "自動偵測" : "使用者手動回報";
     $("reportCategoryLabel").textContent = REPORT_CATEGORY_LABELS[item.category] || "其他";
     $("reportOccurrences").textContent = Number(item.occurrences || 0) || 1;
+    const priority = String(item.priority || "normal");
+    $("reportPriority").textContent = priority === "urgent" ? "緊急" : priority === "high" ? "高" : "一般";
     $("reportFirstSeenAt").textContent = formatDate(item.firstSeenAt || item.createdAt);
     $("reportLastSeenAt").textContent = formatDate(item.lastSeenAt || item.createdAt);
     $("reportBuildVersion").textContent = String(item.buildVersion || "—");
@@ -1428,6 +1430,14 @@
     $("reportAiRootCause").textContent = String(item.aiRootCause || "—");
     $("reportAiSuggestion").textContent = String(item.aiSuggestion || "—");
     $("reportDetails").value = String(item.details || "");
+    const screenshot = String(item.screenshotDataUrl || "");
+    const screenshotWrap = $("reportScreenshotWrap");
+    const screenshotEl = $("reportScreenshot");
+    if (screenshotWrap && screenshotEl) {
+      const validScreenshot = /^data:image\/(png|jpeg|webp);base64,/i.test(screenshot) && screenshot.length <= 900000;
+      screenshotEl.src = validScreenshot ? screenshot : "";
+      screenshotWrap.classList.toggle("hidden", !validScreenshot);
+    }
     $("reportStatus").value = normalizeReportStatus(item.status);
     $("reportHandledBy").textContent = item.handledByEmail || item.handledByUid || (item.autoResolvedAt ? "自動監控" : "—");
     $("reportAutoResolve").textContent = item.autoResolvedAt
