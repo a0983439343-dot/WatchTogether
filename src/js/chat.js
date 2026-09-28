@@ -80,6 +80,15 @@ async function requireMediaPermission() {
   }
 }
 
+async function requireChatSendPermission() {
+  var access = window.WT_ACCESS_CONTROL;
+  if (!access) return;
+  await access.waitUntilReady(2500);
+  if (access.state && access.state.ready && !access.hasPermission("chat.send")) {
+    throw new Error("你目前無法傳送聊天訊息");
+  }
+}
+
 function displayName() {
   return String(wt.currentName ? wt.currentName() : (wt.state.profile && wt.state.profile.displayName) || "玩家").slice(0,30);
 }
@@ -402,6 +411,8 @@ async function sendText() {
   var text = String(input.value || "").trim();
   if (!text) return;
   if (state.editingId) {
+    await requireDmPermission();
+    await requireChatSendPermission();
     var message = state.messages[state.editingId];
     if (!message || message.uid !== user().uid || message.type !== "text") return;
     await wt.db.ref("conversations/" + privateId(user().uid,state.activeUid) + "/messages/" + state.editingId).update({
