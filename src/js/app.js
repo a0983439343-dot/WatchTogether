@@ -3878,6 +3878,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function moveQueueItem(queueId, direction) {
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("room.queue")) {
+        throw new Error("你目前無法管理待播放順序");
+      }
+    }
     if (!canManageQueueOrder()) {
       throw new Error("只有房主或 Co-host 可以調整待播放順序");
     }
@@ -3904,6 +3911,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
   async function playQueueItem(queueId) {
     cancelScheduledQueuePlayback();
+
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("room.queue")) {
+        throw new Error("你目前無法使用待播放清單");
+      }
+    }
 
     if (!state.isOwner) {
       throw new Error("只有房主可以播放待播放清單");
