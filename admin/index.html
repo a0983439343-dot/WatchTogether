@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>404 Not Found</title>
+  <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
+  <script src="../config/firebase-config.js"></script>
+  <style>html,body{margin:0;min-height:100%;background:#fff;color:#111;font-family:system-ui,sans-serif}body{display:grid;place-items:center;padding:24px}.box{max-width:720px;text-align:center}.code{font-size:clamp(64px,14vw,128px);font-weight:900;letter-spacing:-.06em}.msg{margin-top:8px;color:#555;font-size:14px}</style>
+</head>
+<body>
+  <main class="box" aria-live="polite">
+    <div class="code">404</div>
+    <div class="msg">Page not found.</div>
+  </main>
+<script>
+(() => {
+  "use strict";
+  const MASTER_UID="35d45a23-b648-4caf-a6d5-a69112860551";
+  const MASTER_EMAIL="a0983439343@gmail.com";
+  const adminUrl="./admin.html";
+  const notFound="../404.html";
+
+  function go(url){
+    try{window.location.replace(url);}catch(_){window.location.href=url;}
+  }
+
+  function denied(){go(notFound);}
+
+  try{
+    if(!window.FIREBASE_CONFIG){denied();return;}
+    if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);
+    const auth=firebase.auth(),db=firebase.database();
+
+    auth.onAuthStateChanged(async user=>{
+      if(!user || user.isAnonymous){denied();return;}
+      const uid=String(user.uid||"");
+      const email=String(user.email||"").trim().toLowerCase();
+      if(uid===MASTER_UID || email===MASTER_EMAIL){go(adminUrl);return;}
+
+      try{
+        const snap=await db.ref("admin/whitelistByUid/"+uid).once("value");
+        const value=snap.val()||{};
+        if(value.enabled===true && ["admin","master"].includes(String(value.role||"admin"))){
+          go(adminUrl);
+          return;
+        }
+      }catch(_){}
+      denied();
+    });
+  }catch(_){denied();}
+})();
+</script>
+</body>
+</html>

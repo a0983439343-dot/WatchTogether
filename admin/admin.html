@@ -28,7 +28,9 @@
   window.addEventListener("orientationchange", updateOrientation, {passive:true});
 })();
 </script>
-<link rel="stylesheet" href="admin.css?v=20260927-admin-v13">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.0/dist/css/tabler.min.css">
+<link rel="stylesheet" href="admin.css?v=20260927-admin-v30">
+<link rel="stylesheet" href="admin2.css?v=2.0.0">
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
@@ -40,8 +42,8 @@
 <div id="deniedScreen" class="screen hidden">
   <div class="denied-card">
     <div class="eyebrow">WATCHTOGETHER / ADMIN</div>
-    <h1>無法進入管理員後台</h1>
-    <p id="deniedMessage">目前登入的 Google 帳號沒有管理員權限。</p>
+    <h1>404 Not Found</h1>
+    <p id="deniedMessage">這個管理員入口不存在。</p>
     <div class="denied-actions"><button id="switchAccountBtn" class="btn primary">切換 Google 帳號</button><a href="../" class="btn">返回 WatchTogether</a></div>
   </div>
 </div>
@@ -49,7 +51,7 @@
 <div id="setupScreen" class="screen hidden">
   <div class="denied-card">
     <div class="eyebrow">WATCHTOGETHER / ADMIN</div>
-    <h1>尚未設定管理員帳號</h1>
+    <h1>404 Not Found</h1>
     <p>管理員介面已建立。完成管理員 Email 設定後，只有指定的 Google 帳號可以讀取後台資料。</p>
     <a href="../" class="btn">返回 WatchTogether</a>
   </div>
@@ -161,6 +163,18 @@
            <option value="whitelist.role">調整權限</option>
            <option value="whitelist.toggle">啟用 / 停用</option>
            <option value="whitelist.remove">移除白名單</option>
+           <option value="userRestriction.apply">套用功能限制</option>
+           <option value="userRestriction.clear">解除功能限制</option>
+           <option value="permissionOverride.apply">套用權限例外</option>
+           <option value="permissionOverride.clear">清除權限例外</option>
+           <option value="featureFlags.update">更新全站功能</option>
+           <option value="role.save">儲存角色</option>
+           <option value="role.masterEquivalent">授予同權限</option>
+           <option value="role.clearAssignment">清除角色指派</option>
+           <option value="maintenance.enable">啟用網站維護</option>
+           <option value="maintenance.disable">恢復網站</option>
+           <option value="maintenance.password">更新維護密碼</option>
+           <option value="adminControl.url.update">更新 Worker URL</option>
            <option value="audit.delete">刪除操作紀錄</option>
          </select>
          <span id="auditCount" class="muted">0 筆</span>
@@ -292,6 +306,9 @@
 
 <div id="toast" class="toast"></div>
 </div>
-<script src="admin.js?v=20260927-admin-v30"></script>
+<script src="admin.js?v=20260928-admin-v31"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<script src="admin2.js?v=2.0.1"></script>
+<script src="admin-agent.js?v=2.0.1"></script>
 </body>
 </html>

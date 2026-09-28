@@ -1322,6 +1322,30 @@ function notify(title,body) {
   } catch (_) {}
 }
 
+async function isFeatureBlocked(feature) {
+  var user = wt.auth.currentUser;
+  if (!user || user.isAnonymous || !wt.db || !feature) return false;
+  try {
+    var snapshot = await wt.db.ref("admin/restrictionsByUid/" + user.uid).once("value");
+    var value = snapshot.val() || {};
+    var until = Number(value.blockedUntil || 0);
+    var active = until === 0 || until > Date.now();
+    return active && value.features && value.features[feature] === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function isGlobalFeatureEnabled(feature) {
+  if (!wt.db || !feature) return true;
+  try {
+    var snapshot = await wt.db.ref("system/featureFlags/" + feature).once("value");
+    return snapshot.val() !== false;
+  } catch (_) {
+    return true;
+  }
+}
+
 async function isLoggedUser() {
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous) {
@@ -1339,7 +1363,9 @@ async function isFriend(uid) {
 }
 
 async function addFriendByCode(code) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
+  if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var user = wt.auth.currentUser;
   code = String(code || "").trim().toUpperCase();
   if (!FRIEND_CODE_RE.test(code)) throw new Error("ID 必須是 6 碼英數字");
@@ -1375,6 +1401,7 @@ async function addFriendByCode(code) {
 }
 
 async function acceptFriend(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   var requestRef = wt.db.ref("friendRequests/" + user.uid + "/" + uid);
@@ -1392,6 +1419,7 @@ async function acceptFriend(uid) {
 }
 
 async function declineFriend(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   await wt.db.ref("friendRequests/" + user.uid + "/" + uid).remove();
@@ -1399,6 +1427,7 @@ async function declineFriend(uid) {
 }
 
 async function removeFriend(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!(await isLoggedUser())) return;
   var user = wt.auth.currentUser;
   if (!window.confirm("確定要刪除這位好友嗎？")) return;
@@ -1803,8 +1832,10 @@ function formatDate(value) {
 }
 
 async function sendPrivateText(text) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
+  if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   text = String(text || "").trim().slice(0,300);
   if (!text) return;
   var id = await ensureConversation(wt.state.selectedFriendUid);
@@ -1814,8 +1845,10 @@ async function sendPrivateText(text) {
 }
 
 async function sendPrivateSticker(sticker) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   var user = wt.auth.currentUser;
   if (!user || user.isAnonymous || !wt.state.selectedFriendUid) throw new Error("請先登入並選擇好友");
+  if (await isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var id = await ensureConversation(wt.state.selectedFriendUid);
   await wt.db.ref("conversations/" + id + "/messages").push({
     uid:user.uid,name:wt.currentName(),type:"sticker",sticker:String(sticker || "😊").slice(0,4),createdAt:wt.serverTs()
@@ -1823,19 +1856,35 @@ async function sendPrivateSticker(sticker) {
   $("wtPrivateStickerPicker").classList.add("hidden");
 }
 
-function openFriends() {
+async function openFriends() {
   buildFriendsModal();
-  if (!wt.auth.currentUser || wt.auth.currentUser.isAnonymous) wt.toast("Google 登入後才能使用好友功能");
+  var current=wt.auth.currentUser;
+  if (!current || current.isAnonymous) {
+    wt.toast("Google 登入後才能使用好友功能");
+    wt.openModal("wtFriendsModal");
+    return;
+  }
+  if (!(await isGlobalFeatureEnabled("friends"))) {
+    wt.toast("目前暫停使用好友功能");
+    return;
+  }
+  if (await isFeatureBlocked("friends")) {
+    wt.toast("你的帳號目前無法使用好友功能");
+    return;
+  }
   wt.openModal("wtFriendsModal");
-  void loadFriends();
+  await loadFriends();
   listenRequests();
   renderFriends();
   renderRequests();
   updatePrivateHeader();
 }
 
+wt.isFeatureBlocked = isFeatureBlocked;
 wt.isFriend = isFriend;
 wt.addFriendByCode = addFriendByCode;
+wt.acceptFriend = acceptFriend;
+wt.declineFriend = declineFriend;
 wt.openFriends = openFriends;
 wt.renderFriends = renderFriends;
 wt.listenRequests = listenRequests;
@@ -1914,6 +1963,8 @@ function formatDate(value) {
 
 async function sendRoomText(text) {
   var user = wt.auth.currentUser;
+  if (!(await isGlobalFeatureEnabled("chat"))) throw new Error("目前暫停使用聊天室");
+  if (await isFeatureBlocked("chat")) throw new Error("你的帳號目前無法使用聊天室");
   var id = roomId();
   text = String(text || "").trim().slice(0,300);
   if (!user || !id || !text) return;
@@ -1928,6 +1979,8 @@ async function sendRoomText(text) {
 
 async function sendRoomSticker(sticker) {
   var user = wt.auth.currentUser;
+  if (!(await isGlobalFeatureEnabled("chat"))) throw new Error("目前暫停使用聊天室");
+  if (await isFeatureBlocked("chat")) throw new Error("你的帳號目前無法使用聊天室");
   var id = roomId();
   if (!user || !id) return;
   await wt.db.ref("chat/" + id).push({
@@ -2792,6 +2845,9 @@ function renderHomeSearch(results) {
 }
 
 async function searchHome(query) {
+  if (await isFeatureBlocked("youtube_search")) {
+    throw new Error("你的帳號目前無法使用 YouTube 搜尋");
+  }
   var config = window.WATCHTOGETHER_CONFIG || {};
   var base = String(config.youtubeSearchProxyUrl || "").replace(/\/search\/?$/,"/search");
   if (!base) throw new Error("YouTube 搜尋服務未設定");
@@ -2801,12 +2857,20 @@ async function searchHome(query) {
   searchController = new AbortController();
   var version = ++searchVersion;
   var url = base + "?q=" + encodeURIComponent(query) + "&maxResults=8&regionCode=TW&relevanceLanguage=zh-Hant&safeSearch=moderate";
-  var response = await fetch(url,{method:"GET",headers:{Accept:"application/json"},credentials:"omit",cache:"no-store",signal:searchController.signal});
+  var headers = {Accept:"application/json"};
+  try {
+    var currentUser = wt.auth && wt.auth.currentUser;
+    if (currentUser && typeof currentUser.getIdToken === "function") {
+      headers.Authorization = "Bearer " + await currentUser.getIdToken();
+    }
+  } catch (_) {}
+  var response = await fetch(url,{method:"GET",headers:headers,credentials:"omit",cache:"no-store",signal:searchController.signal});
   if (!response.ok) throw new Error("YouTube 搜尋失敗");
   var data = await response.json();
   if (version !== searchVersion) return;
   var results = Array.isArray(data.items) ? data.items.map(normalizeSearchItem).filter(Boolean) : [];
   renderHomeSearch(results);
+  return results;
 }
 
 function bindHomeSearch() {
@@ -2886,6 +2950,8 @@ function bindHomeSearch() {
 function initSearchAndCreate() {
   bindHomeSearch();
 }
+
+wt.searchHome = searchHome;
 
 wt.state.createVideo = wt.state.createVideo || null;
 

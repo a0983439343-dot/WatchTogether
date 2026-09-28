@@ -296,6 +296,13 @@
 
     membersRef: null,
 
+    roomRolesRef: null,
+    roomRoles: {},
+    roomFeatureRestrictions: {},
+    systemFeatureFlags: {},
+    globalFeatureFlagsLoaded: false,
+    lastMembers: {},
+
     kickedRef: null,
 
     chatRef: null,
@@ -589,6 +596,61 @@
       ":" +
       String(secs).padStart(2, "0")
     );
+  }
+
+
+  async function refreshGlobalFeatureFlags() {
+    if (!db) {
+      state.systemFeatureFlags = {};
+      state.globalFeatureFlagsLoaded = false;
+      return;
+    }
+    try {
+      const snapshot = await db.ref("system/featureFlags").once("value");
+      state.systemFeatureFlags = snapshot.val() || {};
+      state.globalFeatureFlagsLoaded = true;
+    } catch (error) {
+      state.systemFeatureFlags = {};
+      state.globalFeatureFlagsLoaded = false;
+      console.warn("讀取全站功能旗標失敗:", error);
+    }
+  }
+
+  function isGlobalFeatureEnabled(feature) {
+    return state.systemFeatureFlags?.[String(feature || "")] !== false;
+  }
+
+
+  async function refreshRoomFeatureRestrictions() {
+    const uid = String(state.uid || "").trim();
+    const dbRef = db;
+    if (!uid || !state.roomId || !dbRef) {
+      state.roomFeatureRestrictions = {};
+      return;
+    }
+    try {
+      const snapshot = await dbRef.ref(
+        "admin/restrictionsByUid/" + uid + "/features"
+      ).once("value");
+      state.roomFeatureRestrictions = snapshot.val() || {};
+    } catch (_) {
+      state.roomFeatureRestrictions = {};
+    }
+  }
+
+
+  async function isCurrentUserFeatureRestricted(feature) {
+    const uid = String(state.uid || auth?.currentUser?.uid || "").trim();
+    if (!uid || !db || !feature) return false;
+    try {
+      const snapshot = await db.ref("admin/restrictionsByUid/" + uid).once("value");
+      const value = snapshot.val() || {};
+      const until = Number(value.blockedUntil || 0);
+      if (!(until === 0 || until > Date.now())) return false;
+      return value.features?.[feature] === true;
+    } catch (_) {
+      return false;
+    }
   }
 
 
@@ -2620,6 +2682,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     query,
     append = false
   ) {
+    if (!isGlobalFeatureEnabled("youtube_search")) {
+      throw new Error("目前暫停使用 YouTube 搜尋");
+    }
+    if (await isCurrentUserFeatureRestricted("youtube_search")) {
+      throw new Error("你的帳號目前無法使用 YouTube 搜尋");
+    }
+
     query =
       String(
         query || ""
@@ -3787,6 +3856,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       throw new Error("目前不在房間內");
     }
 
+    if (state.room && !state.isOwner && !hasRoomPermission("queue_manage")) {
+      throw new Error("你目前沒有管理待播放清單的權限");
+    }
+
+    if (await isCurrentUserFeatureRestricted("playlists")) {
+      throw new Error("你的帳號目前無法使用播放清單");
+    }
+
+    if (!isGlobalFeatureEnabled("playlists")) {
+      throw new Error("目前暫停使用播放清單");
+    }
+
     if (!video?.id) {
       throw new Error("無效的影片");
     }
@@ -3807,7 +3888,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       channel: video.channel || "YouTube",
       addedBy: state.uid,
       addedByName: state.memberName,
-      addedAt: firebase.database.ServerValue.TIMESTAMP
+      addedAt: firebase.database.ServerValue.TIMESTAMP,
+      queueOrder: Date.now()
     };
 
     if (video.url) item.url = String(video.url);
@@ -3823,6 +3905,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function removeFromQueue(queueId) {
+    if (await isCurrentUserFeatureRestricted("playlists")) {
+      throw new Error("你的帳號目前無法使用播放清單");
+    }
+    if (!isGlobalFeatureEnabled("playlists")) {
+      throw new Error("目前暫停使用播放清單");
+    }
     if (
       !state.queueRef ||
       !queueId
@@ -3840,11 +3928,60 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  async function reorderQueue(queueIds) {
+    if (!state.queueRef || !state.roomId) {
+      throw new Error("目前不在房間內");
+    }
+
+    if (!canControlRoomPlayback()) {
+      throw new Error("只有房主或副房主可以重新排序待播放清單");
+    }
+
+    const current = getSortedQueue().filter(item => !isCurrentVideo(item));
+    const allowed = new Set(current.map(item => String(item.queueId || "")));
+    const requested = Array.from(new Set(
+      (Array.isArray(queueIds) ? queueIds : [])
+        .map(item => String(item || "").trim())
+        .filter(id => allowed.has(id))
+    ));
+
+    const finalOrder = [
+      ...requested,
+      ...current.map(item => String(item.queueId || "")).filter(id => !requested.includes(id))
+    ];
+
+    const updates = {};
+    let order = Date.now();
+    finalOrder.forEach(queueId => {
+      updates[queueId + "/queueOrder"] = order++;
+    });
+
+    if (Object.keys(updates).length) {
+      await state.queueRef.update(updates);
+    }
+
+    finalOrder.forEach((queueId, index) => {
+      if (state.queue?.[queueId]) {
+        state.queue[queueId].queueOrder = Date.now() + index;
+      }
+    });
+
+    renderQueue();
+    toast("待播放清單已重新排序");
+  }
+
+
   async function playQueueItem(queueId) {
+    if (await isCurrentUserFeatureRestricted("playback_control")) {
+      throw new Error("你的帳號目前無法控制播放");
+    }
+    if (!isGlobalFeatureEnabled("playback_control")) {
+      throw new Error("目前暫停使用播放控制");
+    }
     cancelScheduledQueuePlayback();
 
-    if (!state.isOwner) {
-      throw new Error("只有房主可以播放待播放清單");
+    if (!canControlRoomPlayback()) {
+      throw new Error("只有房主或副房主可以播放待播放清單");
     }
 
     if (!state.uid || !state.roomId) {
@@ -3921,11 +4058,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       .sort(
         (a, b) =>
           Number(
-            a.addedAt || 0
+            a.queueOrder || a.addedAt || 0
           ) -
           Number(
-            b.addedAt || 0
-          )
+            b.queueOrder || b.addedAt || 0
+          ) ||
+          String(a.queueId || "").localeCompare(String(b.queueId || ""))
       );
   }
 
@@ -3981,6 +4119,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   min-width:0;
                 "
               >
+
+                ${canControlRoomPlayback() ? `<div class="wt2-queue-drag-handle" title="拖曳排序" aria-label="拖曳排序">⠿</div>` : ""}
 
                 <div
                   style="
@@ -4156,7 +4296,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function playNextQueueItem() {
     cancelScheduledQueuePlayback();
 
-    if (!state.isOwner) {
+    if (!canControlRoomPlayback()) {
       return false;
     }
 
@@ -4324,6 +4464,35 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
   }
 
+  function isRoomCoHost() {
+    return (
+      !state.isOwner &&
+      String(
+        state.roomRoles?.[state.uid]?.role || ""
+      ).toLowerCase() === "cohost"
+    );
+  }
+
+  function hasRoomPermission(permission) {
+    if (state.isOwner) return true;
+    const roleEntry = state.roomRoles?.[state.uid] || {};
+    if (String(roleEntry.role || "").toLowerCase() !== "cohost") return false;
+
+    const permissions = roleEntry.permissions;
+    if (!permissions || typeof permissions !== "object") {
+      return permission === "playback_control" || permission === "queue_manage";
+    }
+
+    return permissions[permission] === true;
+  }
+
+  function canControlRoomPlayback() {
+    return (
+      hasRoomPermission("playback_control") &&
+      !Boolean(state.roomFeatureRestrictions?.playback_control)
+    );
+  }
+
   function nativeYoutubeGuestActionAllowed(
     kind = ""
   ) {
@@ -4349,7 +4518,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     kind = ""
   ) {
     if (
-      !state.isOwner ||
+      !canControlRoomPlayback() ||
       !state.playerReady ||
       !state.player ||
       state.playerType !== "youtube" ||
@@ -7223,6 +7392,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
     }
 
+    if (await isCurrentUserFeatureRestricted("create_room")) {
+      throw new Error("你的帳號目前無法建立房間");
+    }
+
+    if (!isGlobalFeatureEnabled("create_room")) {
+      throw new Error("目前暫停建立新房間");
+    }
+
     await ensureNotGloballyBlocked(auth?.currentUser || null);
 
     let roomId =
@@ -7248,6 +7425,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
      * 避免 Realtime Database Rules 在多路徑寫入時把整筆
      * 操作判定為 permission_denied。
      */
+    const visibility =
+      String(
+        document.querySelector('input[name="wt2-room-visibility"]:checked')?.value ||
+        "personal"
+      ).trim() === "public"
+        ? "public"
+        : "personal";
+
     const room = {
       owner:
         state.uid,
@@ -7338,6 +7523,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           name:
             roomName,
 
+          visibility,
+          joinMode:
+            visibility === "public"
+              ? String(
+                  document.querySelector("#wt2PublicJoinMode")?.value ||
+                  "open"
+                ) === "approval"
+                ? "approval"
+                : "open"
+              : "invite_only",
+
           settings: {
             locked:
               false,
@@ -7403,6 +7599,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
      */
     state.room = {
       ...room,
+      visibility,
+      isPersonal: visibility === "personal",
       video:
         null
     };
@@ -7415,6 +7613,47 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       "",
       `?room=${encodeURIComponent(roomId)}${state.adminJoinOverride ? "&adminJoin=1" : ""}`
     );
+
+    try {
+      await db.ref("roomRoles/" + roomId + "/" + state.uid).set({
+        role: "owner",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedBy: state.uid
+      });
+    } catch (error) {
+      console.warn("寫入房主角色失敗:", error);
+    }
+
+    if (visibility === "personal") {
+      try {
+        await db.ref("profiles/" + state.uid + "/personalRooms/" + roomId).set({
+          roomId,
+          name: roomName,
+          visibility: "personal",
+          createdAt: firebase.database.ServerValue.TIMESTAMP,
+          updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+      } catch (error) {
+        console.warn("寫入專屬房間帳號索引失敗:", error);
+      }
+    }
+
+    if (visibility === "public") {
+      try {
+        await db.ref("publicRooms/" + roomId).set({
+          roomId,
+          name: roomName,
+          sourceType,
+          visibility: "public",
+          joinMode: String(document.querySelector("#wt2PublicJoinMode")?.value || "open") === "approval" ? "approval" : "open",
+          memberCount: 1,
+          createdAt: firebase.database.ServerValue.TIMESTAMP,
+          updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+      } catch (error) {
+        console.warn("寫入公開房間索引失敗:", error);
+      }
+    }
 
     try {
       await enterRoom();
@@ -7575,6 +7814,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     saveRoomId(roomId);
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      String(metaData.joinMode || "open") === "approval"
+    ) {
+      try {
+        await db.ref("roomJoinRequests/" + roomId + "/" + state.uid).remove();
+      } catch (_) {}
+      state.pendingRoomJoinRequest = null;
+    }
   }
 
   async function createRoomWithVideo(video) {
@@ -7646,6 +7896,60 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
    * JOIN ROOM
    * =========================================================
    */
+
+  async function requestRoomJoinApproval(roomId) {
+    const user = auth?.currentUser;
+    if (!db || !user || user.isAnonymous) {
+      throw new Error("請先登入後再申請加入公開房間");
+    }
+
+    const requestRef = db.ref("roomJoinRequests/" + roomId + "/" + user.uid);
+    const existingSnapshot = await requestRef.once("value").catch(() => null);
+    const existing = existingSnapshot?.val?.() || {};
+
+    if (existing.status === "approved" && existing.approved === true) {
+      return true;
+    }
+
+    if (existing.status !== "pending") {
+      const profile = await db.ref("profiles/" + user.uid).once("value").catch(() => null);
+      const profileValue = profile?.val?.() || {};
+      const name = String(profileValue.displayName || state.memberName || "玩家").trim().slice(0, 30) || "玩家";
+
+      await requestRef.set({
+        uid: user.uid,
+        name,
+        status: "pending",
+        approved: false,
+        requestedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+
+    requestRef.on("value", async snapshot => {
+      const value = snapshot.val();
+      if (!value) return;
+
+      if (value.status === "approved" && value.approved === true) {
+        requestRef.off();
+        try {
+          await joinRoom(roomId);
+          await requestRef.remove();
+        } catch (error) {
+          toast(error?.message || "核准後加入房間失敗");
+        }
+      } else if (value.status === "rejected") {
+        requestRef.off();
+        toast("房主拒絕了你的加入申請");
+        try {
+          await requestRef.remove();
+        } catch (_) {}
+      }
+    });
+
+    state.pendingRoomJoinRequest = roomId;
+    toast(existing.status === "pending" ? "已經送出申請，等待房主審核" : "已送出加入申請，等待房主審核");
+    return false;
+  }
 
   async function joinRoom(roomId) {
     roomId =
@@ -7759,6 +8063,41 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       Boolean(state.adminJoinOverride);
 
     if (
+      !isAdminJoin &&
+      !isRoomOwner &&
+      !isExistingMember &&
+      String(metaData.visibility || "personal") === "public" &&
+      await isCurrentUserFeatureRestricted("join_public_room")
+    ) {
+      throw new Error("你的帳號目前無法加入公開房間");
+    }
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      !isExistingMember &&
+      String(metaData.joinMode || "open") === "invite_only"
+    ) {
+      const inviteSnapshot = await db.ref("roomInvites/" + roomId + "/" + state.uid).once("value");
+      if (inviteSnapshot.val() !== true) {
+        throw new Error("這個房間是邀請制，你目前不在邀請名單中");
+      }
+    }
+
+    if (
+      !state.adminJoinOverride &&
+      !isRoomOwner &&
+      !isExistingMember &&
+      String(metaData.visibility || "personal") === "public" &&
+      String(metaData.joinMode || "open") === "approval"
+    ) {
+      const approved = await requestRoomJoinApproval(roomId);
+      if (!approved) {
+        return;
+      }
+    }
+
+    if (
       !state.adminJoinOverride &&
       !isRoomOwner &&
       !isExistingMember &&
@@ -7811,6 +8150,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       owner: actualOwnerUid,
       name: metaSnapshot.val()?.name || "一起看",
       sourceType: "youtube",
+      visibility: String(metaData.visibility || "personal"),
+      isPersonal: String(metaData.visibility || "personal") === "personal",
       video: null
     };
 
@@ -9069,6 +9410,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.playbackApplyingRemote
     ) return null;
 
+    if (await isCurrentUserFeatureRestricted("playback_control")) {
+      throw new Error("你的帳號目前無法控制播放");
+    }
+
+    if (state.room && !hasRoomPermission("playback_control")) {
+      throw new Error("你在這個房間沒有播放控制權限");
+    }
+
     const ref = playbackSyncRef();
     if (!ref) return null;
 
@@ -9239,7 +9588,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     endedOverride = false
   ) {
     if (
-      !state.isOwner ||
+      !canControlRoomPlayback() ||
       !state.uid ||
       !state.roomId ||
       !state.playerReady ||
@@ -10532,6 +10881,31 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  async function syncPublicRoomIndex(members = {}) {
+    if (
+      String(state.room?.visibility || "personal") !== "public" ||
+      !state.isOwner ||
+      !state.roomId ||
+      !db
+    ) {
+      return;
+    }
+
+    const count = Object.values(members || {}).filter(member =>
+      isMemberPresenceLive(member)
+    ).length;
+
+    try {
+      await db.ref("publicRooms/" + state.roomId).update({
+        memberCount: count,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+    } catch (error) {
+      console.warn("更新公開房間索引失敗:", error);
+    }
+  }
+
+
   async function heartbeatMember() {
     if (
       !state.membersRef ||
@@ -10639,6 +11013,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function transferOwnershipBeforeLeave() {
     if (
       state.adminJoinOverride ||
+      String(state.room?.visibility || "personal") === "personal" ||
       !state.isOwner ||
       !state.roomId ||
       !state.uid
@@ -10856,7 +11231,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (
       state.isOwner &&
-      !state.adminJoinOverride
+      !state.adminJoinOverride &&
+      String(state.room?.visibility || "personal") !== "personal"
     ) {
       try {
         const nextOwner =
@@ -11243,9 +11619,23 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     state.room =
       roomSnapshot.val();
 
+    try {
+      const roomMetaSnapshot = await db
+        .ref("roomMeta/" + state.roomId)
+        .once("value");
+      const roomMetaValue = roomMetaSnapshot.val() || {};
+      state.room.visibility = String(roomMetaValue.visibility || "personal");
+      state.room.isPersonal = state.room.visibility === "personal";
+      state.room.joinMode = String(roomMetaValue.joinMode || (state.room.isPersonal ? "invite_only" : "open"));
+    } catch (_) {
+      state.room.visibility = state.room.visibility || "personal";
+      state.room.isPersonal = state.room.visibility === "personal";
+    }
+
     state.isOwner =
       state.room.owner ===
       state.uid;
+    void refreshRoomFeatureRestrictions();
 
     if (
       !state.isOwner &&
@@ -11270,7 +11660,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             ""
           );
 
+        const roomIsPersonal =
+          String(state.room?.visibility || "") === "personal";
+
         let ownerCanBeClaimed =
+          !roomIsPersonal &&
           !currentOwnerUid;
 
         if (
@@ -11284,6 +11678,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               .once("value");
 
           ownerCanBeClaimed =
+            !roomIsPersonal &&
             !isMemberPresenceLive(
               ownerMemberSnapshot.val()
             );
@@ -11453,6 +11848,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             snapshot.val() ||
             {};
 
+          void syncPublicRoomIndex(members);
+
           /*
            * 自己原本已經進來，
            * 後來突然不存在，
@@ -11494,6 +11891,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             return;
           }
 
+          state.lastMembers = members;
           renderMembers(
             members
           );
@@ -11509,6 +11907,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
       state.membersListenerAttached =
         true;
+    }
+
+    if (!state.roomRolesRef) {
+      state.roomRolesRef = db.ref("roomRoles/" + state.roomId);
+      state.roomRolesRef.on("value", (snapshot) => {
+        state.roomRoles = snapshot.val() || {};
+        renderMembers(state.lastMembers || {});
+      });
     }
 
     if (
@@ -11623,6 +12029,37 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
               member?.online !==
               false;
 
+            const role =
+              owner
+                ? "owner"
+                : String(
+                    state.roomRoles?.[uid]?.role ||
+                    "viewer"
+                  );
+
+            const roleLabel =
+              role === "cohost"
+                ? "副房主"
+                : role === "owner"
+                  ? "房主"
+                  : online
+                    ? "在線"
+                    : "離線";
+
+            const roleButton =
+              state.isOwner &&
+              !owner &&
+              uid !== state.uid
+                ? `
+                  <button
+                    type="button"
+                    class="tiny-btn wt2-member-role-btn"
+                    data-member-role-toggle="${escapeHtml(uid)}"
+                    data-member-role-name="${escapeHtml(name)}"
+                  >${role === "cohost" ? "降為一般" : "升為副房主"}</button>
+                `
+                : "";
+
             /*
              * 房主可以踢其他人，
              * 但不能踢自己。
@@ -11690,11 +12127,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
                   <span>
                     ${
-                      owner
-                        ? "房主"
-                        : online
-                          ? "在線"
-                          : "離線"
+roleLabel
                     }
                   </span>
 
@@ -11711,6 +12144,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   "
                 ></span>
 
+                ${roleButton}
+
                 ${kickButton}
 
               </div>
@@ -11718,6 +12153,31 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
           }
         )
         .join("");
+
+    $("memberList")
+      .querySelectorAll("[data-member-role-toggle]")
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          const uid = button.dataset.memberRoleToggle;
+          const current = String(
+            state.roomRoles?.[uid]?.role || "viewer"
+          );
+
+          try {
+            await setRoomMemberRole(
+              uid,
+              current === "cohost"
+                ? "viewer"
+                : "cohost"
+            );
+          } catch (error) {
+            toast(
+              error?.message ||
+              "修改房間角色失敗"
+            );
+          }
+        });
+      });
 
     $("memberList")
       .querySelectorAll(
@@ -11740,6 +12200,44 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
   }
 
+
+  async function setRoomMemberRole(uid, role, permissions = null) {
+    uid = String(uid || "").trim();
+    role = String(role || "").trim().toLowerCase();
+
+    if (!uid || uid === state.uid || !state.isOwner) {
+      return;
+    }
+
+    if (!["cohost", "viewer"].includes(role)) {
+      throw new Error("不支援的房間角色");
+    }
+
+    if (!state.roomRolesRef) {
+      state.roomRolesRef = db.ref("roomRoles/" + state.roomId);
+    }
+
+    const entry = {
+      role,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedBy: state.uid
+    };
+
+    if (role === "cohost") {
+      const current = state.roomRoles?.[uid]?.permissions || {};
+      const next = permissions && typeof permissions === "object"
+        ? permissions
+        : current;
+      entry.permissions = {
+        playback_control: next.playback_control !== false,
+        queue_manage: next.queue_manage !== false,
+        chat: next.chat === true,
+        member_manage: next.member_manage === true
+      };
+    }
+
+    await state.roomRolesRef.child(uid).set(entry);
+  }
 
   /*
    * =========================================================
@@ -11764,6 +12262,18 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       state.leavingRoom
     ) {
       return;
+    }
+
+    if (await isCurrentUserFeatureRestricted("chat")) {
+      throw new Error("你的帳號目前無法使用聊天室");
+    }
+
+    if (!isGlobalFeatureEnabled("chat")) {
+      throw new Error("目前暫停使用聊天室");
+    }
+
+    if (state.room && !state.isOwner && !hasRoomPermission("chat")) {
+      throw new Error("你在這個房間沒有聊天權限");
     }
 
     if (
@@ -11899,6 +12409,15 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                       ""
                     )}
                   </p>
+                  <div class="wt2-chat-translation" aria-live="polite"></div>
+                  <button
+                    type="button"
+                    class="wt2-chat-translate-btn"
+                    data-chat-translate="${escapeHtml(message.id)}"
+                    data-chat-original="${escapeHtml(message?.text || "")}"
+                  >
+                    [翻譯]
+                  </button>
                 `;
 
             const isOwnMessage =
@@ -11926,6 +12445,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
             return `
               <div
+                id="chat-message-${escapeHtml(message.id)}"
                 class="message wt-message${isOwnMessage ? " self" : ""}"
               >
                 <div
@@ -11971,6 +12491,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     box.scrollTop =
       box.scrollHeight;
+
+    box.querySelectorAll("[data-chat-translate]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (window.WT2_TRANSLATOR?.translateMessage) {
+          void window.WT2_TRANSLATOR.translateMessage(button);
+        }
+      });
+    });
 
     box
       .querySelectorAll(
@@ -13998,6 +14526,21 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     if (!auth) {
       await initializeFirebase();
+
+      await refreshGlobalFeatureFlags();
+      if (db) {
+        db.ref("system/featureFlags").on("value", snapshot => {
+          state.systemFeatureFlags = snapshot.val() || {};
+          state.globalFeatureFlagsLoaded = true;
+          try {
+            window.dispatchEvent(new CustomEvent("watchtogether:feature-flags-changed", {
+              detail: { ...state.systemFeatureFlags }
+            }));
+          } catch (_) {}
+        }, error => {
+          console.warn("全站功能旗標監聽失敗:", error);
+        });
+      }
     }
 
     const currentUser =
@@ -14423,11 +14966,38 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   window.WT_CORE.createRoom =
     createRoom;
 
+  window.WT_CORE.addToQueue =
+    addToQueue;
+
+  window.WT_CORE.removeFromQueue =
+    removeFromQueue;
+  window.WT_CORE.reorderQueue =
+    reorderQueue;
+
+  window.WT_CORE.playQueueItem =
+    playQueueItem;
+
+  window.WT_CORE.changeVideo =
+    changeVideo;
+
+  window.WT_CORE.setRoomMemberRole =
+    setRoomMemberRole;
+
   window.WT_CORE.createRoomWithVideo =
     createRoomWithVideo;
+  window.WT_CORE.joinRoom = joinRoom;
+  window.WT_CORE.searchYoutube = searchYoutube;
+  window.WT_CORE.addToQueue = addToQueue;
+  window.WT_CORE.removeFromQueue = removeFromQueue;
+  window.WT_CORE.playQueueItem = playQueueItem;
+  window.WT_CORE.refreshQueue = renderQueue;
+  window.WT_CORE.canControlRoomPlayback = canControlRoomPlayback;
+  window.WT_CORE.hasRoomPermission = hasRoomPermission;
+  window.WT_CORE.sendChat = sendChat;
 
   window.WT_CORE.setMemberName = setMemberName;
   window.WT_CORE.getMemberName = getMemberName;
+  window.WT_CORE.getRoomId = () => String(state.roomId || "");
   window.WT_CORE.setGuestName = function() {
     const key = "wt_guest_name";
     let name =

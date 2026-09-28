@@ -1,6 +1,10 @@
 const http = require("node:http");
 const { spawn } = require("node:child_process");
 const { Readable } = require("node:stream");
+const { webcrypto } = require("node:crypto");
+
+const FIREBASE_TOKEN_JWK_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const firebaseJwkCache = { expiresAt:0, keys:[] };
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -36,13 +40,88 @@ const YT_STREAM_REFERER = "https://www.youtube.com/";
 const YT_POT_PROVIDER_URL =
   process.env.YT_POT_PROVIDER_URL ||
   "http://127.0.0.1:4416";
+const FIREBASE_DATABASE_URL = String(
+  process.env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app"
+).trim().replace(/\/+$/, "");
+const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || "watchtogether-3f4f9").trim();
 const VERIFY_SITE_URL =
   String(process.env.WATCHTOGETHER_SITE_URL || "https://a0983439343-dot.github.io/WatchTogether")
     .trim()
     .replace(/\/+$/, "");
 const rateBuckets = new Map();
+const AI_AGENT_ALLOWED_TOOLS = new Set([
+  "searchVideos","getRoomState","addToQueue","createRoom","sendChat","removeFromQueue",
+  "listQueue","getQueue","playQueueItem","admin_overview","search_users","search_rooms",
+  "reports_summary","recent_audit","maintenance_status"
+]);
 let activeSearches = 0;
 let activeStreams = 0;
+
+function decodeB64UrlJson(value){
+  const normalized=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
+  const padded=normalized+"=".repeat((4-normalized.length%4)%4);
+  return JSON.parse(Buffer.from(padded,"base64").toString("utf8"));
+}
+
+function parseJwkMaxAge(cacheControl){
+  const match=String(cacheControl||"").match(/max-age=(\d+)/i);
+  const seconds=match ? Number(match[1]) : 3600;
+  return Math.max(300,Math.min(21600,Number.isFinite(seconds)?seconds:3600))*1000;
+}
+
+async function getFirebaseJwks(){
+  const now=Date.now();
+  if(firebaseJwkCache.keys.length && now<firebaseJwkCache.expiresAt) return firebaseJwkCache.keys;
+  const response=await fetch(FIREBASE_TOKEN_JWK_URL);
+  if(!response.ok) throw new Error("Firebase 公開金鑰取得失敗");
+  const data=await response.json();
+  firebaseJwkCache.keys=Array.isArray(data?.keys) ? data.keys : [];
+  firebaseJwkCache.expiresAt=now+parseJwkMaxAge(response.headers.get("cache-control"));
+  return firebaseJwkCache.keys;
+}
+
+async function verifyFirebaseIdTokenRender(token,projectId){
+  const parts=String(token||"").split(".");
+  if(parts.length!==3) throw new Error("Firebase Token 格式錯誤");
+  const header=decodeB64UrlJson(parts[0]);
+  const payload=decodeB64UrlJson(parts[1]);
+  if(header?.alg!=="RS256" || !header?.kid) throw new Error("Firebase Token 演算法錯誤");
+  const now=Math.floor(Date.now()/1000);
+  if(typeof payload?.sub!=="string" || !payload.sub || payload.sub.length>128) throw new Error("Firebase Token 使用者錯誤");
+  if(payload.aud!==projectId) throw new Error("Firebase Token 專案錯誤");
+  if(payload.iss!=="https://securetoken.google.com/"+projectId) throw new Error("Firebase Token 發行者錯誤");
+  if(typeof payload.exp!=="number" || payload.exp<=now) throw new Error("Firebase Token 已過期");
+  if(typeof payload.iat!=="number" || payload.iat<=0 || payload.iat>now+120) throw new Error("Firebase Token 核發時間錯誤");
+  if(typeof payload.auth_time!=="number" || payload.auth_time<=0 || payload.auth_time>now+120) throw new Error("Firebase Token 驗證時間錯誤");
+
+  let jwks=await getFirebaseJwks();
+  let jwk=jwks.find(item=>item?.kid===header.kid);
+  if(!jwk){
+    firebaseJwkCache.expiresAt=0;
+    firebaseJwkCache.keys=[];
+    jwks=await getFirebaseJwks();
+    jwk=jwks.find(item=>item?.kid===header.kid);
+  }
+  if(!jwk) throw new Error("Firebase 公開金鑰不存在");
+
+  const key=await webcrypto.subtle.importKey(
+    "jwk",
+    {kty:"RSA",n:jwk.n,e:jwk.e,alg:"RS256",use:"sig"},
+    {name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},
+    false,
+    ["verify"]
+  );
+
+  const signature=Buffer.from(parts[2].replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-parts[2].length%4)%4),"base64");
+  const valid=await webcrypto.subtle.verify(
+    {name:"RSASSA-PKCS1-v1_5"},
+    key,
+    signature,
+    Buffer.from(parts[0]+"."+parts[1],"utf8")
+  );
+  if(!valid) throw new Error("Firebase Token 簽章驗證失敗");
+  return payload;
+}
 
 function getClientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -141,7 +220,7 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
     "Content-Type": type,
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Authorization",
     "Access-Control-Expose-Headers": "Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified",
     "Cache-Control": "no-store"
   });
@@ -181,6 +260,25 @@ function aiAllowedOrigin(req) {
   return origin === "https://a0983439343-dot.github.io" ||
     origin === "http://localhost:3000" ||
     origin === "http://127.0.0.1:3000";
+}
+async function verifyFirebaseBearer(authorization) {
+  const value = String(authorization || "");
+  if (!value.startsWith("Bearer ")) return {ok:false};
+  const token = value.slice(7).trim();
+  if (!token) return {ok:false};
+
+  try {
+    const payload=await verifyFirebaseIdTokenRender(token,FIREBASE_PROJECT_ID);
+    return {
+      ok:true,
+      uid:String(payload.sub||""),
+      email:String(payload.email||""),
+      emailVerified:payload.email_verified===true,
+      token
+    };
+  } catch (_) {
+    return {ok:false};
+  }
 }
 
 async function readJsonBody(req, maxBytes = 32768) {
@@ -244,7 +342,7 @@ function extractGeminiText(value) {
 function cleanAiInput(value, max = 2400) {
   return String(value == null ? "" : value)
     .replace(/[\\u0000-\\u001f\\u007f]/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
 }
@@ -840,6 +938,338 @@ function degradedAiResult(input, error) {
   };
 }
 
+async function isFeatureRestrictedForUser(identity, feature) {
+  if (!identity?.uid || !feature) return false;
+  const token = String(identity.token || "");
+  if (!token) return false;
+
+  const url = FIREBASE_DATABASE_URL +
+    "/admin/restrictionsByUid/" + encodeURIComponent(identity.uid) +
+    "/features/" + encodeURIComponent(feature) +
+    ".json?auth=" + encodeURIComponent(token);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(url, {
+      method:"GET",
+      cache:"no-store",
+      signal:controller.signal
+    });
+    if (!response.ok) return true;
+    const value = await response.json().catch(() => false);
+    return value === true;
+  } catch (_) {
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function handleAiAgent(req, res) {
+  if (req.method !== "POST") {
+    send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+
+  if (!aiAllowedOrigin(req)) {
+    send(res, 403, JSON.stringify({ok:false,error:"origin_not_allowed"}));
+    return;
+  }
+
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) {
+    send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+  const identity = await verifyFirebaseBearer(authorization);
+  if (!identity.ok) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
+    return;
+  }
+
+  if (await isFeatureRestrictedForUser(identity, "ai_agent")) {
+    send(res, 403, JSON.stringify({ok:false,error:"AI Agent 已被此帳號停用"}));
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "agent", 18)) {
+    send(res, 429, JSON.stringify({ok:false,error:"AI Agent 請求過於頻繁，請稍後再試"}));
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, 32_768);
+  } catch (error) {
+    send(res, 400, JSON.stringify({ok:false,error:String(error?.message || "invalid_request")}));
+    return;
+  }
+
+  const messages = Array.isArray(body?.messages) ? body.messages.slice(-16) : [];
+  const tools = Array.isArray(body?.tools)
+    ? body.tools
+        .slice(0, 16)
+        .filter(tool => AI_AGENT_ALLOWED_TOOLS.has(String(tool?.function?.name || "").trim()))
+    : [];
+  if (!messages.length) {
+    send(res, 400, JSON.stringify({ok:false,error:"messages_required"}));
+    return;
+  }
+
+  const allowedNames = new Set(
+    tools
+      .map(item => String(item?.function?.name || "").trim())
+      .filter(name => AI_AGENT_ALLOWED_TOOLS.has(name))
+  );
+
+  const safeMessages = messages.map(message => ({
+    role: String(message?.role || "").slice(0, 20),
+    content: String(message?.content || "").slice(0, 4_000),
+    ...(Array.isArray(message?.tool_calls) ? {
+      tool_calls: message.tool_calls.slice(0, 6).map(call => ({
+        id: String(call?.id || "").slice(0, 100),
+        type: "function",
+        function: {
+          name: String(call?.function?.name || "").slice(0, 80),
+          arguments: String(call?.function?.arguments || "{}").slice(0, 2_000)
+        }
+      }))
+    } : {}),
+    ...(message?.tool_call_id ? {
+      tool_call_id: String(message.tool_call_id).slice(0, 100)
+    } : {})
+  }));
+
+  const toolSummary = tools.map(tool => ({
+    name: String(tool?.function?.name || "").slice(0, 80),
+    description: String(tool?.function?.description || "").slice(0, 400),
+    parameters: tool?.function?.parameters || {type:"object",properties:{}}
+  }));
+
+  const prompt = [
+    "You are WatchTogether 2.0 AI Core.",
+    "Understand the user's request and respond with JSON only.",
+    "You may request one or more tools from the supplied allow-list.",
+    "Never invent a tool name.",
+    "When a tool is necessary, set message.tool_calls to an array and put JSON arguments as a STRING in function.arguments.",
+    "When no tool is necessary, tool_calls must be an empty array.",
+    "Do not pretend a tool ran; the browser will execute returned tool calls.",
+    "Important operations are confirmed by the browser before execution.",
+    "",
+    "AVAILABLE TOOLS:",
+    JSON.stringify(toolSummary),
+    "",
+    "CONVERSATION:",
+    JSON.stringify(safeMessages)
+  ].join("\n");
+
+  const schema = {
+    type: "object",
+    properties: {
+      message: {
+        type: "object",
+        properties: {
+          role: {type:"string"},
+          content: {type:"string"},
+          tool_calls: {
+            type:"array",
+            items: {
+              type:"object",
+              properties: {
+                id:{type:"string"},
+                type:{type:"string"},
+                function:{
+                  type:"object",
+                  properties:{
+                    name:{type:"string"},
+                    arguments:{type:"string"}
+                  },
+                  required:["name","arguments"]
+                }
+              },
+              required:["id","type","function"]
+            }
+          }
+        },
+        required:["role","content","tool_calls"]
+      }
+    },
+    required:["message"]
+  };
+
+  try {
+    const apiKeys = getGeminiApiKeys();
+    if (!apiKeys.length) throw new Error("GEMINI_API_KEY 未設定");
+
+    let lastError = null;
+    for (const model of getAiModelFallbacks()) {
+      for (const apiKey of apiKeys) {
+        try {
+          const result = await requestGeminiModel({
+            model,
+            apiKey,
+            prompt,
+            schema,
+            isRepairPhase: false
+          });
+
+          const message = result?.message || {};
+          const toolCalls = Array.isArray(message.tool_calls)
+            ? message.tool_calls
+                .slice(0, 6)
+                .filter(call => allowedNames.has(String(call?.function?.name || "")))
+            : [];
+
+          send(res, 200, JSON.stringify({
+            ok:true,
+            model,
+            message:{
+              role:"assistant",
+              content:String(message.content || "").slice(0,4_000),
+              tool_calls:toolCalls.map((call,index)=>({
+                id:String(call?.id || ("call_" + Date.now() + "_" + index)).slice(0,100),
+                type:"function",
+                function:{
+                  name:String(call?.function?.name || "").slice(0,80),
+                  arguments:String(call?.function?.arguments || "{}").slice(0,2_000)
+                }
+              }))
+            }
+          }));
+          return;
+        } catch (error) {
+          lastError = error;
+          if (!isQuotaError(error)) break;
+        }
+      }
+      if (lastError && !isQuotaError(lastError)) break;
+    }
+
+    send(res, 502, JSON.stringify({
+      ok:false,
+      error:String(lastError?.message || "AI Agent 失敗").slice(0,300)
+    }));
+  } catch (error) {
+    send(res, 500, JSON.stringify({
+      ok:false,
+      error:String(error?.message || "AI Agent 失敗").slice(0,300)
+    }));
+  }
+}
+
+async function handleAiTranslate(req, res) {
+  if (req.method !== "POST") {
+    send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+
+  const identity = await verifyFirebaseBearer(String(req.headers.authorization || ""));
+  if (identity.ok && await isFeatureRestrictedForUser(identity, "ai")) {
+    send(res, 403, JSON.stringify({ok:false,error:"AI 功能已被此帳號停用"}));
+    return;
+  }
+
+  if (!aiAllowedOrigin(req)) {
+    send(res, 403, JSON.stringify({ok:false,error:"origin_not_allowed"}));
+    return;
+  }
+
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) {
+    send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+  let firebaseUser;
+  try {
+    firebaseUser = await verifyFirebaseIdTokenRender(
+      authorization.slice(7).trim(),
+      FIREBASE_PROJECT_ID
+    );
+  } catch (_) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!allowRate(ip, "translate", 30)) {
+    send(res, 429, JSON.stringify({ok:false,error:"翻譯請求過於頻繁，請稍後再試"}));
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, 8_192);
+  } catch (error) {
+    send(res, 400, JSON.stringify({ok:false,error:String(error?.message||"invalid_request")}));
+    return;
+  }
+
+  const textValue = String(body?.text || "").trim().slice(0, 2_000);
+  const targetLanguage = String(body?.targetLanguage || "zh").trim().slice(0, 20);
+  if (!textValue) {
+    send(res, 400, JSON.stringify({ok:false,error:"text_required"}));
+    return;
+  }
+
+  const allowedTargets = new Set(["zh","zh-TW","zh-CN","en","ja","ko","es","fr","de","pt","pt-BR","ru","it","th","vi","id","tr","ar"]);
+  const target = allowedTargets.has(targetLanguage) ? targetLanguage : "zh";
+
+  try {
+    const apiKeys = getGeminiApiKeys();
+    if (!apiKeys.length) throw new Error("GEMINI_API_KEY 未設定");
+
+    const schema = {
+      type: "object",
+      properties: {
+        translatedText: {type:"string"}
+      },
+      required: ["translatedText"],
+      propertyOrdering: ["translatedText"]
+    };
+
+    let lastError = null;
+    for (const model of getAiModelFallbacks()) {
+      for (const apiKey of apiKeys) {
+        try {
+          const result = await requestGeminiModel({
+            model,
+            apiKey,
+            prompt:
+              "Translate the following user chat message into target language code " +
+              target +
+              ". Preserve meaning, tone, emojis, names, URLs and line breaks. " +
+              "Return only the translated text in JSON field translatedText. " +
+              "Do not add explanations.\n\n" +
+              textValue,
+            schema,
+            isRepairPhase: false
+          });
+          const translatedText = String(result?.translatedText || "").trim().slice(0, 2_000);
+          if (!translatedText) throw new Error("empty_translation");
+          send(res, 200, JSON.stringify({ok:true, translatedText, model}));
+          return;
+        } catch (error) {
+          lastError = error;
+          if (!isQuotaError(error)) break;
+        }
+      }
+      if (lastError && !isQuotaError(lastError)) break;
+    }
+
+    send(res, 502, JSON.stringify({
+      ok:false,
+      error:String(lastError?.message || "translation_failed").slice(0,300)
+    }));
+  } catch (error) {
+    send(res, 500, JSON.stringify({
+      ok:false,
+      error:String(error?.message || "translation_failed").slice(0,300)
+    }));
+  }
+}
+
 async function handleAiAnalyze(req, res) {
   if (req.method !== "POST") {
     send(res, 405, JSON.stringify({
@@ -854,6 +1284,22 @@ async function handleAiAnalyze(req, res) {
       ok: false,
       error: "origin_not_allowed"
     }));
+    return;
+  }
+
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) {
+    send(res, 401, JSON.stringify({ok:false,error:"authorization_required"}));
+    return;
+  }
+  let firebaseUser;
+  try {
+    firebaseUser = await verifyFirebaseIdTokenRender(
+      authorization.slice(7).trim(),
+      FIREBASE_PROJECT_ID
+    );
+  } catch (_) {
+    send(res, 401, JSON.stringify({ok:false,error:"invalid_firebase_token"}));
     return;
   }
 
@@ -1501,7 +1947,7 @@ function setStreamResponseHeaders(res, upstream) {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Authorization",
     "Cache-Control": "no-store"
   };
 
@@ -1850,7 +2296,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-      "Access-Control-Allow-Headers": "Range,Content-Type"
+      "Access-Control-Allow-Headers": "Range,Content-Type,Authorization"
     });
     res.end();
     return;
@@ -1882,6 +2328,16 @@ const server = http.createServer((req, res) => {
       repairModel: getAiModel("repair"),
       configuredKeys: getGeminiApiKeys().length
     }));
+    return;
+  }
+
+  if (url.pathname === "/agent") {
+    handleAiAgent(req, res);
+    return;
+  }
+
+  if (url.pathname === "/ai/translate") {
+    handleAiTranslate(req, res);
     return;
   }
 

@@ -1,0 +1,54 @@
+name: Deploy WatchTogether 2.0 Workers
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Worker to deploy"
+        required: true
+        default: "admin-control"
+        type: choice
+        options:
+          - admin-control
+          - ai-core
+          - youtube-search
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.136.0
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          case "${{ inputs.deploy }}" in
+            admin-control)
+              cd workers/admin-control
+              wrangler deploy
+              ;;
+            ai-core)
+              cd workers
+              wrangler deploy --config wrangler-ai.toml
+              ;;
+            youtube-search)
+              cd workers
+              wrangler deploy
+              ;;
+            *)
+              echo "Unknown worker"
+              exit 1
+              ;;
+          esac

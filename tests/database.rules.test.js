@@ -138,6 +138,201 @@ test.after(async () => {
   await env.cleanup();
 });
 
+
+test("public room join approval: requester can apply but cannot self-approve", async () => {
+  const roomId = "APR123";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room",
+      visibility: "public",
+      joinMode: "approval",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+  });
+
+  const requestRef = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  }).ref("roomJoinRequests/" + roomId + "/" + OTHER_UID);
+
+  await assertSucceeds(requestRef.set({
+    uid: OTHER_UID,
+    name: "Other",
+    status: "pending",
+    approved: false,
+    requestedAt: Date.now()
+  }));
+
+  await assertFails(requestRef.update({
+    status: "approved",
+    approved: true,
+    approvedAt: Date.now(),
+    approvedBy: OTHER_UID
+  }));
+
+  await assertSucceeds(requestRef.remove());
+});
+
+test("public room join approval: owner can approve and approved user can become a member", async () => {
+  const roomId = "APR456";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room 2",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Approval Room 2",
+      visibility: "public",
+      joinMode: "approval",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+  });
+
+  const requester = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+  const owner = db(USER_UID, userToken);
+
+  await assertSucceeds(
+    requester.ref("roomJoinRequests/" + roomId + "/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      name: "Other",
+      status: "pending",
+      approved: false,
+      requestedAt: Date.now()
+    })
+  );
+
+  await assertSucceeds(
+    owner.ref("roomJoinRequests/" + roomId + "/" + OTHER_UID).update({
+      status: "approved",
+      approved: true,
+      approvedAt: Date.now(),
+      approvedBy: USER_UID
+    })
+  );
+
+  await assertSucceeds(
+    requester.ref("members/" + roomId + "/" + OTHER_UID).set({
+      name: "Other",
+      joinedAt: Date.now(),
+      online: true,
+      lastSeen: Date.now()
+    })
+  );
+});
+
+test("personal room: an offline former owner cannot be replaced through the owner-takeover write path", async () => {
+  const roomId = "PER123";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Personal",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Personal",
+      visibility: "personal",
+      joinMode: "invite_only",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+    await context.database().ref("members/" + roomId + "/" + USER_UID).set({
+      name: "User", joinedAt: 1, online: false, lastSeen: 1
+    });
+    await context.database().ref("members/" + roomId + "/" + OTHER_UID).set({
+      name: "Other", joinedAt: Date.now(), online: true, lastSeen: Date.now()
+    });
+  });
+
+  await assertFails(
+    db(OTHER_UID, {
+      email: "other@example.com",
+      email_verified: true
+    }).ref("rooms/" + roomId + "/owner").set(OTHER_UID)
+  );
+});
+
+
+test("invite-only room: a non-invited user cannot create membership", async () => {
+  const roomId = "INV123";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room",
+      visibility: "personal",
+      joinMode: "invite_only",
+      settings: {locked:false,maxMembers:10,controlMode:"host"},
+      createdAt: Date.now()
+    });
+  });
+
+  const requester = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertFails(
+    requester.ref("members/" + roomId + "/" + OTHER_UID).set({
+      name:"Other",
+      joinedAt:Date.now(),
+      online:true,
+      lastSeen:Date.now()
+    })
+  );
+});
+
+test("invite-only room: an invited user can create membership", async () => {
+  const roomId = "INV456";
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room 2",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/" + roomId).set({
+      owner: USER_UID,
+      name: "Invite Room 2",
+      visibility: "personal",
+      joinMode: "invite_only",
+      settings: {locked:false,maxMembers:10,controlMode:"host"},
+      createdAt: Date.now()
+    });
+    await context.database().ref("roomInvites/" + roomId + "/" + OTHER_UID).set(true);
+  });
+
+  const requester = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+
+  await assertSucceeds(
+    requester.ref("members/" + roomId + "/" + OTHER_UID).set({
+      name:"Other",
+      joinedAt:Date.now(),
+      online:true,
+      lastSeen:Date.now()
+    })
+  );
+});
+
 test("reports: manually submitted reports can store verification but cannot self-resolve before approval", async () => {
   const ref = db(USER_UID, userToken).ref("reports/manual-verify");
   await assertSucceeds(ref.set({
@@ -314,7 +509,7 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
   );
 });
 
-test("audit logs: admin can append but cannot modify or delete", async () => {
+test("audit logs: admin can append and delete, but cannot modify an existing entry", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs");
 
   await assertSucceeds(ref.push({
@@ -358,8 +553,12 @@ test("audit logs: admin can append but cannot modify or delete", async () => {
     })
   );
 
-  await assertFails(
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + existing).remove()
+  );
+
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/auditLogs/" + existing).remove()
   );
 });
 
@@ -417,5 +616,425 @@ test("unauthenticated users cannot access protected admin paths", async () => {
 
   await assertFails(
     unauth.database().ref("admin/whitelistByUid").once("value")
+  );
+});
+
+
+test("2.0: public maintenance state is public-readable but admin-write only", async () => {
+  await assertSucceeds(db(USER_UID, userToken).ref("system/publicMaintenance").once("value"));
+  await assertFails(
+    db(USER_UID, userToken).ref("system/publicMaintenance").set({
+      enabled: true,
+      mode: "maintenance",
+      message: "forged",
+      startedAt: Date.now(),
+      endsAt: 0
+    })
+  );
+  await assertFails(
+    db(USER_UID, userToken).ref("system/maintenance").once("value")
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/maintenance").set({
+      enabled: true,
+      mode: "maintenance",
+      message: "test",
+      startedAt: Date.now(),
+      endsAt: 0,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/publicMaintenance").set({
+      enabled: true,
+      mode: "maintenance",
+      message: "test",
+      startedAt: Date.now(),
+      endsAt: 0
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/maintenance").set({
+      enabled: false,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("system/publicMaintenance").set({
+      enabled: false
+    })
+  );
+});
+
+test("2.0: active per-user feature restrictions are enforced and expire", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("admin/restrictionsByUid/" + USER_UID).set({
+      features: {chat: true, create_room: true, friends: true},
+      reason: "temporary test",
+      blockedUntil: Date.now() + 120000,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    });
+  });
+
+  await assertFails(
+    db(USER_UID, userToken).ref("chat/ABC123").push({
+      uid: USER_UID, name: "User", type: "text", text: "blocked", createdAt: Date.now()
+    })
+  );
+
+  await assertFails(
+    db(USER_UID, userToken).ref("rooms/NEW123").set({
+      owner: USER_UID, name: "Blocked Room", sourceType: "youtube"
+    })
+  );
+
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("admin/restrictionsByUid/" + USER_UID + "/blockedUntil").set(Date.now() - 1000);
+  });
+
+  await assertSucceeds(
+    db(USER_UID, userToken).ref("rooms/NEW123").set({
+      owner: USER_UID, name: "Expired Restriction Room", sourceType: "youtube"
+    })
+  );
+
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("admin/restrictionsByUid/" + USER_UID).remove();
+    await context.database().ref("rooms/NEW123").remove();
+  });
+});
+
+test("2.0: user feature restrictions can only be written by admin", async () => {
+  const path = "admin/restrictionsByUid/" + USER_UID;
+  await assertFails(
+    db(USER_UID, userToken).ref(path).set({
+      features: { chat: true },
+      reason: "self",
+      blockedUntil: 0,
+      updatedAt: Date.now(),
+      updatedBy: USER_UID
+    })
+  );
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref(path).set({
+      features: { chat: true, create_room: true },
+      reason: "test restriction",
+      blockedUntil: 0,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+  await assertSucceeds(db(USER_UID, userToken).ref(path).once("value"));
+});
+
+test("2.0: custom admin role permissions are enforced", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  await master.ref("admin/roles/restricted_admin").set({
+    name: "Restricted Admin",
+    permissions: {"rooms__view":true,"audit__view":true},
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "restricted_admin",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("rooms/ABC123").once("value")
+  );
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("rooms/ABC123/name").set("forged")
+  );
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("admin/restrictionsByUid/" + USER_UID).set({
+      features: {chat: true},
+      reason: "denied",
+      blockedUntil: 0,
+      updatedAt: Date.now(),
+      updatedBy: ADMIN_UID
+    })
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/restricted_admin").remove();
+});
+
+test("2.0: audit deletion requires audit__delete permission", async () => {
+  const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
+  const log = await master.ref("admin/auditLogs").push({
+    action: "test",
+    actorUid: MASTER_UID,
+    actorEmail: MASTER_EMAIL,
+    actorRole: "master",
+    targetUid: ADMIN_UID,
+    targetName: "test",
+    details: "audit deletion test",
+    createdAt: Date.now()
+  });
+
+  await master.ref("admin/roles/audit_deleter").set({
+    name: "Audit Deleter",
+    permissions: { audit__delete: true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "audit_deleter",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + log.key).remove()
+  );
+
+  await master.ref("admin/roles/audit_viewer").set({
+    name: "Audit Viewer",
+    permissions: { audit__view: true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "audit_viewer",
+    updatedAt: Date.now()
+  });
+  const log2 = await master.ref("admin/auditLogs").push({
+    action: "test",
+    actorUid: MASTER_UID,
+    actorEmail: MASTER_EMAIL,
+    actorRole: "master",
+    targetUid: ADMIN_UID,
+    targetName: "test",
+    details: "audit deletion deny test",
+    createdAt: Date.now()
+  });
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + log2.key).remove()
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/audit_deleter").remove();
+  await master.ref("admin/roles/audit_viewer").remove();
+  await master.ref("admin/auditLogs/" + log2.key).remove();
+});
+
+test("2.0: assigned admin can read its own custom role definition", async () => {
+  const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
+  await master.ref("admin/roles/read_test").set({
+    name: "Read Test",
+    permissions: { rooms__view: true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "read_test",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/roles/read_test").once("value")
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/read_test").remove();
+});
+
+test("2.0: role definitions and assignments require roles.manage", async () => {
+  const master = db(MASTER_UID, { email: MASTER_EMAIL, email_verified: true });
+  await master.ref("admin/roles/role_manager").set({
+    name: "Role Manager",
+    permissions: { "roles__manage": true },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "role_manager",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/roles/core_admin").set({
+      name: "Core Admin",
+      permissions: { "rooms__manage": true },
+      updatedAt: Date.now()
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/userRoles/" + OTHER_UID).set({
+      roleId: "core_admin",
+      updatedAt: Date.now()
+    })
+  );
+
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/roles/viewer_cannot_write").set({
+      name: "Nope",
+      permissions: { "rooms__manage": true },
+      updatedAt: Date.now()
+    })
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/userRoles/" + OTHER_UID).remove();
+  await master.ref("admin/roles/core_admin").remove();
+  await master.ref("admin/roles/role_manager").remove();
+});
+
+test("2.0: permissioned same-level admin can update an existing whitelist entry", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  await master.ref("admin/roles/master_equivalent").set({
+    name: "Master Equivalent",
+    permissions: {
+      whitelist__manage: true,
+      roles__manage: true,
+      users__manage: true,
+      rooms__manage: true,
+      audit__view: true
+    },
+    updatedAt: Date.now()
+  });
+  await master.ref("admin/userRoles/" + ADMIN_UID).set({
+    roleId: "master_equivalent",
+    updatedAt: Date.now()
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/whitelistByUid/" + OTHER_UID).set({
+      uid: OTHER_UID,
+      email: "other@example.com",
+      enabled: true,
+      role: "admin",
+      addedAt: Date.now(),
+      addedByUid: ADMIN_UID,
+      addedByEmail: "admin@example.com"
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("admin/whitelistByUid/" + OTHER_UID).update({
+      enabled: false,
+      role: "viewer"
+    })
+  );
+
+  await master.ref("admin/userRoles/" + ADMIN_UID).remove();
+  await master.ref("admin/roles/master_equivalent").remove();
+  await master.ref("admin/whitelistByUid/" + OTHER_UID).remove();
+});
+
+test("2.0: public room index is readable but owner-controlled", async () => {
+  await assertSucceeds(
+    db(USER_UID, userToken).ref("publicRooms/ABC123").set({
+      roomId: "ABC123",
+      name: "Public Test",
+      sourceType: "youtube",
+      memberCount: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    })
+  );
+  await assertSucceeds(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true })
+      .ref("publicRooms/ABC123")
+      .once("value")
+  );
+  await assertFails(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true })
+      .ref("publicRooms/ABC123")
+      .update({ name: "forged" })
+  );
+  await assertFails(
+    db(VIEWER_UID, viewerToken)
+      .ref("publicRooms/ABC123")
+      .update({ name: "viewer-forged" })
+  );
+});
+
+
+test("2.0: approval join requests are requester-creatable and owner-approvable", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("rooms/REQ123").set({
+      owner: ADMIN_UID,
+      name: "Approval Room",
+      sourceType: "youtube"
+    });
+    await context.database().ref("roomMeta/REQ123").set({
+      owner: ADMIN_UID,
+      name: "Approval Room",
+      visibility: "public",
+      joinMode: "approval",
+      settings: { locked: false, maxMembers: 10, controlMode: "host" },
+      createdAt: Date.now()
+    });
+  });
+
+  const requestPath = "roomJoinRequests/REQ123/" + OTHER_UID;
+  await assertSucceeds(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true }).ref(requestPath).set({
+      uid: OTHER_UID,
+      name: "User",
+      status: "pending",
+      approved: false,
+      requestedAt: Date.now()
+    })
+  );
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref(requestPath).update({
+      status: "approved",
+      approved: true,
+      approvedAt: Date.now(),
+      approvedBy: ADMIN_UID
+    })
+  );
+
+  await assertFails(
+    db(OTHER_UID, { email: "other@example.com", email_verified: true })
+      .ref(requestPath)
+      .update({ status: "approved", approved: true })
+  );
+});
+
+
+test("2.0: co-host can reorder but cannot rewrite queue item", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref("roomRoles/ABC123/" + ADMIN_UID).set({
+      role: "cohost",
+      updatedAt: 1,
+      updatedBy: USER_UID
+    });
+    await context.database().ref("queue/ABC123/item1").set({
+      id: "video-1",
+      platform: "youtube",
+      title: "Original",
+      thumbnail: "",
+      channel: "YouTube",
+      addedBy: USER_UID,
+      addedByName: "User",
+      addedAt: 1,
+      queueOrder: 1
+    });
+    await context.database().ref("rooms/ABC123/owner").set(USER_UID);
+    await context.database().ref("members/ABC123/" + ADMIN_UID).set({
+      name: "Admin",
+      joinedAt: 1,
+      online: true,
+      lastSeen: 1
+    });
+  });
+
+  await assertSucceeds(
+    db(ADMIN_UID, adminToken).ref("queue/ABC123/item1/queueOrder").set(2)
+  );
+
+  await assertFails(
+    db(ADMIN_UID, adminToken).ref("queue/ABC123/item1").update({
+      title: "forged"
+    })
   );
 });

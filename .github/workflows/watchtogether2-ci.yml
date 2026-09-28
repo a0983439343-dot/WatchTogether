@@ -1,0 +1,100 @@
+name: WatchTogether 2.0 CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            src/js/app.js \
+            src/js/enhancements.js \
+            src/js/chat.js \
+            src/js/i18n.js \
+            src/js/bug-monitor.js \
+            src/js/watchtogether2.js \
+            src/js/translation.js \
+            src/js/translator.js \
+            src/js/ai-core.js \
+            src/js/ai-agent.js \
+            src/js/notifications2.js \
+            src/js/schedules.js \
+            src/js/command-palette.js \
+            admin/admin.js \
+            admin/admin2.js \
+            admin/admin-agent.js \
+            config/firebase-config.js \
+            youtube-proxy/server.js
+          do
+            echo "Checking $f"
+            node --check "$f"
+          done
+          for f in \
+            workers/youtube-search.js \
+            workers/ai-core.js \
+            workers/admin-control/admin-control.js
+          do
+            echo "Checking Worker ESM: $f"
+            node --input-type=module --check < "$f"
+          done
+
+      - name: Validate Wrangler worker bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.136.0 deploy --dry-run --config workers/wrangler.toml
+          npx --yes wrangler@4.136.0 deploy --dry-run --config workers/wrangler-ai.toml
+          npx --yes wrangler@4.136.0 deploy --dry-run --config workers/admin-control/wrangler.toml
+
+      - name: Validate local HTML references
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          for html_path in [Path("index.html"), Path("admin/admin.html")]:
+              html = html_path.read_text(encoding="utf-8")
+              refs = re.findall(r'''(?:src|href)=["']([^"']+)["']''', html)
+              for ref in refs:
+                  if ref.startswith(("http://", "https://", "//", "#", "data:")):
+                      continue
+                  target = (html_path.parent / ref.split("?", 1)[0].split("#", 1)[0]).resolve()
+                  if not target.exists():
+                      raise SystemExit(f"{html_path}: missing local reference {ref} -> {target}")
+              print(f"{html_path}: local references OK")
+
+      - name: Validate JSON configuration
+        run: |
+          python - <<'PY'
+          import json
+          for path in ["config/database.rules.json","manifest.webmanifest","package.json"]:
+              print("Checking", path)
+              with open(path, encoding="utf-8") as f:
+                  json.load(f)
+          PY
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run Firebase Rules tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$JAVA_HOME/bin:$PATH"
+          echo "JAVA_HOME=$JAVA_HOME"
+          which java
+          java -version
+          npx firebase --version
+          npm run test:rules

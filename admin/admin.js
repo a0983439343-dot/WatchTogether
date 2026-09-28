@@ -30,7 +30,10 @@
 
   const $ = id => document.getElementById(id);
   const show = id => $(id)?.classList.remove("hidden");
-  const hide = id => $(id)?.classList.add("hidden");
+  const hide = id => $(id)?.classList.add("hidden");  function redirectAdmin404(){
+    try{window.location.replace("../404.html");}catch(_){window.location.href="../404.html";}
+  }
+
 
   function toast(message) {
     const el = $("toast");
@@ -87,8 +90,87 @@
     return item.role === "viewer" ? "viewer" : "admin";
   }
 
+  function publishAdminContext() {
+    window.WT2_ADMIN_ROLE = currentRole;
+    window.WT_ADMIN_CONTEXT = {
+      getRole: () => currentRole,
+      isAuthorized: () => currentHasAdminAccess,
+      overview: () => ({
+        role: currentRole,
+        users: Object.keys(accounts || {}).length,
+        whitelist: Object.values(whitelist || {}).filter(item => item?.enabled === true).length,
+        blocked: Object.keys(blocks || {}).length,
+        rooms: Object.keys(rooms || {}).length,
+        openReports: Object.values(reports || {}).filter(item => String(item?.status || "open") === "open").length,
+        auditEntries: Object.keys(auditLogs || {}).length
+      }),
+      searchUsers: query => {
+        const q=String(query||"").trim().toLowerCase();
+        return Object.values(accounts || {}).filter(item => {
+          if(!q) return true;
+          return [item?.uid,item?.email,item?.displayName].some(value=>String(value||"").toLowerCase().includes(q));
+        }).slice(0,30).map(item=>({
+          uid:String(item?.uid||""),
+          email:String(item?.email||""),
+          displayName:String(item?.displayName||""),
+          provider:String(item?.provider||""),
+          createdAt:Number(item?.createdAt||0),
+          lastLoginAt:Number(item?.lastLoginAt||0)
+        }));
+      },
+      searchRooms: query => {
+        const q=String(query||"").trim().toLowerCase();
+        return Object.values(rooms || {}).filter(item => !q || [item?.roomId,item?.name,item?.owner].some(value=>String(value||"").toLowerCase().includes(q)))
+          .slice(0,30).map(item=>({
+            roomId:String(item?.roomId||""),
+            name:String(item?.name||""),
+            owner:String(item?.owner||""),
+            sourceType:String(item?.sourceType||"")
+          }));
+      },
+      reportsSummary: () => Object.values(reports || {}).slice(-50).map(item=>({
+        uid:String(item?.uid||""),
+        category:String(item?.category||""),
+        status:String(item?.status||""),
+        createdAt:Number(item?.createdAt||0),
+        details:String(item?.details||"").slice(0,300)
+      })),
+      recentAudit: () => Object.values(auditLogs || {}).slice(-50).map(item=>({
+        action:String(item?.action||""),
+        actorUid:String(item?.actorUid||""),
+        actorRole:String(item?.actorRole||""),
+        targetUid:String(item?.targetUid||""),
+        details:String(item?.details||"").slice(0,300),
+        createdAt:Number(item?.createdAt||0)
+      })),
+      maintenance: () => ({
+        enabled:Boolean(document.querySelector("#autonomousMaintenanceEnabled")?.checked),
+        autonomous:Boolean(autonomousMaintenanceEnabled)
+      })
+    };
+    window.dispatchEvent(new Event("wt2-admin-role-ready"));
+  }
+
   function isAdminOperator() {
     return currentRole === "master" || currentRole === "admin";
+  }
+
+  function hasAdminPermission(permission) {
+    if (currentRole === "master") return true;
+    const key = String(permission || "").trim();
+    if (!key || !isAdminOperator()) return false;
+    const ctx = window.__WT2_ADMIN_PERMISSION_CONTEXT__;
+    if (ctx && String(ctx.baseRole || "").toLowerCase() === String(currentRole || "").toLowerCase()) {
+      if (ctx.deny && ctx.deny[key] === true) return false;
+      if (ctx.allow && ctx.allow[key] === true) return true;
+      if (ctx.hasCustomRole === true) {
+        return Array.isArray(ctx.permissions) && ctx.permissions.includes(key);
+      }
+    }
+    if (currentRole === "viewer") {
+      return ["users.view","rooms.view","analytics.view","audit.view"].includes(key);
+    }
+    return currentRole === "admin";
   }
 
   const ROLE_LEVELS = {
@@ -125,6 +207,7 @@
     }
     const snapshot = await db.ref("accounts").once("value");
     accounts = snapshot.val() || {};
+    publishAdminContext();
     renderAccounts();
     updateStats();
   }
@@ -150,11 +233,12 @@
   }
 
   async function loadWhitelist() {
-    const ref = isMasterUser(currentUser)
+    const canManageWhitelist = hasAdminPermission("whitelist.manage");
+    const ref = canManageWhitelist
       ? db.ref("admin/whitelistByUid")
       : db.ref("admin/whitelistByUid/" + currentUser.uid);
     const snapshot = await ref.once("value");
-    if (isMasterUser(currentUser)) {
+    if (canManageWhitelist) {
       whitelist = snapshot.val() || {};
     } else {
       const item = snapshot.val();
@@ -172,6 +256,7 @@
     }
     const snapshot = await db.ref("admin/blocksByUid").once("value");
     blocks = snapshot.val() || {};
+    publishAdminContext();
     renderAccounts();
     updateStats();
   }
@@ -208,6 +293,7 @@
     });
 
     rooms = valid;
+    publishAdminContext();
     renderRooms();
     updateStats();
   }
@@ -250,7 +336,7 @@
             '<td><span class="small">' + escapeHtml(platform) + ' · ' + escapeHtml(title) + '</span></td>' +
             '<td>' + escapeHtml(formatDate(meta.createdAt || item.createdAt)) + '</td>' +
             '<td><div class="room-actions"><a class="btn primary" href="' + href + '">🚪 進入房間</a>' +
-              (isAdminOperator() ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
+              (hasAdminPermission("rooms.manage") ? '<button class="btn danger" type="button" data-room-delete="' + escapeHtml(key) + '">🗑️ 刪除</button>' : '<span class="muted">僅可查看</span>') +
               '</div></td>' +
           '</tr>';
         }).join("")
@@ -261,6 +347,21 @@
         .catch(error => { console.error(error); toast(error?.message || "刪除房間失敗"); }));
     });
   }
+
+  window.addEventListener("wt2-admin-permission-ready", () => {
+    if (!currentHasAdminAccess) return;
+    try {
+      renderAccounts();
+      renderWhitelist();
+      renderRooms();
+      renderReports();
+      renderAuditLogs();
+      renderAutonomousMaintenance();
+      updateStats();
+    } catch (error) {
+      console.warn("Admin 2.0 permission UI refresh failed:", error);
+    }
+  });
 
   function renderAccounts() {
     const query = String($("accountSearch")?.value || "").trim().toLowerCase();
@@ -285,24 +386,29 @@
               ? '<span class="status off">已封鎖 · ' + escapeHtml(formatRemaining(block)) + '</span>'
               : '<span class="status">正常</span>';
 
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManageUser = hasAdminPermission("users.manage");
+          const canRestrictUser = hasAdminPermission("restrictions.manage");
+          const canBanUser = hasAdminPermission("users.ban");
           let actions = '<div class="row-actions">';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
-          } else if (!canManage) {
+          } else if (!canManageUser && !canRestrictUser && !canBanUser) {
             actions += '<span class="muted">僅可查看</span>';
           } else {
-            actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
-            if (active) {
-              if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
-                actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
-              } else if (uid === currentUser?.uid) {
-                actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
+            if (canManageUser) actions += '<button class="btn" type="button" data-edit-user="' + escapeHtml(uid) + '">✏️ 編輯</button>';
+            if (canRestrictUser) actions += '<button class="btn" type="button" data-user-restrict="' + escapeHtml(uid) + '">🚫 功能限制</button>';
+            if (canBanUser) {
+              if (active) {
+                if (uid === currentUser?.uid && !canCurrentUserSelfUnblock(block, uid)) {
+                  actions += '<button class="btn" type="button" disabled title="封鎖者權限比自己高，不能自行解除">無法自行解除</button>';
+                } else if (uid === currentUser?.uid) {
+                  actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除自己的封鎖</button>';
+                } else {
+                  actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
+                }
               } else {
-                actions += '<button class="btn" type="button" data-unblock-user="' + escapeHtml(uid) + '">解除封鎖</button>';
+                actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
               }
-            } else {
-              actions += '<button class="btn danger" type="button" data-block-user="' + escapeHtml(uid) + '">封鎖</button>';
             }
           }
           actions += '</div>';
@@ -322,6 +428,16 @@
     $("accountsBody").querySelectorAll("[data-edit-user]").forEach(button => {
       button.addEventListener("click", () => openEditUser(button.dataset.editUser)
         .catch(error => { console.error(error); toast("載入使用者資料失敗"); }));
+    });
+    $("accountsBody").querySelectorAll("[data-user-restrict]").forEach(button => {
+      button.addEventListener("click", () => {
+        const uid = String(button.dataset.userRestrict || "").trim();
+        const input = $("ad2RestrictionUid");
+        if (input) input.value = uid;
+        const nav = document.querySelector('#app .nav-item[data-section="restrictions"]');
+        nav?.click();
+        input?.dispatchEvent(new Event("change"));
+      });
     });
     $("accountsBody").querySelectorAll("[data-block-user]").forEach(button => {
       button.addEventListener("click", () => openBlockUser(button.dataset.blockUser));
@@ -345,6 +461,7 @@
 
   function renderWhitelist() {
     const master = isMasterUser(currentUser);
+    const canManageWhitelist = hasAdminPermission("whitelist.manage");
     const query = String($("whitelistSearch")?.value || "").trim().toLowerCase();
     const rows = Object.entries(whitelist || {})
       .map(([key,item]) => ({key,item}))
@@ -357,9 +474,11 @@
           const enabled = item.enabled === true;
           const role = item.role === "viewer" ? "viewer" : "admin";
           const roleLabel = role === "viewer" ? "觀察員" : "管理員";
-          const actions = master
+          const actions = canManageWhitelist && key !== MASTER_UID
             ? '<div class="row-actions"><select class="search" data-role-select="' + escapeHtml(key) + '" aria-label="權限級別"><option value="admin"' + (role === "admin" ? " selected" : "") + '>管理員</option><option value="viewer"' + (role === "viewer" ? " selected" : "") + '>觀察員</option></select><button class="btn" data-role-save="' + escapeHtml(key) + '">套用</button><button class="btn" data-toggle="' + escapeHtml(key) + '">' + (enabled ? "停用" : "啟用") + '</button><button class="btn" data-remove="' + escapeHtml(key) + '">刪除</button></div>'
-            : '<span class="muted">僅最高管理員可管理</span>';
+            : key === MASTER_UID
+              ? '<span class="muted">最高管理員不可修改</span>'
+              : '<span class="muted">僅可查看</span>';
           return '<tr><td><div class="primary-text">' + escapeHtml(item.email || "—") + '</div><span class="small uid-text">' + escapeHtml(item.uid || key) + '</span></td><td><span class="status admin">' + escapeHtml(roleLabel) + '</span></td><td><span class="status ' + (enabled ? "" : "off") + '">' + (enabled ? "啟用" : "停用") + '</span></td><td>' + escapeHtml(formatDate(item.addedAt)) + '</td><td>' + escapeHtml(item.addedByEmail || "—") + '</td><td>' + actions + '</td></tr>';
         }).join("")
       : '<tr><td colspan="5" class="muted">目前沒有白名單帳號。</td></tr>';
@@ -386,7 +505,19 @@
     "whitelist.role": "調整權限",
     "whitelist.toggle": "啟用 / 停用",
     "whitelist.remove": "移除白名單",
-    "audit.delete": "刪除操作紀錄"
+    "audit.delete": "刪除操作紀錄",
+    "userRestriction.apply": "套用使用者功能限制",
+    "userRestriction.clear": "解除使用者功能限制",
+    "permissionOverride.apply": "套用個人權限例外",
+    "permissionOverride.clear": "清除個人權限例外",
+    "featureFlags.update": "更新全站功能開關",
+    "role.save": "儲存角色",
+    "role.masterEquivalent": "授予主帳號同等權限",
+    "role.clearAssignment": "清除角色指派",
+    "maintenance.enable": "啟用網站維護",
+    "maintenance.disable": "恢復網站",
+    "maintenance.password.update": "更新維護密碼",
+    "adminControl.url.update": "更新 Worker URL"
   };
 
   function stopAuditLogsListener() {
@@ -404,7 +535,7 @@
     if (!panel || !toggle || !status || !hint) return;
     const enabled = autonomousMaintenanceEnabled === true;
     toggle.checked = enabled;
-    toggle.disabled = currentRole !== "master";
+    toggle.disabled = !hasAdminPermission("maintenance.autonomous");
     panel.classList.toggle("is-enabled", enabled);
     panel.classList.toggle("is-disabled", !enabled);
     status.textContent = enabled ? "已啟用 · 全自動維護中" : "未啟用";
@@ -449,7 +580,7 @@
   }
 
   async function setAutonomousMaintenance(enabled) {
-    if (currentRole !== "master") {
+    if (!hasAdminPermission("maintenance.autonomous")) {
       renderAutonomousMaintenance();
       return;
     }
@@ -505,6 +636,7 @@
     }
     const snapshot = await db.ref("admin/auditLogs").limitToLast(300).once("value");
     auditLogs = snapshot.val() || {};
+    publishAdminContext();
     renderAuditLogs();
   }
 
@@ -522,7 +654,7 @@
   }
 
   async function deleteAuditLog(id) {
-    if (!isAdminOperator()) {
+    if (!hasAdminPermission("audit.delete")) {
       toast("沒有刪除操作紀錄的權限");
       return;
     }
@@ -576,7 +708,7 @@
           const label = AUDIT_ACTION_LABELS[action] || action;
           const actor = String(item.actorEmail || item.actorUid || "—");
           const target = String(item.targetName || item.targetUid || "—");
-          const canDelete = isAdminOperator();
+          const canDelete = hasAdminPermission("audit.delete");
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
@@ -705,7 +837,7 @@
   }
 
   async function upsertScannerFinding(finding, scanResult) {
-    if (!currentUser || !isAdminOperator() || finding?.ok === true) return null;
+    if (!currentUser || !hasAdminPermission("reports.handle") || finding?.ok === true) return null;
     const categoryMap = {
       playback:"playback",
       search:"search",
@@ -821,7 +953,7 @@
   }
 
   async function scanWebsiteAndReports() {
-    if (!currentHasAdminAccess || !isAdminOperator() || reportScanRunning) return;
+    if (!currentHasAdminAccess || !hasAdminPermission("reports.handle") || reportScanRunning) return;
     reportScanRunning = true;
     const banner = $("reportScanBanner");
     if (banner) {
@@ -886,13 +1018,13 @@
 
   function startReportAutomation() {
     if (reportScanTimer) clearInterval(reportScanTimer);
-    if (!currentHasAdminAccess || !isAdminOperator()) return;
+    if (!currentHasAdminAccess || !hasAdminPermission("reports.handle")) return;
     void scanWebsiteAndReports();
     reportScanTimer = setInterval(() => void scanWebsiteAndReports(), 90000);
   }
 
   async function repairDecisionStart() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) return;
@@ -913,7 +1045,7 @@
   }
 
   async function recheckCurrentReport() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) return;
@@ -1083,7 +1215,7 @@
           const details = String(item.details || "");
           const preview = details.length > 120 ? details.slice(0,120) + "…" : details;
           const room = String(item.roomId || "").trim();
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManage = hasAdminPermission("reports.handle");
           const actions = canManage
             ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
             : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
@@ -1213,7 +1345,7 @@
     $("reportRepairPlan").textContent =
       String(item.aiSuggestion || "") ||
       "先閱讀回報與驗證結果，再決定是否開始處理。";
-    const canManageReport = currentRole === "master" || currentRole === "admin";
+    const canManageReport = hasAdminPermission("reports.handle");
     const fullAuto = autonomousMaintenanceEnabled === true;
     $("reportRepairBtn").classList.toggle("hidden", !canManageReport || fullAuto || normalizeReportStatus(item.status) === "resolved");
     $("reportRepairBtn").textContent = normalizeReportStatus(item.status) === "in_progress" ? "處理中" : "開始處理";
@@ -1222,8 +1354,8 @@
       repairQuestion.classList.toggle("hidden", fullAuto || normalizeReportStatus(item.status) === "resolved");
     }
     $("reportHint").textContent = account.email ? "回報帳號：" + account.email + " · 來源：" + reportSourceLabel(item) : "來源：" + reportSourceLabel(item);
-    $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
-    $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
+    $("reportDelete").classList.toggle("hidden", !hasAdminPermission("reports.handle"));
+    $("reportSave").classList.toggle("hidden", !hasAdminPermission("reports.handle"));
     show("reportModal");
     await loadReportHistory(String(id || ""));
   }
@@ -1233,7 +1365,7 @@
   }
 
   async function saveReportStatus() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1272,7 +1404,7 @@
   }
 
   async function deleteReport() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!hasAdminPermission("reports.handle")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1318,7 +1450,7 @@
   }
 
   async function addWhitelist() {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有管理白名單權限"); return; }
     const input = $("whitelistEmail");
     const uid = String(input?.value || "").trim();
     if (!uid) { toast("請輸入使用者 UID"); return; }
@@ -1350,7 +1482,7 @@
   }
 
   async function changeWhitelistRole(uid) {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以調整權限"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有調整白名單權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     if (uid === MASTER_UID) { toast("最高管理員的權限不可修改"); return; }
@@ -1366,7 +1498,7 @@
   }
 
   async function toggleWhitelist(uid) {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有管理白名單權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     await db.ref("admin/whitelistByUid/" + uid).update({
@@ -1380,7 +1512,7 @@
   }
 
   async function removeWhitelist(uid) {
-    if (!isMasterUser(currentUser)) { toast("只有最高管理員可以管理白名單"); return; }
+    if (!hasAdminPermission("whitelist.manage")) { toast("你沒有管理白名單權限"); return; }
     const item = whitelist[uid];
     if (!item) return;
     if (!window.confirm("確定刪除 " + (item.email || "這個帳號") + " 的管理員資格？")) return;
@@ -1391,7 +1523,7 @@
   }
 
   async function openEditUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.manage")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1419,7 +1551,7 @@
   }
 
   async function saveUser() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.manage")) return;
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1482,7 +1614,7 @@
   }
 
   function openBlockUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.ban")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1500,7 +1632,7 @@
   }
 
   async function confirmBlock() {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("users.ban")) return;
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1532,7 +1664,7 @@
   }
 
    async function unblockUser(uid) {
-     if (!isAdminOperator()) return;
+     if (!hasAdminPermission("users.ban")) return;
      const item = accounts[uid];
      if (!item) return;
      if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1559,7 +1691,7 @@
    }
 
   async function deleteRoom(roomId) {
-    if (!isAdminOperator()) return;
+    if (!hasAdminPermission("rooms.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
@@ -1584,14 +1716,15 @@
 
   function applyRoleUi() {
     const master = currentRole === "master";
+    const canWhitelist = hasAdminPermission("whitelist.manage");
     const addPanel = $("whitelistAddPanel");
     const help = $("whitelistHelp");
-    if (master) {
+    if (canWhitelist) {
       addPanel?.classList.remove("hidden");
       if (help) help.textContent = "到「登入帳號」查看使用者 UID，按「複製 UID」後貼到這裡；新增時可指定「管理員」或「觀察員」。";
     } else if (currentRole === "admin") {
       addPanel?.classList.add("hidden");
-      if (help) help.textContent = "你目前是管理員，可管理使用者、封鎖帳號、刪除房間與控制房間；白名單由最高管理員管理。";
+      if (help) help.textContent = "你目前是管理員；可用功能會依自訂角色與個人權限覆寫決定。";
     } else {
       addPanel?.classList.add("hidden");
       if (help) help.textContent = "你目前是觀察員，僅可查看後台資料，不可修改使用者、封鎖帳號或刪除房間。";
@@ -1600,16 +1733,11 @@
 
   async function initialize() {
     if (!window.firebase || !window.FIREBASE_CONFIG) {
-      hide("loadingScreen");
-      show("deniedScreen");
-      $("deniedMessage").textContent = "Firebase 設定未載入。";
+      redirectAdmin404();
       return;
     }
-    if (adminEmail !== MASTER_EMAIL) {
-      hide("loadingScreen");
-      show("setupScreen");
-      return;
-    }
+    // adminEmail is configuration metadata only; actual authorization is resolved
+    // from the signed-in Firebase account + whitelist/role rules below.
     if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
     auth = firebase.auth();
     db = firebase.database();
@@ -1640,8 +1768,7 @@
       hide("deniedScreen");
 
       if (!user || user.isAnonymous) {
-        show("deniedScreen");
-        $("deniedMessage").textContent = "請先使用 Google 帳號登入。";
+        redirectAdmin404();
         return;
       }
 
@@ -1649,8 +1776,7 @@
         currentRole = await resolveAdminRole(user);
         currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
-          show("deniedScreen");
-          $("deniedMessage").textContent = "目前登入的 Google 帳號沒有管理員權限。";
+          redirectAdmin404();
           return;
         }
 
@@ -1658,6 +1784,7 @@
         show("app");
         restoreAdminSection();
         applyRoleUi();
+        publishAdminContext();
 
         await Promise.all([
           loadAccounts(),
@@ -1672,6 +1799,8 @@
             renderAutonomousMaintenance();
           })
         ]);
+        window.__WT_ADMIN_ACCOUNTS__ = accounts;
+        renderAutonomousMaintenance();
         startAccountsListener();
         startReportsListener();
         startAuditLogsListener();
@@ -1680,8 +1809,7 @@
         startReportAutomation();
       } catch (error) {
         console.error(error);
-        show("deniedScreen");
-        $("deniedMessage").textContent = "管理員資料載入失敗，請檢查 Firebase Rules。";
+        redirectAdmin404();
       }
     });
   }

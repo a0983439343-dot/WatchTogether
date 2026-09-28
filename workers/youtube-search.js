@@ -43,7 +43,7 @@ const certCache =
     certs: null
   };
 
-function corsHeaders(
+export function corsHeaders(
   origin,
   allowedOrigin,
   requestedHeaders = ""
@@ -64,7 +64,7 @@ function corsHeaders(
       allowed,
 
     "Access-Control-Allow-Methods":
-      "GET, OPTIONS",
+      "GET, POST, OPTIONS",
 
     "Access-Control-Allow-Headers":
       allowHeaders,
@@ -77,7 +77,7 @@ function corsHeaders(
   };
 }
 
-function jsonResponse(
+export function jsonResponse(
   body,
   status = 200,
   origin = "",
@@ -327,7 +327,7 @@ async function getVerifyKey(kid) {
   return key;
 }
 
-async function verifyFirebaseIdToken(
+export async function verifyFirebaseIdToken(
   token,
   projectId
 ) {
@@ -476,7 +476,7 @@ async function verifyFirebaseIdToken(
   return payload;
 }
 
-function isRateLimited(
+export function isRateLimited(
   bucketMap,
   key,
   limit
@@ -514,6 +514,29 @@ function isRateLimited(
     record.count >
     limit
   );
+}
+
+async function isUserFeatureBlocked(env, token, uid, feature){
+  if(!token || !uid || !feature) return false;
+  const base=String(env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app").trim().replace(/\/+$/,"");
+  const response=await fetch(base+"/admin/restrictionsByUid/"+encodeURIComponent(uid)+".json?auth="+encodeURIComponent(token),{method:"GET",cache:"no-store"});
+  if(!response.ok)return true;
+  const value=await response.json().catch(()=>null);
+  if(!value || typeof value!=="object")return false;
+  const until=Number(value.blockedUntil||0);
+  return (until===0 || until>Date.now()) && value.features?.[feature]===true;
+}
+
+async function isGlobalFeatureDisabled(env, token, feature){
+  const base=String(env.FIREBASE_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app").trim().replace(/\/+$/,"");
+  try{
+    const response=await fetch(base+"/system/featureFlags/"+encodeURIComponent(feature)+".json?auth="+encodeURIComponent(token),{method:"GET",cache:"no-store"});
+    if(!response.ok)return true;
+    const value=await response.json().catch(()=>null);
+    return value === false;
+  }catch(_){
+    return true;
+  }
 }
 
 function parseIsoDuration(
@@ -611,6 +634,210 @@ export default {
     }
 
     if (
+      request.method === "POST" &&
+      url.pathname === "/translate"
+    ) {
+      if (
+        allowedOrigin !== "*" &&
+        origin !== allowedOrigin
+      ) {
+        return jsonResponse(
+          { error: { message: "不允許的來源" } },
+          403,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const authorization = request.headers.get("Authorization") || "";
+      const fallbackToken = request.headers.get("X-Firebase-ID-Token") || "";
+      const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+      const firebaseIdToken =
+        tokenMatch?.[1]?.trim() ||
+        fallbackToken.trim();
+
+      if (!firebaseIdToken) {
+        return jsonResponse(
+          { error: { message: "缺少登入驗證" } },
+          401,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const projectId = String(
+        env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID
+      ).trim();
+
+      let firebaseUser = null;
+      try {
+        firebaseUser = await verifyFirebaseIdToken(
+          firebaseIdToken,
+          projectId
+        );
+      } catch (_) {
+        return jsonResponse(
+          { error: { message: "登入驗證失敗" } },
+          401,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      if (await isGlobalFeatureDisabled(env, firebaseIdToken, "translation")) {
+        return jsonResponse(
+          { error: { message: "聊天翻譯功能目前由系統管理員停用" } },
+          503,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      if (await isUserFeatureBlocked(env, firebaseIdToken, firebaseUser.sub, "translation")) {
+        return jsonResponse(
+          { error: { message: "你的帳號目前無法使用聊天翻譯" } },
+          403,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const ip =
+        request.headers.get("CF-Connecting-IP") || "unknown";
+
+      if (
+        isRateLimited(ipBuckets, ip, 12) ||
+        isRateLimited(userBuckets, firebaseUser.sub, 8)
+      ) {
+        return jsonResponse(
+          { error: { message: "翻譯太頻繁，請稍候再試" } },
+          429,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      let body = null;
+      try {
+        body = await request.json();
+      } catch (_) {
+        return jsonResponse(
+          { error: { message: "JSON 格式錯誤" } },
+          400,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const text = String(body?.text || "").trim();
+      const target = String(body?.targetLanguage || "zh").trim().slice(0, 16);
+
+      if (!text || text.length > 2000) {
+        return jsonResponse(
+          { error: { message: "文字長度錯誤" } },
+          400,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      if (!/^[A-Za-z-]{2,16}$/.test(target)) {
+        return jsonResponse(
+          { error: { message: "翻譯語言格式錯誤" } },
+          400,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translationUrl = String(env.TRANSLATION_API_URL || "").trim();
+      if (!translationUrl) {
+        return jsonResponse(
+          { error: { message: "Worker 尚未設定 TRANSLATION_API_URL" } },
+          503,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translationBody = new URLSearchParams({
+        q: text,
+        source: "auto",
+        target
+      });
+
+      const translationApiKey = String(
+        env.LIBRETRANSLATE_API_KEY || ""
+      ).trim();
+
+      if (translationApiKey) {
+        translationBody.set("api_key", translationApiKey);
+      }
+
+      let translationResponse;
+      try {
+        translationResponse = await fetch(translationUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: translationBody.toString()
+        });
+      } catch (_) {
+        return jsonResponse(
+          { error: { message: "翻譯服務目前無法連線" } },
+          502,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translatedData =
+        await translationResponse.json().catch(() => ({}));
+
+      if (!translationResponse.ok) {
+        return jsonResponse(
+          {
+            error: {
+              message:
+                String(
+                  translatedData?.error ||
+                  "第三方翻譯服務失敗"
+                ).slice(0, 240)
+            }
+          },
+          502,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      const translatedText = String(
+        translatedData?.translatedText || ""
+      ).trim();
+
+      if (!translatedText) {
+        return jsonResponse(
+          { error: { message: "翻譯服務沒有返回文字" } },
+          502,
+          origin,
+          allowedOrigin
+        );
+      }
+
+      return jsonResponse(
+        {
+          translatedText,
+          source: "libretranslate",
+          targetLanguage: target
+        },
+        200,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    if (
       request.method !==
       "GET"
     ) {
@@ -618,7 +845,7 @@ export default {
         {
           error: {
             message:
-              "只允許 GET"
+              "只允許 GET 或 POST /translate"
           }
         },
         405,
@@ -700,6 +927,24 @@ export default {
           }
         },
         401,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    if (await isGlobalFeatureDisabled(env, firebaseIdToken, "youtube_search")) {
+      return jsonResponse(
+        { error: { message: "YouTube 搜尋功能目前由系統管理員停用" } },
+        503,
+        origin,
+        allowedOrigin
+      );
+    }
+
+    if (await isUserFeatureBlocked(env, firebaseIdToken, firebaseUser.sub, "youtube_search")) {
+      return jsonResponse(
+        { error: { message: "你的帳號目前無法使用 YouTube 搜尋" } },
+        403,
         origin,
         allowedOrigin
       );

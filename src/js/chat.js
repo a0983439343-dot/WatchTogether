@@ -58,6 +58,16 @@ function user() {
   return value && !value.isAnonymous ? value : null;
 }
 
+async function isGlobalFeatureEnabled(feature) {
+  try {
+    var snap = await wt.db.ref("system/featureFlags/" + String(feature || "")).once("value");
+    return snap.val() !== false;
+  } catch (_) {
+    return true;
+  }
+}
+
+
 function privateId(a,b) {
   return [String(a),String(b)].sort().join("_");
 }
@@ -214,7 +224,9 @@ function listenRequests() {
 }
 
 async function sendFriendRequest(code) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!ensureLogin()) return;
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友功能");
   var me = user();
   code = String(code || "").trim().toUpperCase();
   if (!wt.FRIEND_CODE_RE.test(code)) throw new Error("ID 必須是 6 碼英數字");
@@ -244,6 +256,7 @@ async function sendFriendRequest(code) {
 }
 
 async function acceptRequest(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!ensureLogin()) return;
   var me = user();
   var requestRef = wt.db.ref("friendRequests/" + me.uid + "/" + uid);
@@ -268,12 +281,14 @@ async function acceptRequest(uid) {
 }
 
 async function declineRequest(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!ensureLogin()) return;
   await wt.db.ref("friendRequests/" + user().uid + "/" + uid).remove();
   wt.toast("已拒絕好友邀請");
 }
 
 async function removeFriendPlus(uid) {
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友功能");
   if (!ensureLogin()) return;
   var me = user();
   if (!window.confirm("確定要刪除這位好友嗎？")) return;
@@ -340,7 +355,10 @@ async function updateSummary(id,message,targetUid) {
 }
 
 async function sendMessagePayload(payload,targetUid) {
+  if (!(await isGlobalFeatureEnabled("chat"))) throw new Error("目前暫停使用聊天室");
+  if (!(await isGlobalFeatureEnabled("friends"))) throw new Error("目前暫停使用好友聊天");
   var me = user();
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("friends")) throw new Error("你的帳號目前無法使用好友聊天");
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("請先選擇好友");
   var conversationId = await ensureConversation(targetUid);
@@ -455,7 +473,9 @@ function blobToDataUrl(blob) {
 }
 
 async function uploadMediaBlob(blob,type,name,targetUid) {
+  if (!(await isGlobalFeatureEnabled("uploads"))) throw new Error("目前暫停使用檔案／圖片上傳");
   var me = user();
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("uploads")) throw new Error("你的帳號目前無法使用檔案／圖片上傳");
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("聊天對象不存在");
   var conversationId = privateId(me.uid,targetUid);
@@ -503,6 +523,7 @@ async function uploadMediaBlob(blob,type,name,targetUid) {
 }
 
 async function sendImageFile(file,targetUid) {
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("uploads")) throw new Error("你的帳號目前無法使用圖片上傳");
   targetUid = String(targetUid || state.activeUid || "");
   if (!targetUid) throw new Error("請先選擇好友");
   var prepared = await blobFromFile(file,8 * 1024 * 1024);
@@ -551,6 +572,8 @@ function mediaRecorderMime() {
 }
 
 async function toggleRecording() {
+  if (!(await isGlobalFeatureEnabled("uploads"))) { wt.toast("目前暫停使用語音上傳"); return; }
+  if (wt.isFeatureBlocked && await wt.isFeatureBlocked("uploads")) { wt.toast("你的帳號目前無法使用語音上傳"); return; }
   if (!ensureLogin() || !state.activeUid) {
     if (!state.activeUid) wt.toast("請先選擇好友");
     return;
@@ -1093,6 +1116,8 @@ function closeChat() {
 }
 
 async function openChat() {
+  if (!(await isGlobalFeatureEnabled("chat"))) { wt.toast("目前暫停使用聊天室"); return; }
+  if (!(await isGlobalFeatureEnabled("friends"))) { wt.toast("目前暫停使用好友聊天"); return; }
   buildModal();
   if(!ensureLogin()) return;
   var modal=$("wtChatCenter");
