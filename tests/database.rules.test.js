@@ -83,12 +83,12 @@ async function seed() {
           },
           permissionsByUid: {
             [USER_UID]: {
-              "chat.send": "deny"
+              "chat__send": "deny"
             }
           },
           restrictionsByUid: {
             [USER_UID]: {
-              "room.queue": {
+              "room__queue": {
                 enabled: true,
                 permanent: false,
                 until: Date.now() + 3600000,
@@ -101,7 +101,7 @@ async function seed() {
           }
         },
         featureFlags: {
-          "rooms.manage": {
+          "rooms__manage": {
             enabled: true,
             reason: "",
             updatedAt: Date.now(),
@@ -360,7 +360,7 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
   );
 });
 
-test("audit logs: admin can append but cannot modify or delete", async () => {
+test("audit logs: admin with audit.delete can append and delete but cannot modify", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs");
 
   await assertSucceeds(ref.push({
@@ -404,7 +404,7 @@ test("audit logs: admin can append but cannot modify or delete", async () => {
     })
   );
 
-  await assertFails(
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + existing).remove()
   );
 });
@@ -524,7 +524,7 @@ test("2.0 access control: server-side restriction and feature flag block room wr
   );
 });
 
-test("2.0 access control: audit.delete is master-only", async () => {
+test("2.0 access control: audit.delete follows the assigned permission", async () => {
   const ref = db(ADMIN_UID, adminToken).ref("admin/auditLogs").push();
   await assertSucceeds(ref.set({
     action: "delete-test",
@@ -536,12 +536,40 @@ test("2.0 access control: audit.delete is master-only", async () => {
     details: "delete test",
     createdAt: Date.now()
   }));
-  await assertFails(
+  await assertSucceeds(
     db(ADMIN_UID, adminToken).ref("admin/auditLogs/" + ref.key).remove()
   );
+
+  const viewerRef = db(VIEWER_UID, viewerToken).ref("admin/auditLogs").push();
+  await assertSucceeds(viewerRef.set({
+    action: "viewer-delete-test",
+    actorUid: VIEWER_UID,
+    actorEmail: "viewer@example.com",
+    actorRole: "viewer",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "viewer target",
+    createdAt: Date.now()
+  }));
+  await assertFails(
+    db(VIEWER_UID, viewerToken).ref("admin/auditLogs/" + viewerRef.key).remove()
+  );
+
+  const masterRef = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
+    .ref("admin/auditLogs").push();
+  await assertSucceeds(masterRef.set({
+    action: "master-delete-test",
+    actorUid: MASTER_UID,
+    actorEmail: MASTER_EMAIL,
+    actorRole: "master",
+    targetUid: USER_UID,
+    targetName: "User",
+    details: "master target",
+    createdAt: Date.now()
+  }));
   await assertSucceeds(
     db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true})
-      .ref("admin/auditLogs/" + ref.key).remove()
+      .ref("admin/auditLogs/" + masterRef.key).remove()
   );
 });
 
