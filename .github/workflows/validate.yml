@@ -159,7 +159,28 @@ jobs:
           BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
         run: |
           node - <<'NODE'
+          const fs = require("fs");
           const url = String(process.env.BUG_SERVICE_URL || "").replace(/\/+$/, "") + "/ai/analyze";
+          const raw = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "").trim();
+          if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is required for authenticated AI verification.");
+          const credentials = raw.startsWith("{") ? JSON.parse(raw) : JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+          const {cert, getApps, initializeApp} = require("firebase-admin/app");
+          const {getAuth} = require("firebase-admin/auth");
+          if (!getApps().length) initializeApp({credential: cert(credentials)});
+          const configText = fs.readFileSync("config/firebase-config.js", "utf8");
+          const keyStart = configText.indexOf("apiKey:");
+          const keyMatch = keyStart >= 0 ? configText.slice(keyStart + 7).match(/[\"']([^\"']+)[\"']/) : null;
+          const apiKey = String(keyMatch && keyMatch[1] || "").trim();
+          if (!apiKey) throw new Error("Firebase Web API key missing from config.");
+          const customToken = await getAuth().createCustomToken("35d45a23-b648-4caf-a6d5-a69112860551", {watchtogetherCi: true});
+          const tokenResponse = await fetch("https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=" + encodeURIComponent(apiKey), {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({token: customToken, returnSecureToken: true})
+          });
+          const tokenJson = await tokenResponse.json().catch(() => ({}));
+          if (!tokenResponse.ok || !tokenJson.idToken) throw new Error("Firebase CI token exchange failed: " + String(tokenJson && tokenJson.error && tokenJson.error.message || "").slice(0,300));
+          const idToken = String(tokenJson.idToken);
           const probeId = "ci-ai-endpoint-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
           const payload = JSON.stringify({
             phase: "detect",
@@ -191,7 +212,10 @@ jobs:
             try {
               const response = await fetch(url, {
                 method: "POST",
-                headers: {"Content-Type": "application/json"},
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer " + idToken
+                },
                 body: payload,
                 signal: controller.signal
               });
