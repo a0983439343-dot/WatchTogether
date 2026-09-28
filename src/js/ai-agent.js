@@ -186,6 +186,15 @@
   }
 
   async function run(prompt){
+    const globalDb=window.firebase?.database?.();
+    if(globalDb){
+      try{
+        const globalSnap=await globalDb.ref("system/featureFlags/ai_agent").once("value");
+        if(globalSnap.val()===false) throw new Error("目前暫停使用 AI Agent");
+      }catch(error){
+        if(error?.message==="目前暫停使用 AI Agent") throw error;
+      }
+    }
     const user=window.firebase?.auth?.().currentUser;
     if(!user || user.isAnonymous) throw new Error("請先登入 Google 帳號後使用 AI Agent");
     if(window.WT_ENHANCEMENTS?.isFeatureBlocked && await window.WT_ENHANCEMENTS.isFeatureBlocked("ai_agent")){
