@@ -254,12 +254,8 @@ function renderGlobalSearchResults(body,query){
       btn.onclick=async function(){
         try{
           if(!wt.openFriends)throw new Error("好友功能尚未準備完成");
-          await wt.openFriends();
-          setTimeout(function(){
-            var input=document.getElementById("wtChatFriendCode");
-            if(input){input.value=btn.dataset.globalAdd;input.dispatchEvent(new Event("input",{bubbles:true}));input.focus();}
-          },100);
-          toast("已帶入好友 ID");
+          await wt.openFriends(btn.dataset.globalAdd);
+          toast("已開啟好友搜尋");
         }catch(e){toast(e.message||"無法開啟好友功能");}
       };
     });
