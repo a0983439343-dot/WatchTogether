@@ -513,6 +513,8 @@ async function openRoomTools(){
 
 function ensureRoomTools(){
   var id=roomId(),copy=$("copyRoomBtn");if(!id||!copy)return;
+  if(!$("wtCurrentRoomFavoriteBtn")){var rf=document.createElement("button");rf.id="wtCurrentRoomFavoriteBtn";rf.className="tiny-btn";rf.type="button";copy.insertAdjacentElement("afterend",rf);rf.onclick=function(){var s=st(),rid=roomId();toggleRoomFavorite({id:rid,name:s.room?.name||$("roomTitle")?.textContent||"一起看",sourceType:s.room?.sourceType||"youtube",owner:s.room?.owner||""});renderRoomFavoriteButton(rf,{id:rid});};}
+  renderRoomFavoriteButton($("wtCurrentRoomFavoriteBtn"),{id:id});
   if(!$("wtRoomInviteBtn")){var b=document.createElement("button");b.id="wtRoomInviteBtn";b.className="tiny-btn";b.type="button";b.textContent="邀請";b.onclick=openInvite;copy.insertAdjacentElement("afterend",b);}
   if(!$("wtRoomReportBtn")){var c=document.createElement("button");c.id="wtRoomReportBtn";c.className="tiny-btn";c.type="button";c.textContent="回報";c.onclick=function(){openReport("room");};copy.insertAdjacentElement("afterend",c);}
   if(!$("wtRoomHostToolsBtn")){var h=document.createElement("button");h.id="wtRoomHostToolsBtn";h.className="tiny-btn";h.type="button";h.textContent="房主工具";h.onclick=openRoomTools;copy.insertAdjacentElement("afterend",h);}
