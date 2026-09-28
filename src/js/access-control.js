@@ -172,7 +172,16 @@
     const user = options.user || state.user;
     if (!user) return false;
     if (isMaster(user)) return true;
+
+    const adminScoped = /^(admin|users|audit)\\./.test(key) ||
+      key === "reports.manage" ||
+      key === "analytics.read" ||
+      key === "ai.use" ||
+      key === "ai.agent" ||
+      key === "rooms.manage";
+
     if (user.isAnonymous) {
+      if (adminScoped) return false;
       const flag = state.featureFlags[key];
       return normalizeFlag(flag);
     }
@@ -186,13 +195,6 @@
       const flag = state.featureFlags[key];
       return normalizeFlag(flag);
     }
-
-    const adminScoped = /^(admin|users|audit)\./.test(key) ||
-      key === "reports.manage" ||
-      key === "analytics.read" ||
-      key === "ai.use" ||
-      key === "ai.agent" ||
-      key === "rooms.manage";
 
     const role = normalizeRole(options.role || state.role);
     if (state.role) {
@@ -616,6 +618,11 @@
     getRoleSource: () => state.roleSource,
     getFeatureFlags: () => ({...state.featureFlags}),
     getSiteSettings: () => ({...state.siteSettings}),
+    isActiveRestriction,
+    isFeatureEnabled: permission => {
+      const key = String(permission || "").trim();
+      return key ? normalizeFlag(state.featureFlags[key]) : false;
+    },
     getPermissionCatalog
 
   };
