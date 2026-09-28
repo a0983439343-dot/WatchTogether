@@ -53,6 +53,9 @@ jobs:
       - name: Check expanded feature pack syntax
         run: node --check src/js/feature-pack.js
 
+      - name: Check feature completion syntax
+        run: node --check src/js/feature-completion.js
+
       - name: Check YouTube proxy syntax
         run: node --check youtube-proxy/server.js
 
