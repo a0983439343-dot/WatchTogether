@@ -1115,6 +1115,59 @@ test("blocks: blocked user cannot mutate their own higher-role block", async () 
   );
 });
 
+test("blocks: disabled accounts cannot write site data", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const user = db(USER_UID, userToken);
+
+  await assertSucceeds(master.ref("admin/blocksByUid/" + USER_UID).set({
+    uid: USER_UID,
+    email: "user@example.com",
+    displayName: "User",
+    permanent: false,
+    blockedUntil: Date.now() + 3600000,
+    blockedAt: Date.now(),
+    blockedByUid: MASTER_UID,
+    blockedByEmail: MASTER_EMAIL,
+    blockedByRole: "master"
+  }));
+
+  await assertFails(user.ref("rooms/ABC123").remove());
+
+  await assertFails(user.ref("chat/ABC123/blocked-message").set({
+    uid: USER_UID,
+    name: "User",
+    type: "text",
+    text: "blocked",
+    createdAt: Date.now()
+  }));
+
+  await assertFails(user.ref("queue/ABC123/blocked-queue").set({
+    id: "blocked-video",
+    platform: "youtube",
+    title: "Blocked",
+    thumbnail: "",
+    channel: "",
+    addedBy: USER_UID,
+    addedByName: "User",
+    addedAt: Date.now()
+  }));
+
+  await assertFails(user.ref("playback/ABC123").set({
+    action: "pause",
+    position: 0,
+    videoId: "video-1",
+    platform: "youtube",
+    issuedAt: Date.now(),
+    updatedAt: Date.now(),
+    updatedBy: USER_UID,
+    eventId: "blocked-playback",
+    playing: false,
+    playbackRate: 1
+  }));
+
+  await assertSucceeds(master.ref("admin/blocksByUid/" + USER_UID).remove());
+});
+
 test("blocks: master account cannot be blocked", async () => {
   await assertFails(
     db(ADMIN_UID, adminToken).ref("admin/blocksByUid/" + MASTER_UID).set({
