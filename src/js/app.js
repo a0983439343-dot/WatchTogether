@@ -11662,6 +11662,37 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     if (
+      !state.roomBansRef &&
+      state.roomId
+    ) {
+      state.roomBansRef =
+        db.ref(
+          "roomBans/" +
+          state.roomId
+        );
+
+      state.roomBansRef.on(
+        "value",
+        (snapshot) => {
+          state.roomBans =
+            snapshot.val() ||
+            {};
+
+          if (state.membersRef) {
+            state.membersRef.once(
+              "value"
+            ).then((memberSnapshot) => {
+              renderMembers(
+                memberSnapshot.val() ||
+                {}
+              );
+            }).catch(() => {});
+          }
+        }
+      );
+    }
+
+    if (
       !state.membersListenerAttached
     ) {
       state.membersRef.on(
@@ -11862,6 +11893,26 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 state.roomMutes?.[uid]
               );
 
+            const banned =
+              isActiveRoomBan(
+                state.roomBans?.[uid]
+              );
+
+            const banButton =
+              canModerateMember
+                ? (
+                  '<button type="button" class="tiny-btn" data-member-ban="' +
+                  escapeHtml(uid) +
+                  '" data-member-name="' +
+                  escapeHtml(name) +
+                  '" style="margin-left:6px;color:' +
+                  (banned ? "#86efac" : "#fda4af") +
+                  ';border-color:rgba(244,63,94,.2);">' +
+                  (banned ? "解除封鎖" : "封鎖") +
+                  "</button>"
+                )
+                : "";
+
             const muteButton =
               canModerateMember
                 ? (
@@ -11962,6 +12013,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                 ></span>
 
                 ${muteButton}
+                ${banButton}
                 ${kickButton}
 
               </div>
@@ -11981,6 +12033,24 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             async () => {
               await toggleRoomMute(
                 button.dataset.memberMute,
+                button.dataset.memberName
+              );
+            }
+          );
+        }
+      );
+
+    $("memberList")
+      .querySelectorAll(
+        "[data-member-ban]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              await toggleRoomBan(
+                button.dataset.memberBan,
                 button.dataset.memberName
               );
             }
