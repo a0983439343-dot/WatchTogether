@@ -2139,7 +2139,7 @@
             '<div><strong>' + escapeHtml(name.replace(/__/g, ".")) + '</strong><span class="small">' + escapeHtml(item?.reason || "—") + '</span></div>' +
             '<span class="status ' + (item?.enabled === false ? "off" : "admin") + '">' + (item?.enabled === false ? "關閉" : "啟用") + '</span>' +
             '<span class="small">' + escapeHtml(formatDate(item?.updatedAt)) + '</span>' +
-            (isMasterOperator() ? '<button class="btn danger" type="button" data-access-flag-delete="' + escapeHtml(name) + '">刪除</button>' : '') +
+            (currentCan("featureflags.manage") ? '<button class="btn danger" type="button" data-access-flag-delete="' + escapeHtml(name) + '">刪除</button>' : '') +
           '</div>'
         ).join("")
       : '<div class="muted">目前沒有 Feature Flag。</div>';
@@ -2333,8 +2333,8 @@
   }
 
   async function saveSystemSettings() {
-    if (!isMasterOperator()) {
-      throw new Error("只有最高管理員可以修改系統設定");
+    if (!currentCan("settings.manage")) {
+      throw new Error("目前管理員沒有系統設定權限");
     }
     const siteName = String($("systemSiteName")?.value || "").trim().slice(0,80);
     const siteDescription = String($("systemSiteDescription")?.value || "").trim().slice(0,300);
@@ -2587,7 +2587,7 @@
   }
 
   async function deleteAccessFeatureFlag(name) {
-    if (!isMasterOperator()) throw new Error("只有最高管理員可以刪除 Feature Flag");
+    if (!currentCan("featureflags.manage")) throw new Error("目前管理員沒有 Feature Flag 管理權限");
     const key = encodeAccessPermission(name);
     if (!key) return;
     if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
@@ -2605,7 +2605,7 @@
       chat: "chat.read",
       whitelist: "users.update",
       access: "admin.read",
-      settings: "__master__",
+      settings: "settings.manage",
       reports: "reports.read",
       analytics: "analytics.read",
       ai: "ai.use",
