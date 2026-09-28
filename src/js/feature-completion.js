@@ -298,7 +298,7 @@
   }
 
   async function openAccountManager() {
-    await loadOwnProfile();
+    await wt.loadOwnProfile?.();
     const u = currentUser();
     const anonymous = Boolean(u?.isAnonymous);
     const publicCode = String(state().profile?.publicCode || "").toUpperCase();
@@ -332,7 +332,7 @@
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt:"select_account" });
     const result = await u.linkWithPopup(provider);
-    await loadOwnProfile();
+    await wt.loadOwnProfile?.();
     toast("Google 已成功綁定，原帳號 UID 不變");
     if (result?.user) {
       closeModal("wtAccountManagerModal");
@@ -828,6 +828,6 @@
   function bridge(){const f=wt.pushNotification;if(typeof f!=="function"||f.__wtAccountV6)return;const g=function(){const r=f.apply(this,arguments);setTimeout(badge,0);return r};g.__wtAccountV6=true;wt.pushNotification=g}
   function init(){if(document.documentElement.dataset.wtAccountV6)return;document.documentElement.dataset.wtAccountV6="1";const activeAuth=auth();activeAuth?.onAuthStateChanged?.(()=>{profileLoadUid="";void loadOwnProfile();notifUid="";try{notifRef?.off()}catch(_){}notifRef=null;cloud={};bindUi();cloudWatch();badge()});void loadOwnProfile();const s=document.createElement("style");s.id="wtAccountV6Style";s.textContent=".wt-account-v6-card{width:min(920px,calc(100vw - 24px));max-height:90vh;overflow:auto}.wt-account-v6-head,.wt-account-v6-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.wt-account-v6-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.wt-account-v6-grid label{display:grid;gap:6px;font-size:12px}.wt-account-v6-grid input,.wt-account-v6-grid select{width:100%;box-sizing:border-box}.wt-account-v6-check{display:flex!important;align-items:center;gap:8px;padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:12px}.wt-account-v6-check input{width:auto!important}.wt-account-v6-list{display:grid;gap:8px;max-height:58vh;overflow:auto;margin-top:12px}.wt-account-v6-row{display:flex;width:100%;justify-content:space-between;gap:10px;padding:11px;border:1px solid rgba(148,163,184,.14);border-radius:12px;background:transparent;color:inherit;text-align:left}.wt-account-v6-row.unread{background:rgba(59,130,246,.07)}.wt-account-v6-row>div{display:grid;gap:3px}.wt-account-v6-row .small{display:block;word-break:break-word}.wt-account-v6-empty{text-align:center;padding:18px;color:#94a3b8}.wt-account-v6-note{margin-top:12px;padding:10px;border-radius:12px;background:rgba(59,130,246,.07);color:#94a3b8;font-size:11px}.wt-account-v6-compact .room-controls .control-btn,.wt-account-v6-compact .room-controls .volume{transform:scale(.94);transform-origin:left center}@media(max-width:650px){.wt-account-v6-grid{grid-template-columns:1fr}}";document.head.appendChild(s);bindUi();bridge();cloudWatch();document.documentElement.classList.toggle("wt-account-v6-compact",prefs().compactControls===true)}
   auth()?.onAuthStateChanged?.(()=>{notifUid="";try{notifRef?.off()}catch(_){}notifRef=null;cloud={};bindUi();cloudWatch();badge()});
-  wt.openSettings=openSettings;wt.openNotifications=openNotifications;wt.openCompleteSettings=openSettings;wt.openSyncedNotifications=openNotifications;wt.loadAccountSettings=cloudSettings;wt.updateNotificationBadge=badge;
+  wt.openSettings=openSettings;wt.openNotifications=openNotifications;wt.openCompleteSettings=openSettings;wt.openSyncedNotifications=openNotifications;wt.loadAccountSettings=cloudSettings;wt.loadOwnProfile=loadOwnProfile;wt.updateNotificationBadge=badge;
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
