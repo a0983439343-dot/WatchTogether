@@ -1904,6 +1904,38 @@ function runYoutubeSearch(query, maxResults, page) {
 }
 
 async function handleSearch(req, res, url) {
+  const token = getBearerToken(req);
+  if (!token) {
+    send(res, 401, JSON.stringify({
+      error: {
+        message: "YouTube 搜尋需要登入狀態"
+      }
+    }));
+    return;
+  }
+
+  let access;
+  try {
+    access = await resolveUserAccessPolicy(token);
+  } catch (error) {
+    console.error("[search-auth]", error?.message || error);
+    send(res, 401, JSON.stringify({
+      error: {
+        message: "YouTube 搜尋身分驗證失敗"
+      }
+    }));
+    return;
+  }
+
+  if (!resolveEffectivePermission(access, "youtube.search")) {
+    send(res, 403, JSON.stringify({
+      error: {
+        message: "你目前沒有使用 YouTube 搜尋的權限"
+      }
+    }));
+    return;
+  }
+
   const ip = getClientIp(req);
   if (!allowRate(ip, "search", SEARCH_LIMIT_PER_IP)) {
     send(res, 429, JSON.stringify({error:{message:"搜尋請求過於頻繁，請稍後再試"}}));
