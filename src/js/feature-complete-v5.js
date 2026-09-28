@@ -245,7 +245,7 @@
     captionData = null;
     captionCues = [];
     captionRoom = id;
-    captionRef = db.ref("roomCaptions/" + id");
+    captionRef = db.ref("roomCaptions/" + id);
     captionRef.on("value", snapshot => {
       const value = snapshot.val();
       captionData = value && typeof value === "object" ? value : null;
@@ -268,7 +268,7 @@
     }
     const cues = parseVtt(source);
     if (!cues.length) throw new Error("找不到有效的 WebVTT 字幕時間軸");
-    await db.ref("roomCaptions/" + id").set({
+    await db.ref("roomCaptions/" + id).set({
       text:source.slice(0, MAX_VTT_BYTES),
       label:String(label || "字幕").trim().slice(0,80) || "字幕",
       language:String(language || "zh-TW").trim().slice(0,20) || "zh-TW",
@@ -284,7 +284,7 @@
     if (!id || !db) return;
     if (!isRoomManager()) throw new Error("只有房主或 Co-host 可以刪除字幕");
     if (!window.confirm("確定移除這個房間的字幕嗎？")) return;
-    await db.ref("roomCaptions/" + id").remove();
+    await db.ref("roomCaptions/" + id).remove();
     captionData = null;
     captionCues = [];
     renderCaption("");
