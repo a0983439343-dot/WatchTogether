@@ -11,6 +11,7 @@
   let currentUser = null;
   let currentHasAdminAccess = false;
   let currentRole = null;
+  let currentRolePermissions = {};
   let accounts = {};
   let whitelist = {};
   let blocks = {};
@@ -79,8 +80,29 @@
   }
 
   async function resolveAdminRole(user) {
+    currentRolePermissions = {};
     if (!user || user.isAnonymous) return null;
     if (isMasterUser(user)) return "master";
+
+    try {
+      const assignedSnapshot = await db.ref("admin/access/roleByUid/" + user.uid).once("value");
+      const assignedRole = String(assignedSnapshot.val() || "").trim();
+      if (assignedRole) {
+        const roleSnapshot = await db.ref("admin/access/roles/" + assignedRole).once("value");
+        const definition = roleSnapshot.val();
+        if (definition && definition.permissions && typeof definition.permissions === "object") {
+          currentRolePermissions = Object.fromEntries(
+            Object.entries(definition.permissions).filter(([, enabled]) => enabled === true)
+          );
+          if (currentRolePermissions["admin.read"] === true || currentRolePermissions["*"] === true) {
+            return assignedRole;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("custom admin role resolve failed:", error);
+    }
+
     const snapshot = await db.ref("admin/whitelistByUid/" + user.uid).once("value");
     const item = snapshot.val();
     if (!item || item.uid !== user.uid || item.enabled !== true) return null;
@@ -1614,16 +1636,30 @@
 
   function currentCan(permission) {
     if (isMasterOperator()) return true;
-    try {
-      if (window.WT_ACCESS_CONTROL?.hasPermission?.(permission)) {
-        return true;
-      }
-    } catch (_) {}
-    if (permission === "admin.read") return Boolean(currentHasAdminAccess);
-    if (permission === "users.update" || permission === "users.restrict" || permission === "rooms.manage" || permission === "reports.manage" || permission === "audit.write") {
-      return currentRole === "admin";
+    const key = String(permission || "").trim();
+    if (currentRolePermissions[key] === true) return true;
+    if (currentRole === "admin") {
+      const adminDefaults = [
+        "admin.read","users.read","users.update","users.restrict",
+        "rooms.read","rooms.manage","chat.read","chat.moderate",
+        "reports.read","reports.manage","analytics.read","ai.use",
+        "audit.read","audit.write","sync.control","sync.manual",
+        "room.create","room.join","room.queue","chat.send","chat.media",
+        "chat.dm","youtube.search","youtube.queue","favorites.manage"
+      ];
+      return adminDefaults.includes(key);
     }
-    return currentHasAdminAccess;
+    if (currentRole === "viewer") {
+      return [
+        "admin.read","users.read","rooms.read","chat.read",
+        "reports.read","analytics.read","audit.read"
+      ].includes(key);
+    }
+    try {
+      return window.WT_ACCESS_CONTROL?.hasPermission?.(key) === true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function safeKey(value, max = 80) {
@@ -1816,6 +1852,16 @@
     renderAccessOverrides();
     renderAccessRestrictions();
     renderAccessFeatureFlags();
+    const master = isMasterOperator();
+    const canRestrict = currentCan("users.restrict");
+    [
+      "accessRoleId","accessRoleName","accessRolePermissions","accessRoleSaveBtn",
+      "accessAssignUid","accessAssignRole","accessAssignBtn",
+      "accessOverrideUid","accessOverridePermission","accessOverrideEffect","accessOverrideBtn",
+      "accessFlagName","accessFlagEnabled","accessFlagReason","accessFlagBtn"
+    ].forEach(id => { const el = $(id); if (el) el.disabled = !master; });
+    ["accessRestrictionUid","accessRestrictionPermission","accessRestrictionDuration","accessRestrictionReason","accessRestrictionBtn"]
+      .forEach(id => { const el = $(id); if (el) el.disabled = !canRestrict; });
     const select = $("accessAssignRole");
     if (select) {
       const options = Object.entries(accessRoles || {}).sort((a,b) => a[0].localeCompare(b[0]));
@@ -1993,12 +2039,12 @@
     if (master) {
       addPanel?.classList.remove("hidden");
       if (help) help.textContent = "到「登入帳號」查看使用者 UID，按「複製 UID」後貼到這裡；新增時可指定「管理員」或「觀察員」。";
-    } else if (currentRole === "admin") {
+    } else if (currentCan("users.update")) {
       addPanel?.classList.add("hidden");
-      if (help) help.textContent = "你目前是管理員，可管理使用者、封鎖帳號、刪除房間與控制房間；白名單由最高管理員管理。";
+      if (help) help.textContent = "你目前具備管理權限，可依自訂角色允許的功能操作；白名單與最高權限由最高管理員管理。";
     } else {
       addPanel?.classList.add("hidden");
-      if (help) help.textContent = "你目前是觀察員，僅可查看後台資料，不可修改使用者、封鎖帳號或刪除房間。";
+      if (help) help.textContent = "你目前是觀察型管理角色，僅可使用被授予的查看權限。";
     }
   }
 
@@ -2026,6 +2072,7 @@
       currentUser = user || null;
       currentHasAdminAccess = false;
       currentRole = null;
+      currentRolePermissions = {};
       if (reportScanTimer) {
         clearInterval(reportScanTimer);
         reportScanTimer = null;
