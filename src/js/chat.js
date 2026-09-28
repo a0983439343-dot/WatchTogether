@@ -71,6 +71,15 @@ async function requireDmPermission() {
   }
 }
 
+async function requireMediaPermission() {
+  var access = window.WT_ACCESS_CONTROL;
+  if (!access) return;
+  await access.waitUntilReady(2500);
+  if (access.state && access.state.ready && !access.hasPermission("chat.media")) {
+    throw new Error("你目前無法傳送圖片或語音");
+  }
+}
+
 function displayName() {
   return String(wt.currentName ? wt.currentName() : (wt.state.profile && wt.state.profile.displayName) || "玩家").slice(0,30);
 }
@@ -466,6 +475,7 @@ function blobToDataUrl(blob) {
 }
 
 async function uploadMediaBlob(blob,type,name,targetUid) {
+  await requireMediaPermission();
   var me = user();
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("聊天對象不存在");
