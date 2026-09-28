@@ -11032,9 +11032,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     const ownerUidAtSchedule =
       String(state.uid);
 
-    const members =
-      await getMembersOnce();
-
+    /*
+     * 重新確認仍然是同一個房間、同一個連線與同一個房主。
+     * 即使目前沒有其他在線成員，也必須設定 onDisconnect 清空 owner；
+     * 下一位重新加入的人會透過 transaction 自動接管。
+     */
     if (
       sequence !==
         Number(state.ownerFailoverSequence || 0) ||
@@ -11045,33 +11047,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         ownerUidAtSchedule ||
       !state.isOwner
     ) {
-      return;
-    }
-
-    const candidates =
-      Object.entries(
-        members || {}
-      )
-        .filter(
-          ([uid, member]) =>
-            uid !== state.uid &&
-            isMemberPresenceLive(member) &&
-            member &&
-            typeof member === "object"
-        )
-        .sort(
-          ([, a], [, b]) =>
-            (
-              Boolean(b?.online) -
-              Boolean(a?.online)
-            ) ||
-            (
-              Number(a?.joinedAt || 0) -
-              Number(b?.joinedAt || 0)
-            )
-        );
-
-    if (!candidates.length) {
       return;
     }
 
