@@ -294,6 +294,11 @@ function rememberVideo(video) {
 
 function toggleFavorite(video) {
   if (!video || !video.id) return;
+  var access = window.WT_ACCESS_CONTROL;
+  if (access && access.state && access.state.ready && !access.hasPermission("favorites.manage")) {
+    toast("你目前無法使用收藏功能");
+    return;
+  }
   var map = favoritesMap();
   var key = videoKey(video);
   if (map[key]) {
