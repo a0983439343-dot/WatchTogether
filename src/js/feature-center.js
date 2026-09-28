@@ -49,6 +49,7 @@ function injectCss(){
 
 function ensureTopbar(){
   var r=document.querySelector(".topbar-right");if(!r)return;var anchor=$("googleLoginBtn");
+  if(!$("wtFeatureSearchBtn")){var sb=document.createElement("button");sb.id="wtFeatureSearchBtn";sb.className="wt-nav-btn";sb.type="button";sb.textContent="🔎 搜尋";sb.title="站內搜尋";sb.addEventListener("click",openGlobalSearch);r.insertBefore(sb,anchor||null);}
   if(!$("wtFeatureNotificationBtn")){var w=document.createElement("span");w.className="wt-nav-wrap";w.innerHTML='<button id="wtFeatureNotificationBtn" class="wt-nav-btn" type="button" title="通知中心">🔔</button><span id="wtFeatureNotificationBadge" class="wt-notice-dot" style="display:none"></span>';w.firstElementChild.addEventListener("click",openNotifications);r.insertBefore(w,anchor||null);}
   if(!$("wtFeatureInviteBtn")){var iv=document.createElement("button");iv.id="wtFeatureInviteBtn";iv.className="wt-nav-btn";iv.type="button";iv.textContent="✉ 邀請";iv.addEventListener("click",openInvites);r.insertBefore(iv,anchor||null);}
   if(!$("wtFeatureStatsBtn")){var sc=document.createElement("button");sc.id="wtFeatureStatsBtn";sc.className="wt-nav-btn";sc.type="button";sc.textContent="📊 統計";sc.addEventListener("click",openStats);r.insertBefore(sc,anchor||null);}
@@ -117,6 +118,48 @@ function openFavorites(){
   var html='<div class="wt-feature-stat-grid"><div class="wt-feature-stat"><span class="small muted">觀看時間</span><strong>'+esc(fmtDur(s.watchSeconds))+'</strong></div><div class="wt-feature-stat"><span class="small muted">播放影片</span><strong>'+esc(s.videosStarted||0)+' 部</strong></div><div class="wt-feature-stat"><span class="small muted">加入房間</span><strong>'+esc(s.roomsJoined||0)+' 次</strong></div></div>';
   html+='<div class="wt-feature-list"><div class="wt-feature-row"><span>訊息數</span><strong>'+esc(s.messagesSent||0)+'</strong></div><div class="wt-feature-row"><span>收藏數</span><strong>'+esc(Object.keys(fav||{}).length)+'</strong></div><div class="wt-feature-row"><span>語言</span><strong>'+esc(lang)+'</strong></div><div class="wt-feature-row"><span>最近活動</span><strong>'+esc(fmtDate(s.lastAt))+'</strong></div></div>';
   modal("wtStatsModal","個人統計",html);
+}
+
+
+async function searchPublicUsers(query){
+  var q=String(query||"").trim().toLowerCase();
+  if(!q)return [];
+  var matches=[];
+  if(/^[a-z0-9]{6}$/i.test(q)){
+    var code=(await db.ref("profileCodes/"+q.toUpperCase()).once("value").catch(function(){return null;}))?.val();
+    if(code){
+      var p=(await db.ref("publicUsers/"+code).once("value").catch(function(){return null;}))?.val();
+      if(p)matches.push([String(code),p]);
+    }
+    return matches;
+  }
+  try{
+    var snap=await db.ref("publicUsers").orderByChild("searchName").startAt(q).endAt(q+"\\uf8ff").limitToFirst(30).once("value");
+    snap.forEach(function(child){var p=child.val();if(p&&matches.length<30)matches.push([child.key,p]);});
+  }catch(_){}
+  return matches;
+}
+
+function renderGlobalSearchResults(body,query){
+  var q=String(query||"").trim();
+  var recent=wt.readJson?wt.readJson("wt_recent_rooms_v2",[]):[];
+  if(!Array.isArray(recent))recent=[];
+  recent=recent.filter(function(x){return x&&String(x.id||"").toUpperCase().includes(q.toUpperCase())||String(x.name||"").toLowerCase().includes(q.toLowerCase());}).slice(0,10);
+  var roomHtml=recent.map(function(x){return '<div class="wt-feature-row"><div><strong>'+esc(x.name||"一起看")+'</strong><div class="small muted">房間 '+esc(String(x.id||"").toUpperCase())+'</div></div><button class="tiny-btn primary" data-global-room="'+esc(String(x.id||""))+'">加入</button></div>';}).join("");
+  return searchPublicUsers(q).then(function(users){
+    body.innerHTML='<div class="small muted">搜尋使用者、好友與最近房間。輸入 6 碼 ID 可直接查找。</div><div class="panel-title" style="margin-top:14px">使用者</div><div class="wt-feature-list">'+(users.length?users.map(function(x){var uid=x[0],p=x[1]||{};return '<div class="wt-feature-row"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:24px">'+esc(p.avatarEmoji||"🙂")+'</span><div><strong>'+esc(p.displayName||"玩家")+'</strong><div class="small muted">ID：'+esc(p.publicCode||"—")+'</div></div></div><button class="tiny-btn primary" data-global-add="'+esc(p.publicCode||"")+'">好友</button></div>';}).join(""):'<div class="wt-feature-empty">沒有找到使用者。</div>')+'</div><div class="panel-title" style="margin-top:16px">最近房間</div><div class="wt-feature-list">'+(roomHtml||'<div class="wt-feature-empty">沒有符合的最近房間。</div>')+'</div>';
+    body.querySelectorAll("[data-global-add]").forEach(function(btn){btn.onclick=async function(){try{if(!wt.openFriends)throw new Error("好友功能尚未準備完成");await wt.openFriends();setTimeout(function(){var input=document.getElementById("wtChatFriendCode");if(input){input.value=btn.dataset.globalAdd;input.dispatchEvent(new Event("input",{bubbles:true}));input.focus();}},100);toast("已帶入好友 ID");}catch(e){toast(e.message||"無法開啟好友功能");}};});
+    body.querySelectorAll("[data-global-room]").forEach(function(btn){btn.onclick=function(){location.href=location.pathname+"?room="+encodeURIComponent(btn.dataset.globalRoom);};});
+  });
+}
+
+function openGlobalSearch(){
+  var body=modal("wtGlobalSearchModal","站內搜尋",'<div class="wt-feature-actions" style="margin-top:0"><input id="wtGlobalSearchInput" class="search" type="search" maxlength="100" placeholder="搜尋使用者、好友或最近房間…" style="flex:1"><button id="wtGlobalSearchGo" class="primary-btn">搜尋</button></div><div id="wtGlobalSearchBody" class="wt-feature-list"><div class="wt-feature-empty">輸入關鍵字後開始搜尋。</div></div>');
+  var input=$("wtGlobalSearchInput"),results=$("wtGlobalSearchBody");
+  var run=function(){var q=String(input.value||"").trim();if(!q)return results.innerHTML='<div class="wt-feature-empty">請輸入搜尋內容。</div>';results.innerHTML='<div class="wt-feature-empty">搜尋中…</div>';renderGlobalSearchResults(results,q).catch(function(){results.innerHTML='<div class="wt-feature-empty">搜尋失敗，請稍後再試。</div>';});};
+  body.querySelector("#wtGlobalSearchGo").onclick=run;
+  input.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();run();}};
+  setTimeout(function(){input.focus();},30);
 }
 
 function openStatus(){
@@ -376,6 +419,6 @@ function init(){
   setInterval(installFriendRequestWatcher,5000);
   setInterval(installFriendshipWatcher,5000);
   setInterval(installRoomInviteWatcher,5000);
-}wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openStats=openStats;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
+}wt.openGlobalSearch=openGlobalSearch;wt.openSettings=openSettings;wt.openStatus=openStatus;wt.openStats=openStats;wt.openNotifications=openNotifications;wt.openFavorites=openFavorites;wt.openReport=openReport;wt.openInvite=openInvite;wt.openInvites=openInvites;wt.sendRoomInvite=sendRoomInvite;wt.pushNotification=pushNotification;
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
