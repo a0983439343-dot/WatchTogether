@@ -201,84 +201,32 @@ jobs:
           BUG_SERVICE_URL: https://watchtogether-youtube-proxy-2026.onrender.com
         run: |
           node - <<'NODE'
-          const url = String(process.env.BUG_SERVICE_URL || "").replace(/\/+$/, "") + "/ai/analyze";
-          const probeId = "ci-ai-endpoint-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-          const payload = JSON.stringify({
-            phase: "detect",
-            report: {
-              category: "other",
-              details: "CI live AI endpoint health check " + probeId,
-              fingerprint: probeId,
-              buildVersion: probeId,
-              source: "ci",
-              occurrences: 1,
-              createdAt: Date.now()
-            },
-            evidence: {
-              liveErrorPresent: false,
-              deployment: {
-                source: "github-actions"
-              }
-            },
-            current: {
-              healthy: true,
-              page: "https://a0983439343-dot.github.io/WatchTogether/"
-            }
-          });
+          const base = String(process.env.BUG_SERVICE_URL || "").replace(/\\/+$/, "");
+          const healthUrl = base + "/ai/health";
+          const analyzeUrl = base + "/ai/analyze";
 
-          let last = "";
-          for (let attempt = 1; attempt <= 3; attempt += 1) {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 20_000);
-            try {
-              const response = await fetch(url, {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: payload,
-                signal: controller.signal
-              });
-              const text = await response.text();
-              last = "HTTP " + response.status + " " + text.slice(0, 500);
-
-              let json = {};
-              try { json = JSON.parse(text); } catch (_) {}
-
-              if (
-                response.ok &&
-                json.ok === true &&
-                json.degraded !== true &&
-                json.analysis &&
-                /^gemini-(?:3\.|2\.5-)/.test(String(json.model || ""))
-              ) {
-                console.log("Bug AI endpoint verified with live Gemini:", last);
-                process.exit(0);
-              }
-
-              if (
-                response.ok &&
-                json.ok === true &&
-                json.degraded === true &&
-                /quota|rate limit|resource exhausted|exceeded your current quota|daily quota/i.test(
-                  String(json.reason || json.analysis?.summary || "")
-                )
-              ) {
-                console.warn("Bug AI endpoint is reachable, but Gemini quota is exhausted; live AI verification is deferred.");
-                console.warn(last);
-                process.exit(0);
-              }
-            } catch (error) {
-              last = String(error?.message || error);
-            } finally {
-              clearTimeout(timeout);
-            }
-
-            if (attempt < 3) {
-              console.log("Bug AI endpoint not ready, retry " + attempt + "/3:", last);
-              await new Promise(resolve => setTimeout(resolve, 10_000));
-            }
+          const healthResponse = await fetch(healthUrl, {method: "GET"});
+          const healthText = await healthResponse.text();
+          let health = {};
+          try { health = JSON.parse(healthText); } catch (_) {}
+          if (!healthResponse.ok || health.ok !== true || health.provider !== "gemini" || !/^gemini-(?:3\\.|2\\.5-)/.test(String(health.model || ""))) {
+            throw new Error("Bug AI health verification failed: HTTP " + healthResponse.status + " " + healthText.slice(0, 500));
           }
+          console.log("Bug AI service health verified:", JSON.stringify({ok:health.ok, provider:health.provider, model:health.model, repairModel:health.repairModel, configuredKeys:health.configuredKeys}));
 
-          throw new Error("Bug AI endpoint verification failed after 3 attempts: " + last);
+          const probeId = "ci-ai-auth-gate-" + Date.now();
+          const response = await fetch(analyzeUrl, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({phase:"detect",report:{category:"other",details:"CI authentication gate probe " + probeId,fingerprint:probeId,buildVersion:probeId,source:"ci",occurrences:1,createdAt:Date.now()},evidence:{liveErrorPresent:false},current:{healthy:true}}
+          });
+          const text = await response.text();
+          let json = {};
+          try { json = JSON.parse(text); } catch (_) {}
+          if (response.status !== 401 || json.error !== "missing_auth_token") {
+            throw new Error("Bug AI authentication gate verification failed: HTTP " + response.status + " " + text.slice(0, 500));
+          }
+          console.log("Bug AI authentication gate verified: unauthenticated analyze requests are rejected.");
           NODE
 
       - name: Deploy validated Firebase Realtime Database Rules
