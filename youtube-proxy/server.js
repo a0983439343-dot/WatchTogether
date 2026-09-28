@@ -133,6 +133,113 @@ function resolveEffectivePermission(basePermissions, overrides, restrictions, pe
   return basePermissions.has("*") || basePermissions.has(key);
 }
 
+let firebaseServiceAccessToken = "";
+let firebaseServiceAccessTokenExpiresAt = 0;
+
+function getFirebaseServiceAccount() {
+  let value = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "").trim();
+  if (value) {
+    try {
+      const parsed = JSON.parse(value);
+      return {
+        clientEmail: String(parsed.client_email || "").trim(),
+        privateKey: String(parsed.private_key || "").replace(/\\n/g, "\n"),
+        tokenUri: String(parsed.token_uri || "https://oauth2.googleapis.com/token").trim()
+      };
+    } catch (_) {}
+  }
+
+  return {
+    clientEmail: String(process.env.FIREBASE_SERVICE_ACCOUNT_EMAIL || "").trim(),
+    privateKey: String(process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+    tokenUri: String(process.env.FIREBASE_SERVICE_ACCOUNT_TOKEN_URI || "https://oauth2.googleapis.com/token").trim()
+  };
+}
+
+function base64UrlJson(value) {
+  return Buffer.from(JSON.stringify(value))
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function getFirebaseServiceAccessToken() {
+  if (
+    firebaseServiceAccessToken &&
+    firebaseServiceAccessTokenExpiresAt > Date.now() + 60_000
+  ) {
+    return firebaseServiceAccessToken;
+  }
+
+  const account = getFirebaseServiceAccount();
+  if (!account.clientEmail || !account.privateKey) {
+    throw new Error("firebase_service_account_not_configured");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const assertionHeader = base64UrlJson({alg:"RS256",typ:"JWT"});
+  const assertionClaim = base64UrlJson({
+    iss: account.clientEmail,
+    scope: "https://www.googleapis.com/auth/firebase.database",
+    aud: account.tokenUri,
+    iat: now,
+    exp: now + 3600
+  });
+  const signer = crypto.createSign("RSA-SHA256");
+  signer.update(assertionHeader + "." + assertionClaim);
+  signer.end();
+  const signature = signer.sign(account.privateKey)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  const assertion = assertionHeader + "." + assertionClaim + "." + signature;
+
+  const response = await fetch(account.tokenUri, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.access_token) {
+    throw new Error(
+      String(data?.error_description || data?.error || "firebase_service_token_failed").slice(0, 300)
+    );
+  }
+
+  firebaseServiceAccessToken = String(data.access_token);
+  firebaseServiceAccessTokenExpiresAt =
+    Date.now() + Math.max(60, Number(data.expires_in || 3600)) * 1000;
+  return firebaseServiceAccessToken;
+}
+
+async function firebaseAdminPatch(updates) {
+  const token = await getFirebaseServiceAccessToken();
+  const response = await fetch(MAINTENANCE_DATABASE_URL + ".json", {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(updates)
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(
+      String(data?.error || "firebase_admin_patch_failed").slice(0, 300)
+    );
+    error.httpStatus = response.status;
+    throw error;
+  }
+  return data;
+}
+
 async function firebaseRestGet(pathname, token) {
   const cleanPath = String(pathname || "").replace(/^\/+|\/+$/g, "");
   const response = await fetch(
@@ -377,20 +484,14 @@ async function handleAdminMaintenance(req, res) {
   };
 
   try {
-    const response = await fetch(MAINTENANCE_DATABASE_URL + ".json", {
-      method: "PATCH",
-      headers: {
-        Authorization: "Bearer " + token,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(updates)
-    });
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      send(res, 403, JSON.stringify({
+    let data;
+    try {
+      data = await firebaseAdminPatch(updates);
+    } catch (error) {
+      console.error("[admin-maintenance-write]", error?.message || error);
+      send(res, 503, JSON.stringify({
         ok:false,
-        error:String(data?.error || "maintenance_update_denied").slice(0, 300)
+        error:String(error?.message || "maintenance_update_failed").slice(0, 300)
       }));
       return;
     }
