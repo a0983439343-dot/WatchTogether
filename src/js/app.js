@@ -7708,6 +7708,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     const isExistingMember =
       currentMemberSnapshot.exists();
 
+    const isRoomOwner =
+      actualOwnerUid ===
+      String(
+        state.uid ||
+        ""
+      );
+
     let isRoomInvite = false;
     const inviteId =
       String(
@@ -7761,13 +7768,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         );
       }
     }
-
-    const isRoomOwner =
-      actualOwnerUid ===
-      String(
-        state.uid ||
-        ""
-      );
 
     if (
       !state.adminJoinOverride &&
