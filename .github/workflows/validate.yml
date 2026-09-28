@@ -135,6 +135,9 @@ jobs:
           if (!sw.includes('./src/js/feature-complete-v3.js')) throw new Error('Feature completion v3 is not precached.');
           if (!index.includes('feature-complete-v3.js')) throw new Error('Feature completion v3 is not loaded by the frontend.');
           if (!featureV3.includes('watchHistory') || !featureV3.includes('watchStats') || !featureV3.includes('notifications') || !featureV3.includes('presence') || !featureV3.includes('userSettings')) throw new Error('Feature completion v3 cloud layers are incomplete.');
+          const completion = fs.readFileSync('src/js/feature-completion.js', 'utf8');
+          if (!completion.includes('sessions/') || !completion.includes('openSessionManager')) throw new Error('Cross-device session management is missing.');
+          if (!rules.includes('"sessions"')) throw new Error('Session security rules are missing.');
 
           if (!app.includes('requestPlaybackControl(')) throw new Error('Member playback request function missing.');
           if (!app.includes('attachPlaybackControlRequestListener(')) throw new Error('Owner control-request listener missing.');
