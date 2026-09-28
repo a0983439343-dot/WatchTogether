@@ -4132,6 +4132,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                     : ""
                 }
 
+                ${isRoomManager() ? `
+                  <button type="button" class="tiny-btn" data-queue-up="${escapeHtml(item.queueId)}" ${index === 0 ? "disabled" : ""}>↑</button>
+                  <button type="button" class="tiny-btn" data-queue-down="${escapeHtml(item.queueId)}" ${index === list.length - 1 ? "disabled" : ""}>↓</button>
+                ` : ""}
+
               </div>
 
             </div>
