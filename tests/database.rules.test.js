@@ -67,14 +67,14 @@ async function seed() {
             custom: {
               name: "自訂測試角色",
               permissions: {
-                "admin.read": true,
-                "users.read": true,
-                "users.update": true,
-                "users.restrict": true,
-                "reports.read": true,
-                "reports.manage": true,
-                "audit.read": true,
-                "audit.write": true
+                admin__read: true,
+                users__read: true,
+                users__update: true,
+                users__restrict: true,
+                reports__read: true,
+                reports__manage: true,
+                audit__read: true,
+                audit__write: true
               }
             }
           },
