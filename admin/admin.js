@@ -736,7 +736,7 @@
       action:"audit.delete",
       actorUid:String(currentUser?.uid || "").slice(0,128),
       actorEmail:String(currentUser?.email || "").slice(0,320),
-      actorRole:String(currentRole || "").slice(0,20),
+      actorRole:String(currentRole || "").slice(0,80),
       targetUid:String(item.targetUid || "").slice(0,128),
       targetName:String(item.targetName || "操作紀錄").slice(0,200),
       details:"刪除操作紀錄 " + key + "（原操作：" + label + "）".slice(0,1000),
@@ -771,7 +771,7 @@
           const label = AUDIT_ACTION_LABELS[action] || action;
           const actor = String(item.actorEmail || item.actorUid || "—");
           const target = String(item.targetName || item.targetUid || "—");
-          const canDelete = currentRole === "master";
+          const canDelete = currentCan("audit.delete") && currentCan("audit.write");
           return '<tr>' +
             '<td><span class="small">' + escapeHtml(formatDate(item.createdAt)) + '</span></td>' +
             '<td><div class="primary-text">' + escapeHtml(actor) + '</div><span class="small">' + escapeHtml(item.actorRole || "") + '</span></td>' +
