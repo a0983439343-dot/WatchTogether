@@ -749,12 +749,23 @@
 
   function renderAuditLogs() {
     const query = String($("auditSearch")?.value || "").trim().toLowerCase();
+    const userQuery = String($("auditUserFilter")?.value || "").trim().toLowerCase();
     const filter = String($("auditActionFilter")?.value || "all");
+    const startValue = String($("auditStartFilter")?.value || "").trim();
+    const endValue = String($("auditEndFilter")?.value || "").trim();
+    const startAt = startValue ? new Date(startValue).getTime() : 0;
+    const endAt = endValue ? new Date(endValue).getTime() : 0;
     const rows = Object.entries(auditLogs || {})
       .filter(([id,item]) => {
         if (!item || typeof item !== "object") return false;
         const action = String(item.action || "other");
+        const createdAt = Number(item.createdAt || 0);
         if (filter !== "all" && action !== filter) return false;
+        if (userQuery && ![
+          item.actorEmail,item.actorUid,item.actorRole
+        ].join(" ").toLowerCase().includes(userQuery)) return false;
+        if (startAt && (!createdAt || createdAt < startAt)) return false;
+        if (endAt && (!createdAt || createdAt > endAt)) return false;
         const hay = [
           id,item.actorEmail,item.actorUid,item.actorRole,
           item.targetName,item.targetUid,item.details,
@@ -2472,6 +2483,9 @@
     });
 
     $("auditSearch")?.addEventListener("input", renderAuditLogs);
+    $("auditUserFilter")?.addEventListener("input", renderAuditLogs);
+    $("auditStartFilter")?.addEventListener("change", renderAuditLogs);
+    $("auditEndFilter")?.addEventListener("change", renderAuditLogs);
     $("auditActionFilter")?.addEventListener("change", renderAuditLogs);
     $("auditRefreshBtn")?.addEventListener("click", () => loadAuditLogs().then(() => toast("已重新整理")).catch(() => toast("重新整理失敗")));
 
