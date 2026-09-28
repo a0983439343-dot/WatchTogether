@@ -31,12 +31,31 @@ function roomFavorites(){try{var x=JSON.parse(localStorage.getItem(ROOM_FAV_KEY)
 function saveRoomFavorites(x){try{localStorage.setItem(ROOM_FAV_KEY,JSON.stringify(x||{}));}catch(_){}}
 function roomFavoriteKey(x){return String(x&& (x.id||x.roomId) || "").trim().toUpperCase();}
 function isRoomFavorite(x){var k=roomFavoriteKey(x);return Boolean(k&&roomFavorites()[k]);}
+async function loadRoomFavoritesFromCloud(){
+  var u=user();
+  if(!u||u.isAnonymous||!db)return;
+  try{
+    var snap=await db.ref("roomFavorites/"+u.uid).once("value");
+    var remote=snap.val()||{},local=roomFavorites(),merged=Object.assign({},remote,local);
+    if(JSON.stringify(remote)!==JSON.stringify(merged)){
+      var up={};Object.keys(local).forEach(function(k){up[k]=local[k];});
+      if(Object.keys(up).length)await db.ref("roomFavorites/"+u.uid).update(up).catch(function(){});
+    }
+    saveRoomFavorites(merged);
+  }catch(e){console.warn("房間收藏雲端同步失敗",e);}
+}
 function toggleRoomFavorite(x){
   var k=roomFavoriteKey(x);if(!k)return false;
-  var map=roomFavorites();
-  if(map[k]){delete map[k];saveRoomFavorites(map);toast("已取消房間收藏");return false;}
+  var map=roomFavorites(),was=Boolean(map[k]);
+  if(was){
+    delete map[k];saveRoomFavorites(map);
+    var u=user();if(u&&!u.isAnonymous&&db)void db.ref("roomFavorites/"+u.uid+"/"+k).remove().catch(function(e){console.warn("房間收藏雲端刪除失敗",e);});
+    toast("已取消房間收藏");return false;
+  }
   map[k]={id:k,name:String(x?.name||x?.roomName||"一起看").slice(0,40),sourceType:String(x?.sourceType||"youtube").slice(0,30),owner:String(x?.owner||"").slice(0,128),savedAt:Date.now()};
-  saveRoomFavorites(map);toast("已收藏房間");return true;
+  saveRoomFavorites(map);
+  var u2=user();if(u2&&!u2.isAnonymous&&db)void db.ref("roomFavorites/"+u2.uid+"/"+k).set(map[k]).catch(function(e){console.warn("房間收藏雲端寫入失敗",e);});
+  toast("已收藏房間");return true;
 }
 function renderRoomFavoriteButton(button,x){
   if(!button)return;
@@ -637,6 +656,9 @@ function init(){
   installRoomInviteWatcher();
   if(auth)auth.onAuthStateChanged(function(current){
     recordLogin(current);
+    if (current && !current.isAnonymous) {
+      void loadRoomFavoritesFromCloud();
+    }
     if (!current) {
       try { window.__WT_FRIENDSHIP_WATCHER_REF?.off(); } catch (_) {}
       try { window.__WT_ROOM_INVITE_WATCHER_REF?.off(); } catch (_) {}
