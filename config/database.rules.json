@@ -250,6 +250,12 @@
             },
             "schedules": {
               ".validate": "newData.isBoolean()"
+            },
+            "youtube_search": {
+              ".validate": "newData.isBoolean()"
+            },
+            "translation": {
+              ".validate": "newData.isBoolean()"
             }
           },
           "reason": {
