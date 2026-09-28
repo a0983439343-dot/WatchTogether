@@ -730,8 +730,11 @@
     return result;
   }
 
-  async function writeReportHistory(id,event,details) {
-    if (!id || !currentUser) return;
+  async function writeReportHistory(id,event,details,source = "admin") {
+    if (!id || !currentUser) return false;
+    const allowedSource = ["watchdog","admin","autonomous_repair"].includes(String(source || "").trim())
+      ? String(source).trim()
+      : "admin";
     try {
       await db.ref("reportHistoryEvents/" + id).push({
         reportId:String(id).slice(0,128),
@@ -739,11 +742,13 @@
         createdAt:firebase.database.ServerValue.TIMESTAMP,
         actorUid:currentUser.uid,
         actorEmail:currentUser.email || "",
-        source:"admin",
+        source:allowedSource,
         details:String(details || "").slice(0,500)
       });
+      return true;
     } catch (error) {
       console.warn("report history write failed",error);
+      return false;
     }
   }
 
@@ -804,7 +809,7 @@
       createdAt:firebase.database.ServerValue.TIMESTAMP,
       verificationState:"failed"
     });
-    await writeReportHistory(id,"scanner_detected","系統網站掃描發現：" + String(finding.name || "unknown"));
+    await writeReportHistory(id,"scanner_detected","系統網站掃描發現：" + String(finding.name || "unknown"),"watchdog");
     return id;
   }
 
