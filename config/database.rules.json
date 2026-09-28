@@ -468,6 +468,25 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['uid','role','updatedAt','updatedByUid']) && newData.child('uid').isString() && newData.child('uid').val() === $uid && newData.child('role').isString() && ((newData.child('role').val() === 'member') || (newData.child('role').val() === 'cohost' && root.child('members').child($roomId).child($uid).exists())) && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid)"
         }
       }
+    },
+    "roomInvites": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$inviteId": {
+          ".write": "auth != null && (((!data.exists() && newData.exists()) && (auth.uid === root.child('rooms').child(newData.child('roomId').val()).child('owner').val() || root.child('roomRoles').child(newData.child('roomId').val()).child(auth.uid).child('role').val() === 'cohost' || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') && newData.child('toUid').val() === $uid) || (data.exists() && auth.uid === $uid && newData.exists() && (newData.child('status').val() === 'accepted' || newData.child('status').val() === 'declined')) || (data.exists() && auth.uid === $uid && !newData.exists()))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['inviteId','roomId','roomName','toUid','fromUid','fromName','createdAt','status']) && newData.child('inviteId').isString() && newData.child('inviteId').val() === $inviteId && newData.child('inviteId').val().length <= 128 && newData.child('roomId').isString() && newData.child('roomId').val().length === 6 && root.child('rooms').child(newData.child('roomId').val()).exists() && newData.child('roomName').isString() && newData.child('roomName').val().length > 0 && newData.child('roomName').val().length <= 40 && newData.child('toUid').isString() && newData.child('toUid').val() === $uid && newData.child('fromUid').isString() && newData.child('fromUid').val().length > 0 && newData.child('fromUid').val().length <= 128 && newData.child('fromName').isString() && newData.child('fromName').val().length > 0 && newData.child('fromName').val().length <= 30 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 120000 && newData.child('status').isString() && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'accepted' || newData.child('status').val() === 'declined' || newData.child('status').val() === 'expired') && (!newData.child('link').exists() || (newData.child('link').isString() && newData.child('link').val().length <= 2000)))"
+        }
+      }
+    },
+    "roomMutes": {
+      "$roomId": {
+        ".read": "auth != null && (root.child('members').child($roomId).child(auth.uid).exists() || auth.uid === root.child('rooms').child($roomId).child('owner').val() || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomRoles').child($roomId).child(auth.uid).child('role').val() === 'cohost' || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          ".write": "auth != null && (auth.uid === root.child('rooms').child($roomId).child('owner').val() || root.child('roomRoles').child($roomId).child(auth.uid).child('role').val() === 'cohost' || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid','until','permanent','updatedAt','updatedByUid']) && newData.child('uid').isString() && newData.child('uid').val() === $uid && newData.child('until').isNumber() && newData.child('until').val() >= 0 && newData.child('permanent').isBoolean() && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 120000 && newData.child('updatedByUid').isString() && newData.child('updatedByUid').val() === auth.uid)"
+        }
+      }
     }
   }
 }
