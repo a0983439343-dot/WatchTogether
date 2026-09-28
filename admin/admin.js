@@ -2162,13 +2162,13 @@
     hint.textContent = active
       ? "原因：" + String(item.reason || "未提供") + " · 預計恢復：" + (Number(item.restoreAt || 0) > 0 ? formatDate(item.restoreAt) : "未設定")
       : "目前沒有啟用網站維護模式。";
-    const canManageMaintenance = currentCan("maintenance.manage");
+    const canManageMaintenance = currentCan("maintenance.manage") && currentCan("audit.write");
     if (openBtn) openBtn.disabled = !canManageMaintenance || active;
     if (closeBtn) closeBtn.disabled = !canManageMaintenance || !active;
   }
 
   async function setSiteMaintenance(enabled) {
-    if (!currentCan("maintenance.manage")) throw new Error("目前管理員沒有網站維護權限");
+    if (!currentCan("maintenance.manage") || !currentCan("audit.write")) throw new Error("需要 maintenance.manage 與 audit.write 權限");
     const passwordEl = $("maintenancePassword");
     const reasonEl = $("maintenanceReason");
     const restoreEl = $("maintenanceRestoreAt");
@@ -2282,7 +2282,7 @@
     if (announcementEnabled) announcementEnabled.checked = current.announcementEnabled;
     if (announcementText) announcementText.value = current.announcementText;
 
-    const canManage = currentCan("settings.manage");
+    const canManage = currentCan("settings.manage") && currentCan("audit.write");
     [name,description,announcementEnabled,announcementText,$("systemSettingsSaveBtn")]
       .filter(Boolean)
       .forEach(el => { el.disabled = !canManage; });
@@ -2334,7 +2334,7 @@
 
   async function saveSystemSettings() {
     if (!currentCan("settings.manage")) {
-      throw new Error("目前管理員沒有系統設定權限");
+      throw new Error("需要 settings.manage 與 audit.write 權限");
     }
     const siteName = String($("systemSiteName")?.value || "").trim().slice(0,80);
     const siteDescription = String($("systemSiteDescription")?.value || "").trim().slice(0,300);
@@ -2391,7 +2391,7 @@
     renderMaintenanceControl();
     const master = isMasterOperator();
     const canRestrict = currentCan("users.restrict");
-    const canManageFlags = currentCan("featureflags.manage");
+    const canManageFlags = currentCan("featureflags.manage") && currentCan("audit.write");
     [
       "accessRoleId","accessRoleName","accessRolePermissions","accessRoleSaveBtn",
       "accessAssignUid","accessAssignRole","accessAssignBtn",
@@ -2570,7 +2570,7 @@
   }
 
   async function saveAccessFeatureFlag() {
-    if (!currentCan("featureflags.manage")) throw new Error("目前管理員沒有 Feature Flag 管理權限");
+    if (!currentCan("featureflags.manage") || !currentCan("audit.write")) throw new Error("需要 featureflags.manage 與 audit.write 權限");
     const name = encodeAccessPermission($("accessFlagName")?.value);
     const enabled = $("accessFlagEnabled")?.value !== "false";
     const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
@@ -2590,7 +2590,7 @@
   }
 
   async function deleteAccessFeatureFlag(name) {
-    if (!currentCan("featureflags.manage")) throw new Error("目前管理員沒有 Feature Flag 管理權限");
+    if (!currentCan("featureflags.manage") || !currentCan("audit.write")) throw new Error("需要 featureflags.manage 與 audit.write 權限");
     const key = encodeAccessPermission(name);
     if (!key) return;
     if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
