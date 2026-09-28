@@ -167,9 +167,22 @@
   async function ensureSessionTracking() {
     const u = currentUser();
     const database = db();
-    if (!u || u.isAnonymous || !database) return;
+    if (!u || u.isAnonymous || !database) {
+      if (sessionRef) {
+        try { sessionRef.off(); } catch (_) {}
+      }
+      sessionRef = null;
+      sessionListenerAttached = false;
+      return;
+    }
+    if (sessionRef && sessionRef.__wtSessionUid !== u.uid) {
+      try { sessionRef.off(); } catch (_) {}
+      sessionRef = null;
+      sessionListenerAttached = false;
+    }
     const sid = getSessionId();
     const ref = database.ref("sessions/" + u.uid + "/" + sid);
+    ref.__wtSessionUid = u.uid;
     sessionRef = ref;
     try {
       const snapshot = await ref.once("value");
