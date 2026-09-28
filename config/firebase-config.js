@@ -13,6 +13,7 @@ window.WATCHTOGETHER_CONFIG = {
   youtubeSearchProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/search",
   youtubeStreamProxyUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   aiBugDetectorUrl: "https://watchtogether-youtube-proxy-2026.onrender.com/ai/analyze",
+  adminControlUrl: "https://watchtogether-youtube-proxy-2026.onrender.com",
   dailymotionPlayerId: "",
   adminEmail: "a0983439343@gmail.com"
 };
