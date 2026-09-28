@@ -13099,6 +13099,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     try {
       state.membersRef?.off();
       state.roomMutesRef?.off();
+      state.roomBansRef?.off();
       state.kickedRef?.off();
       state.roomVolumeRef?.off();
       state.roomMetaSettingsRef?.off();
@@ -13180,6 +13181,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     state.playbackLocalControlUntil =
       0;
+
+    state.roomMutesRef = null;
+    state.roomBansRef = null;
+    state.roomMutes = {};
+    state.roomBans = {};
 
     state.membersListenerAttached =
       false;
