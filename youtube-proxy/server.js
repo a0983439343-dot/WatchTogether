@@ -2223,13 +2223,15 @@ async function authorizeSearchRequest(req) {
   let override;
   let assignedRole;
   let whitelist;
+  let block;
   try {
-    [restriction, flag, override, assignedRole, whitelist] = await Promise.all([
+    [restriction, flag, override, assignedRole, whitelist, block] = await Promise.all([
       fetchFirebaseJson(restrictionPath,idToken),
       fetchFirebaseJson("admin/featureFlags/youtube__search",idToken),
       fetchFirebaseJson(overridePath,idToken),
       fetchFirebaseJson("admin/access/roleByUid/" + encodeURIComponent(uid),idToken),
-      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken)
+      fetchFirebaseJson("admin/whitelistByUid/" + encodeURIComponent(uid),idToken),
+      fetchFirebaseJson("admin/blocksByUid/" + encodeURIComponent(uid),idToken)
     ]);
   } catch (error) {
     return {
@@ -2245,6 +2247,19 @@ async function authorizeSearchRequest(req) {
     String(user.email || "").trim().toLowerCase() === "a0983439343@gmail.com";
 
   if (isMaster) return {ok:true,user};
+
+  if (block && typeof block === "object" && (
+    block.permanent === true ||
+    Number(block.blockedUntil || 0) === 0 ||
+    Number(block.blockedUntil || 0) > Date.now()
+  )) {
+    return {
+      ok:false,
+      status:403,
+      error:"user_blocked",
+      message:"目前帳號已被停用。"
+    };
+  }
 
   if (isActivePolicy(restriction)) {
     return {
