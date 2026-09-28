@@ -350,6 +350,7 @@
 
     const next = [current].concat(list.filter(x => favoriteKey(x) !== key)).slice(0,50);
     writeJson(HISTORY_KEY, next);
+    writeJson("wt_watch_history_v1", next);
     lastHistoryWrite = now;
     lastVideoKey = key;
   }
