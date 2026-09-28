@@ -166,6 +166,14 @@ async function seed() {
             lastSeen: 1
           }
         }
+      },
+      friendships: {
+        [USER_UID]: {
+          [OTHER_UID]: {since: 1}
+        },
+        [OTHER_UID]: {
+          [USER_UID]: {since: 1}
+        }
       }
     });
   });
@@ -707,6 +715,56 @@ test("2.0 access control: room.join restriction and feature flag block membershi
   }));
 
   await assertSucceeds(master.ref("admin/featureFlags/room__join").remove());
+});
+
+test("2.0 access control: chat.dm restriction and feature flag block private-chat writes", async () => {
+  const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
+  const other = db(OTHER_UID, {
+    email: "other@example.com",
+    email_verified: true
+  });
+  const conversationId = [USER_UID, OTHER_UID].sort().join("_");
+  const conversationRef = other.ref("conversations/" + conversationId);
+
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__dm").set({
+    enabled: true,
+    permanent: true,
+    until: 0,
+    reason: "dm restricted",
+    createdAt: Date.now(),
+    createdByUid: MASTER_UID,
+    createdByEmail: MASTER_EMAIL
+  }));
+
+  await assertFails(conversationRef.set({
+    userA: USER_UID,
+    userB: OTHER_UID,
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__dm").remove());
+
+  await assertSucceeds(conversationRef.set({
+    userA: USER_UID,
+    userB: OTHER_UID,
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref("admin/featureFlags/chat__dm").set({
+    enabled: false,
+    reason: "dm disabled",
+    updatedAt: Date.now(),
+    updatedByUid: MASTER_UID
+  }));
+
+  await assertFails(other.ref("conversations/" + conversationId + "/messages/message-1").set({
+    uid: OTHER_UID,
+    type: "text",
+    text: "blocked",
+    createdAt: Date.now()
+  }));
+
+  await assertSucceeds(master.ref("admin/featureFlags/chat__dm").remove());
 });
 
 test("blocks: blocked user cannot mutate their own higher-role block", async () => {
