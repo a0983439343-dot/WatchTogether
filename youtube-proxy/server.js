@@ -121,16 +121,42 @@ function isActiveMaintenanceRestriction(item) {
   return Number.isFinite(until) && until > Date.now();
 }
 
-function resolveEffectivePermission(basePermissions, overrides, restrictions, permission) {
+function isAdminScopedPermission(permission) {
+  const key = String(permission || "").trim();
+  return /^(admin|users|audit)\./.test(key) ||
+    key === "reports.manage" ||
+    key === "analytics.read" ||
+    key === "ai.use" ||
+    key === "maintenance.manage";
+}
+
+function resolveEffectivePermission(policy, permission) {
   const key = String(permission || "").trim();
   if (!key) return false;
-  if (isActiveMaintenanceRestriction(restrictions?.[key])) return false;
+  if (isActiveMaintenanceRestriction(policy?.restrictions?.[key])) return false;
 
-  const override = overrides?.[key];
+  const override = policy?.overrides?.[key];
   if (override === "deny") return false;
   if (override === "allow") return true;
 
-  return basePermissions.has("*") || basePermissions.has(key);
+  const hasExplicitRole =
+    policy?.roleSource === "custom" ||
+    policy?.role === "admin" ||
+    policy?.role === "master";
+
+  const roleAllows =
+    policy?.permissions instanceof Set &&
+    (policy.permissions.has("*") || policy.permissions.has(key));
+
+  const normalUserDefault =
+    !hasExplicitRole &&
+    !isAdminScopedPermission(key);
+
+  if (!(roleAllows || normalUserDefault)) {
+    return false;
+  }
+
+  return policy?.featureFlags?.[key] !== false;
 }
 
 let firebaseServiceAccessToken = "";
@@ -261,34 +287,39 @@ async function firebaseRestGet(pathname, token) {
   return data;
 }
 
-async function resolveMaintenanceActor(token) {
+async function resolveUserAccessPolicy(token) {
   const payload = decodeJwtPayload(token);
   const uid = String(payload?.user_id || payload?.sub || "").trim();
   const email = String(payload?.email || "").trim().toLowerCase();
   if (!uid) throw new Error("missing_uid");
 
-  if (
+  const master =
     uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
-    email === "a0983439343@gmail.com"
-  ) {
+    email === "a0983439343@gmail.com";
+
+  if (master) {
     return {
       uid,
       email,
       role: "master",
+      roleSource: "master",
       permissions: new Set(["*"]),
       overrides: {},
-      restrictions: {}
+      restrictions: {},
+      featureFlags: {}
     };
   }
 
-  const [roleValue, whitelistValue, overrideValue, restrictionValue] = await Promise.all([
+  const [roleValue, whitelistValue, overrideValue, restrictionValue, flagValue] = await Promise.all([
     firebaseRestGet("admin/access/roleByUid/" + encodeURIComponent(uid), token),
     firebaseRestGet("admin/whitelistByUid/" + encodeURIComponent(uid), token),
     firebaseRestGet("admin/access/permissionsByUid/" + encodeURIComponent(uid), token),
-    firebaseRestGet("admin/access/restrictionsByUid/" + encodeURIComponent(uid), token)
+    firebaseRestGet("admin/access/restrictionsByUid/" + encodeURIComponent(uid), token),
+    firebaseRestGet("admin/featureFlags", token)
   ]);
 
   let role = "";
+  let roleSource = "none";
   let permissions = new Set();
 
   const assignedRole = String(roleValue || "").trim();
@@ -302,6 +333,7 @@ async function resolveMaintenanceActor(token) {
       if (enabled === true) permissions.add(key);
     });
     role = assignedRole;
+    roleSource = "custom";
   } else if (
     whitelistValue &&
     whitelistValue.enabled === true &&
@@ -310,17 +342,29 @@ async function resolveMaintenanceActor(token) {
     role = String(whitelistValue.role || "admin").trim().toLowerCase() === "viewer"
       ? "viewer"
       : "admin";
+    roleSource = "whitelist";
     if (role === "admin") permissions = new Set(BUILTIN_ADMIN_PERMISSIONS);
+    else permissions = new Set();
   }
 
-  const overrides = decodePermissionMap(overrideValue);
-  const restrictions = decodePermissionMap(restrictionValue);
+  return {
+    uid,
+    email,
+    role,
+    roleSource,
+    permissions,
+    overrides: decodePermissionMap(overrideValue),
+    restrictions: decodePermissionMap(restrictionValue),
+    featureFlags: decodePermissionMap(flagValue)
+  };
+}
 
-  if (!role || role === "viewer") {
+async function resolveMaintenanceActor(token) {
+  const policy = await resolveUserAccessPolicy(token);
+  if (!policy.role || policy.role === "viewer") {
     throw new Error("admin_permission_denied");
   }
-
-  return {uid, email, role, permissions, overrides, restrictions};
+  return policy;
 }
 
 function verifyMaintenancePassword(password) {
