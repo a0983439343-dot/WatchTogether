@@ -63,6 +63,8 @@ jobs:
 
       - name: Check room chat rich module syntax
         run: node --check src/js/room-chat-rich.js
+      - name: Check cloud completion runtime references
+        run: node -e "const fs=require('fs'); const v3=fs.readFileSync('src/js/feature-complete-v3.js','utf8'); const v4=fs.readFileSync('src/js/room-chat-rich.js','utf8'); if(v3.includes('LOCAL_STATS_KEY')) throw new Error('Undefined LOCAL_STATS_KEY reference remains.'); if(!v3.includes('watchHistory/')||!v3.includes('watchStats/')||!v3.includes('userSettings/')||!v3.includes('notifications/')||!v3.includes('presence/')) throw new Error('Cloud completion paths missing.'); if(!v4.includes('roomChatReplies')||!v4.includes('roomChatEdits')||!v4.includes('roomChatPins')||!v4.includes('roomChatReactions')) throw new Error('Room chat metadata paths missing.');"
 
       - name: Check feature center syntax
         run: node --check src/js/feature-center.js
