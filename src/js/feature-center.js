@@ -428,7 +428,11 @@ async function openRoomTools(){
   var snap=await db.ref("members/"+id).once("value").catch(function(){return null;}),members=snap?.val()||{};
   var entries=Object.entries(members).filter(function(x){return x[0]!==u.uid;});
   var settings=(s.room&&s.room.settings)||window.WT_ROOM_ACCESS?.state?.meta?.settings||{};
-  var body=modal("wtRoomToolsModal","房主工具",'<div class="wt-feature-grid"><label class="full">房間名稱<input id="wtRoomRename" maxlength="40" value="'+esc(s.room&&s.room.name||"一起看")+'"></label><label class="full">轉移房主<select id="wtTransferOwner"><option value="">不轉移</option>'+entries.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1]?.name||x[0])+'｜'+esc(x[0])+'</option>';}).join("")+'</select></label><label class="full wt-feature-switch"><input id="wtSyncVolume" type="checkbox" '+(settings.syncVolume===true?"checked":"")+'> 同步房主音量給所有成員</label></div><div class="wt-feature-actions"><button id="wtRoomRenameSave" class="secondary-btn">儲存房名</button><button id="wtSyncVolumeSave" class="secondary-btn">儲存音量同步</button><button id="wtTransferOwnerBtn" class="primary-btn">轉移房主</button></div>');
+  var moderationHtml=entries.length?'<div class="panel-title" style="margin-top:16px">成員管理</div><div class="wt-feature-list">'+entries.map(function(x){
+    var uid=String(x[0]||""),member=x[1]||{},name=String(member.name||uid);
+    return '<div class="wt-feature-row"><div><strong>'+esc(name)+'</strong><div class="small muted">'+esc(uid)+'</div></div><div class="wt-feature-actions" style="margin-top:0"><button class="tiny-btn" data-room-mute="'+esc(uid)+'">禁言</button><button class="tiny-btn" data-room-ban="'+esc(uid)+'">封鎖</button><button class="tiny-btn danger" data-room-kick="'+esc(uid)+'">踢出</button></div></div>';
+  }).join("")+'</div>':'<div class="panel-title" style="margin-top:16px">成員管理</div><div class="wt-feature-empty">目前沒有其他成員。</div>';
+  var body=modal("wtRoomToolsModal","房主工具",'<div class="wt-feature-grid"><label class="full">房間名稱<input id="wtRoomRename" maxlength="40" value="'+esc(s.room&&s.room.name||"一起看")+'"></label><label class="full">轉移房主<select id="wtTransferOwner"><option value="">不轉移</option>'+entries.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1]?.name||x[0])+'｜'+esc(x[0])+'</option>';}).join("")+'</select></label><label class="full wt-feature-switch"><input id="wtSyncVolume" type="checkbox" '+(settings.syncVolume===true?"checked":"")+'> 同步房主音量給所有成員</label></div><div class="wt-feature-actions"><button id="wtRoomRenameSave" class="secondary-btn">儲存房名</button><button id="wtSyncVolumeSave" class="secondary-btn">儲存音量同步</button><button id="wtTransferOwnerBtn" class="primary-btn">轉移房主</button></div>'+moderationHtml);
   body.querySelector("#wtRoomRenameSave").onclick=async function(){
     try{
       var name=String($("wtRoomRename").value||"").trim().slice(0,40);if(!name)throw new Error("房間名稱不能為空");
@@ -445,7 +449,19 @@ async function openRoomTools(){
       if(s.room) s.room.settings=Object.assign({},s.room.settings||{},{syncVolume:enabled});
       toast(enabled?"已開啟音量同步":"已關閉音量同步");
     }catch(e){toast(e.message||"音量同步設定失敗");}
-  };
+  };  body.querySelectorAll("[data-room-mute]").forEach(function(btn){btn.onclick=async function(){
+    var uid=btn.dataset.roomMute,member=members[uid]||{};
+    try{await core?.toggleRoomMute?.(uid,member.name||uid);openRoomTools();}catch(e){toast(e.message||"禁言操作失敗");}
+  };});
+  body.querySelectorAll("[data-room-ban]").forEach(function(btn){btn.onclick=async function(){
+    var uid=btn.dataset.roomBan,member=members[uid]||{};
+    try{await core?.toggleRoomBan?.(uid,member.name||uid);openRoomTools();}catch(e){toast(e.message||"封鎖操作失敗");}
+  };});
+  body.querySelectorAll("[data-room-kick]").forEach(function(btn){btn.onclick=async function(){
+    var uid=btn.dataset.roomKick,member=members[uid]||{};
+    try{await core?.kickMember?.(uid,member.name||uid);openRoomTools();}catch(e){toast(e.message||"踢人失敗");}
+  };});
+
   body.querySelector("#wtTransferOwnerBtn").onclick=async function(){
     var target=$("wtTransferOwner").value;if(!target)return toast("請先選擇新房主");
     var name=String(members[target]?.name||target);
