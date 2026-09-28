@@ -309,7 +309,7 @@
               ? '<span class="status off">已封鎖 · ' + escapeHtml(formatRemaining(block)) + '</span>'
               : '<span class="status">正常</span>';
 
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManage = currentCan("users.update");
           let actions = '<div class="row-actions">';
           if (master) {
             actions += '<span class="muted">最高管理員</span>';
@@ -853,6 +853,7 @@
   }
 
   async function analyzeReportOnAdmin(id, report, verification, phase = "admin_review") {
+    if (!currentCan("ai.use")) throw new Error("目前帳號沒有 AI 管理權限");
     const endpoint = getBugAiEndpoint();
     if (!endpoint) return null;
     const user = auth?.currentUser || currentUser;
@@ -1034,7 +1035,7 @@
   }
 
   async function scanWebsiteAndReports() {
-    if (!currentHasAdminAccess || !isAdminOperator() || reportScanRunning) return;
+    if (!currentHasAdminAccess || !currentCan("reports.manage") || reportScanRunning) return;
     reportScanRunning = true;
     const banner = $("reportScanBanner");
     if (banner) {
@@ -1099,13 +1100,13 @@
 
   function startReportAutomation() {
     if (reportScanTimer) clearInterval(reportScanTimer);
-    if (!currentHasAdminAccess || !isAdminOperator()) return;
+    if (!currentHasAdminAccess || !currentCan("reports.manage")) return;
     void scanWebsiteAndReports();
     reportScanTimer = setInterval(() => void scanWebsiteAndReports(), 90000);
   }
 
   async function repairDecisionStart() {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) return;
@@ -1126,7 +1127,7 @@
   }
 
   async function recheckCurrentReport() {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) return;
@@ -1296,7 +1297,7 @@
           const details = String(item.details || "");
           const preview = details.length > 120 ? details.slice(0,120) + "…" : details;
           const room = String(item.roomId || "").trim();
-          const canManage = currentRole === "master" || currentRole === "admin";
+          const canManage = currentCan("reports.manage");
           const actions = canManage
             ? '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看 / 處理</button>'
             : '<button class="btn" type="button" data-report-open="' + escapeHtml(id) + '">查看</button>';
@@ -1435,8 +1436,8 @@
       repairQuestion.classList.toggle("hidden", fullAuto || normalizeReportStatus(item.status) === "resolved");
     }
     $("reportHint").textContent = account.email ? "回報帳號：" + account.email + " · 來源：" + reportSourceLabel(item) : "來源：" + reportSourceLabel(item);
-    $("reportDelete").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
-    $("reportSave").classList.toggle("hidden", !(currentRole === "master" || currentRole === "admin"));
+    $("reportDelete").classList.toggle("hidden", !currentCan("reports.manage"));
+    $("reportSave").classList.toggle("hidden", !currentCan("reports.manage"));
     show("reportModal");
     await loadReportHistory(String(id || ""));
   }
@@ -1446,7 +1447,7 @@
   }
 
   async function saveReportStatus() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!currentCan("reports.manage")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1477,7 +1478,7 @@
   }
 
   async function deleteReport() {
-    if (currentRole !== "master" && currentRole !== "admin") return;
+    if (!currentCan("reports.manage")) return;
     const id = String($("reportId").value || "").trim();
     const item = reports[id];
     if (!id || !item) {
@@ -1595,7 +1596,7 @@
   }
 
   async function openEditUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1623,7 +1624,7 @@
   }
 
   async function saveUser() {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const uid = String($("editUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1686,7 +1687,7 @@
   }
 
   function openBlockUser(uid) {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const item = accounts[uid];
     if (!item) return;
     if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1704,7 +1705,7 @@
   }
 
   async function confirmBlock() {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const uid = String($("blockUserUid").value || "").trim();
     const item = accounts[uid];
     if (!uid || !item) { toast("找不到使用者"); return; }
@@ -1736,7 +1737,7 @@
   }
 
    async function unblockUser(uid) {
-     if (!isAdminOperator()) return;
+     if (!currentCan("reports.manage")) return;
      const item = accounts[uid];
      if (!item) return;
      if (uid === MASTER_UID || String(item.email || "").trim().toLowerCase() === MASTER_EMAIL) {
@@ -1763,7 +1764,7 @@
    }
 
   async function deleteRoom(roomId) {
-    if (!isAdminOperator()) return;
+    if (!currentCan("reports.manage")) return;
     const key = String(roomId || "").trim().toUpperCase();
     const item = rooms[key];
     if (!item) { toast("這個房間已不存在"); await loadRooms(); return; }
