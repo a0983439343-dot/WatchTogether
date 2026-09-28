@@ -1629,13 +1629,13 @@ serialTest("room captions: owner/cohost can write and members can read, outsider
     }
   }));
 
-  await assertSucceeds(master.ref("members/CAP001/" + USER_UID).set({
+  await assertSucceeds(owner.ref("members/CAP001/" + USER_UID).set({
     name: "Owner",
     joinedAt: Date.now(),
     online: true,
     lastSeen: Date.now()
   }));
-  await assertSucceeds(master.ref("members/CAP001/" + OTHER_UID).set({
+  await assertSucceeds(member.ref("members/CAP001/" + OTHER_UID).set({
     name: "Member",
     joinedAt: Date.now(),
     online: true,
