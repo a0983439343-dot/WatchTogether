@@ -1870,53 +1870,70 @@
     const hint = $("aiStatusHint");
     const permission = $("aiPermissionSummary");
     if (!grid || !hint || !permission) return;
+
     if (!currentCan("ai.use")) {
       grid.innerHTML = '<div class="info-item"><span>權限</span><strong>禁止使用 AI</strong></div>';
       hint.textContent = "目前帳號沒有 ai.use 權限。";
-      permission.textContent = "需要 ai.use 才能呼叫 AI 分析服務。";
+      permission.textContent = "需要 ai.use 才能啟動即時 Bug 診斷。";
       aiStatus = null;
       return;
     }
 
-    const endpoint = getBugServiceBase();
-    if (!endpoint) {
-      grid.innerHTML = '<div class="info-item"><span>AI 服務</span><strong>未設定</strong></div>';
-      hint.textContent = "尚未設定 AI 服務端點。";
-      permission.textContent = "ai.use 已授權，但服務端點尚未設定。";
-      aiStatus = null;
-      return;
-    }
-
+    let extensionReady = false;
     try {
-      const response = await fetch(endpoint + "/ai/health", {
-        method:"GET",
-        cache:"no-store",
-        credentials:"omit"
+      const ready = new Promise(resolve => {
+        let done = false;
+        const finish = value => {
+          if (done) return;
+          done = true;
+          window.removeEventListener("message", handler);
+          resolve(value === true);
+        };
+        const handler = event => {
+          if (event.source !== window || event.origin !== location.origin) return;
+          const data = event.data;
+          if (!data || data.source !== AI_EXTENSION_BRIDGE_SOURCE || data.type !== "EXTENSION_READY") return;
+          finish(true);
+        };
+        window.addEventListener("message", handler);
+        window.postMessage({
+          source:AI_EXTENSION_SOURCE,
+          type:"EXTENSION_PING",
+          requestId:adminAiRequestId()
+        },location.origin);
+        setTimeout(() => finish(false),2500);
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error("AI Health HTTP " + response.status);
-      aiStatus = result;
-      grid.innerHTML = [
-        ["服務", result.ok === true ? "正常" : "不可用"],
-        ["Provider", result.provider || "—"],
-        ["一般模型", result.model || "—"],
-        ["修復模型", result.repairModel || "—"],
-        ["已設定 API Key", Number(result.configuredKeys || 0)],
-        ["目前角色", currentRole || "—"]
-      ].map(([label,value]) =>
-        '<div class="info-item"><span>' + escapeHtml(label) +
-        '</span><strong>' + escapeHtml(value) + '</strong></div>'
-      ).join("");
-      hint.textContent = result.ok === true
-        ? "AI 服務目前可用；個人限制與 Feature Flag 仍會在後端再次驗證。"
-        : "AI 服務目前沒有可用的 Gemini Key。";
-      permission.textContent = "目前帳號具備 ai.use；管理員 AI 分析會留下操作紀錄。";
-    } catch (error) {
-      aiStatus = null;
-      grid.innerHTML = '<div class="info-item"><span>服務</span><strong>無法連線</strong></div>';
-      hint.textContent = String(error?.message || "AI 狀態檢查失敗");
-      permission.textContent = "後端目前無法回應 AI 健康檢查。";
+      extensionReady = await ready;
+    } catch (_) {
+      extensionReady = false;
     }
+
+    aiStatus = {
+      ok:extensionReady,
+      provider:"openai",
+      model:AI_EXTENSION_MODEL,
+      configuredKeys:extensionReady ? 1 : 0,
+      extensionRequired:true
+    };
+
+    grid.innerHTML = [
+      ["服務", extensionReady ? "Chrome 擴充功能已連線" : "尚未連線"],
+      ["Provider", "OpenAI"],
+      ["模型", AI_EXTENSION_MODEL],
+      ["API", "https://api.openai.com/v1/chat/completions"],
+      ["串流", "SSE / stream:true"],
+      ["目前角色", currentRole || "—"]
+    ].map(([label,value]) =>
+      '<div class="info-item"><span>' + escapeHtml(label) +
+      '</span><strong>' + escapeHtml(value) + '</strong></div>'
+    ).join("");
+
+    hint.textContent = extensionReady
+      ? "即時 Bug 診斷會從 WatchTogether 發送到本地 Chrome 擴充功能，再由擴充功能以 OpenAI 官方 Chat Completions 串流回傳。"
+      : "請先載入並啟用 WatchTogether AI Bug Diagnoser Chrome 擴充功能；未連線時不會假裝 AI 已完成診斷。";
+    permission.textContent = extensionReady
+      ? "目前帳號具備 ai.use；診斷結果與串流內容會保存到問題回報。"
+      : "需要 ai.use 與本地 Chrome 擴充功能，才能啟動 OpenAI 即時診斷。";
   }
 
   function updateStats() {
