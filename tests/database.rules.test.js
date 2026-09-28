@@ -460,18 +460,7 @@ test("2.0 access control: custom admin role can read and write its permitted adm
 
 test("2.0 maintenance: normal users are blocked while admin users keep access", async () => {
   const master = db(MASTER_UID, {email: MASTER_EMAIL, email_verified: true});
-  const adminRoleRef = master.ref("admin/access/roles/maintenance-admin");
 
-  await assertSucceeds(adminRoleRef.set({
-    name: "Maintenance Admin",
-    permissions: {
-      "admin__read": true,
-      "room__queue": true
-    }
-  }));
-  await assertSucceeds(
-    master.ref("admin/access/roleByUid/" + USER_UID).set("maintenance-admin")
-  );
   await assertSucceeds(
     master.ref("site/maintenance").set({
       enabled: true,
@@ -484,7 +473,7 @@ test("2.0 maintenance: normal users are blocked while admin users keep access", 
   );
 
   const queueItem = {
-    id: "maintenance-test",
+    id: "maintenance-normal",
     platform: "youtube",
     title: "Maintenance Test",
     thumbnail: "",
@@ -494,10 +483,32 @@ test("2.0 maintenance: normal users are blocked while admin users keep access", 
     addedAt: Date.now()
   };
 
+  await assertFails(
+    db(USER_UID, userToken)
+      .ref("queue/ABC123/maintenance-normal")
+      .set(queueItem)
+  );
+
+  await assertSucceeds(
+    master.ref("admin/access/roles/maintenance-admin").set({
+      name: "Maintenance Admin",
+      permissions: {
+        "admin__read": true,
+        "room__queue": true
+      }
+    })
+  );
+  await assertSucceeds(
+    master.ref("admin/access/roleByUid/" + USER_UID).set("maintenance-admin")
+  );
+
   await assertSucceeds(
     db(USER_UID, userToken)
-      .ref("queue/ABC123/maintenance-test")
-      .set(queueItem)
+      .ref("queue/ABC123/maintenance-admin")
+      .set({
+        ...queueItem,
+        id: "maintenance-admin"
+      })
   );
 });
 
