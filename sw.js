@@ -8,6 +8,7 @@ const ASSETS = [
   "./src/js/enhancements.js",
   "./src/js/feature-center.js",
   "./src/js/chat.js",
+  "./src/js/feature-pack.js",
   "./src/js/i18n.js",
   "./config/firebase-config.js",
   "./manifest.webmanifest",
