@@ -2713,6 +2713,20 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     let response = null;
     let fetchError = null;
+    let idToken = "";
+
+    try {
+      const currentUser = auth?.currentUser || null;
+      if (currentUser) {
+        idToken = await currentUser.getIdToken();
+      }
+    } catch (error) {
+      fetchError = error;
+    }
+
+    if (!idToken) {
+      throw new Error("登入驗證尚未準備完成，請稍後再搜尋");
+    }
 
     try {
       response = await fetch(
@@ -2720,7 +2734,8 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
         {
           method: "GET",
           headers: {
-            Accept: "application/json"
+            Accept: "application/json",
+            Authorization: "Bearer " + idToken
           },
           credentials: "omit",
           mode: "cors"
@@ -7698,6 +7713,14 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     await ensureNotGloballyBlocked(auth?.currentUser || null);
 
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("room.join")) {
+        throw new Error("你目前無法加入房間");
+      }
+    }
+
     let adminJoinAllowed = false;
     if (state.adminJoinRequested) {
       try {
@@ -8182,6 +8205,15 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   async function requestPlaybackControl(action, position = null, playing = null) {
     if (state.isOwner || !state.roomId || !state.uid || !state.membersRef || !state.currentVideoId || !state.playerType) return false;
     if (!["play", "pause", "seek"].includes(action)) return false;
+
+    const access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("sync.control")) {
+        toast("你目前無法控制播放同步");
+        return false;
+      }
+    }
 
     const now = Date.now();
     if (now - Number(state.controlRequestLastAt || 0) < 250) return false;
