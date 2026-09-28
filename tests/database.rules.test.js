@@ -341,14 +341,33 @@ test("room chat rich metadata: members can reply and edit their own messages, ow
   });
   const master = db(MASTER_UID, masterToken);
 
-  await assertSucceeds(master.ref("members/ABC123/" + OTHER_UID).set({
+  await assertSucceeds(master.ref("rooms/RICH01").set({
+    owner: USER_UID,
+    name: "Rich Chat Test",
+    sourceType: "youtube",
+    video: {
+      id: "rich-chat-video",
+      platform: "youtube",
+      title: "Rich Chat",
+      thumbnail: "",
+      channel: ""
+    }
+  }));
+
+  await assertSucceeds(master.ref("members/RICH01/" + USER_UID).set({
+    name: "User",
+    joinedAt: Date.now(),
+    online: true,
+    lastSeen: Date.now()
+  }));
+  await assertSucceeds(master.ref("members/RICH01/" + OTHER_UID).set({
     name: "Other",
     joinedAt: Date.now(),
     online: true,
     lastSeen: Date.now()
   }));
 
-  const messageRef = user.ref("chat/ABC123/room-rich-test-message");
+  const messageRef = user.ref("chat/RICH01/room-rich-test-message");
   await assertSucceeds(messageRef.set({
     uid: USER_UID,
     name: "User",
@@ -357,7 +376,7 @@ test("room chat rich metadata: members can reply and edit their own messages, ow
     createdAt: Date.now()
   }));
 
-  const replyRef = user.ref("roomChatReplies/ABC123").push();
+  const replyRef = user.ref("roomChatReplies/RICH01").push();
   await assertSucceeds(replyRef.set({
     uid: USER_UID,
     name: "User",
@@ -369,29 +388,31 @@ test("room chat rich metadata: members can reply and edit their own messages, ow
     createdAt: Date.now()
   }));
 
-  await assertSucceeds(user.ref("roomChatEdits/ABC123/" + messageRef.key).set({
+  await assertSucceeds(user.ref("roomChatEdits/RICH01/" + messageRef.key).set({
     uid: USER_UID,
     text: "編輯後的房間訊息",
     editedAt: Date.now()
   }));
 
-  await assertSucceeds(user.ref("roomChatPins/ABC123/" + messageRef.key).set({
+  await assertSucceeds(user.ref("roomChatPins/RICH01/" + messageRef.key).set({
     pinned: true,
     uid: USER_UID,
     updatedAt: Date.now()
   }));
 
-  await assertFails(other.ref("roomChatEdits/ABC123/" + messageRef.key).set({
+  await assertFails(other.ref("roomChatEdits/RICH01/" + messageRef.key).set({
     uid: OTHER_UID,
     text: "不應該能改",
     editedAt: Date.now()
   }));
 
-  await assertFails(other.ref("roomChatPins/ABC123/" + messageRef.key).set({
+  await assertFails(other.ref("roomChatPins/RICH01/" + messageRef.key).set({
     pinned: false,
     uid: OTHER_UID,
     updatedAt: Date.now()
   }));
+
+  await assertSucceeds(master.ref("rooms/RICH01").remove());
 });
 
 test("room chat reactions: members may change their own reaction only", async () => {
@@ -401,7 +422,7 @@ test("room chat reactions: members may change their own reaction only", async ()
     email_verified: true
   });
 
-  const ref = user.ref("roomChatReactions/ABC123/room-rich-test-message/" + USER_UID);
+  const ref = user.ref("roomChatReactions/RICH01/room-rich-test-message/" + USER_UID);
   await assertSucceeds(ref.set({
     emoji: "👍",
     updatedAt: Date.now()
@@ -410,11 +431,13 @@ test("room chat reactions: members may change their own reaction only", async ()
   await assertSucceeds(ref.remove());
 
   await assertFails(
-    other.ref("roomChatReactions/ABC123/room-rich-test-message/" + USER_UID).set({
+    other.ref("roomChatReactions/RICH01/room-rich-test-message/" + USER_UID).set({
       emoji: "🔥",
       updatedAt: Date.now()
     })
   );
+
+  await assertSucceeds(db(MASTER_UID, masterToken).ref("rooms/RICH01").remove());
 });
 
 test("reports: normal users cannot read the collection", async () => {
@@ -441,12 +464,13 @@ test("reports: admin and viewer can read, but viewer cannot modify", async () =>
 
 test("chat moderation deletion can be atomic with its Audit Log", async () => {
   const admin = db(ADMIN_UID, adminToken);
-  const messageKey = admin.ref("chat/ABC123").push().key;
+  const user = db(USER_UID, userToken);
+  const messageKey = user.ref("chat/ABC123").push().key;
   const auditKey = admin.ref("admin/auditLogs").push().key;
   assert.ok(messageKey);
   assert.ok(auditKey);
 
-  await assertSucceeds(admin.ref("chat/ABC123/" + messageKey).set({
+  await assertSucceeds(user.ref("chat/ABC123/" + messageKey).set({
     uid: USER_UID,
     name: "User",
     type: "text",
@@ -510,6 +534,7 @@ test("atomic access and report updates require matching Audit permissions", asyn
   };
 
   await assertSucceeds(admin.ref().update(atomicUpdates));
+  await assertSucceeds(master.ref("admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send").remove());
   await assertFails(viewer.ref().update({
     ["admin/access/restrictionsByUid/" + OTHER_UID + "/chat__send"]: {
       enabled: true,
