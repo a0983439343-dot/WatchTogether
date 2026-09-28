@@ -473,6 +473,26 @@ test("2.0 access control: custom administrator can manage user blocks", async ()
 
   await assertSucceeds(customAdmin.ref("admin/blocksByUid/" + USER_UID).remove());
 
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + OTHER_UID + "/users__restrict"
+  ).set("deny"));
+
+  await assertFails(customAdmin.ref("admin/blocksByUid/" + USER_UID).set({
+    uid: USER_UID,
+    email: "user@example.com",
+    displayName: "User",
+    permanent: false,
+    blockedUntil: Date.now() + 3600000,
+    blockedAt: Date.now(),
+    blockedByUid: OTHER_UID,
+    blockedByEmail: "other@example.com",
+    blockedByRole: "admin"
+  }));
+
+  await assertSucceeds(master.ref(
+    "admin/access/permissionsByUid/" + OTHER_UID + "/users__restrict"
+  ).remove());
+
   await assertSucceeds(master.ref("admin/access/roleByUid/" + OTHER_UID).remove());
   await assertSucceeds(master.ref("admin/access/roles/block-manager").remove());
 });
