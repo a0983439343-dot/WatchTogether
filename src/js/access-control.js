@@ -101,6 +101,16 @@
     return String(key || "").replace(/__/g, ".");
   }
 
+  function normalizePolicyMap(value) {
+    if (!value || typeof value !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        decodePermissionKey(key),
+        item
+      ])
+    );
+  }
+
   function rolePermissions(role, definition) {
     if (Array.isArray(definition)) return new Set(definition.map(String));
     if (definition && Array.isArray(definition.permissions)) {
@@ -289,8 +299,8 @@
       db.ref("admin/access/permissionsByUid/" + user.uid).once("value"),
       db.ref("admin/access/restrictionsByUid/" + user.uid).once("value")
     ]);
-    state.userOverrides = overrideSnapshot.val() || {};
-    state.restrictions = restrictionSnapshot.val() || {};
+    state.userOverrides = normalizePolicyMap(overrideSnapshot.val());
+    state.restrictions = normalizePolicyMap(restrictionSnapshot.val());
   }
 
   async function loadGlobalPolicies() {
@@ -298,7 +308,7 @@
       db.ref("admin/featureFlags").once("value").catch(() => null),
       db.ref("site/maintenance").once("value").catch(() => null)
     ]);
-    state.featureFlags = flags?.val?.() || {};
+    state.featureFlags = normalizePolicyMap(flags?.val?.());
     state.maintenance = maintenance?.val?.() || {enabled:false};
   }
 
@@ -306,7 +316,7 @@
     try {
       state.refs.featureFlags = db.ref("admin/featureFlags");
       state.refs.featureFlags.on("value", snapshot => {
-        state.featureFlags = snapshot.val() || {};
+        state.featureFlags = normalizePolicyMap(snapshot.val());
         renderMaintenance();
         renderRestrictionNotice();
         emit();
@@ -339,7 +349,7 @@
     try {
       state.refs.overrides = db.ref("admin/access/permissionsByUid/" + user.uid);
       state.refs.overrides.on("value", snapshot => {
-        state.userOverrides = snapshot.val() || {};
+        state.userOverrides = normalizePolicyMap(snapshot.val());
         emit();
       });
     } catch (_) {}
@@ -347,7 +357,7 @@
     try {
       state.refs.restrictions = db.ref("admin/access/restrictionsByUid/" + user.uid);
       state.refs.restrictions.on("value", snapshot => {
-        state.restrictions = snapshot.val() || {};
+        state.restrictions = normalizePolicyMap(snapshot.val());
         renderRestrictionNotice();
         emit();
       });
