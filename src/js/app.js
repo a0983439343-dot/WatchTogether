@@ -7401,6 +7401,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       );
     }
 
+    await db.ref("publicRooms/" + roomId).set({
+      id: roomId,
+      name: roomName,
+      searchName: String(roomName || "一起看").trim().toLowerCase().slice(0, 40) || "一起看",
+      owner: String(state.uid),
+      sourceType: sourceType,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(error => {
+      console.warn("建立公開房間搜尋索引失敗:", error);
+    });
+
     if (!state.adminJoinOverride) {
       const roomBanSnapshot =
         await db
