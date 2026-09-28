@@ -2715,12 +2715,17 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     let fetchError = null;
 
     try {
+      const currentUser = auth?.currentUser || null;
+      const token = currentUser
+        ? await currentUser.getIdToken()
+        : "";
       response = await fetch(
         url.toString(),
         {
           method: "GET",
           headers: {
-            Accept: "application/json"
+            Accept: "application/json",
+            ...(token ? {Authorization: "Bearer " + token} : {})
           },
           credentials: "omit",
           mode: "cors"
