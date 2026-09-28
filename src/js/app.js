@@ -2910,13 +2910,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     }
 
     try {
-      await searchYoutube(
+      await searchSelectedPlatform(
         state.searchQuery,
         true
       );
     } catch (error) {
       console.error(
-        "載入更多 YouTube 失敗:",
+        "載入更多影片失敗:",
         error
       );
 
@@ -2937,7 +2937,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
         currentButton.textContent =
           state.searchNextPageToken
-            ? "載入更多 YouTube 影片"
+            ? "載入更多 " + String(state.searchPlatform || "影片") + " 影片"
             : "已載入全部結果";
       }
 
@@ -3339,11 +3339,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             }
 
             try {
-              await changeVideo({
-                ...video,
-                platform:
-                  "youtube"
-              });
+              await changeVideo(video);
             } catch (error) {
               console.error(
                 error
@@ -3385,11 +3381,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             }
 
             try {
-              await addToQueue({
-                ...video,
-                platform:
-                  "youtube"
-              });
+              await addToQueue(video);
 
               toast(
                 "已加入待播放清單"
@@ -3440,8 +3432,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
     state.modalSelectedVideo = {
       ...video,
-      platform:
-        "youtube"
+      platform: video.platform || state.searchPlatform || "youtube"
     };
 
     state.modalSelectedVideoId =
@@ -3492,37 +3483,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
 
   function getSelectedModalYoutubeVideo() {
-    const container =
-      $("modalVideoSearchResults");
-
-    const storedId =
-      String(
-        container?.dataset
-          ?.selectedVideoId ||
-        state.modalSelectedVideoId ||
-        ""
-      ).trim();
-
-    if (!storedId) {
-      return null;
-    }
-
-    const video =
-      state.searchResults.find(
-        (item) =>
-          String(item.id) ===
-          storedId
-      );
-
-    if (!video) {
-      return null;
-    }
-
-    return {
-      ...video,
-      platform:
-        "youtube"
-    };
+    const container = $("modalVideoSearchResults");
+    const storedId = String(container?.dataset?.selectedVideoId || state.modalSelectedVideoId || "").trim();
+    if (!storedId) return null;
+    return state.searchResults.find(item => String(item.id) === storedId) || null;
   }
 
 
@@ -12288,10 +12252,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       $("platformNotice");
 
     const searchable =
-      PLATFORMS[platform]?.searchable === true;
+      ["youtube","vimeo","dailymotion","twitch"].includes(platform);
 
-    const manual =
-      ["vimeo", "dailymotion", "twitch"].includes(platform);
+    const manual = false;
 
     if (searchArea) {
       searchArea.classList.toggle("hidden", !searchable);
@@ -12374,10 +12337,7 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       }
     }
 
-    const searchable =
-      PLATFORMS[
-        platform
-      ]?.searchable === true;
+    const searchable = ["youtube","vimeo","dailymotion","twitch"].includes(platform);
 
     if (searchArea) {
       searchArea.classList.toggle(
