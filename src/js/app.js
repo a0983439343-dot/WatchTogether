@@ -14776,6 +14776,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     return name;
   };
   window.WT_CORE.updateCurrentMemberName = updateCurrentMemberName;
+  window.WT_CORE.refreshYoutubeStreamIfNeeded = refreshYoutubeStreamIfNeeded;
+  window.WT_CORE.recoverPlaybackAfterPageResume = recoverPlaybackAfterPageResume;
+  window.WT_CORE.hardSyncPlaybackToTimeline = hardSyncPlaybackToTimeline;
   window.WT_CORE.state = state;
   window.WT_CORE.isPrivilegedAdminUser = isPrivilegedAdminUser;
   window.WT_CORE.persistAuthenticatedAccount = persistAuthenticatedAccount;
