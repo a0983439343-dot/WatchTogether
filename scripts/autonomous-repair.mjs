@@ -126,6 +126,7 @@ function allowedPaths(category) {
     "src/js/bug-monitor.js",
     "src/js/chat.js",
     "src/js/access-control.js",
+    "src/js/feature-completion-v2.js",
     "sw.js",
     "admin/admin.js",
     "admin/admin.html",
@@ -156,6 +157,7 @@ function repairContextPaths(category) {
       "src/js/app.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
+      "src/js/feature-completion-v2.js",
       "youtube-proxy/server.js"
     ],
         search: [
@@ -163,6 +165,7 @@ function repairContextPaths(category) {
       "src/js/access-control.js",
       "src/js/enhancements.js",
       "src/js/bug-monitor.js",
+      "src/js/feature-completion-v2.js",
       "youtube-proxy/server.js",
       "workers/youtube-search.js"
     ],
@@ -173,6 +176,7 @@ function repairContextPaths(category) {
       "src/js/enhancements.js",
       "src/js/chat.js",
       "src/js/bug-monitor.js",
+      "src/js/feature-completion-v2.js",
       "config/database.rules.json"
     ],
         chat: [
@@ -450,6 +454,7 @@ async function syncAssetVersions(changed, original) {
     "src/js/bug-monitor.js",
     "src/js/chat.js",
     "src/js/access-control.js",
+    "src/js/feature-completion-v2.js",
     "sw.js"
   ].some(file => changed.has(file));
 
@@ -467,6 +472,7 @@ async function syncAssetVersions(changed, original) {
       changed.has("src/js/enhancements.js") ||
       changed.has("src/css/styles.css") ||
       changed.has("src/js/access-control.js") ||
+      changed.has("src/js/feature-completion-v2.js") ||
       changed.has("sw.js")
     ) {
       indexAfter = indexAfter.replace(
@@ -488,6 +494,10 @@ async function syncAssetVersions(changed, original) {
       indexAfter = indexAfter.replace(
         /(src\/css\/enhancements\.css\?v=)[^"'&]+/,
         "$1" + version.formal
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/feature-completion-v2\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-feature-")
       );
       indexAfter = indexAfter.replace(
         /(sw\.js\?v=)[^"'&]+/,
@@ -637,6 +647,11 @@ async function validateChangedFiles(changed) {
     const stylesVersion = index.match(/styles\.css\?v=([^"'&]+)/)?.[1];
     const swVersion = index.match(/sw\.js\?v=([^"'&]+)/)?.[1];
     const cacheVersion = sw.match(/wt-shell-(\d{8}-v[^"\s]+)/)?.[1];
+
+    const featureV2 = await readRepoFile("src/js/feature-completion-v2.js");
+    if (!index.includes("feature-completion-v2.js?") || !featureV2.includes("wt_platform_search_history_v2")) {
+      throw new Error("Feature completion v2 asset/check missing");
+    }
 
     if (
       !appVersion ||
