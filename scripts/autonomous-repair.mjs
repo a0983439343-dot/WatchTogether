@@ -466,6 +466,7 @@ async function syncAssetVersions(changed, original) {
       changed.has("src/js/app.js") ||
       changed.has("src/js/enhancements.js") ||
       changed.has("src/css/styles.css") ||
+      changed.has("src/js/access-control.js") ||
       changed.has("sw.js")
     ) {
       indexAfter = indexAfter.replace(
@@ -624,7 +625,7 @@ async function validateChangedFiles(changed) {
     }
   }
 
-  if (changed.has("index.html") || changed.has("src/js/app.js") || changed.has("src/js/enhancements.js") || changed.has("sw.js")) {
+  if (changed.has("index.html") || changed.has("src/js/app.js") || changed.has("src/js/enhancements.js") || changed.has("src/js/access-control.js") || changed.has("sw.js")) {
     const index = await readRepoFile("index.html");
     const sw = await readRepoFile("sw.js");
     const app = await readRepoFile("src/js/app.js");
