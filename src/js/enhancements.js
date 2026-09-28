@@ -2809,7 +2809,16 @@ async function searchHome(query) {
   searchController = new AbortController();
   var version = ++searchVersion;
   var url = base + "?q=" + encodeURIComponent(query) + "&maxResults=8&regionCode=TW&relevanceLanguage=zh-Hant&safeSearch=moderate";
-  var response = await fetch(url,{method:"GET",headers:{Accept:"application/json"},credentials:"omit",cache:"no-store",signal:searchController.signal});
+  var currentUser = wt.auth.currentUser;
+  if (!currentUser) {
+    for (var attempt = 0; attempt < 30 && !currentUser; attempt++) {
+      await new Promise(function(resolve){ setTimeout(resolve, 100); });
+      currentUser = wt.auth.currentUser;
+    }
+  }
+  if (!currentUser) throw new Error("登入狀態尚未準備完成");
+  var token = await currentUser.getIdToken();
+  var response = await fetch(url,{method:"GET",headers:{Accept:"application/json",Authorization:"Bearer " + token},credentials:"omit",cache:"no-store",signal:searchController.signal});
   if (!response.ok) throw new Error("YouTube 搜尋失敗");
   var data = await response.json();
   if (version !== searchVersion) return;
