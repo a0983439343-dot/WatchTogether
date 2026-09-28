@@ -11977,6 +11977,11 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
             const isSticker =
               message?.type === "sticker";
 
+            const isImage =
+              message?.type === "image";
+            const isAudio =
+              message?.type === "audio";
+
             const body =
               isSticker
                 ? `
@@ -11990,14 +11995,50 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                     )}
                   </div>
                 `
-                : `
-                  <p>
-                    ${escapeHtml(
-                      message?.text ||
-                      ""
-                    )}
-                  </p>
-                `;
+                : isImage && message?.mediaUrl
+                  ? `
+                    <button
+                      type="button"
+                      class="wt-room-chat-image-btn"
+                      data-chat-image="${escapeHtml(
+                        message.mediaUrl
+                      )}"
+                      aria-label="查看圖片"
+                    >
+                      <img
+                        src="${escapeHtml(
+                          message.mediaUrl
+                        )}"
+                        alt="${escapeHtml(
+                          message.mediaName ||
+                          "聊天圖片"
+                        )}"
+                        loading="lazy"
+                      >
+                    </button>
+                  `
+                  : isAudio && message?.mediaUrl
+                    ? `
+                      <audio
+                        class="wt-room-chat-audio"
+                        controls
+                        preload="metadata"
+                        src="${escapeHtml(
+                          message.mediaUrl
+                        )}"
+                      ></audio>
+                    `
+                    : `
+                      <p>
+                        ${escapeHtml(
+                          message?.text ||
+                          ""
+                        ).replace(
+                          /@([A-Z0-9]{6})\\b/g,
+                          '<span class="wt-room-chat-mention">@$1</span>'
+                        )}
+                      </p>
+                    `;
 
             const isOwnMessage =
               Boolean(
@@ -12007,18 +12048,29 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   String(state.uid)
               );
 
-            const deleteButton =
+            const actionButtons =
               isOwnMessage
                 ? `
-                  <button
-                    type="button"
-                    class="wt-message-delete"
-                    data-chat-delete="${escapeHtml(
-                      message.id
-                    )}"
-                  >
-                    刪除訊息
-                  </button>
+                  <div class="wt-room-chat-actions">
+                    <button
+                      type="button"
+                      class="wt-message-delete"
+                      data-chat-pin="${escapeHtml(
+                        message.id
+                      )}"
+                    >
+                      ${message?.pinned === true ? "取消置頂" : "置頂"}
+                    </button>
+                    <button
+                      type="button"
+                      class="wt-message-delete"
+                      data-chat-delete="${escapeHtml(
+                        message.id
+                      )}"
+                    >
+                      刪除訊息
+                    </button>
+                  </div>
                 `
                 : "";
 
@@ -12056,8 +12108,9 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   </span>
                 </div>
 
+                ${message?.pinned === true ? '<span class="wt-room-chat-pin-badge">📌 已置頂</span>' : ""}
                 ${body}
-                ${deleteButton}
+                ${actionButtons}
               </div>
             `;
           }
@@ -12107,6 +12160,86 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
                   error?.message ||
                   "刪除訊息失敗"
                 );
+              }
+            }
+          );
+        }
+      );
+
+    box
+      .querySelectorAll(
+        "[data-chat-pin]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            async () => {
+              if (!state.chatRef || !state.uid) return;
+              const id = button.dataset.chatPin;
+              const message = messages?.[id];
+              if (
+                !message ||
+                String(message.uid || "") !==
+                  String(state.uid)
+              ) {
+                return;
+              }
+
+              try {
+                await state.chatRef
+                  .child(id)
+                  .update({
+                    pinned:
+                      message.pinned !== true,
+                    pinnedAt:
+                      message.pinned === true
+                        ? null
+                        : firebase.database.ServerValue.TIMESTAMP
+                  });
+
+                toast(
+                  message.pinned === true
+                    ? "已取消置頂"
+                    : "已置頂訊息"
+                );
+              } catch (error) {
+                console.error(
+                  "聊天室置頂失敗:",
+                  error
+                );
+                toast(
+                  error?.message ||
+                  "置頂失敗"
+                );
+              }
+            }
+          );
+        }
+      );
+
+    box
+      .querySelectorAll(
+        "[data-chat-image]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            () => {
+              const url =
+                button.dataset.chatImage ||
+                "";
+              if (!url) return;
+
+              try {
+                window.open(
+                  url,
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+              } catch (_) {
+                toast("無法開啟圖片");
               }
             }
           );
