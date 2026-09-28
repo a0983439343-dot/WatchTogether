@@ -87,11 +87,7 @@ async function seed() {
           roleByUid: {
             [ADMIN_UID]: "custom"
           },
-          permissionsByUid: {
-            [USER_UID]: {
-              "chat__send": "deny"
-            }
-          },
+          permissionsByUid: {},
         },
         featureFlags: {
           "rooms__manage": {
