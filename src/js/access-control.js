@@ -169,11 +169,36 @@
       return normalizeFlag(flag);
     }
 
-    const role = normalizeRole(options.role || state.role);
-    if (!state.role) return false;
+    const adminScoped = /^(admin|users|audit)\./.test(key) ||
+      key === "reports.manage" ||
+      key === "analytics.read" ||
+      key === "ai.use" ||
+      key === "maintenance.manage";
 
-    const permissions = rolePermissions(role, state.roleDefinition);
-    if (!permissions.has("*") && !permissions.has(key)) {
+    const role = normalizeRole(options.role || state.role);
+    if (state.role) {
+      const permissions = rolePermissions(role, state.roleDefinition);
+      const legacyViewer =
+        state.roleSource === "whitelist" &&
+        role === "viewer";
+
+      if (
+        legacyViewer &&
+        adminScoped &&
+        !permissions.has("*") &&
+        !permissions.has(key)
+      ) {
+        return false;
+      }
+
+      if (
+        !legacyViewer &&
+        !permissions.has("*") &&
+        !permissions.has(key)
+      ) {
+        return false;
+      }
+    } else if (adminScoped) {
       return false;
     }
 
