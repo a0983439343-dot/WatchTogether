@@ -1845,7 +1845,7 @@
       blockedAt:firebase.database.ServerValue.TIMESTAMP,
       blockedByUid:currentUser.uid,
       blockedByEmail:currentUser.email || "",
-       blockedByRole:currentRole
+      blockedByRole:isMasterOperator() ? "master" : "admin"
     });
 
     await loadBlocks();
