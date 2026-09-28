@@ -2244,9 +2244,16 @@
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!permission) throw new Error("請輸入權限名稱");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被限制權限");
-    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set(effect);
+    const updates = {};
+    updates["admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)] = effect;
+    await applyMutationWithAudit(
+      updates,
+      "access.permission.override",
+      uid,
+      permission,
+      effect.toUpperCase() + " " + permission
+    );
     await loadAccessControl();
-    void writeAuditLog("access.permission.override", uid, permission, effect.toUpperCase() + " " + permission);
     $("accessOverrideUid").value = "";
     $("accessOverridePermission").value = "";
     toast("個人權限覆寫已套用");
@@ -2257,9 +2264,16 @@
     const u = safeKey(uid,128);
     const p = encodeAccessPermission(permission);
     if (!u || !p) return;
-    await db.ref("admin/access/permissionsByUid/" + u + "/" + p).remove();
+    const updates = {};
+    updates["admin/access/permissionsByUid/" + u + "/" + p] = null;
+    await applyMutationWithAudit(
+      updates,
+      "access.permission.clear",
+      u,
+      p.replace(/__/g, "."),
+      "移除個人權限覆寫"
+    );
     await loadAccessControl();
-    void writeAuditLog("access.permission.clear", u, p.replace(/__/g, "."), "移除個人權限覆寫");
     toast("個人權限覆寫已移除");
   }
 
