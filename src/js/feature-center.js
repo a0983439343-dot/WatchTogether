@@ -57,8 +57,6 @@ function ensureTopbar(){
 }
 
 var notifications=[];
-var lastTrackedRoom="";
-var lastTrackedVideo="";
 function loadNotifications(){try{var x=JSON.parse(localStorage.getItem(NOTIFY_KEY)||"[]");notifications=Array.isArray(x)?x.slice(0,100):[];}catch(_){notifications=[];}updateBadge();}
 function saveNotifications(){notifications=notifications.slice(0,100);try{localStorage.setItem(NOTIFY_KEY,JSON.stringify(notifications));}catch(_){}updateBadge();}
 function updateBadge(){var b=$("wtFeatureNotificationBadge");if(!b)return;var n=notifications.filter(function(x){return !x.read;}).length;b.textContent=n>99?"99+":String(n);b.style.display=n?"block":"none";}
