@@ -152,12 +152,17 @@
     const joinPolicy = document.getElementById("roomAccessJoinPolicy")?.value === "application" ? "application" : "open";
     const maxMembers = Math.max(2, Math.min(10, Number(document.getElementById("roomAccessMaxMembers")?.value || 2)));
     const locked = document.getElementById("roomAccessLocked")?.checked === true;
+    const queueModeValue = document.getElementById("roomAccessQueueMode")?.value || "normal";
+    const queueMode = ["normal", "repeat_one", "shuffle"].includes(queueModeValue)
+      ? queueModeValue
+      : "normal";
 
     await db.ref("roomMeta/" + id + "/settings").update({
       visibility,
       joinPolicy,
       maxMembers,
-      locked
+      locked,
+      queueMode
     });
 
     await loadRoomAccess();
@@ -262,6 +267,7 @@
         '<label>可見性<select id="roomAccessVisibility"><option value="public">公開</option><option value="private">私人</option></select></label>' +
         '<label>加入方式<select id="roomAccessJoinPolicy"><option value="open">直接加入</option><option value="application">需要房主審核</option></select></label>' +
         '<label>最多成員<input id="roomAccessMaxMembers" type="number" min="2" max="10" value="2"></label>' +
+        '<label>佇列模式<select id="roomAccessQueueMode"><option value="normal">依序播放</option><option value="repeat_one">重播目前影片</option><option value="shuffle">隨機播放下一部</option></select></label>' +
         '<label class="room-access-check"><input id="roomAccessLocked" type="checkbox"> 鎖定新成員加入</label>' +
       '</div>' +
       '<div id="roomAccessOwnerArea">' +
@@ -309,14 +315,16 @@
     const joinPolicyEl = document.getElementById("roomAccessJoinPolicy");
     const maxEl = document.getElementById("roomAccessMaxMembers");
     const lockedEl = document.getElementById("roomAccessLocked");
+    const queueModeEl = document.getElementById("roomAccessQueueMode");
     const saveEl = document.getElementById("roomAccessSaveBtn");
 
     if (visibilityEl) visibilityEl.value = settings.visibility === "private" ? "private" : "public";
     if (joinPolicyEl) joinPolicyEl.value = settings.joinPolicy === "application" ? "application" : "open";
     if (maxEl) maxEl.value = String(Math.max(2, Math.min(10, Number(settings.maxMembers || 2))));
+    if (queueModeEl) queueModeEl.value = ["normal", "repeat_one", "shuffle"].includes(String(settings.queueMode || "")) ? String(settings.queueMode) : "normal";
     if (lockedEl) lockedEl.checked = settings.locked === true;
 
-    [visibilityEl, joinPolicyEl, maxEl, lockedEl, saveEl].forEach(el => { if (el) el.disabled = !owner; });
+    [visibilityEl, joinPolicyEl, maxEl, queueModeEl, lockedEl, saveEl].forEach(el => { if (el) el.disabled = !owner; });
 
     const ownerArea = document.getElementById("roomAccessOwnerArea");
     const cohostArea = document.getElementById("roomAccessCohostArea");
@@ -395,7 +403,8 @@
     saveRoomSettings,
     reviewApplication,
     cancelOwnApplication,
-    setCohost
+    setCohost,
+    isCohost
   };
 
   const start = () => {
