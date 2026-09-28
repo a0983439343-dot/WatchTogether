@@ -58,6 +58,7 @@
     roleDefinition: null,
     userOverrides: {},
     restrictions: {},
+    block: null,
     featureFlags: {},
     maintenance: null,
     siteSettings: {
@@ -72,6 +73,7 @@
       role: null,
       overrides: null,
       restrictions: null,
+      block: null,
       featureFlags: null,
       maintenance: null,
       siteSettings: null
@@ -96,6 +98,13 @@
     if (!item || typeof item !== "object" || item.enabled !== true) return false;
     if (item.permanent === true) return true;
     const until = Number(item.until || item.restrictedUntil || 0);
+    return Number.isFinite(until) && until > Date.now();
+  }
+
+  function isActiveBlock(item) {
+    if (!item || typeof item !== "object") return false;
+    if (item.permanent === true) return true;
+    const until = Number(item.blockedUntil || item.until || 0);
     return Number.isFinite(until) && until > Date.now();
   }
 
@@ -172,6 +181,7 @@
     const user = options.user || state.user;
     if (!user) return false;
     if (isMaster(user)) return true;
+    if (isActiveBlock(state.block)) return false;
 
     const adminScoped = /^(admin|users|audit)\./.test(key) ||
       key === "reports.manage" ||
@@ -287,14 +297,17 @@
   async function loadUserPolicies(user) {
     state.userOverrides = {};
     state.restrictions = {};
+    state.block = null;
     if (!user || user.isAnonymous) return;
 
-    const [overrideSnapshot, restrictionSnapshot] = await Promise.all([
+    const [overrideSnapshot, restrictionSnapshot, blockSnapshot] = await Promise.all([
       db.ref("admin/access/permissionsByUid/" + user.uid).once("value"),
-      db.ref("admin/access/restrictionsByUid/" + user.uid).once("value")
+      db.ref("admin/access/restrictionsByUid/" + user.uid).once("value"),
+      db.ref("admin/blocksByUid/" + user.uid).once("value")
     ]);
     state.userOverrides = normalizePolicyMap(overrideSnapshot.val());
     state.restrictions = normalizePolicyMap(restrictionSnapshot.val());
+    state.block = blockSnapshot.val() || null;
   }
 
   async function loadGlobalPolicies() {
@@ -380,6 +393,15 @@
         emit();
       });
     } catch (_) {}
+
+    try {
+      state.refs.block = db.ref("admin/blocksByUid/" + user.uid);
+      state.refs.block.on("value", snapshot => {
+        state.block = snapshot.val() || null;
+        renderRestrictionNotice();
+        emit();
+      });
+    } catch (_) {}
   }
 
   function createRestrictionNotice() {
@@ -412,7 +434,19 @@
     const notice = document.getElementById("wtRestrictionNotice");
     const body = document.getElementById("wtRestrictionNoticeBody");
     if (!notice || !body) return;
-    const rows = Object.entries(state.restrictions || {})
+    const rows = [];
+    if (isActiveBlock(state.block)) {
+      const block = state.block;
+      const until = block.permanent === true || Number(block.blockedUntil || 0) === 0
+        ? "永久"
+        : new Date(Number(block.blockedUntil)).toLocaleString("zh-TW");
+      rows.push(
+        '<div><strong>帳號已停用</strong> · ' +
+        String(block.reason || "此帳號目前無法使用網站").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c])) +
+        ' · 到期：' + until + '</div>'
+      );
+    }
+    rows.push(...Object.entries(state.restrictions || {})
       .filter(([, item]) => isActiveRestriction(item))
       .map(([permission, item]) => {
         const until = item.permanent === true || Number(item.until || 0) === 0
@@ -421,7 +455,7 @@
         return '<div style="margin-top:5px"><strong>' + String(permission).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c])) + '</strong> · ' +
           String(item.reason || "管理員設定的功能限制").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c])) +
           ' · 到期：' + until + '</div>';
-      });
+      }));
     body.innerHTML = rows.join("");
     notice.style.display = rows.length ? "block" : "none";
   }
@@ -619,6 +653,8 @@
     getFeatureFlags: () => ({...state.featureFlags}),
     getSiteSettings: () => ({...state.siteSettings}),
     isActiveRestriction,
+    isBlocked: () => isActiveBlock(state.block),
+    getBlock: () => isActiveBlock(state.block) ? {...state.block} : null,
     isFeatureEnabled: permission => {
       const key = String(permission || "").trim();
       return key ? normalizeFlag(state.featureFlags[key]) : false;
