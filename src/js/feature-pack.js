@@ -185,19 +185,32 @@
       }
     }
 
-    const friends = window.WT_CHAT?.friends || {};
-    Object.entries(friends).forEach(([uid, profile]) => {
-      const name = String(profile?.displayName || "");
-      const code = String(profile?.publicCode || "").toUpperCase();
-      if (name.toLowerCase().includes(q.toLowerCase()) || code.includes(upper)) {
-        results.push({
-          kind:"friend",
-          title:name || "好友",
-          detail:(code || "沒有公開 ID") + " · " + uid,
-          uid
+    const me = String(auth?.currentUser?.uid || db?.app?.options?.authDomain || "");
+    if (db && auth?.currentUser && !auth.currentUser.isAnonymous) {
+      try {
+        const friendSnapshot = await db.ref("friendships/" + auth.currentUser.uid).once("value");
+        const friendIds = Object.keys(friendSnapshot.val() || {}).filter(uid => uid && uid !== auth.currentUser.uid);
+        const friendRows = await Promise.all(friendIds.map(async uid => {
+          const profile = (await db.ref("profiles/" + uid).once("value").catch(() => null))?.val?.() || {};
+          return [uid, profile];
+        }));
+        friendRows.forEach(([uid, profile]) => {
+          const name = String(profile?.displayName || "");
+          const code = String(profile?.publicCode || "").toUpperCase();
+          if (
+            name.toLowerCase().includes(q.toLowerCase()) ||
+            code.includes(upper)
+          ) {
+            results.push({
+              kind:"friend",
+              title:name || "好友",
+              detail:(code || "沒有公開 ID") + " · " + uid,
+              uid
+            });
+          }
         });
-      }
-    });
+      } catch (_) {}
+    }
 
     const dedupe = new Map();
     results.forEach(item => dedupe.set(item.kind + ":" + (item.uid || item.roomId || item.detail), item));
