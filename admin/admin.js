@@ -1759,7 +1759,6 @@
 
       try {
         currentRole = await resolveAdminRole(user);
-        window.__WT_ADMIN_ACCOUNTS__ = accounts;
         currentHasAdminAccess = Boolean(currentRole);
         if (!currentHasAdminAccess) {
           redirectAdmin404();
@@ -1785,6 +1784,8 @@
             renderAutonomousMaintenance();
           })
         ]);
+        window.__WT_ADMIN_ACCOUNTS__ = accounts;
+        renderAutonomousMaintenance();
         startAccountsListener();
         startReportsListener();
         startAuditLogsListener();
