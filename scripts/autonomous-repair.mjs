@@ -56,6 +56,13 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function autonomousRepairSecret() {
+  const credentials = firebaseCredential();
+  const privateKey = String(credentials?.private_key || "").replace(/\\n/g, "\n");
+  if (!privateKey) throw new Error("firebase_service_account_private_key_missing");
+  return sha256(privateKey);
+}
+
 function normalizeCategory(value) {
   const allowed = new Set(["playback","search","room","chat","account","ui","other"]);
   return allowed.has(String(value || "").trim().toLowerCase())
@@ -328,7 +335,10 @@ async function requestRepair(report, verification, files) {
   };
   const result = await fetchJson(BUG_SERVICE_URL + "/ai/analyze", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: {
+      "Content-Type": "application/json",
+      "x-watchtogether-agent-secret": autonomousRepairSecret()
+    },
     body: JSON.stringify(payload),
     timeoutMs: 60_000
   });
