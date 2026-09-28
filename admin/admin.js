@@ -1724,7 +1724,7 @@
     box.innerHTML = entries.length
       ? entries.map(([id,item]) => {
           const permissions = item && item.permissions && typeof item.permissions === "object"
-            ? Object.keys(item.permissions).filter(key => item.permissions[key] === true).sort()
+            ? Object.keys(item.permissions).filter(key => item.permissions[key] === true).map(key => key === "__all__" ? "*" : key.replace(/__/g, ".")).sort()
             : [];
           return '<div class="access-policy-row">' +
             '<div><strong>' + escapeHtml(item?.name || id) + '</strong><span class="small">' + escapeHtml(id) + '</span></div>' +
@@ -1770,7 +1770,7 @@
     box.innerHTML = rows.length
       ? rows.map(row =>
           '<div class="access-policy-row">' +
-            '<div><strong>' + escapeHtml(row.uid) + '</strong><span class="small">' + escapeHtml(row.permission) + '</span></div>' +
+            '<div><strong>' + escapeHtml(row.uid) + '</strong><span class="small">' + escapeHtml(row.permission.replace(/__/g, ".")) + '</span></div>' +
             '<span class="status ' + (row.effect === "deny" ? "off" : "admin") + '">' + escapeHtml(String(row.effect || "").toUpperCase()) + '</span>' +
             '<button class="btn danger" type="button" data-access-override-delete="' + escapeHtml(row.uid) + '" data-access-override-permission="' + escapeHtml(row.permission) + '">移除</button>' +
           '</div>'
@@ -1953,7 +1953,7 @@
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!permission) throw new Error("請輸入權限名稱");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被限制權限");
-    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + permission).set(effect);
+    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set(effect);
     await loadAccessControl();
     void writeAuditLog("access.permission.override", uid, permission, effect.toUpperCase() + " " + permission);
     $("accessOverrideUid").value = "";
@@ -1964,7 +1964,7 @@
   async function removeAccessOverride(uid, permission) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以移除個人權限覆寫");
     const u = safeKey(uid,128);
-    const p = safeKey(permission,80);
+    const p = encodeAccessPermission(permission);
     if (!u || !p) return;
     await db.ref("admin/access/permissionsByUid/" + u + "/" + p).remove();
     await loadAccessControl();
@@ -1984,7 +1984,7 @@
     if (uid === MASTER_UID || uid === currentUser?.uid) throw new Error("不能限制最高管理員或自己");
     const permanent = duration === "permanent";
     const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
-    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + permission).set({
+    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set({
       enabled:true,
       permanent,
       until,
@@ -2004,7 +2004,7 @@
   async function removeAccessRestriction(uid, permission) {
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能解除功能限制");
     const u = safeKey(uid,128);
-    const p = safeKey(permission,80);
+    const p = encodeAccessPermission(permission);
     if (!u || !p) return;
     await db.ref("admin/access/restrictionsByUid/" + u + "/" + p).remove();
     await loadAccessControl();
@@ -2014,7 +2014,7 @@
 
   async function saveAccessFeatureFlag() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以管理 Feature Flag");
-    const name = safeKey($("accessFlagName")?.value,80);
+    const name = encodeAccessPermission($("accessFlagName")?.value);
     const enabled = $("accessFlagEnabled")?.value !== "false";
     const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
     if (!name) throw new Error("請輸入功能名稱");
@@ -2034,7 +2034,7 @@
 
   async function deleteAccessFeatureFlag(name) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以刪除 Feature Flag");
-    const key = safeKey(name);
+    const key = encodeAccessPermission(name);
     if (!key) return;
     if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
     await db.ref("admin/featureFlags/" + key).remove();
