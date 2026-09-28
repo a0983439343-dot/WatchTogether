@@ -453,7 +453,7 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
       name: "Applicant",
       joinedAt: Date.now(),
       online: true,
-      lastSeen: firebase.database.ServerValue.TIMESTAMP
+      lastSeen: Date.now()
     })
   );
 
@@ -486,7 +486,7 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
     ownerDb.ref("roomRoles/ABC123/" + OTHER_UID).set({
       uid: OTHER_UID,
       role: "cohost",
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedAt: Date.now(),
       updatedByUid: USER_UID
     })
   );
@@ -494,9 +494,9 @@ test("room 2.0: application lifecycle and cohost role are owner controlled", asy
   await assertSucceeds(
     ownerDb.ref("members/ABC123/" + OTHER_UID).set({
       name: "Applicant",
-      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      joinedAt: Date.now(),
       online: true,
-      lastSeen: firebase.database.ServerValue.TIMESTAMP
+      lastSeen: Date.now()
     })
   );
 });
