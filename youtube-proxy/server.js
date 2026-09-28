@@ -1,4 +1,5 @@
 const http = require("node:http");
+const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { Readable } = require("node:stream");
 
@@ -43,6 +44,369 @@ const VERIFY_SITE_URL =
 const rateBuckets = new Map();
 let activeSearches = 0;
 let activeStreams = 0;
+
+const MAINTENANCE_DATABASE_URL =
+  String(process.env.WATCHTOGETHER_DATABASE_URL || "https://watchtogether-3f4f9-default-rtdb.asia-southeast1.firebasedatabase.app")
+    .trim()
+    .replace(/\/+$/, "");
+const MAINTENANCE_PASSWORD_HASH =
+  String(process.env.MAINTENANCE_PASSWORD_HASH || "")
+    .trim()
+    .toLowerCase();
+const MAINTENANCE_PASSWORD_PLAIN =
+  String(process.env.MAINTENANCE_PASSWORD || "");
+const MAINTENANCE_FAIL_LIMIT = 5;
+const MAINTENANCE_LOCK_MS = 15 * 60_000;
+const maintenanceFailures = new Map();
+
+const BUILTIN_ADMIN_PERMISSIONS = new Set([
+  "admin.read",
+  "users.read",
+  "users.update",
+  "users.restrict",
+  "rooms.read",
+  "rooms.manage",
+  "chat.read",
+  "chat.moderate",
+  "reports.read",
+  "reports.manage",
+  "analytics.read",
+  "ai.use",
+  "audit.read",
+  "audit.write",
+  "sync.control",
+  "sync.manual",
+  "room.create",
+  "room.join",
+  "room.queue",
+  "chat.send",
+  "chat.media",
+  "chat.dm",
+  "youtube.search",
+  "youtube.queue",
+  "favorites.manage",
+  "maintenance.manage"
+]);
+
+function decodeJwtPayload(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) throw new Error("invalid_id_token");
+  const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const raw = encoded + "=".repeat((4 - (encoded.length % 4)) % 4);
+  return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+}
+
+function getBearerToken(req) {
+  const value = String(req.headers.authorization || "").trim();
+  if (!/^Bearer\s+/i.test(value)) return "";
+  return value.replace(/^Bearer\s+/i, "").trim();
+}
+
+function normalizePermissionKey(key) {
+  const raw = String(key || "").trim();
+  return raw === "__all__" ? "*" : raw.replace(/__/g, ".");
+}
+
+function decodePermissionMap(value) {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [normalizePermissionKey(key), item])
+  );
+}
+
+function isActiveMaintenanceRestriction(item) {
+  if (!item || typeof item !== "object" || item.enabled !== true) return false;
+  if (item.permanent === true) return true;
+  const until = Number(item.until || 0);
+  return Number.isFinite(until) && until > Date.now();
+}
+
+function resolveEffectivePermission(basePermissions, overrides, restrictions, permission) {
+  const key = String(permission || "").trim();
+  if (!key) return false;
+  if (isActiveMaintenanceRestriction(restrictions?.[key])) return false;
+
+  const override = overrides?.[key];
+  if (override === "deny") return false;
+  if (override === "allow") return true;
+
+  return basePermissions.has("*") || basePermissions.has(key);
+}
+
+async function firebaseRestGet(pathname, token) {
+  const cleanPath = String(pathname || "").replace(/^\/+|\/+$/g, "");
+  const response = await fetch(
+    MAINTENANCE_DATABASE_URL + "/" + cleanPath + ".json",
+    {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    }
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(
+      String(data?.error || "firebase_read_failed").slice(0, 300)
+    );
+    error.httpStatus = response.status;
+    throw error;
+  }
+  return data;
+}
+
+async function resolveMaintenanceActor(token) {
+  const payload = decodeJwtPayload(token);
+  const uid = String(payload?.user_id || payload?.sub || "").trim();
+  const email = String(payload?.email || "").trim().toLowerCase();
+  if (!uid) throw new Error("missing_uid");
+
+  if (
+    uid === "35d45a23-b648-4caf-a6d5-a69112860551" ||
+    email === "a0983439343@gmail.com"
+  ) {
+    return {
+      uid,
+      email,
+      role: "master",
+      permissions: new Set(["*"]),
+      overrides: {},
+      restrictions: {}
+    };
+  }
+
+  const [roleValue, whitelistValue, overrideValue, restrictionValue] = await Promise.all([
+    firebaseRestGet("admin/access/roleByUid/" + encodeURIComponent(uid), token),
+    firebaseRestGet("admin/whitelistByUid/" + encodeURIComponent(uid), token),
+    firebaseRestGet("admin/access/permissionsByUid/" + encodeURIComponent(uid), token),
+    firebaseRestGet("admin/access/restrictionsByUid/" + encodeURIComponent(uid), token)
+  ]);
+
+  let role = "";
+  let permissions = new Set();
+
+  const assignedRole = String(roleValue || "").trim();
+  if (assignedRole) {
+    const definition = await firebaseRestGet(
+      "admin/access/roles/" + encodeURIComponent(assignedRole),
+      token
+    );
+    const decoded = decodePermissionMap(definition?.permissions);
+    Object.entries(decoded).forEach(([key, enabled]) => {
+      if (enabled === true) permissions.add(key);
+    });
+    role = assignedRole;
+  } else if (
+    whitelistValue &&
+    whitelistValue.enabled === true &&
+    String(whitelistValue.uid || "") === uid
+  ) {
+    role = String(whitelistValue.role || "admin").trim().toLowerCase() === "viewer"
+      ? "viewer"
+      : "admin";
+    if (role === "admin") permissions = new Set(BUILTIN_ADMIN_PERMISSIONS);
+  }
+
+  const overrides = decodePermissionMap(overrideValue);
+  const restrictions = decodePermissionMap(restrictionValue);
+
+  if (!role || role === "viewer") {
+    throw new Error("admin_permission_denied");
+  }
+
+  return {uid, email, role, permissions, overrides, restrictions};
+}
+
+function verifyMaintenancePassword(password) {
+  const input = String(password || "");
+  if (!input) return false;
+
+  if (MAINTENANCE_PASSWORD_HASH) {
+    const actual = crypto.createHash("sha256").update(input, "utf8").digest("hex");
+    const left = Buffer.from(actual, "utf8");
+    const right = Buffer.from(MAINTENANCE_PASSWORD_HASH, "utf8");
+    return left.length === right.length && crypto.timingSafeEqual(left, right);
+  }
+
+  if (MAINTENANCE_PASSWORD_PLAIN) {
+    const left = Buffer.from(input, "utf8");
+    const right = Buffer.from(MAINTENANCE_PASSWORD_PLAIN, "utf8");
+    return left.length === right.length && crypto.timingSafeEqual(left, right);
+  }
+
+  return false;
+}
+
+function maintenanceLockState(key) {
+  const item = maintenanceFailures.get(key);
+  if (!item) return {locked:false, remaining:0};
+  if (item.lockedUntil > Date.now()) {
+    return {
+      locked:true,
+      remaining:Math.ceil((item.lockedUntil - Date.now()) / 1000)
+    };
+  }
+  maintenanceFailures.delete(key);
+  return {locked:false, remaining:0};
+}
+
+function registerMaintenanceFailure(key) {
+  const current = maintenanceFailures.get(key) || {count:0, lockedUntil:0};
+  current.count += 1;
+  if (current.count >= MAINTENANCE_FAIL_LIMIT) {
+    current.lockedUntil = Date.now() + MAINTENANCE_LOCK_MS;
+    current.count = 0;
+  }
+  maintenanceFailures.set(key, current);
+  return maintenanceLockState(key);
+}
+
+async function handleAdminMaintenance(req, res) {
+  if (req.method !== "POST") {
+    send(res, 405, JSON.stringify({ok:false,error:"method_not_allowed"}));
+    return;
+  }
+  if (!aiAllowedOrigin(req)) {
+    send(res, 403, JSON.stringify({ok:false,error:"origin_not_allowed"}));
+    return;
+  }
+
+  const token = getBearerToken(req);
+  if (!token) {
+    send(res, 401, JSON.stringify({ok:false,error:"missing_firebase_id_token"}));
+    return;
+  }
+
+  let actor;
+  try {
+    actor = await resolveMaintenanceActor(token);
+  } catch (error) {
+    const code = String(error?.message || "");
+    send(res, code === "admin_permission_denied" ? 403 : 401, JSON.stringify({
+      ok:false,
+      error:code || "admin_auth_failed"
+    }));
+    return;
+  }
+
+  if (!resolveEffectivePermission(actor.permissions, actor.overrides, actor.restrictions, "maintenance.manage")) {
+    send(res, 403, JSON.stringify({ok:false,error:"maintenance_permission_denied"}));
+    return;
+  }
+  if (!resolveEffectivePermission(actor.permissions, actor.overrides, actor.restrictions, "audit.write")) {
+    send(res, 403, JSON.stringify({ok:false,error:"audit_permission_required"}));
+    return;
+  }
+
+  const key = actor.uid + ":" + getClientIp(req);
+  const lock = maintenanceLockState(key);
+  if (lock.locked) {
+    send(res, 429, JSON.stringify({
+      ok:false,
+      error:"maintenance_password_locked",
+      retryAfterSeconds:lock.remaining
+    }));
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, 16384);
+  } catch (error) {
+    send(res, 400, JSON.stringify({ok:false,error:String(error?.message || "invalid_request")}));
+    return;
+  }
+
+  const action = String(body?.action || "").trim().toLowerCase();
+  if (action !== "close" && action !== "open") {
+    send(res, 400, JSON.stringify({ok:false,error:"invalid_maintenance_action"}));
+    return;
+  }
+
+  const reason = String(body?.reason || "").trim().slice(0, 500);
+  const restoreAt = Math.max(0, Number(body?.restoreAt || 0));
+  if (action === "close" && !reason) {
+    send(res, 400, JSON.stringify({ok:false,error:"maintenance_reason_required"}));
+    return;
+  }
+
+  if (action === "close") {
+    if (!MAINTENANCE_PASSWORD_HASH && !MAINTENANCE_PASSWORD_PLAIN) {
+      send(res, 503, JSON.stringify({ok:false,error:"maintenance_password_not_configured"}));
+      return;
+    }
+    if (!verifyMaintenancePassword(body?.password)) {
+      const next = registerMaintenanceFailure(key);
+      send(res, next.locked ? 429 : 401, JSON.stringify({
+        ok:false,
+        error:next.locked ? "maintenance_password_locked" : "maintenance_password_invalid",
+        retryAfterSeconds:next.locked ? next.remaining : 0
+      }));
+      return;
+    }
+  }
+
+  maintenanceFailures.delete(key);
+
+  const maintenance = {
+    enabled: action === "close",
+    reason: action === "close" ? reason : "網站已重新開放",
+    restoreAt: action === "close" ? restoreAt : 0,
+    updatedAt: {".sv":"timestamp"},
+    updatedByUid: actor.uid,
+    updatedByEmail: actor.email
+  };
+
+  const logId = crypto.randomBytes(16)
+    .toString("base64url")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 24);
+
+  const updates = {};
+  updates["site/maintenance"] = maintenance;
+  updates["admin/auditLogs/" + logId] = {
+    action: action === "close" ? "maintenance.close" : "maintenance.open",
+    actorUid: actor.uid,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    targetUid: "",
+    targetName: "WatchTogether",
+    details: action === "close"
+      ? "關閉網站" + (reason ? " · 原因：" + reason : "")
+      : "重新開放網站",
+    createdAt: {".sv":"timestamp"}
+  };
+
+  try {
+    const response = await fetch(MAINTENANCE_DATABASE_URL + ".json", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(updates)
+    });
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      send(res, 403, JSON.stringify({
+        ok:false,
+        error:String(data?.error || "maintenance_update_denied").slice(0, 300)
+      }));
+      return;
+    }
+
+    send(res, 200, JSON.stringify({
+      ok:true,
+      action,
+      maintenance
+    }));
+  } catch (error) {
+    console.error("[admin-maintenance]", error?.message || error);
+    send(res, 503, JSON.stringify({ok:false,error:"maintenance_update_failed"}));
+  }
+}
+
+
 
 function getClientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -141,7 +505,7 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
     "Content-Type": type,
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Allow-Headers": "Authorization,Range,Content-Type",
     "Access-Control-Expose-Headers": "Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified",
     "Cache-Control": "no-store"
   });
@@ -1850,7 +2214,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-      "Access-Control-Allow-Headers": "Range,Content-Type"
+      "Access-Control-Allow-Headers": "Authorization,Range,Content-Type"
     });
     res.end();
     return;
@@ -1887,6 +2251,11 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/ai/analyze") {
     handleAiAnalyze(req, res);
+    return;
+  }
+
+  if (url.pathname === "/admin/maintenance") {
+    handleAdminMaintenance(req, res);
     return;
   }
 
