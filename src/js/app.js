@@ -3920,9 +3920,6 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
       throw new Error("目前不在房間內");
     }
 
-    const item =
-      state.queue?.[queueId];
-
     if (!item) {
       throw new Error(
         "找不到待播放影片"
