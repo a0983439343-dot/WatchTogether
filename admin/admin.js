@@ -515,10 +515,13 @@
   }
 
   async function writeAuditLog(action, targetUid, targetName, details) {
-    if (!currentUser || !currentCan("audit.write")) return false;
+    const normalizedAction = String(action || "other").slice(0,40);
+    const canWrite = currentCan("audit.write") ||
+      (normalizedAction === "audit.delete" && currentCan("audit.delete"));
+    if (!currentUser || !canWrite) return false;
     try {
       await db.ref("admin/auditLogs").push({
-        action:String(action || "other").slice(0,40),
+        action:normalizedAction,
         actorUid:String(currentUser?.uid || "").slice(0,128),
         actorEmail:String(currentUser?.email || "").slice(0,320),
         actorRole:String(currentRole || "").slice(0,20),
