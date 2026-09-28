@@ -597,6 +597,14 @@ function renderHomeActivity() {
 }
 
 async function createRoomWithVideo(video) {
+  var access = window.WT_ACCESS_CONTROL;
+  if (access) {
+    await access.waitUntilReady(2500);
+    if (access.state && access.state.ready && !access.hasPermission("room.create")) {
+      toast("你目前無法建立房間");
+      return;
+    }
+  }
   if (!video || !video.id) {
     toast("沒有可建立的影片");
     return;
@@ -2828,6 +2836,15 @@ function bindHomeSearch() {
       renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
       renderHistory();
       return;
+    }
+
+    var access = window.WT_ACCESS_CONTROL;
+    if (access) {
+      await access.waitUntilReady(2500);
+      if (access.state && access.state.ready && !access.hasPermission("youtube.search")) {
+        renderHomeSearchMessage("你目前無法使用影片搜尋功能。");
+        return;
+      }
     }
 
     var serial = ++runSerial;
