@@ -756,6 +756,12 @@
     if (!response.ok || !result?.ok || !result?.analysis || result?.degraded === true) {
       throw new Error(String(result?.error || result?.analysis?.summary || "AI 分析目前不可用"));
     }
+    void writeAuditLog(
+      "ai.analyze",
+      String(report?.uid || ""),
+      String(id || "問題回報"),
+      "AI " + String(phase || "admin_review") + " 分析完成"
+    );
     return result;
   }
 
