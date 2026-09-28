@@ -466,8 +466,12 @@ async function syncAssetVersions(changed, original) {
     "src/js/bug-monitor.js",
     "src/js/chat.js",
     "src/js/access-control.js",
+    "src/js/feature-completion.js",
     "src/js/feature-completion-v2.js",
     "src/js/feature-complete-v3.js",
+    "src/js/room-chat-rich.js",
+    "src/js/feature-suite-v4.js",
+    "src/js/feature-complete-v5.js",
     "src/js/room-chat-rich.js",
     "sw.js"
   ].some(file => changed.has(file));
@@ -486,8 +490,12 @@ async function syncAssetVersions(changed, original) {
       changed.has("src/js/enhancements.js") ||
       changed.has("src/css/styles.css") ||
       changed.has("src/js/access-control.js") ||
+      changed.has("src/js/feature-completion.js") ||
       changed.has("src/js/feature-completion-v2.js") ||
       changed.has("src/js/feature-complete-v3.js") ||
+      changed.has("src/js/room-chat-rich.js") ||
+      changed.has("src/js/feature-suite-v4.js") ||
+      changed.has("src/js/feature-complete-v5.js") ||
       changed.has("src/js/room-chat-rich.js") ||
       changed.has("sw.js")
     ) {
@@ -512,8 +520,28 @@ async function syncAssetVersions(changed, original) {
         "$1" + version.formal
       );
       indexAfter = indexAfter.replace(
+        /(src\/js\/feature-completion\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-feature-completion-")
+      );
+      indexAfter = indexAfter.replace(
         /(src\/js\/feature-completion-v2\.js\?v=)[^"'&]+/,
         "$1" + version.formal.replace("-formal-", "-feature-")
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/feature-complete-v3\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-feature-complete-v3-")
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/room-chat-rich\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-room-chat-rich-")
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/feature-suite-v4\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-feature-suite-v4-")
+      );
+      indexAfter = indexAfter.replace(
+        /(src\/js\/feature-complete-v5\.js\?v=)[^"'&]+/,
+        "$1" + version.formal.replace("-formal-", "-feature-complete-v5-")
       );
       indexAfter = indexAfter.replace(
         /(sw\.js\?v=)[^"'&]+/,
@@ -696,7 +724,22 @@ async function validateChangedFiles(changed) {
     }
   }
 
+  if (changed.has("src/js/feature-completion.js")) {
+    const featureCompletion = await readRepoFile("src/js/feature-completion.js");
+    if (!featureCompletion.includes("openSessionManager") || !featureCompletion.includes("sessions/")) {
+      throw new Error("自動維護不可移除跨裝置登入工作階段功能");
+    }
+  }
+
   if (changed.has("config/database.rules.json")) {
+    const rulesText = await fs.readFile(path.join(ROOT, "config/database.rules.json"), "utf8");
+    const rules = JSON.parse(rulesText);
+    if (!rules.rules?.sessions?.["$uid"] || !rules.rules?.members?.["$roomId"]?.["$uid"]) {
+      throw new Error("自動維護不可移除 sessions 或 members 安全規則");
+    }
+    if (rules.rules.members["$roomId"]["$uid"][".write"] === "false") {
+      throw new Error("自動維護不可將 members 寫入永久關閉");
+    }
     const test = await execFileAsync("npm", ["run", "test:rules"], {
       cwd: ROOT,
       maxBuffer: 2_000_000
