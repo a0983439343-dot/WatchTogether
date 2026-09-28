@@ -12297,184 +12297,67 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
 
+  function renderRoomChatRichText(text) {
+    let value = escapeHtml(text || "");
+    value = value.replace(/(^|[\s])(@[^\s@]{1,30})/g, '$1<span class="wt-chat-mention">$2</span>');
+    return value;
+  }
+
+  async function toggleRoomMessagePin(messageId) {
+    if (!state.chatRef || !state.uid || !messageId) return;
+    const snapshot = await state.chatRef.child(messageId).once("value").catch(() => null);
+    const message = snapshot?.val() || null;
+    if (!message || String(message.uid || "") !== String(state.uid)) {
+      toast("只能置頂自己的訊息");
+      return;
+    }
+    const next = message.pinned !== true;
+    await state.chatRef.child(messageId).update({
+      pinned: next,
+      pinnedAt: next ? firebase.database.ServerValue.TIMESTAMP : null
+    });
+    toast(next ? "訊息已置頂" : "已取消置頂");
+  }
+
   function renderChat(messages) {
-    const list =
-      Object.entries(
-        messages || {}
-      )
-        .map(([id, message]) => ({
-          id,
-          ...(message || {})
-        }))
-        .sort(
-          (a, b) =>
-            Number(a.createdAt || 0) -
-            Number(b.createdAt || 0)
-        );
-
-    if (!$("chatMessages")) {
-      return;
-    }
-
+    const list = Object.entries(messages || {})
+      .map(([id, message]) => ({ id, ...(message || {}) }))
+      .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+    if (!$('chatMessages')) return;
     if (!list.length) {
-      $("chatMessages")
-        .innerHTML = `
-          <div
-            class="muted"
-            style="
-              padding:12px;
-            "
-          >
-            開始聊天吧 👋
-          </div>
-        `;
-
+      $('chatMessages').innerHTML = '<div class="muted" style="padding:12px;">開始聊天吧 👋</div>';
       return;
     }
-
-    $("chatMessages")
-      .innerHTML =
-      list
-        .map(
-          (message) => {
-            const isSticker =
-              message?.type === "sticker";
-
-            const body =
-              isSticker
-                ? `
-                  <div
-                    class="wt-sticker"
-                    aria-label="貼圖"
-                  >
-                    ${escapeHtml(
-                      message?.sticker ||
-                      "😊"
-                    )}
-                  </div>
-                `
-                : `
-                  <p>
-                    ${escapeHtml(
-                      message?.text ||
-                      ""
-                    )}
-                  </p>
-                `;
-
-            const isOwnMessage =
-              Boolean(
-                state.uid &&
-                message?.uid &&
-                String(message.uid) ===
-                  String(state.uid)
-              );
-
-            const deleteButton =
-              isOwnMessage
-                ? `
-                  <button
-                    type="button"
-                    class="wt-message-delete"
-                    data-chat-delete="${escapeHtml(
-                      message.id
-                    )}"
-                  >
-                    刪除訊息
-                  </button>
-                `
-                : "";
-
-            return `
-              <div
-                class="message wt-message${isOwnMessage ? " self" : ""}"
-              >
-                <div
-                  class="wt-message-top"
-                >
-                  <b
-                    class="wt-message-name"
-                  >
-                    ${escapeHtml(
-                      message?.name ||
-                      "玩家"
-                    )}
-                  </b>
-                  <span
-                    class="wt-message-time"
-                  >
-                    ${escapeHtml(
-                      message?.createdAt
-                        ? new Date(
-                            Number(message.createdAt)
-                          ).toLocaleTimeString(
-                            "zh-TW",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            }
-                          )
-                        : ""
-                    )}
-                  </span>
-                </div>
-
-                ${body}
-                ${deleteButton}
-              </div>
-            `;
-          }
-        )
-        .join("");
-
-    const box =
-      $("chatMessages");
-
-    box.scrollTop =
-      box.scrollHeight;
-
-    box
-      .querySelectorAll(
-        "[data-chat-delete]"
-      )
-      .forEach(
-        (button) => {
-          button.addEventListener(
-            "click",
-            async () => {
-              if (
-                !state.chatRef ||
-                !state.uid
-              ) {
-                return;
-              }
-
-              try {
-                await state.chatRef
-                  .child(
-                    button.dataset
-                      .chatDelete
-                  )
-                  .remove();
-
-                toast(
-                  "訊息已刪除"
-                );
-              } catch (error) {
-                console.error(
-                  "刪除聊天室訊息失敗:",
-                  error
-                );
-
-                toast(
-                  error?.message ||
-                  "刪除訊息失敗"
-                );
-              }
-            }
-          );
-        }
-      );
+    $('chatMessages').innerHTML = list.map(message => {
+      const isSticker = message?.type === "sticker";
+      const body = isSticker
+        ? '<div class="wt-sticker" aria-label="貼圖">' + escapeHtml(message?.sticker || "😊") + '</div>'
+        : '<p>' + renderRoomChatRichText(message?.text || "") + '</p>';
+      const isOwnMessage = Boolean(state.uid && message?.uid && String(message.uid) === String(state.uid));
+      const pinBadge = message?.pinned === true ? '<span class="small" style="margin-left:6px">📌</span>' : '';
+      const pinButton = isOwnMessage ? '<button type="button" class="wt-message-delete" data-chat-pin="' + escapeHtml(message.id) + '">' + (message?.pinned === true ? '取消置頂' : '置頂') + '</button>' : '';
+      const deleteButton = isOwnMessage ? '<button type="button" class="wt-message-delete" data-chat-delete="' + escapeHtml(message.id) + '">刪除訊息</button>' : '';
+      const time = message?.createdAt ? new Date(Number(message.createdAt)).toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div class="message wt-message' + (isOwnMessage ? ' self' : '') + '">' +
+        '<div class="wt-message-top"><b class="wt-message-name">' + escapeHtml(message?.name || '玩家') + pinBadge + '</b><span class="wt-message-time">' + time + '</span></div>' +
+        body + pinButton + deleteButton +
+        '</div>';
+    }).join('');
+    const box = $('chatMessages');
+    box.scrollTop = box.scrollHeight;
+    box.querySelectorAll('[data-chat-pin]').forEach(button => {
+      button.addEventListener('click', async () => {
+        try { await toggleRoomMessagePin(button.dataset.chatPin); }
+        catch (error) { console.error('置頂聊天室訊息失敗:', error); toast(error?.message || '置頂失敗'); }
+      });
+    });
+    box.querySelectorAll('[data-chat-delete]').forEach(button => {
+      button.addEventListener('click', async () => {
+        if (!state.chatRef || !state.uid) return;
+        try { await state.chatRef.child(button.dataset.chatDelete).remove(); toast('訊息已刪除'); }
+        catch (error) { console.error('刪除聊天室訊息失敗:', error); toast(error?.message || '刪除訊息失敗'); }
+      });
+    });
   }
 
 
