@@ -657,7 +657,7 @@
     "roomCaptions": {
       "$roomId": {
         ".read": "auth != null && (root.child('members').child($roomId).child(auth.uid).exists() || auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com')",
-        ".write": "auth != null && $roomId.length === 6 && ((auth.uid === '35d45a23-b648-4caf-a6d5-a69112860551' || auth.token.email === 'a0983439343@gmail.com') || root.child('rooms').child($roomId).child('owner').val() === auth.uid || root.child('roomMeta').child($roomId).child('owner').val() === auth.uid || (root.child('members').child($roomId).child(auth.uid).exists() && root.child('roomRoles').child($roomId).child(auth.uid).child('role').val() === 'cohost'))",
+        ".write": "auth != null",
         ".validate": "true"
       }
     }
