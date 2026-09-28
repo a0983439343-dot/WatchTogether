@@ -662,23 +662,9 @@
   }
 
   async function writeAuditLog(action, targetUid, targetName, details) {
-    const normalizedAction = String(action || "other").slice(0,40);
-    const canWrite = currentCan("audit.write") ||
-      (normalizedAction === "audit.delete" && currentCan("audit.delete"));
-    if (!currentUser || !canWrite) return false;
-    const payload = {
-      action:normalizedAction,
-      actorUid:String(currentUser?.uid || "").slice(0,128),
-      actorEmail:String(currentUser?.email || "").slice(0,320),
-      actorRole:String(currentRole || "").slice(0,40),
-      targetUid:String(targetUid || "").slice(0,128),
-      targetName:String(targetName || "").slice(0,200),
-      details:String(details || "").slice(0,1000),
-      createdAt:firebase.database.ServerValue.TIMESTAMP
-    };
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        await db.ref("admin/auditLogs").push(payload);
+        await writeAuditedUpdates({}, action, targetUid, targetName, details);
         return true;
       } catch (error) {
         if (attempt === 3) {
@@ -690,7 +676,6 @@
     }
     return false;
   }
-
   async function loadAuditLogs() {
     if (!currentHasAdminAccess) {
       auditLogs = {};
@@ -2431,67 +2416,59 @@
     if (!isMasterOperator()) throw new Error("只有最高管理員可以建立自訂角色");
     const id = safeKey($("accessRoleId")?.value, 80);
     const name = String($("accessRoleName")?.value || "").trim().slice(0,80);
-    const permissions = String($("accessRolePermissions")?.value || "")
-      .split(",").map(item => item.trim()).filter(Boolean);
+    const permissions = String($("accessRolePermissions")?.value || "").split(",").map(item => item.trim()).filter(Boolean);
     if (!id) throw new Error("請輸入角色 ID");
     if (!name) throw new Error("請輸入角色名稱");
     if (!permissions.length) throw new Error("至少需要一項權限");
     const map = {};
     permissions.forEach(permission => {
       const normalized = String(permission || "").trim();
-      if (normalized === "*") {
-        map.__all__ = true;
-      } else {
-        map[encodeAccessPermission(normalized)] = true;
+      if (normalized === "*") map.__all__ = true;
+      else map[encodeAccessPermission(normalized)] = true;
+    });
+    await writeAuditedUpdates({
+      ["admin/access/roles/" + id]: {
+        name,
+        permissions: map,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid: currentUser.uid,
+        updatedByEmail: currentUser.email || ""
       }
-    });
-    await db.ref("admin/access/roles/" + id).set({
-      name,
-      permissions: map,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid: currentUser.uid,
-      updatedByEmail: currentUser.email || ""
-    });
+    },"access.role.create",currentUser.uid,name,"建立自訂角色 " + id);
     await loadAccessControl();
-    void writeAuditLog("access.role.create", currentUser.uid, name, "建立自訂角色 " + id);
     $("accessRoleId").value = "";
     $("accessRoleName").value = "";
     $("accessRolePermissions").value = "";
     toast("自訂角色已儲存");
   }
-
   async function deleteAccessRole(id) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以刪除自訂角色");
     const key = safeKey(id);
     if (!key || !accessRoles[key]) return;
-    if (Object.values(accessAssignments || {}).some(role => String(role) === key)) {
-      throw new Error("這個角色仍有使用者指派，請先解除指派");
-    }
+    if (Object.values(accessAssignments || {}).some(role => String(role) === key)) throw new Error("這個角色仍有使用者指派，請先解除指派");
     const roleName = String(accessRoles[key]?.name || key);
     if (!window.confirm("確定刪除自訂角色「" + roleName + "」？")) return;
-    await db.ref("admin/access/roles/" + key).remove();
+    await writeAuditedUpdates({"admin/access/roles/" + key:null},"access.role.delete","",roleName,"刪除自訂角色 " + key);
     await loadAccessControl();
-    void writeAuditLog("access.role.delete", "", roleName, "刪除自訂角色 " + key);
     toast("自訂角色已刪除");
   }
-
   async function assignFullAdminRole() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以授予完整管理權限");
     const uid = String($("accessAssignUid")?.value || "").trim();
     if (!uid) throw new Error("請先輸入使用者 UID");
     if (uid === MASTER_UID) throw new Error("最高管理員不需要被重新指派權限");
-
     const roleId = "full_admin";
-    await db.ref("admin/access/roles/" + roleId).set({
-      name: "完整管理員（與 Master 相同）",
-      permissions: {__all__: true},
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid: currentUser.uid,
-      updatedByEmail: currentUser.email || ""
-    });
-    await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(roleId);
+    await writeAuditedUpdates({
+      ["admin/access/roles/" + roleId]: {
+        name: "完整管理員（與 Master 相同）",
+        permissions: {__all__: true},
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedByUid: currentUser.uid,
+        updatedByEmail: currentUser.email || ""
+      },
+      ["admin/access/roleByUid/" + safeKey(uid,128)]: roleId
+    },"access.role.full_admin",uid,roleId,"授予與最高管理員相同的完整管理權限");
     await loadAccessControl();
-    void writeAuditLog("access.role.full_admin", uid, roleId, "授予與最高管理員相同的完整管理權限");
     $("accessAssignUid").value = "";
     toast("已授予完整管理權限");
   }
@@ -2502,23 +2479,19 @@
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!role || !accessRoles[role]) throw new Error("請選擇有效的自訂角色");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被重新指派角色");
-    await db.ref("admin/access/roleByUid/" + safeKey(uid,128)).set(role);
+    await writeAuditedUpdates({"admin/access/roleByUid/" + safeKey(uid,128):role},"access.role.assign",uid,role,"指派自訂角色 " + role);
     await loadAccessControl();
-    void writeAuditLog("access.role.assign", uid, role, "指派自訂角色 " + role);
     $("accessAssignUid").value = "";
     toast("角色已指派");
   }
-
   async function removeAccessAssignment(uid) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以解除角色");
     const key = safeKey(uid,128);
     if (!key) return;
-    await db.ref("admin/access/roleByUid/" + key).remove();
+    await writeAuditedUpdates({"admin/access/roleByUid/" + key:null},"access.role.unassign",key,key,"解除自訂角色");
     await loadAccessControl();
-    void writeAuditLog("access.role.unassign", key, key, "解除自訂角色");
     toast("角色指派已解除");
   }
-
   async function saveAccessOverride() {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以設定個人 Allow / Deny");
     const uid = String($("accessOverrideUid")?.value || "").trim();
@@ -2527,25 +2500,22 @@
     if (!uid) throw new Error("請輸入使用者 UID");
     if (!permission) throw new Error("請輸入權限名稱");
     if (uid === MASTER_UID) throw new Error("最高管理員不能被限制權限");
-    await db.ref("admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set(effect);
+    await writeAuditedUpdates({
+      ["admin/access/permissionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)]:effect
+    },"access.permission.override",uid,permission,effect.toUpperCase() + " " + permission);
     await loadAccessControl();
-    void writeAuditLog("access.permission.override", uid, permission, effect.toUpperCase() + " " + permission);
     $("accessOverrideUid").value = "";
     $("accessOverridePermission").value = "";
     toast("個人權限覆寫已套用");
   }
-
   async function removeAccessOverride(uid, permission) {
     if (!isMasterOperator()) throw new Error("只有最高管理員可以移除個人權限覆寫");
-    const u = safeKey(uid,128);
-    const p = encodeAccessPermission(permission);
+    const u = safeKey(uid,128), p = encodeAccessPermission(permission);
     if (!u || !p) return;
-    await db.ref("admin/access/permissionsByUid/" + u + "/" + p).remove();
+    await writeAuditedUpdates({"admin/access/permissionsByUid/" + u + "/" + p:null},"access.permission.clear",u,p.replace(/__/g,"."),"移除個人權限覆寫");
     await loadAccessControl();
-    void writeAuditLog("access.permission.clear", u, p.replace(/__/g, "."), "移除個人權限覆寫");
     toast("個人權限覆寫已移除");
   }
-
   async function saveAccessRestriction() {
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能設定功能限制");
     const uid = String($("accessRestrictionUid")?.value || "").trim();
@@ -2556,67 +2526,55 @@
     if (!permission) throw new Error("請輸入要限制的功能");
     if (!reason) throw new Error("請輸入限制原因");
     if (uid === MASTER_UID || uid === currentUser?.uid) throw new Error("不能限制最高管理員或自己");
+    const allowedDurations = new Set(["3600000","86400000","604800000","2592000000","permanent"]);
+    if (!allowedDurations.has(duration)) throw new Error("不支援的限制時間");
     const permanent = duration === "permanent";
-    const until = permanent ? 0 : Date.now() + Math.max(1, Number(duration) || 3600000);
-    await db.ref("admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)).set({
-      enabled:true,
-      permanent,
-      until,
-      reason,
-      createdAt:firebase.database.ServerValue.TIMESTAMP,
-      createdByUid:currentUser.uid,
-      createdByEmail:currentUser.email || ""
-    });
+    const until = permanent ? 0 : Date.now() + Number(duration);
+    await writeAuditedUpdates({
+      ["admin/access/restrictionsByUid/" + safeKey(uid,128) + "/" + encodeAccessPermission(permission)]: {
+        enabled:true, permanent, until, reason,
+        createdAt:firebase.database.ServerValue.TIMESTAMP,
+        createdByUid:currentUser.uid,
+        createdByEmail:currentUser.email || ""
+      }
+    },"access.user.restriction",uid,permission,reason + " · " + (permanent ? "永久" : formatDate(until)));
     await loadAccessControl();
-    void writeAuditLog("access.user.restriction", uid, permission, reason + " · " + (permanent ? "永久" : formatDate(until)));
     $("accessRestrictionUid").value = "";
     $("accessRestrictionPermission").value = "";
     $("accessRestrictionReason").value = "";
     toast("功能限制已套用");
   }
-
   async function removeAccessRestriction(uid, permission) {
     if (!currentCan("users.restrict")) throw new Error("目前管理員權限不足，不能解除功能限制");
-    const u = safeKey(uid,128);
-    const p = encodeAccessPermission(permission);
+    const u = safeKey(uid,128), p = encodeAccessPermission(permission);
     if (!u || !p) return;
-    await db.ref("admin/access/restrictionsByUid/" + u + "/" + p).remove();
+    await writeAuditedUpdates({"admin/access/restrictionsByUid/" + u + "/" + p:null},"access.user.restriction.clear",u,p,"解除功能限制");
     await loadAccessControl();
-    void writeAuditLog("access.user.restriction.clear", u, p, "解除功能限制");
     toast("功能限制已解除");
   }
-
   async function saveAccessFeatureFlag() {
     if (!currentCan("featureflags.manage") || !currentCan("audit.write")) throw new Error("需要 featureflags.manage 與 audit.write 權限");
     const name = encodeAccessPermission($("accessFlagName")?.value);
     const enabled = $("accessFlagEnabled")?.value !== "false";
     const reason = String($("accessFlagReason")?.value || "").trim().slice(0,500);
     if (!name) throw new Error("請輸入功能名稱");
-    await db.ref("admin/featureFlags/" + name).set({
-      enabled,
-      reason,
-      updatedAt:firebase.database.ServerValue.TIMESTAMP,
-      updatedByUid:currentUser.uid,
-      updatedByEmail:currentUser.email || ""
-    });
+    await writeAuditedUpdates({
+      ["admin/featureFlags/" + name]: {enabled,reason,updatedAt:firebase.database.ServerValue.TIMESTAMP,updatedByUid:currentUser.uid,updatedByEmail:currentUser.email || ""}
+    },"feature.flag",currentUser.uid,name,(enabled ? "啟用 " : "關閉 ") + name + (reason ? " · " + reason : ""));
     await loadAccessControl();
-    void writeAuditLog("feature.flag", currentUser.uid, name, (enabled ? "啟用 " : "關閉 ") + name + (reason ? " · " + reason : ""));
     $("accessFlagName").value = "";
     $("accessFlagReason").value = "";
     toast("Feature Flag 已更新");
   }
-
   async function deleteAccessFeatureFlag(name) {
     if (!currentCan("featureflags.manage") || !currentCan("audit.write")) throw new Error("需要 featureflags.manage 與 audit.write 權限");
     const key = encodeAccessPermission(name);
     if (!key) return;
     if (!window.confirm("確定刪除 Feature Flag「" + key + "」？")) return;
-    await db.ref("admin/featureFlags/" + key).remove();
+    await writeAuditedUpdates({"admin/featureFlags/" + key:null},"feature.flag.delete",currentUser.uid,key,"刪除 Feature Flag");
     await loadAccessControl();
-    void writeAuditLog("feature.flag.delete", currentUser.uid, key, "刪除 Feature Flag");
     toast("Feature Flag 已刪除");
   }
-
   function applyNavigationPermissions() {
     const sectionPermissions = {
       overview: "admin.read",
