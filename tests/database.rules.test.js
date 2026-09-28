@@ -75,7 +75,8 @@ async function seed() {
                 reports__manage: true,
                 audit__read: true,
                 audit__write: true,
-                audit__delete: true
+                audit__delete: true,
+                maintenance__manage: true
               }
             }
           },
@@ -614,6 +615,37 @@ test("room 2.0: cohost can control playback and manage queue, but not roles", as
   }));
 
   await assertSucceeds(cohostDb.ref("queue/ABC123/first").remove());
+});
+
+test("2.0 access control: custom admin can control maintenance, viewer cannot", async () => {
+  const adminDb = db(ADMIN_UID, adminToken);
+  const viewerDb = db(VIEWER_UID, viewerToken);
+
+  await assertSucceeds(adminDb.ref("site/maintenance").set({
+    enabled: true,
+    reason: "test maintenance",
+    restoreAt: Date.now() + 3600000,
+    updatedAt: Date.now(),
+    updatedByUid: ADMIN_UID
+  }));
+
+  await assertSucceeds(viewerDb.ref("site/maintenance").once("value"));
+
+  await assertFails(viewerDb.ref("site/maintenance").update({
+    enabled: false,
+    reason: "viewer must not control maintenance",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: VIEWER_UID
+  }));
+
+  await assertSucceeds(adminDb.ref("site/maintenance").set({
+    enabled: false,
+    reason: "test maintenance complete",
+    restoreAt: 0,
+    updatedAt: Date.now(),
+    updatedByUid: ADMIN_UID
+  }));
 });
 
 test("2.0 access control: custom admin role can read and write its permitted admin data", async () => {
