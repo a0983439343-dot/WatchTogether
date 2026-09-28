@@ -5,6 +5,7 @@ import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {cert, getApps, initializeApp} from "firebase-admin/app";
 import {getDatabase} from "firebase-admin/database";
+import {getAuth} from "firebase-admin/auth";
 
 const execFileAsync = promisify(execFile);
 const ROOT = process.env.GITHUB_WORKSPACE || process.cwd();
@@ -40,6 +41,59 @@ function db() {
     });
   }
   return getDatabase();
+}
+
+let autonomousAiTokenPromise = null;
+
+async function getAutonomousAiIdToken() {
+  if (autonomousAiTokenPromise) return autonomousAiTokenPromise;
+
+  autonomousAiTokenPromise = (async () => {
+    const customToken = await getAuth().createCustomToken(MASTER_UID, {
+      watchtogetherAutonomousRepair: true
+    });
+
+    let apiKey = String(process.env.FIREBASE_API_KEY || "").trim();
+    if (!apiKey) {
+      const configText = await readRepoFile("config/firebase-config.js");
+      const match = configText.match(/apiKey:\s*["']([^"']+)["']/);
+      apiKey = String(match?.[1] || "").trim();
+    }
+
+    if (!apiKey) {
+      throw new Error("FIREBASE_API_KEY 未設定，無法取得自動修復 AI 驗證 Token");
+    }
+
+    const response = await fetch(
+      "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=" +
+      encodeURIComponent(apiKey),
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          token: customToken,
+          returnSecureToken: true
+        })
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.idToken) {
+      throw new Error(
+        "自動修復 AI 驗證 Token 交換失敗：" +
+        clean(data?.error?.message || "unknown_error", 300)
+      );
+    }
+
+    return String(data.idToken);
+  })();
+
+  try {
+    return await autonomousAiTokenPromise;
+  } catch (error) {
+    autonomousAiTokenPromise = null;
+    throw error;
+  }
 }
 
 function clean(value, max = 1800) {
@@ -326,9 +380,13 @@ async function requestRepair(report, verification, files) {
       files
     }
   };
+  const aiToken = await getAutonomousAiIdToken();
   const result = await fetchJson(BUG_SERVICE_URL + "/ai/analyze", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + aiToken
+    },
     body: JSON.stringify(payload),
     timeoutMs: 60_000
   });
@@ -768,9 +826,13 @@ async function stableRecheck(report, category, changed, commitSha) {
       autoVerifyEnabled: true
     }
   };
+  const aiToken = await getAutonomousAiIdToken();
   const ai = await fetchJson(BUG_SERVICE_URL + "/ai/analyze", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + aiToken
+    },
     body: JSON.stringify(aiPayload),
     timeoutMs: 60_000
   });
