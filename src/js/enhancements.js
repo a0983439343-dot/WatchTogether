@@ -2857,8 +2857,8 @@ function bindHomeSearch() {
   var runSerial = 0;
   async function run() {
     var query = String(input.value || "").trim();
-    if (query.length < 2) {
-      renderHomeSearchMessage("輸入至少 2 個字元開始即時搜尋。");
+    if (query.length < 1) {
+      renderHomeSearchMessage("請輸入搜尋關鍵字。");
       renderHistory();
       return;
     }
@@ -2900,8 +2900,8 @@ function bindHomeSearch() {
   });
   input.addEventListener("input",function(){
     var value = String(input.value || "").trim();
-    if (value.length < 2) {
-      renderHomeSearchMessage("按「搜尋」或 Enter 才會開始搜尋。");
+    if (value.length < 1) {
+      renderHomeSearchMessage("輸入搜尋關鍵字後按「搜尋」或 Enter。");
       renderHistory();
     } else {
       renderHomeSearchMessage("按「搜尋」或 Enter 才會開始搜尋。");
