@@ -1,4 +1,4 @@
-const CACHE_NAME = "wt-shell-20260928-v95";
+const CACHE_NAME = "wt-shell-20260928-v96";
 const ASSETS = [
   "./",
   "./src/css/styles.css",
