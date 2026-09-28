@@ -131,6 +131,13 @@
 
   async function saveRoomSettings() {
     if (!isOwner() && !isMaster()) throw new Error("只有房主可以修改房間設定");
+    const access = window.WT_ACCESS_CONTROL;
+    if (access && !isMaster()) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("rooms.manage")) {
+        throw new Error("你目前無法修改房間管理設定");
+      }
+    }
     const id = roomId();
     if (!id) throw new Error("目前不在房間中");
 
@@ -186,6 +193,13 @@
 
   async function setCohost(uid, role) {
     if (!isOwner() && !isMaster()) throw new Error("只有房主可以管理 Co-host");
+    const access = window.WT_ACCESS_CONTROL;
+    if (access && !isMaster()) {
+      await access.waitUntilReady(2500);
+      if (access.state?.ready && !access.hasPermission("rooms.manage")) {
+        throw new Error("你目前無法管理 Co-host");
+      }
+    }
 
     const id = roomId();
     const key = String(uid || "").trim();
