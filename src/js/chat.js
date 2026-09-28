@@ -62,6 +62,15 @@ function privateId(a,b) {
   return [String(a),String(b)].sort().join("_");
 }
 
+async function requireDmPermission() {
+  var access = window.WT_ACCESS_CONTROL;
+  if (!access) return;
+  await access.waitUntilReady(2500);
+  if (access.state && access.state.ready && !access.hasPermission("chat.dm")) {
+    throw new Error("你目前無法使用私聊");
+  }
+}
+
 function displayName() {
   return String(wt.currentName ? wt.currentName() : (wt.state.profile && wt.state.profile.displayName) || "玩家").slice(0,30);
 }
@@ -299,6 +308,7 @@ async function removeFriendPlus(uid) {
 }
 
 async function ensureConversation(uid) {
+  await requireDmPermission();
   var me = user();
   if (!me) throw new Error("Google 登入後才能私聊");
   var friendship = await wt.db.ref("friendships/" + me.uid + "/" + uid).once("value");
@@ -340,6 +350,7 @@ async function updateSummary(id,message,targetUid) {
 }
 
 async function sendMessagePayload(payload,targetUid) {
+  await requireDmPermission();
   var me = user();
   targetUid = String(targetUid || state.activeUid || "");
   if (!me || !targetUid) throw new Error("請先選擇好友");
