@@ -2682,6 +2682,13 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     query,
     append = false
   ) {
+    if (!isGlobalFeatureEnabled("youtube_search")) {
+      throw new Error("目前暫停使用 YouTube 搜尋");
+    }
+    if (await isCurrentUserFeatureRestricted("youtube_search")) {
+      throw new Error("你的帳號目前無法使用 YouTube 搜尋");
+    }
+
     query =
       String(
         query || ""
@@ -3898,6 +3905,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
   }
 
   async function removeFromQueue(queueId) {
+    if (await isCurrentUserFeatureRestricted("playlists")) {
+      throw new Error("你的帳號目前無法使用播放清單");
+    }
+    if (!isGlobalFeatureEnabled("playlists")) {
+      throw new Error("目前暫停使用播放清單");
+    }
     if (
       !state.queueRef ||
       !queueId
@@ -3959,6 +3972,12 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
 
 
   async function playQueueItem(queueId) {
+    if (await isCurrentUserFeatureRestricted("playback_control")) {
+      throw new Error("你的帳號目前無法控制播放");
+    }
+    if (!isGlobalFeatureEnabled("playback_control")) {
+      throw new Error("目前暫停使用播放控制");
+    }
     cancelScheduledQueuePlayback();
 
     if (!canControlRoomPlayback()) {
