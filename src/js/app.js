@@ -3884,6 +3884,10 @@ function waitForDatabaseConnection(timeoutMs = 8000) {
     );
   }
 
+  window.addEventListener("wt-room-role-changed", () => {
+    renderQueue();
+  });
+
   async function moveQueueItem(queueId, direction) {
     if (!canManageQueueOrder()) {
       throw new Error("只有房主或 Co-host 可以調整待播放順序");
