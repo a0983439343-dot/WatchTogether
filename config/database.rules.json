@@ -606,6 +606,15 @@
         ".validate": "!newData.exists() || (newData.child('watchSeconds').isNumber() && newData.child('watchSeconds').val() >= 0 && newData.child('watchSeconds').val() <= 315360000 && newData.child('videosStarted').isNumber() && newData.child('videosStarted').val() >= 0 && newData.child('videosStarted').val() <= 100000000 && newData.child('roomsJoined').isNumber() && newData.child('roomsJoined').val() >= 0 && newData.child('roomsJoined').val() <= 100000000 && newData.child('messagesSent').isNumber() && newData.child('messagesSent').val() >= 0 && newData.child('messagesSent').val() <= 100000000 && newData.child('lastAt').isNumber() && newData.child('lastAt').val() <= now + 120000)"
       }
     },
+    "roomFavorites": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$roomId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.hasChildren(['id','name','sourceType','savedAt']) && newData.child('id').isString() && newData.child('id').val().length === 6 && newData.child('id').val() === $roomId && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 40 && newData.child('sourceType').isString() && (newData.child('sourceType').val() === 'youtube' || newData.child('sourceType').val() === 'vimeo' || newData.child('sourceType').val() === 'dailymotion' || newData.child('sourceType').val() === 'twitch') && newData.child('savedAt').isNumber() && newData.child('savedAt').val() <= now + 120000)"
+        }
+      }
+    },
     "userSettings": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
