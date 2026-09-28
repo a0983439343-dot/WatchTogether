@@ -581,6 +581,15 @@
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "!newData.exists() || (newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('lastSeen').val() <= now + 120000 && (!newData.child('device').exists() || (newData.child('device').isString() && newData.child('device').val().length <= 20)))"
       }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$notificationId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.hasChildren(['title','body','type','read','createdAt']) && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 120 && newData.child('body').isString() && newData.child('body').val().length <= 500 && newData.child('type').isString() && newData.child('type').val().length <= 30 && newData.child('read').isBoolean() && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 120000)"
+        }
+      }
     }
   }
 }
