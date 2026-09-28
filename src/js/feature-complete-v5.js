@@ -19,7 +19,7 @@
   let captionAnimation = 0;
   let lastCaptionRoom = "";
   let networkBanner = null;
-  let lastOnlineState = navigator.onLine;
+  let lastOnlineState = navigator.onLine === false;
 
   function toast(message) {
     try {
@@ -201,7 +201,6 @@
   }
 
   function captionTick() {
-    captionAnimation = 0;
     void currentPlayerTime().then(time => {
       if (!captionRoom || captionRoom !== roomId()) {
         renderCaption("");
@@ -215,12 +214,13 @@
   function startCaptionLoop() {
     if (captionAnimation) return;
     ensureCaptionOverlay();
-    captionAnimation = requestAnimationFrame(captionTick);
+    captionAnimation = setInterval(captionTick, 120);
+    captionTick();
   }
 
   function stopCaptionLoop() {
     if (!captionAnimation) return;
-    cancelAnimationFrame(captionAnimation);
+    clearInterval(captionAnimation);
     captionAnimation = 0;
   }
 
@@ -312,6 +312,7 @@
       '<div class="wt-v5-caption-actions"><button id="wtV5CaptionClose" class="secondary-btn" type="button">關閉</button><button id="wtV5CaptionSync" class="secondary-btn" type="button">立即同步</button></div>';
 
     const modal = document.createElement("div");
+    document.getElementById("wtV5CaptionModal")?.remove();
     modal.id = "wtV5CaptionModal";
     modal.className = "modal";
     modal.innerHTML = '<div class="modal-card wt-v5-caption-card"><div class="panel-title">字幕中心</div></div>';
